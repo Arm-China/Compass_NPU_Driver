@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/misc/armchina,zhouyi-npu.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: ArmChina Zhouyi NPU bindings
+
+maintainers:
+  - Dejia Shang <dejia.shang@armchina.com>
+
+description: |
+  Armchina AI accelerator IP - Zhouyi NPU
+
+properties:
+  compatible:
+    items:
+      - const: armchina,zhouyi-v1
+      - const: armchina,zhouyi-v2
+      - const: armchina,zhouyi
+
+  reg:
+    maxItems: 1
+
+  memory-region:
+    maxItems: 2
+
+  interrupts:
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+  - interrupts
+
+examples:
+  - |
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+
+    reserved-memory {
+                #address-cells = <2>;
+                #size-cells = <2>;
+                ranges;
+
+                aipu_ddr_reserved: aipu-shmem@0xA0000000 {
+                        compatible = "shared-dma-pool";
+                        no-map;
+                        reg = <0x0 0xA0000000 0x0 0x4000000>;
+                };
+    };
+
+    aipu0@0x64000000 {
+                compatible = "armchina,zhouyi";
+                reg = <0x0 0x64000000 0x0 0x1000>;
+                memory-region=<&aipu_ddr_reserved>;
+                interrupts = <0 168 1>;
+    };

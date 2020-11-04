@@ -1,0 +1,367 @@
+    1 Introduction
+        The purpose of this document is to define one style of programming in C++. The rules and recommendations presented here are not final but should serve as a basis for continued work with C++. This collection of rules should be seen as a dynamic document; suggestions for improvements are encouraged.
+
+        Programs that are developed according to these rules and recommendations
+        should be:
+        - correct
+        - easy to maintain.
+
+        In order to reach these goals, the programs should:
+        - have a consistent style,
+        -	be easy to read and understand,
+        -	be free of common types of errors.
+
+        Questions of design, such as how to design a class or a class hierarchy, are beyond the scope of this document.
+
+    2 General Rules and Recommendations
+
+        Rule 1
+        Rules are rules. Rules must be followed, and recommendations are optional but consistent in a project.
+
+        Rule 2
+        If this style guide leaves anything unclear, see how it has been done in the existing code base and do it accordingly.
+
+        Rule 3
+        If you are working with third-party project, follow its coding style as possible.
+
+    3 Source Files Structure
+        3.1 Structure of Source Code
+            Rule 4
+            Header (include) files in C++ always have the file name extension ".h".
+
+            Rule 5
+            Implementation files in C++ always have the file name extension ".cpp".
+
+        3.2 Naming Files
+            Rule 6
+            Always give a file a name that is unique in as large a context as possible. A header file for a class should have a file name of the form <class name> + extension. Use uppercase and lowercase letters in the same way as in the source code.
+
+        3.3 Whitespace
+            Recommendation 1
+            In a header or implementation file, introductory comment, include guards, #include block, using block and function definitions are separated by one blank line.
+
+        3.4 Comments
+
+            Rule 7
+            Every file that contains source code must be documented with an introductory comment that provides information on the file name, its copyright and its contents.
+
+            Rule 8
+            Write a comment for every class, public/protected function and public/protected enum/typedef/struct.
+            Recommendation 2
+            Prefer C++ style comments (// for normal comments, /// for doxygen documentation comments). if you really need comment out large blocks of code, use #if 0 and endif.
+
+        3.5 Header Files
+
+            Rule 9
+            All header files should have #define guards to prevent multiple inclusion. The format of the symbol name should be <PROJECT>_<PATH>_<FILE>_H.
+            For example, the file foo/src/bar/baz.h in project foo should have the following guard:
+            #ifndef FOO_BAR_BAZ_H
+            #define FOO_BAR_BAZ_H
+
+            ...
+
+            #endif  // FOO_BAR_BAZ_H
+
+            Rule 10
+            Use the directive #include "filename.h" for user-prepared include files.
+
+            Rule 11
+            Use the directive #include <filename.h> for system and compiler supplied header files only.
+
+            Rule 12
+            Never specify relative paths (containing "." and "..") in #include directives.
+            Recommendation 3
+            Order of Includes should be:
+                - Main module header;
+                - Local/Private headers;
+                - Other project headers;
+                - C system headers, e.g. <unistd.h>, <stdlib.h>;
+                - C++ standard library headers (without file extension), e.g. <algorithm>, <cstddef>.
+
+    4 Names
+
+        Rule 13
+        The names of all types (classes, structs, type aliases, enums, and type template parameters) start with a capital letter for each new word, with no underscores.
+
+        Recommendation 4
+        The names of variables (including function parameters) and data members should be nouns (as they represent state) start with an uppercase letter (llvm style) or all lowercase with underscores between words (google style), keeping consistent in the same project.
+
+        Recommendation 5
+        The names of regular functions should be verb phrases (as they represent actions) begin with a lowercase letter (llvm style) or uppercase letter (google style), keeping consistent in the same project.
+
+        Recommendation 6
+        The names of constants and enumeration values are all uppercase. In names that consist of more than one word, these words are separated by underscore characters.
+
+        Recommendation 7
+        Encapsulate global variables and constants, enumerated types, and typedefs in a class.
+
+        Recommendation 8
+        Be consistent. If something is a name it should be a name everywhere it is used.
+
+    5 Style
+
+        5.1 Spaces vs. Tabs
+
+            Rule 14
+            Use only spaces, and indent 4 spaces at a time. Do not use tabs in your code.
+
+            Rule 15
+            Do not leave trailing whitespace at the end of lines.
+
+        5.2 Line Length
+            Recommendation 9
+            Each line of text in your code should be at most 80 characters long.
+
+        5.3 Classes
+
+            Rule 16
+            The public, protected, and private sections of a class are declared in that order (the public section is declared before the protected section which is declared before the private section). These keywords are not indented.
+
+            The basic format for a class definition (lacking the comments) is:
+            class MyClass : public OtherClass {
+                public:
+                MyClass();    // Regular 4 space indent.
+                explicit MyClass(int Var);
+                ~MyClass() {}
+
+                void doSomething();
+                void doNotthing() {
+                }
+
+                void setSomeVar(int Var) { SomeVar = Var; }
+                int getSomeVar() const { return SomeVar; }
+
+                private:
+                bool doSomethingInternal();
+
+                int SomeVar;
+                int SomeOtherVar;
+            };
+
+            Rule 17
+            Inline functions are defined in a separate block following the class declaration.
+
+        5.4 Functions
+
+            Rule 18
+            When declaring functions, the leading parenthesis and the first argument (if any) are written on the same line as the function name.
+
+            Functions look like this:
+            ReturnType ClassName::functionName(Type Parm1, Type Param2) {
+                doSomething();    // 4 spaces indent
+                ...
+            }
+
+            If you have too much text to fit on one line:
+            ReturnType LongClassName::reallyLongFunctionName(Type Param1, Type Param2, Type Param3) {
+                doSomething();    // 4 spaces indent
+                ...
+            }
+
+            or if you cannot fit even the first parameter:
+            ReturnType LongClassName::reallyReallyReallyLongFunctionName(
+            Type Param1,    // 4 spaces indent
+            Type Param2,
+            Type Param3) {
+                doSomething();    // 4 spaces indent
+                ...
+            }
+
+        Some points to note:
+            - The open parenthesis is always on the same line as the function name and no space between them;
+            - There is never a space between the parentheses and the parameters;
+            - The open curly brace is always on the end of the last line of the function declaration, not the start of the next line.
+
+        5.5 Flow Control Statements
+
+            Rule 19
+            There is always a space between the flow control statement's keyword and the opening parenthesis of the control expression. There is no space between the opening parenthesis and the expression. There is also no space between the expression and the closing parenthesis.
+
+            The most common form is:
+            if (condition) {    // no space inside parentheses
+                ...    // 4 spaces indent
+            } else if (...) {    // The else goes on the same line as the closing brace
+                ...
+            }
+            Short conditional statements may be written on one line if this enhances readability. You may use this only when the line is brief enough and the statement does not use he else clause.
+            This is not allowed when the if statement has an else:
+            // Not allowed - IF statement on one line when there is an ELSE clause
+            if (x) doThis();
+            else doThat();
+
+            In general, curly braces are not required for single-line statements, but they are allowed if you like them. However, if one part of an if-else statement uses curly braces, the other part must too:
+            // Not allowed - curly on IF but not ELSE
+            if (condition) {
+                foo;
+            } else
+                bar;
+
+            // Not allowed - curly on ELSE but not IF
+            if (condition)
+                foo;
+            else {
+                bar;
+            }
+
+            Rule 20
+            Switch statements should always have a default case. If the default case should never execute, treat this as an error.
+            Fall-through from one case label to another must be annotated, add one blank line before and after the annotation.
+            Here is an example:
+            switch (Var) {
+            case 0: {    // 4 spaces indent
+                ...            // 4 spaces indent
+                break;
+            }
+            case 1: {
+                ...
+                break;
+            }
+            case 41:  // No annotation needed here
+            case 43:
+                if (x) {
+
+                // FALL-THROUGH
+
+                    } else {
+                    closeButNoCigar();
+                        break;
+                    }
+            case 42:
+                doSomethingSpecial();
+
+                // FALL-THROUGH
+
+            default:
+                assert(false);
+            }
+
+        5.6 Pointers and References
+            Recommendation 10
+            When declaring a pointer variable or argument, you may place the asterisk adjacent to either the type or to the variable name, but should do this consistently within a single file.
+
+        5.7 Boolean Expressions
+            Recommendation 11
+            When you have a boolean expression that is longer than the standard line length, be consistent in how you break up the lines.
+            In this example, the logical AND operator is always at the end of the lines:
+            if (ThisOneThing > thisOtherThing &&
+                AthirdThing == AFourThing &&                // 4 spaces indent
+                YetAnother && LastOne) {
+                ...  // 4 spaces indent
+            }
+    6 Classes
+        Rule 21
+        Do not specify public or protected member data in a class.
+
+        Recommendation 12
+        Use class as possible as you can. The use of structs is discouraged since these only contain public data. In interfaces with other languages (such as C), it may, however, be necessary to use structs.
+        Recommendation 13
+        Access functions (accessors) that simply return the value of a member variable are inline.
+        Recommendation 14
+        Constructors and destructors should not be inline.
+        Recommendation 15
+        When two operators are opposites (such as == and !=), it is appropriate to define both.
+        Recommendation 16
+        Do not overload operator &&, operator || or operator , (comma).
+
+    7 Functions
+
+        Rule 22
+        The names of formal arguments to functions must be specified and must be the same both in the function declaration and in the function definition.
+
+        Rule 23
+        A public function must never return a reference or a pointer to a local variable.
+
+        Rule 24
+        Do not use the preprocessor directive #define to obtain more efficient code; instead, use inline functions.
+
+    8 Constants
+
+        Rule 25
+        Constants are defined using const or enum; never using #define.
+
+        Rule 26
+        Avoid the use of numeric values in code; use symbolic values instead.
+
+    9 Variables
+
+        Rule 27
+        Variables are declared with the smallest possible scope.
+
+        Rule 28
+        Every variable that is declared is given an initial value before it is used.
+        Recommendation 17
+        If possible, always use initialization instead of assignment.
+
+    10 Pointers and References
+
+        Rule 29
+        Use nullptr for pointers, and '\0' for chars (and not the 0 literal).
+
+        Recommendation 18
+        Pointers to pointers should whenever possible be avoided.
+        Recommendation 19
+        Use a typedef to simplify program syntax when declaring function pointers.
+
+    11 Type Conversions
+
+        Rule 30
+        Use C++ style casts (dynamic_cast<>, static_cast<>, reinterpret_cast<>, const_cast<>) instead of old-style C casts for all pointer conversions.
+
+    12 Expressions
+        Recommendation 20
+        Use parentheses to clarify the order of evaluation for operators in expressions.
+
+        Rule 32
+        Always have non-lvalues on the left side (0 == i instead of i == 0).
+
+    13 Memory and Resources
+
+        Rule 33
+        When overloading the new operator for a class, always overload the delete operator too.
+        Recommendation 21
+        Do not use malloc(), realloc() or free().
+
+        Rule 34
+        Always use the array delete operator (delete []) when deallocating arrays.
+
+    14 Namespaces
+
+        Rule 35
+        Do not place using namespace in a header file or before an #include.
+
+        Rule 36
+        A source file must not define more than one namespace.
+        Exception: the use of anonymous namespaces in implementation files.
+
+        Recommendation 22
+        Write namespace declarations in the following way:
+            - one namespace declaration per line
+            - namespace do not add an extra level of indentation
+            - the opening brace is on the same line as the declaration
+            - add a comment to the closing brace of the namespace
+
+        Here are examples:
+        // Single-level namespace
+        namespace knowledge {
+        class Grokable {
+            public:
+            ...
+        };
+
+        }  // end namespace knowledge
+
+        // Anonymous namespace
+        namespace {
+        class StringSort {
+            public:
+            ...
+        };
+
+        }  // end anonymous namespace
+
+        // Two-level namespace
+        namespace foo {
+        namespace bar {
+            ...
+        }  // end namespace bar
+        }  // end namespace foo
