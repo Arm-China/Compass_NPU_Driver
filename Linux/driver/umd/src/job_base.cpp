@@ -329,6 +329,7 @@ aipu_status_t aipudrv::JobBase::config_mem_dump(uint64_t types, const aipu_job_c
     {
         if(access(config->dump_dir, F_OK) != 0)
         {
+            LOG(LOG_ERR, "%s [non-exit]", config->dump_dir);
             ret = AIPU_STATUS_ERROR_INVALID_CONFIG;
             goto finish;
         }

@@ -330,7 +330,10 @@ aipu_status_t aipudrv::JobLegacy::config_simulation(uint64_t types, const aipu_j
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     if(access(config->data_dir, F_OK) != 0)
+    {
+        LOG(LOG_ERR, "%s [non-exit]", config->data_dir);
         return AIPU_STATUS_ERROR_INVALID_CONFIG;
+    }
 
     m_data_dir = config->data_dir;
 
