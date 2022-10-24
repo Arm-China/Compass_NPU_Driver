@@ -42,7 +42,7 @@ COMPASS_DRV_BTENVAR_CROSS_COMPILE_GNU=aarch64-linux-gnu-
 or
 # source env_setup.sh (for csh env)
 
-# ./build_all.sh -p juno [-d]
+# ./build_all.sh -p juno -v x1 [-d]
 ```
 
 - If the command run normally, a folder named 'bin' is created, the corresponding KMD driver(aipu.ko) and UMD library(libaipudrv.so) are generated and stored in it.
@@ -87,7 +87,7 @@ is generated and stored in it.
 Here take Juno(arm64) board as an example, it has to do #2.1 firstly before doing this step. then
 ```bash
 # source bash_env_setup.sh
-# ./build_all.sh -p juno -t sample [-d]
+# ./build_all.sh -p juno -v x1 -t sample [-d]
 ```
 
 After perform this command successfully, the samples are also stored in forder 'bin'.
@@ -99,7 +99,7 @@ After perform this command successfully, the samples are also stored in forder '
 it has to do #2.2 firstly before doing this step. then
 ```bash
 # source bash_env_setup.sh
-# ./build_all.sh -p sim -t sample [-d]
+# ./build_all.sh -p sim -v x1 -t sample [-d]
 ```
 
 After perform this command successfully, the samples are also stored in forder 'bin'.
