@@ -92,7 +92,7 @@ aipu_status_t aipudrv::JobLegacy::init(const aipu_global_config_simulation_t* cf
         if (size != 0)
         {
             std::string str = "reuse_" + std::to_string(i);
-            ret = m_mem->malloc(size, align_in_page, &buf, str.c_str(), AIPU_BUF_REGION_DTCM);
+            ret = m_mem->malloc(size, align_in_page, &buf, str.c_str());
             if (AIPU_STATUS_SUCCESS != ret)
                 goto finish;
         }
