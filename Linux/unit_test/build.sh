@@ -6,7 +6,7 @@
 
 PLATFORM=$1
 
-X1_SIMULATOR_PATH=/project/ai/scratch01/AIPU_SIMULATOR/aipu_simulator_x1
+X1_SIMULATOR_PATH=${COMPASS_DRV_RTENVAR_X1_SIMULATOR}
 
 export PATH=/project/ai/scratch01/AIPU_BSP/toolchain/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu/bin:$PATH
 export C_INCLUDE_PATH=./3rdparty

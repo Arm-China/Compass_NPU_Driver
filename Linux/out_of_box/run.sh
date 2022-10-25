@@ -15,12 +15,9 @@ OUTPUT_DUMP_TOP_DIR=./output
 # Configure correct simulator directory before running test!
 #
 #############################################################
-SIMULATOR=../../../../AI502-SDK-1002-r0p0-eac0/simulator/bin/aipu_simulator_z2       #simulator path
-SIMULATOR_SO_DIR=../../../../AI502-SDK-1002-r0p0-eac0/simulator/lib/    #simulator dynamic lib path
-SIMULATOR=/project/ai/scratch01/AIPU_SIMULATOR/kun/bin/aipu_simulator_x1
-SIMULATOR_SO_DIR=/project/ai/scratch01/AIPU_SIMULATOR/kun/lib
+SIMULATOR=${COMPASS_DRV_RTENVAR_X1_SIMULATOR}
 
-if [ ! -e $SIMULATOR -o ! -e $SIMULATOR_SO_DIR ]; then
+if [ ! -e $SIMULATOR ]; then
     echo "Z1/Z2/Z3/X1: have to supply valid Simulator and simulator lib"
     echo "X2: only need to supply simulator lib"
     exit 1
@@ -83,7 +80,7 @@ else
     exit 1
 fi
 
-export LD_LIBRARY_PATH=${UMD_DIR}:${SIMULATOR_SO_DIR}:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=${UMD_DIR}:$LD_LIBRARY_PATH
 mkdir -p ./${OUTPUT_DIR}
 
 ARGS="--bin=${BENCHMARK_CASE_DIR}/${case}/aipu.bin \

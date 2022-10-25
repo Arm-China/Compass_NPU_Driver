@@ -66,6 +66,7 @@ setenv COMPASS_DRV_RTENVAR_Z3_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu
 setenv COMPASS_DRV_RTENVAR_X1_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu_simulator_x1
 setenv COMPASS_DRV_RTENVAR_SIM_LPATH         ${CONFIG_DRV_RTENVAR_SIM_PATH}/lib
 setenv LD_LIBRARY_PATH                       ${COMPASS_DRV_RTENVAR_SIM_LPATH}:$LD_LIBRARY_PATH
+setenv PATH                                  ${CONFIG_DRV_RTENVAR_SIM_PATH}/:$PATH
 
 # 3.2. Z5 simulator
 setenv CONFIG_DRV_BRENVAR_Z5_SIM_LPATH       /project/ai/zhouyi_compass/z5_common_lib/simulator/kun/lib
@@ -101,6 +102,8 @@ setenv COMPASS_DRV_BTENVAR_KMD_VERSION       3.2.0
 setenv COMPASS_DRV_BRENVAR_ERROR             "\033[31;1m[DRV ERROR]\033[0m"
 setenv COMPASS_DRV_BRENVAR_WARN              "\033[31;1m[DRV WARN]\033[0m"
 setenv COMPASS_DRV_BRENVAR_INFO              "\033[32;1m[DRV INFO]\033[0m"
+
+setenv LD_LIBRARY_PATH                       ${PWD}/bin/sim/debug:${PWD}/bin/sim/release:$LD_LIBRARY_PATH
 
 ###
 setenv COMPASS_DRV_BRENVAR_SETUP_DONE        yes
