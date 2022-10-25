@@ -46,8 +46,8 @@ public:
     aipu_tensor_desc_t out_desc;
     char* input_dest = nullptr;
     uint32_t input_size = 0;
-    string graph_file = "./benchamrk/aipu.bin";
-    string input_file = "./benchamrk/input0.bin";
+    string graph_file = "./benchmark/aipu.bin";
+    string input_file = "./benchmark/input0.bin";
     std::ifstream gbin;
     uint64_t _id = 0;
     uint32_t g_version = 0;

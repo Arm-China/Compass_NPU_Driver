@@ -38,7 +38,7 @@ public:
     aipudrv::MainContext* p_ctx = nullptr;
     DeviceBase* m_dev = nullptr;
     aipu_global_config_simulation_t m_sim_cfg = {0};
-    string graph_file = "./benchamrk/aipu.bin";
+    string graph_file = "./benchmark/aipu.bin";
     std::ifstream gbin;
     uint64_t _id = 0;
     uint32_t g_version = 0;
