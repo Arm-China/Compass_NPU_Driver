@@ -6,8 +6,6 @@
 
 PLATFORM=$1
 
-X1_SIMULATOR_PATH=${COMPASS_DRV_RTENVAR_X1_SIMULATOR}
-
 export PATH=/project/ai/scratch01/AIPU_BSP/toolchain/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu/bin:$PATH
 export C_INCLUDE_PATH=./3rdparty
 export CPLUS_INCLUDE_PATH=./3rdparty
@@ -24,10 +22,8 @@ fi
 
 if [ "$PLATFORM"x == "arm64"x ]; then
     MAKE_FLAG="CXX=aarch64-linux-gnu-g++ CPPFLAGS+=-DZHOUYI_V12=1 BUILD_TARGET_PLATFORM=fpga"
-
 else
     MAKE_FLAG="CXX=g++ CPPFLAGS+=-DSIMULATION=1 CPPFLAGS+=-DZHOUYI_V12=1 BUILD_TARGET_PLATFORM=sim"
-    cp $X1_SIMULATOR_PATH ./simulator/
 fi
 
 echo $MAKE_FLAG

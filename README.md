@@ -1,5 +1,5 @@
 # Compass_NPU_driver
-Compass_NPU_driver includes two parts: kernel mode driver(KMD) and user mode library(UMD). KMD is a standard Linux char driver model for NPU. UMD can be compiled as dynamicly and static libraty accordingly. User application directly call top APIs in UMD and then indirectly call the interface of KMD to interract with NPU hardware.
+Compass_NPU_driver includes two parts: kernel mode driver(KMD) and user mode library(UMD). KMD is a standard Linux char driver model for NPU. UMD can be compiled as dynamical and static library accordingly. User application directly call top APIs in UMD and then indirectly call the interface of KMD to interract with NPU hardware.
 
 ## 1. Folders
 ### driver
@@ -16,7 +16,7 @@ the unit test cases for UMD and KMD.
 ## 2. Compile driver
 
 ### 2.1 Cross compile KMD/UMD for HW board
-Here take Juno(arm64) board as an example, If you use nother board, please change below env variables accordingly in bash_env_setup.sh (for bash) or env_setup.sh (for csh)
+Here take Juno(arm64) board as an example, If you use another board, please change below env variables accordingly in bash_env_setup.sh (for bash) or env_setup.sh (for csh)
 
 - change work directory to Linux/
 
@@ -47,7 +47,7 @@ or
 # ./build_all.sh -p juno -v x1 [-d]
 ```
 
-- If the command run normally, a folder named 'bin' is created, the corresponding KMD driver(aipu.ko) and UMD library(libaipudrv.so) are generated and stored in it.
+- If the command runs normally, a folder named 'bin' is created, the corresponding KMD driver(aipu.ko) and UMD library(libaipudrv.so) are generated and stored in it.
 
 ### 2.2 Compile UMD for x86_64 simulator
 Set below env variables accordingly.
@@ -61,7 +61,7 @@ CONFIG_DRV_BTENVAR_BASE_DIR=/project/ai/scratch01
 CONFIG_DRV_BRENVAR_X86_CLPATH=/arm/tools/gnu/gcc/7.3.0/rhe7-x86_64/lib64 (optional)
 COMPASS_DRV_BTENVAR_X86_CXX=g++
 
-- specify path where store Z1/Z2/Z3/X1 simulators
+- specify path where stores Z1/Z2/Z3/X1 simulators
 CONFIG_DRV_RTENVAR_SIM_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_SIMULATOR/
 COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_PATH}/lib/
 
