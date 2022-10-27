@@ -82,6 +82,12 @@ class DbgLogger {
         return *this;
     }
 
+    DbgLogger &operator() (const std::string &format)
+    {
+        m_oss << format.c_str();
+        return *this;
+    }
+
     private:
     int m_loglevel;
     std::ostringstream m_oss;

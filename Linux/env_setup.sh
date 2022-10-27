@@ -60,13 +60,13 @@ setenv COMPASS_DRV_BTENVAR_CROSS_COMPILE_GNU aarch64-linux-gnu-
 ##############################################
 # 3.1. Z1/Z2/Z3/X1 simulators
 setenv CONFIG_DRV_RTENVAR_SIM_PATH           /project/ai/scratch01/AIPU_SIMULATOR
-setenv COMPASS_DRV_RTENVAR_Z1_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu_simulator_z1
-setenv COMPASS_DRV_RTENVAR_Z2_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu_simulator_z2
-setenv COMPASS_DRV_RTENVAR_Z3_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu_simulator_z3
-setenv COMPASS_DRV_RTENVAR_X1_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu_simulator_x1
+setenv COMPASS_DRV_RTENVAR_Z1_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/bin/aipu_simulator_z1
+setenv COMPASS_DRV_RTENVAR_Z2_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/bin/aipu_simulator_z2
+setenv COMPASS_DRV_RTENVAR_Z3_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/bin/aipu_simulator_z3
+setenv COMPASS_DRV_RTENVAR_X1_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/bin/aipu_simulator_x1
 setenv COMPASS_DRV_RTENVAR_SIM_LPATH         ${CONFIG_DRV_RTENVAR_SIM_PATH}/lib
 setenv LD_LIBRARY_PATH                       ${COMPASS_DRV_RTENVAR_SIM_LPATH}:$LD_LIBRARY_PATH
-setenv PATH                                  ${CONFIG_DRV_RTENVAR_SIM_PATH}/:$PATH
+setenv PATH                                  ${CONFIG_DRV_RTENVAR_SIM_PATH}/bin/:$PATH
 
 # 3.2. Z5 simulator
 setenv CONFIG_DRV_BRENVAR_Z5_SIM_LPATH       /project/ai/zhouyi_compass/z5_common_lib/simulator/kun/lib
