@@ -1,5 +1,5 @@
 # Compass_NPU_driver
-Compass_NPU_driver includes two parts: kernel mode driver(KMD) and user mode library(UMD). KMD is a standard Linux char driver model for NPU. UMD can be compiled as dynamical and static library accordingly. User application directly call top APIs in UMD and then indirectly call the interface of KMD to interract with NPU hardware.
+Compass_NPU_driver includes two parts: kernel mode driver(KMD) and user mode driver(UMD), actually UMD is a user mode library. KMD is a standard Linux char driver model for NPU. UMD can be compiled as dynamical and static library accordingly. User application directly call top APIs in UMD and then indirectly call the interface of KMD to interract with NPU hardware.
 
 ## 1. Folders
 ### driver
