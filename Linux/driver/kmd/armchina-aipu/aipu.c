@@ -53,6 +53,7 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct aipu_buf_desc desc;
 	struct aipu_io_req io_req;
 	struct aipu_job_status_query status;
+	struct aipu_hw_status hw;
 	u64 job_id;
 
 	switch (cmd) {
@@ -133,6 +134,20 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		} else {
 			ret = -EINVAL;
 		}
+		break;
+	case AIPU_IOCTL_GET_HW_STATUS:
+		ret = aipu_job_manager_get_hw_status(&aipu->job_manager, &hw);
+		if (!ret && copy_to_user((struct aipu_hw_status __user *)arg, &hw, sizeof(hw)))
+			ret = -EINVAL;
+		break;
+	case AIPU_IOCTL_ABORT_CMD_POOL:
+		ret = aipu_job_manager_abort_cmd_pool(&aipu->job_manager);
+		break;
+	case AIPU_IOCTL_DISABLE_TICK_COUNTER:
+		ret = aipu_job_manager_disable_tick_counter(&aipu->job_manager);
+		break;
+	case AIPU_IOCTL_ENABLE_TICK_COUNTER:
+		ret = aipu_job_manager_enable_tick_counter(&aipu->job_manager);
 		break;
 	default:
 		ret = -ENOTTY;

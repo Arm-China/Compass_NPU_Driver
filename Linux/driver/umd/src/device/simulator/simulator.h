@@ -41,6 +41,7 @@ struct SimulationJobCtx
     std::string dcr;
     std::string stack;
     std::vector<std::string> reuses;
+    std::vector<std::string> weights;
     std::vector<std::string> outputs;
     char simulation_cmd[CMD_MEN];
 };

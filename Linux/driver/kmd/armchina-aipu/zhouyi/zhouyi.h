@@ -62,8 +62,8 @@
 #define ZHOUYI_DATA_CACHE_FEATURE_REG_OFFSET  0x68
 
 #define ZHOUYI_X2_TRIGGER_TYPE_CREATE                0
-#define ZHOUYI_X2_TRIGGER_TYPE_DISPATCH              1
-#define ZHOUYI_X2_TRIGGER_TYPE_DESTROY_CREATE        2
+#define ZHOUYI_X2_TRIGGER_TYPE_UPDATE_DISPATCH       1
+#define ZHOUYI_X2_TRIGGER_TYPE_DISPATCH              2
 
 int zhouyi_read_status_reg(struct io_region *io);
 void zhouyi_clear_qempty_interrupt(struct io_region *io);

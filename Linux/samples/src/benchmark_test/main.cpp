@@ -22,6 +22,7 @@
 #include "common/cmd_line_parsing.h"
 #include "common/helper.h"
 #include "common/dbg.hpp"
+#include "kmd/armchina_aipu.h" // for aipu_ioctl()
 
 using namespace std;
 
@@ -112,6 +113,15 @@ int main(int argc, char* argv[])
     }
     //fprintf(stderr, "[TEST INFO] aipu_get_tensor_descriptor done\n");
 
+    /**
+     * here you can specify feature map and weight buffer from
+     * specific regions. the low level allcation logic will firstly
+     * try to allocate buffer from those regions. if there's no enough
+     * free buffer, it will try according to the below order:
+     * DTCM->SRAM->DDR, until fail to allocate.
+     */
+    create_job_cfg.fm_mem_region = AIPU_MEM_REGION_SRAM;
+    create_job_cfg.wt_mem_region = AIPU_MEM_REGION_SRAM;
     ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
     if (ret != AIPU_STATUS_SUCCESS)
     {

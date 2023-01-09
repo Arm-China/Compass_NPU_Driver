@@ -34,7 +34,7 @@ struct Task
 {
     TCB        tcb;
     BufferDesc stack;
-    BufferDesc dp_cc;
+    BufferDesc private_data;
 };
 
 struct SubGraphTask
@@ -84,6 +84,7 @@ private:
     uint32_t    m_grid_id = 0;
     uint32_t    m_core_cnt = 0;
     uint32_t    m_qos = 0;
+    uint32_t    m_fm_mem_region = AIPU_MEM_REGION_DEFAULT;
     bool        m_is_defer_run = false;
     bool        m_do_trigger = false;
 
@@ -94,8 +95,9 @@ private:
     bool m_backup_tcb_used = false;
     std::vector<SubGraphTask> m_sg_job;
     std::map<uint32_t, GM_info_desc> m_gm_info[2];
-    uint32_t m_segmmu_num;
-    BinSection m_segmmu_sec;
+    uint32_t m_segmmu_num = 0;
+    uint32_t m_segmmu_tcb_num = 3;
+    std::vector<SegMMUConfig> m_segmmu_sec;
     GM_V3 *m_gm = nullptr;
 
     std::string m_dumpcfg_header;
@@ -108,9 +110,14 @@ private:
     const aipu_global_config_simulation_t* m_cfg;
 
 public:
-    const GraphV3& get_graph()
+    GraphV3& get_graph()
     {
-        return static_cast<const GraphV3&>(m_graph);
+        return static_cast<GraphV3&>(m_graph);
+    }
+
+    virtual uint32_t get_subgraph_cnt()
+    {
+        return get_graph().get_subgraph_cnt();
     }
 
     const std::vector<BufferDesc> & get_reuse() override
@@ -123,7 +130,7 @@ private:
         std::vector<BufferDesc>& reuse_buf, std::vector<BufferDesc>& static_buf);
     aipu_status_t setup_tcb_task(uint32_t sg_id, uint32_t grid_id, uint32_t core_id, uint32_t task_id);
     aipu_status_t setup_tcb_sg(uint32_t sg_id, uint32_t grid_id, uint32_t core_id);
-    void          set_job_params(uint32_t sg_cnt, uint32_t task_per_sg, uint32_t remap);
+    void          set_job_params(uint32_t sg_cnt, uint32_t task_per_sg, uint32_t remap, uint32_t core_cnt);
     aipu_status_t alloc_load_job_buffers();
     aipu_status_t free_job_buffers();
     aipu_status_t alloc_subgraph_buffers();
@@ -173,7 +180,7 @@ public:
     }
 
 public:
-    JobV3(MainContext* ctx, const GraphBase& graph, DeviceBase* dev, aipu_create_job_cfg_t *config = nullptr);
+    JobV3(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_create_job_cfg_t *config = nullptr);
     ~JobV3();
     JobV3(const JobV3& job) = delete;
     JobV3& operator=(const JobV3& job) = delete;

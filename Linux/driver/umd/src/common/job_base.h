@@ -60,7 +60,7 @@ class JobBase
 protected:
     MainContext*      m_ctx;
     JOB_ID            m_id;
-    const GraphBase&  m_graph;
+    GraphBase&        m_graph;
     DeviceBase*       m_dev;
     MemoryBase*       m_mem;
     uint32_t          m_remap_flag = 0;
@@ -69,6 +69,7 @@ protected:
     /* shared buffers */
     BufferDesc m_rodata;
     BufferDesc m_descriptor;
+    BufferDesc m_pprint;
     std::vector<struct JobIOBuffer> m_inputs;
     std::vector<struct JobIOBuffer> m_outputs;
     std::vector<struct JobIOBuffer> m_inter_dumps;
@@ -76,6 +77,7 @@ protected:
     std::vector<struct JobIOBuffer> m_printf;
     std::vector<struct JobIOBuffer> m_layer_counter;
     std::vector<struct JobIOBuffer> m_err_code;
+    std::vector<struct JobIOBuffer> m_segmmus;
 
 protected:
     bool m_dump_text = false;
@@ -87,10 +89,13 @@ protected:
     bool m_dump_output = false;
     bool m_dump_tcb = false;
     bool m_dump_emu = false;
+    bool m_dump_profile = false;
     std::string m_dump_dir = "./";
     std::string m_dump_prefix = "temp";
     std::string m_dump_output_prefix = "temp";
+    std::string m_dump_misc_prefix = "";
     bool m_support_dma_buf = false;
+    int m_profile_fd = -1;
 
 protected:
     uint32_t m_status = AIPU_JOB_STATUS_NO_STATUS;
@@ -108,11 +113,12 @@ protected:
         const std::vector<BufferDesc>& reuse_buf,
         const std::vector<BufferDesc>& static_buf,
         BufferDesc rodata, BufferDesc dcr);
-    virtual const Graph& get_graph()
+    virtual Graph& get_graph()
     {
-        return static_cast<const Graph&>(m_graph);
+        return static_cast<Graph&>(m_graph);
     }
 
+    virtual uint32_t get_subgraph_cnt() = 0;
     virtual const std::vector<BufferDesc> & get_reuse() = 0;
     void setup_remap(BufferDesc& rodata, BufferDesc& descriptor);
     void create_io_buffers(const struct GraphIOTensors& io,
@@ -167,7 +173,7 @@ public:
     }
 
 public:
-    JobBase(MainContext* ctx, const GraphBase& graph, DeviceBase* dev);
+    JobBase(MainContext* ctx, GraphBase& graph, DeviceBase* dev);
     virtual ~JobBase();
     JobBase(const JobBase& job) = delete;
     JobBase& operator=(const JobBase& job) = delete;

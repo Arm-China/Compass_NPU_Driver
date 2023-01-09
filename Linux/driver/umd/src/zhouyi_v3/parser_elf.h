@@ -82,7 +82,7 @@ struct ElfSubGraphDesc
     uint32_t dcr_size;
     uint32_t printfifo_size;
     uint32_t profiler_buf_size;
-    uint32_t reserve0;
+    uint32_t private_data_size;
     uint32_t reserve1;
     uint32_t reserve2;
     uint32_t reserve3;
@@ -141,6 +141,7 @@ private:
         uint64_t& sg_desc_size);
     aipu_status_t parse_no_subgraph(char* start, uint32_t id, GraphV3& gobj,
         uint64_t& sg_desc_size);
+    aipu_status_t parse_graph_header_check(std::istream& gbin, uint32_t gbin_sz);
 
 private:
     aipu_status_t parse_graph_header_bottom(std::istream& gbin);

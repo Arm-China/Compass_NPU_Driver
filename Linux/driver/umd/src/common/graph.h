@@ -57,6 +57,7 @@ struct GraphIOTensors {
     std::vector<struct GraphIOTensorDesc> printf;
     std::vector<struct GraphIOTensorDesc> layer_counter;
     std::vector<struct GraphIOTensorDesc> err_code;
+    std::vector<struct GraphIOTensorDesc> segmmus;
 };
 
 struct GraphParamMapLoadDesc {
@@ -99,7 +100,13 @@ protected:
     /* Buffers in memory for AIPU's access */
     BufferDesc m_text;
     BufferDesc m_crodata;
+
+    /* weight in a whole buffer case */
     BufferDesc m_weight;
+
+    /* weigh in split buffer case */
+    std::vector<BufferDesc> m_weights;
+
     bool m_do_vcheck = true;
 
     /* DTCM size, KB unit */
@@ -124,6 +131,7 @@ public:
     virtual aipu_status_t get_tensor_count(aipu_tensor_type_t type, uint32_t* cnt) = 0;
     virtual aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type,
         uint32_t tensor, aipu_tensor_desc_t* desc) = 0;
+    aipu_status_t alloc_weight_buffer(std::vector<struct GraphSectionDesc> &static_sections);
 
 public:
     /* Set functions */
@@ -165,11 +173,6 @@ public:
     void set_dtcm_size(int dtcm_sz)
     {
         m_dtcm_size = dtcm_sz;
-    }
-
-    const BufferDesc &get_weight() const
-    {
-        return m_weight;
     }
 
     virtual void set_enrty(uint32_t offset){};

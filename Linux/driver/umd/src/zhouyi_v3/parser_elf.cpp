@@ -161,6 +161,7 @@ aipu_status_t aipudrv::ParserELF::parse_subgraph(char* start, uint32_t id, Graph
     sg.dcr.load(nullptr, gbin_sg_desc.dcr_offset, gbin_sg_desc.dcr_size);
     sg.printfifo_size    = gbin_sg_desc.printfifo_size;
     sg.profiler_buf_size = gbin_sg_desc.profiler_buf_size;
+    sg.private_data_size = gbin_sg_desc.private_data_size;
     sg.precursor_cnt = gbin_sg_desc.precursor_cnt;
 
     start += sizeof(gbin_sg_desc);
@@ -209,7 +210,7 @@ aipu_status_t aipudrv::ParserELF::parse_no_subgraph(char* start, uint32_t id, Gr
         uint64_t& sg_desc_size)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    Subgraph sg;
+    Subgraph sg = {0};
     FeatureMapList  fm_list;
     char* bss = nullptr;
     char* next = nullptr;
@@ -225,6 +226,7 @@ aipu_status_t aipudrv::ParserELF::parse_no_subgraph(char* start, uint32_t id, Gr
     sg.profiler_buf_size = 0;
     sg.precursor_cnt = 0;
     gobj.set_subgraph(sg);
+    gobj.set_fake_subgraph();
 
     bss = (char*)sections[ELFSectionFMList].va;
     memcpy(&fm_list, bss, sizeof(fm_list));
@@ -241,14 +243,53 @@ aipu_status_t aipudrv::ParserELF::parse_no_subgraph(char* start, uint32_t id, Gr
     return ret;
 }
 
+aipu_status_t aipudrv::ParserELF::parse_graph_header_check(std::istream& gbin, uint32_t gbin_sz)
+{
+    ELFIO::Elf32_Ehdr header;
+    unsigned int cur_pos = gbin.tellg();
+
+    if (gbin_sz < (sizeof(ELFIO::Elf32_Ehdr)))
+        return AIPU_STATUS_ERROR_INVALID_GBIN;
+
+    gbin.read((char*)&header, sizeof(header));
+    if (gbin.gcount() != sizeof(header))
+        goto finish;
+
+    if (header.e_type != 0x2)
+    {
+        fprintf(stderr, "ELF e_type is invalid\n");
+        goto finish;
+    }
+
+    if (header.e_machine != 0x29a)
+    {
+        fprintf(stderr, "ELF e_machine is invalid\n");
+        goto finish;
+    }
+
+    if (header.e_version != 0x1)
+    {
+        fprintf(stderr, "ELF e_version is invalid\n");
+        goto finish;
+    }
+
+    gbin.seekg(cur_pos, std::ios::beg);
+    return AIPU_STATUS_SUCCESS;
+
+finish:
+    gbin.seekg(cur_pos, std::ios::beg);
+    return AIPU_STATUS_ERROR_INVALID_GBIN;
+}
+
 aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size, Graph& gobj)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     struct ElfSubGraphList sg_desc_header;
     char* start = nullptr;
 
-    if (size < (sizeof(ELFIO::Elf32_Ehdr)))
-        return AIPU_STATUS_ERROR_INVALID_GBIN;
+    ret = parse_graph_header_check(gbin, size);
+    if (ret != AIPU_STATUS_SUCCESS)
+        goto finish;
 
     /* real ELF parsing */
     if (!m_elf.load(gbin))
@@ -343,7 +384,9 @@ aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size,
 
     start = (char*)sections[ELFSectionRemap].va;
     ret = parse_remap_section(start, gobj);
-    ret = gobj.extract_gm_info(0);
+
+    if (sg_desc_header.subgraphs_cnt != 0)
+        ret = gobj.extract_gm_info(0);
 
 finish:
     return ret;

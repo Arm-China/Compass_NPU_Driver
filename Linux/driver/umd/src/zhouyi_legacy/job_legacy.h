@@ -33,15 +33,23 @@ private:
     std::string m_z3_sim;
     std::string m_x1_sim;
     uint32_t m_log_level = 0;
+    bool m_en_eval = false;
     std::string m_data_dir;
+    std::string m_log_path;
     bool m_is_defer_run = false;
     bool m_do_trigger = false;
     uint32_t m_bind_core_id = 0;
+    uint32_t m_fm_mem_region = AIPU_BUF_REGION_DEFAULT;
 
 private:
-    const GraphLegacy& get_graph()
+    GraphLegacy& get_graph()
     {
-        return static_cast<const GraphLegacy&>(m_graph);
+        return static_cast<GraphLegacy&>(m_graph);
+    }
+
+    virtual uint32_t get_subgraph_cnt()
+    {
+        return 1;
     }
 
     const std::vector<BufferDesc> & get_reuse() override
@@ -72,7 +80,8 @@ public:
     }
 
 public:
-    JobLegacy(MainContext* ctx, const GraphBase& graph, DeviceBase* dev);
+    JobLegacy(MainContext* ctx, GraphBase& graph, DeviceBase* dev,
+        aipu_create_job_cfg_t *config = nullptr);
     virtual ~JobLegacy();
     JobLegacy(const JobLegacy& job) = delete;
     JobLegacy& operator=(const JobLegacy& job) = delete;

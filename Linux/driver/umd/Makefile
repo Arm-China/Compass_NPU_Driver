@@ -7,8 +7,15 @@ RM  := rm -rf
 SRC_ROOT := ./src
 INC_DIR  := ./include
 
+SRC_COMMON = $(SRC_ROOT)/common/
+SRC_ZHOUYI_LEGACY = $(SRC_ROOT)/zhouyi_legacy/
+SRC_ZHOUYI_V3 = $(SRC_ROOT)/zhouyi_v3/
+SRC_MISC = $(SRC_ROOT)/misc/
+SRC_UTIL = $(SRC_ROOT)/utils/
+SRC_DEVICE = $(SRC_ROOT)/device/
+
 CXXFLAGS := -std=c++14 -fPIC -Wall -Werror
-INCD := -I$(INC_DIR) -I$(SRC_ROOT) -I$(SRC_ROOT)/device
+INCD := -I$(INC_DIR) -I$(SRC_ROOT) -I$(SRC_COMMON) -I$(SRC_DEVICE) -I$(SRC_MISC) -I$(SRC_UTIL) -I$(SRC_ZHOUYI_LEGACY) -I$(SRC_ZHOUYI_V3)
 LDFLAGS = -shared -Wl,-soname,$(COMPASS_DRV_BTENVAR_UMD_SO_NAME)
 ANDROIDCXXFLAGS := --target=aarch64-none-linux-android21 \
                    --gcc-toolchain=$(BUILD_ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64 \
@@ -42,51 +49,51 @@ ifeq ($(BUILD_TARGET_PLATFORM), sim)
     CXXFLAGS += -DSIMULATION
 endif
 
-SRC_DIRS = $(SRC_ROOT)/ $(SRC_ROOT)/utils $(SRC_ROOT)/device/
-SRCS = $(SRC_ROOT)/context.cpp           \
-       $(SRC_ROOT)/ctx_ref_map.cpp       \
-       $(SRC_ROOT)/graph_base.cpp        \
-       $(SRC_ROOT)/graph.cpp             \
-       $(SRC_ROOT)/job_base.cpp          \
-       $(SRC_ROOT)/parser_base.cpp       \
-       $(SRC_ROOT)/memory_base.cpp       \
-       $(SRC_ROOT)/standard_api_impl.cpp \
-       $(SRC_ROOT)/status_string.cpp     \
-       $(SRC_ROOT)/aipu_printf.cpp       \
-       $(SRC_ROOT)/utils/helper.cpp
+SRC_DIRS = $(SRC_MISC) $(SRC_COMMON) $(SRC_UTIL) $(SRC_DEVICE) $(SRC_ZHOUYI_LEGACY) $(SRC_ZHOUYI_V3)
+SRCS = $(SRC_COMMON)/context.cpp           \
+       $(SRC_COMMON)/ctx_ref_map.cpp       \
+       $(SRC_COMMON)/graph_base.cpp        \
+       $(SRC_COMMON)/graph.cpp             \
+       $(SRC_COMMON)/job_base.cpp          \
+       $(SRC_COMMON)/parser_base.cpp       \
+       $(SRC_COMMON)/memory_base.cpp       \
+       $(SRC_COMMON)/standard_api_impl.cpp \
+       $(SRC_COMMON)/status_string.cpp     \
+       $(SRC_MISC)/aipu_printf.cpp       \
+       $(SRC_UTIL)/helper.cpp
 
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
-    SRC_DIRS += $(SRC_ROOT)/device/simulator
-    SRCS += $(SRC_ROOT)/device/simulator/umemory.cpp
+    SRC_DIRS += $(SRC_DEVICE)simulator
+    SRCS += $(SRC_DEVICE)/simulator/umemory.cpp
 else
-    SRC_DIRS += $(SRC_ROOT)/device/aipu
-    SRCS += $(SRC_ROOT)/device/aipu/aipu.cpp \
-            $(SRC_ROOT)/device/aipu/ukmemory.cpp
+    SRC_DIRS += $(SRC_DEVICE)/aipu
+    SRCS += $(SRC_DEVICE)/aipu/aipu.cpp \
+            $(SRC_DEVICE)/aipu/ukmemory.cpp
 endif
 
 ifneq ($(BUILD_AIPU_VERSION), z123)
     INCD += -I./3rdparty
-    SRCS += $(SRC_ROOT)/graph_v3.cpp   \
-            $(SRC_ROOT)/job_v3.cpp     \
-            $(SRC_ROOT)/parser_elf.cpp \
-            $(SRC_ROOT)/gm.cpp
+    SRCS += $(SRC_ZHOUYI_V3)/graph_v3.cpp   \
+            $(SRC_ZHOUYI_V3)/job_v3.cpp     \
+            $(SRC_ZHOUYI_V3)/parser_elf.cpp \
+            $(SRC_ZHOUYI_V3)/gm.cpp
     ifeq ($(BUILD_TARGET_PLATFORM), sim)
-        LDFLAGS += -L$(CONFIG_DRV_BRENVAR_Z5_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_Z5_SIM_LNAME)
-        SRCS += $(SRC_ROOT)/device/simulator/simulator_v3.cpp
+        LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X2_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X2_SIM_LNAME)
+        SRCS += $(SRC_DEVICE)/simulator/simulator_v3.cpp
     endif
 endif
 
 ifneq ($(BUILD_AIPU_VERSION), x2)
-    SRCS += $(SRC_ROOT)/graph_legacy.cpp \
-            $(SRC_ROOT)/job_legacy.cpp   \
-            $(SRC_ROOT)/parser_legacy.cpp
+    SRCS += $(SRC_ZHOUYI_LEGACY)/graph_legacy.cpp \
+            $(SRC_ZHOUYI_LEGACY)/job_legacy.cpp   \
+            $(SRC_ZHOUYI_LEGACY)/parser_legacy.cpp
     ifeq ($(BUILD_TARGET_PLATFORM), sim)
-        SRCS += $(SRC_ROOT)/device/simulator/simulator.cpp
+        SRCS += $(SRC_DEVICE)/simulator/simulator.cpp
     endif
 endif
 
 ifeq ($(BUILD_UMD_API_TYPE), python_api)
-    SRCS += $(SRC_ROOT)/swig_cpp2py_api.cpp
+    SRCS += $(SRC_COMMON)/swig_cpp2py_api.cpp
     CXXFLAGS += -fwrapv -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2
     INCD += -I$(CONFIG_DRV_RTENVAR_PY_INCD_PATH)
 endif
@@ -123,14 +130,14 @@ $(TARGET): $(OBJS)
 $(A_TARGET): $(OBJS)
 	$(AR) crus $@ $(OBJS)
 
-$(PY_TARGET): $(OBJS) $(COMPASS_DRV_BTENVAR_UMD_BUILD_DIR)/libz5aipudrv_wrap.o
+$(PY_TARGET): $(OBJS) $(COMPASS_DRV_BTENVAR_UMD_BUILD_DIR)/libaipudrv_wrap.o
 	$(CXX) $^ $(LDFLAGS) -lstdc++ -o $@
 
-$(COMPASS_DRV_BTENVAR_UMD_BUILD_DIR)/libz5aipudrv_wrap.o: libz5aipudrv.i
-	swig $(SWIGFLAGS) -c++ -python libz5aipudrv.i
-	$(CXX) $(CXXFLAGS) $(INCD) -c libz5aipudrv_wrap.cxx -o $@
+$(COMPASS_DRV_BTENVAR_UMD_BUILD_DIR)/libaipudrv_wrap.o: libaipudrv.i
+	swig $(SWIGFLAGS) -c++ -python libaipudrv.i
+	$(CXX) $(CXXFLAGS) $(INCD) -c libaipudrv_wrap.cxx -o $@
 	mv libaipudrv.py $(BUILD_AIPU_DRV_ODIR)
-	rm -f libz5aipudrv_wrap.cxx
+	rm -f libaipudrv_wrap.cxx
 
 build-repo:
 	@$(call make-repo)

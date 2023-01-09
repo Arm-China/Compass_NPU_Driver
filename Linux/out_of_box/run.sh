@@ -9,15 +9,19 @@ TEST_APP_DIR=./umd
 UMD_DIR=./umd
 BENCHMARK_CASE_DIR=./benchmarks
 OUTPUT_DUMP_TOP_DIR=./output
+ARCH=""
 
 #############################################################
 #
 # Configure correct simulator directory before running test!
 #
 #############################################################
-SIMULATOR=${COMPASS_DRV_RTENVAR_X1_SIMULATOR}
+SIMULATOR=../../../../AI502-SDK-1002-r0p0-eac0/simulator/bin/aipu_simulator_z2       #simulator path
+SIMULATOR_SO_DIR=../../../../AI502-SDK-1002-r0p0-eac0/simulator/lib/    #simulator dynamic lib path
+SIMULATOR=/project/ai/scratch01/AIPU_SIMULATOR/kun/bin/aipu_simulator_x1
+SIMULATOR_SO_DIR=/project/ai/scratch01/AIPU_SIMULATOR/kun/lib
 
-if [ ! -e $SIMULATOR ]; then
+if [ ! -e $SIMULATOR -o ! -e $SIMULATOR_SO_DIR ]; then
     echo "Z1/Z2/Z3/X1: have to supply valid Simulator and simulator lib"
     echo "X2: only need to supply simulator lib"
     exit 1
@@ -28,10 +32,10 @@ test_run_help() {
     echo "Test Run Options:"
     echo "-h, --help        help"
     echo "-c, --case        benchmark case(s) to run (use default searching path)"
-    echo "-a, --arch        X2_1204/X2_1204_MP3 (ignore for Z1/Z2/Z3/X1)"
+    echo "-a, --arch        X2_1204/X2_1204MP3 (ignore for Z1/Z2/Z3/X1)"
     echo "========================================================================="
     echo "usage: put resnet benchmark in 'bechmark' folder"
-    echo "  ./run.sh -c resnet or ./run.sh -a X2_1204/X2_1204_MP3 -c resnet"
+    echo "  ./run.sh -c resnet or ./run.sh -a X2_1204/X2_1204MP3 -c resnet"
     exit 1
 }
 
@@ -80,7 +84,7 @@ else
     exit 1
 fi
 
-export LD_LIBRARY_PATH=${UMD_DIR}:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=${UMD_DIR}:${SIMULATOR_SO_DIR}:$LD_LIBRARY_PATH
 mkdir -p ./${OUTPUT_DIR}
 
 ARGS="--bin=${BENCHMARK_CASE_DIR}/${case}/aipu.bin \
@@ -89,8 +93,8 @@ ARGS="--bin=${BENCHMARK_CASE_DIR}/${case}/aipu.bin \
     --dump_dir=${OUTPUT_DIR}"
 SIM_ARGS="--sim=${SIMULATOR} --cfg_dir=./"
 
-if [ -n $ARCH ]; then
-    ARGS="-a $ARCH " $ARGS
+if [ "$ARCH"x != x ]; then
+    ARGS="-a $ARCH $ARGS"
 fi
 
 echo -e "\033[7m[TEST RUN INFO] Run $TEST test with benchmark ${case}\033[0m"
@@ -105,5 +109,3 @@ else
 fi
 mv $OUTPUT_DIR $SAVED_DIR
 echo "[TEST RUN INFO] memory section dump files saved under: $SAVED_DIR"
-
-exit $ret

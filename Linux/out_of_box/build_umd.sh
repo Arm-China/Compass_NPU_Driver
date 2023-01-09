@@ -11,7 +11,7 @@ fi
 
 cd ../
 source bash_env_setup.sh
-./build_all.sh -p sim -v x1
+./build_all.sh -p sim
 cd -
 mkdir -p umd
-mv ../bin/sim/release/libaipudrv.so.*.*.* ./umd/libaipudrv.so
+cp ../bin/sim/release/libaipudrv.so.*.*.* ./umd/libaipudrv.so

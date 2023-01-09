@@ -55,7 +55,7 @@ TEST_CASE_FIXTURE(ContextTest, "get_job_object")
 
 TEST_CASE_FIXTURE(ContextTest, "load_graph")
 {
-    string graph_file = "./benchmark/aipu.bin";
+    string graph_file = "./benchamrk/aipu.bin";
     aipu_status_t ret;
     uint64_t graph_id;
 
@@ -73,7 +73,7 @@ TEST_CASE_FIXTURE(ContextTest, "load_graph")
 
 TEST_CASE_FIXTURE(ContextTest, "unload_graph")
 {
-    string graph_file = "./benchmark/aipu.bin";
+    string graph_file = "./benchamrk/aipu.bin";
     aipu_status_t ret;
     uint64_t graph_id;
 
@@ -89,7 +89,7 @@ TEST_CASE_FIXTURE(ContextTest, "unload_graph")
 
 TEST_CASE_FIXTURE(ContextTest, "create_job")
 {
-    string graph_file = "./benchmark/aipu.bin";
+    string graph_file = "./benchamrk/aipu.bin";
     JOB_ID job_id = 0;
     aipu_status_t ret;
     aipu_create_job_cfg create_job_cfg = {0};

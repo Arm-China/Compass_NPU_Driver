@@ -323,7 +323,7 @@ void pipeline()
                 i, opt.input_files[i].c_str(), i+1, input_cnt);
         }
 
-        ret = aipu_flush_job(ctx, job_id_vec[frame], nullptr);
+        ret = aipu_flush_job(ctx, job_id_vec[frame]);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(ctx, ret, &msg);

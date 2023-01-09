@@ -149,7 +149,7 @@
 #define TSM_STATUS_REG                              0x18
 
 /**
- * A1.1.23 TSM Soft Reset
+ * A1.1.25 TSM Soft Reset
  *
  * [1] soft reset status bit
  *     1) host write 0 to launch AIPU soft reset
@@ -176,31 +176,33 @@
 #define TSM_REVISION_REG                            0x50
 
 /**
- * A1.1.22 Tick Counter Low Register
- *
- * [31:0] low of tick counter
- */
-#define TICK_COUNTER_LOW_REG                        0x60
-
-/**
- * A1.1.21 Tick Counter High Register
- *
- * [31:0] high of tick counter
- */
-#define TICK_COUNTER_HIGH_REG                       0x64
-
-/**
- * A1.1.20 Tick Counter Control Status Register
+ * A1.1.22 Tick Counter Control Status Register
  *
  * [8] counter overflow flag
  * [1] clear
  * [0] enable
  */
 #define IS_COUNTER_OVERFLOW(status_32)              (((status_32) >> 8) & 0x1)
-#define CLEAR_COUNTER                               0x10
+#define CLEAR_COUNTER                               0x2
 #define ENABLE_COUNTER                              (CLEAR_COUNTER)
+#define DISABLE_COUNTER                             (CLEAR_COUNTER | 0x1)
 
 #define TICK_COUNTER_CONTROL_STATUS_REG             0x68
+
+/**
+ * A1.1.23 Tick Counter High Register
+ *
+ * [31:0] high of tick counter
+ */
+#define TICK_COUNTER_HIGH_REG                       0x64
+
+/**
+ * A1.1.24 Tick Counter Low Register
+ *
+ * [31:0] low of tick counter
+ */
+#define TICK_COUNTER_LOW_REG                        0x60
+
 
 /**************************************************************************************
  *                             TSM Command Pool [N] Registers
@@ -234,7 +236,6 @@
  * [4]     error bit
  * [3]     fault bit
  * [2]     exception bit
- * [1]     wait bit
  * [0]     done bit
  */
 #define GET_LAST_FINISHED_CID(status_32)            ((status_32) >> 24)
@@ -244,14 +245,12 @@
 #define IS_CMD_POOL_ERROR(status_32)                (((status_32) >> 4) & 0x1)
 #define IS_CMD_POOL_FAULT(status_32)                (((status_32) >> 3) & 0x1)
 #define IS_CMD_POOL_EXCEPTION(status_32)            (((status_32) >> 2) & 0x1)
-#define IS_CMD_POOL_WAIT(status_32)                 (((status_32) >> 1) & 0x1)
 #define IS_CMD_POOL_DONE(status_32)                 (((status_32) & 0x1)
 #define CLEAR_CMD_POOL_IDLE                         (0x1 << 6)
 #define CLEAR_CMD_POOL_SIGNAL                       (0x1 << 5)
 #define CLEAR_CMD_POOL_ERROR                        (0x1 << 4)
 #define CLEAR_CMD_POOL_FAULT                        (0x1 << 3)
 #define CLEAR_CMD_POOL_EXCEPTION                    (0x1 << 2)
-#define CLEAR_CMD_POOL_WAIT                         (0x1 << 1)
 #define CLEAR_CMD_POOL_DONE                         0x1
 
 #define CMD_POOL_STATUS_REG(id)                     (_GET_CMD_POOL_OFFSET(id) + 0x4)
@@ -267,7 +266,6 @@
  * [4]  error interrupt enable
  * [3]  fault interrupt enable
  * [2]  exception interrupt enable
- * [1]  wait interrupt enable
  * [0]  done interrupt enable
  */
 #define EN_CMD_POOL_INTR                            (0x1 << 11)
@@ -278,12 +276,11 @@
 #define EN_ERROR_INTR                               (0x1 << 4)
 #define EN_FAULT_INTR                               (0x1 << 3)
 #define EN_EXCEPTION_INTR                           (0x1 << 2)
-#define EN_WAIT_INTR                                (0x1 << 1)
 #define EN_DONE_INTR                                0x1
 #define EN_ALL_LEVEL_INTRS \
 	(EN_CMD_POOL_INTR | EN_CLUSTER_INTR | EN_CORE_INTR | EN_TEC_INTR)
 #define EN_ALL_TYPE_INTRS  \
-	(EN_SIGNAL_INTR | EN_ERROR_INTR | EN_FAULT_INTR | EN_EXCEPTION_INTR | EN_WAIT_INTR | EN_DONE_INTR)
+	(EN_SIGNAL_INTR | EN_ERROR_INTR | EN_FAULT_INTR | EN_EXCEPTION_INTR | EN_DONE_INTR)
 #define EN_CMD_POOL_ALL_INTRS                       (EN_CMD_POOL_INTR | EN_ALL_TYPE_INTRS)
 #define EN_ALL_INTRS                                (EN_ALL_LEVEL_INTRS | EN_ALL_TYPE_INTRS)
 #define DISABLE_ALL_INTRS                           0
@@ -303,7 +300,6 @@
  * [4]     error interrupt
  * [3]     fault interrupt
  * [2]     exception interrupt
- * [1]     wait interrupt
  * [0]     done interrupt
  */
 #define GET_INTR_CLUSTER_ID(status_32)              (((status_32) >> 24) & 0xFF)
@@ -317,9 +313,9 @@
 #define IS_ERROR_IRQ(status_32)                     (((status_32) >> 4) & 0x1)
 #define IS_FAULT_IRQ(status_32)                     (((status_32) >> 3) & 0x1)
 #define IS_EXCEPTION_IRQ(status_32)                 (((status_32) >> 2) & 0x1)
-#define IS_WAIT_IRQ(status_32)                      (((status_32) >> 1) & 0x1)
 #define IS_DONE_IRQ(status_32)                      ((status_32) & 0x1)
 #define IS_ABNORMAL(status_32)                      (((status_32) >> 2) & 0x7)
+#define IS_SERIOUS_ERR(status_32)                   (IS_ERROR_IRQ(status_32) || IS_FAULT_IRQ(status_32))
 #define GET_INTR_TYPE(status_32)                    ((status_32) & 0x3F)
 
 #define CMD_POOL_INTR_STATUS_REG(id)                (_GET_CMD_POOL_OFFSET(id) + 0xC)
@@ -377,6 +373,14 @@
  *
  * [31:0] flag
  */
+#define IS_HW_EXCEPTION_SIGNAL(flag)                ((flag) >> 31)
+#define IS_SW_EXCEPTION_SIGNAL(flag)                (((flag) >> 30) & 0x1)
+#define IS_EXCEPTION_SIGNAL(flag)                   ((flag) >> 30)
+#define IS_PRINTF_SIGNAL(flag)                      (((flag) >> 29) & 0x1)
+#define IS_PROFILER_BUF_OVERFLOW_SIGNAL(flag)       (((flag) >> 28) & 0x1)
+#define GET_ERR_CODE(flag)                          ((flag) & 0xFFFF)
+#define GET_PRINF_SIZE(flag)                        ((flag) & 0xFFFF)
+
 #define CMD_POOL_IRQ_SIGNAL_FLAG_REG(id)            (_GET_CMD_POOL_OFFSET(id) + 0x20)
 
 /**************************************************************************************

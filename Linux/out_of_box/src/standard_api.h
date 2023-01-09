@@ -18,12 +18,25 @@
 typedef struct ctx_handle aipu_ctx_handle_t;
 
 typedef enum {
+    DEV_IDLE = 0,
+    DEV_BUSY,
+    DEV_EXCEPTION
+} device_status_t;
+
+typedef enum {
     AIPU_DATA_TYPE_NONE = 0,
     AIPU_DATA_TYPE_BOOL = 1,
     AIPU_DATA_TYPE_U8   = 2,
     AIPU_DATA_TYPE_S8   = 3,
     AIPU_DATA_TYPE_U16  = 4,
     AIPU_DATA_TYPE_S16  = 5,
+    AIPU_DATA_TYPE_U32  = 6,
+    AIPU_DATA_TYPE_S32  = 7,
+    AIPU_DATA_TYPE_U64  = 8,
+    AIPU_DATA_TYPE_S64  = 9,
+    AIPU_DATA_TYPE_f16  = 10,
+    AIPU_DATA_TYPE_f32  = 11,
+    AIPU_DATA_TYPE_f64  = 12,
 } aipu_data_type_t;
 
 typedef enum {
@@ -138,14 +151,40 @@ enum {
     AIPU_JOB_QOS_HIGH = 0x1
 };
 
+enum {
+	AIPU_MEM_REGION_DEFAULT = 0,
+	AIPU_MEM_REGION_SRAM    = 1,
+	AIPU_MEM_REGION_DTCM    = 2
+};
+
 /**
- * @brief config job's partition and qos(priority) on creating a job
+ * @union aipu_create_job_cfg
+ *
+ * @brief config job's partition, qos(priority), feature map
+ *        and weight buffer region on creating a job.
+ * @note fm_mem_region
+ *       if config feature buffer region for X1, just ignore partition_id & qos_level,
+ *       set them as 0 and only set fm_mem_region field.
+ *       the buffer is allocated successfully only if there's enough space in
+ *       region marked by `fm_mem_region`.
+ * @note wt_mem_region
+ *       if config weight buffer region for X1, just ignore partition_id & qos_level,
+ *       set them as 0 and only set fm_mem_region field.
+ *       the buffer is allocated successfully only if there's enough space in
+ *       region marked by `fm_mem_region`.
+ *
+ *       usually it only needs to set `fm_mem_region`. if it's sure that the region's
+ *       free space is enough large, you can set `wt_mem_region` to try to allocate
+ *       buffer from it. if it fail to allocate buffer from marked region, it will try
+ *       according to region order: DTCM->SRAM->DDR.
  */
 typedef union aipu_create_job_cfg {
     uint32_t misc = 0;
     struct {
-        uint8_t partition_id; /**< defalut 0, in partition-0 */
-        uint8_t qos_level;    /**< defalut 0, low priority */
+        uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for X2 */
+        uint8_t qos_level:4;     /**< defalut 0, low priority, only for X2 */
+        uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
+        uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
     };
 } aipu_create_job_cfg_t;
 
@@ -191,7 +230,10 @@ typedef enum {
     AIPU_STATUS_ERROR_INVALID_GM           = 0x1F,
     AIPU_STATUS_ERROR_INVALID_SEGMMU       = 0x20,
     AIPU_STATUS_ERROR_INVALID_QOS          = 0x21,
-    AIPU_STATUS_MAX                        = 0x22,
+    AIPU_STATUS_ERROR_INVALID_TENSOR_CNT   = 0x22,
+    AIPU_STATUS_ERROR_TIMEOUT              = 0x23,
+    AIPU_STATUS_ERROR_NO_BATCH_QUEUE       = 0x24,
+    AIPU_STATUS_MAX                        = 0x25,
     /* AIPU layer library runtime error code */
     AIPU_STATUS_ERROR_UNKNOWN_ERROR        = 0x200,
     AIPU_STATUS_ERROR_KEYBOARD_INTERRUPT   = 0x300,
@@ -221,6 +263,7 @@ typedef enum {
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
+
 /**
  * @brief This API is used to initialize AIPU UMD context
  *
@@ -235,6 +278,7 @@ extern "C" {
  * @note Before invoking any other UMD API calls, any UMD application must initialize a context first.
  */
 aipu_status_t aipu_init_context(aipu_ctx_handle_t** ctx);
+
 /**
  * @brief This API is used to destroy AIPU UMD context
  *
@@ -246,6 +290,7 @@ aipu_status_t aipu_init_context(aipu_ctx_handle_t** ctx);
  * @retval AIPU_STATUS_ERROR_DEINIT_FAIL
  */
 aipu_status_t aipu_deinit_context(const aipu_ctx_handle_t* ctx);
+
 /**
  * @brief This API is used to track what happens when an error code is returned by a UMD API.
  *
@@ -259,6 +304,7 @@ aipu_status_t aipu_deinit_context(const aipu_ctx_handle_t* ctx);
  * @retval AIPU_STATUS_ERROR_INVALID_CTX
  */
 aipu_status_t aipu_get_error_message(const aipu_ctx_handle_t* ctx, aipu_status_t status, const char** msg);
+
 /**
  * @brief This API is used to configure a specified global option.
  *
@@ -277,6 +323,7 @@ aipu_status_t aipu_get_error_message(const aipu_ctx_handle_t* ctx, aipu_status_t
  * @note accepted types/config: AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK/none
  */
 aipu_status_t aipu_config_global(const aipu_ctx_handle_t* ctx, uint64_t types, void* config);
+
 /**
  * @brief This API loads an offline built AIPU executable graph binary from file system.
  *
@@ -299,6 +346,7 @@ aipu_status_t aipu_config_global(const aipu_ctx_handle_t* ctx, uint64_t types, v
  * @retval AIPU_STATUS_ERROR_INVALID_GM
  */
 aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph, uint64_t* id);
+
 /**
  * @brief This API loads a graph with the form of AIPU executable graph binary array.
  *
@@ -324,6 +372,7 @@ aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph, u
  */
 aipu_status_t aipu_load_graph_helper(const aipu_ctx_handle_t* ctx, const char* graph_buf,
     uint32_t graph_size, uint64_t* id);
+
 /**
  * @brief This API is used to unload a loaded graph
  *
@@ -336,6 +385,7 @@ aipu_status_t aipu_load_graph_helper(const aipu_ctx_handle_t* ctx, const char* g
  * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
  */
 aipu_status_t aipu_unload_graph(const aipu_ctx_handle_t* ctx, uint64_t graph);
+
 /**
  * @brief This API is used to create a new job for a graph with provided buffer handle.
  *
@@ -343,7 +393,8 @@ aipu_status_t aipu_unload_graph(const aipu_ctx_handle_t* ctx, uint64_t graph);
  * @param[in]  graph  Graph ID returned by aipu_load_graph
  * @param[out] job    Pointer to a memory location allocated by application where UMD stores
  *                        the new created job ID
- * @param[in]  config Specify job's partition id and QoS level, only for X2
+ * @param[in]  config Specify job's partition id and QoS level, only for X2.
+ *                        specify memory region for feature map and weight buffer
  *
  * @retval AIPU_STATUS_SUCCESS
  * @retval AIPU_STATUS_ERROR_NULL_PTR
@@ -354,9 +405,15 @@ aipu_status_t aipu_unload_graph(const aipu_ctx_handle_t* ctx, uint64_t graph);
  * @note The application can create one or multiple jobs by calling this API one or multiple times.
  * @note The application can schedule one created job one or multiple times by calling
  *           aipu_finish_job/aipu_flush_job, and at last clean it by calling aipu_clean_job.
+ * @note Through 'config' parameter, the feature map and weight buffer can be allocated from
+ *           specific memory regions. The allocate order is: DTCM->SRAM->DDR.
+ *           For example: if if intend to allocate feature map buffer from DTCM, it will try to
+ *           allocate from DTCM, if there's no enough free space, it tries to check SRAM, then
+ *           DDR until fail.
  */
 aipu_status_t aipu_create_job(const aipu_ctx_handle_t* ctx, uint64_t graph,
     uint64_t* job, aipu_create_job_cfg_t *config = nullptr);
+
 /**
  * @brief This API is used to flush a new computation job onto AIPU (blocking)
  *
@@ -374,15 +431,12 @@ aipu_status_t aipu_create_job(const aipu_ctx_handle_t* ctx, uint64_t graph,
  * @retval AIPU_STATUS_ERROR_JOB_TIMEOUT
  */
 aipu_status_t aipu_finish_job(const aipu_ctx_handle_t* ctx, uint64_t job, int32_t time_out);
+
 /**
  * @brief This API is used to flush a new computation job onto AIPU (non-blocking)
  *
  * @param[in] ctx      Pointer to a context handle struct returned by aipu_init_context
  * @param[in] job      Job ID returned by aipu_create_job
- * @param[in] callback Pointer to a callback function the UMD application implemented which will be called
- *                         when the flushed job is done
- * @param[in] priv     Pointer to the UMD application private data structure used as
- *                         argument of the callback when it is called
  *
  * @retval AIPU_STATUS_SUCCESS
  * @retval AIPU_STATUS_ERROR_NULL_PTR
@@ -390,10 +444,10 @@ aipu_status_t aipu_finish_job(const aipu_ctx_handle_t* ctx, uint64_t job, int32_
  * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
  * @retval AIPU_STATUS_ERROR_INVALID_OP
  *
- * @note The callback pointer should be NULL if the application would not use this feature.
  * @note A flushed job cannot be flushed again before the previous scheduled one is done.
  */
-aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t job, void* priv);
+aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t job);
+
 /**
  * @brief This API is used to get the execution status of a flushed job (non-blocking)
  *
@@ -409,6 +463,7 @@ aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t job, void* p
  * @note This API should be used by the application after aipu_flush_job successfully returns.
  */
 aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t job, aipu_job_status_t* status);
+
 /**
  * @brief This API is used to clean a finished job object scheduled by aipu_finish_job/aipu_flush_job
  *
@@ -421,6 +476,7 @@ aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t job, ai
  * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
  */
 aipu_status_t aipu_clean_job(const aipu_ctx_handle_t* ctx, uint64_t job);
+
 /**
  * @brief This API is used to get tensor count of specified type
  *
@@ -435,6 +491,7 @@ aipu_status_t aipu_clean_job(const aipu_ctx_handle_t* ctx, uint64_t job);
  * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
  */
 aipu_status_t aipu_get_tensor_count(const aipu_ctx_handle_t* ctx, uint64_t id, aipu_tensor_type_t type, uint32_t* cnt);
+
 /**
  * @brief This API is used to get tensor's descriptor of specified type
  *
@@ -452,6 +509,7 @@ aipu_status_t aipu_get_tensor_count(const aipu_ctx_handle_t* ctx, uint64_t id, a
  */
 aipu_status_t aipu_get_tensor_descriptor(const aipu_ctx_handle_t* ctx, uint64_t id, aipu_tensor_type_t type,
     uint32_t tensor, aipu_tensor_desc_t* desc);
+
 /**
  * @brief This API is used to load input tensor data
  *
@@ -468,6 +526,7 @@ aipu_status_t aipu_get_tensor_descriptor(const aipu_ctx_handle_t* ctx, uint64_t 
  * @retval AIPU_STATUS_ERROR_INVALID_OP
  */
 aipu_status_t aipu_load_tensor(const aipu_ctx_handle_t* ctx, uint64_t job, uint32_t tensor, const void* data);
+
 /**
  * @brief This API is used to get tensor data of specified type
  *
@@ -486,6 +545,7 @@ aipu_status_t aipu_load_tensor(const aipu_ctx_handle_t* ctx, uint64_t job, uint3
  */
 aipu_status_t aipu_get_tensor(const aipu_ctx_handle_t* ctx, uint64_t job,
     aipu_tensor_type_t type, uint32_t tensor, void* data);
+
 /**
  * @brief This API is used to configure a specified option of a job.
  *
@@ -505,6 +565,7 @@ aipu_status_t aipu_get_tensor(const aipu_ctx_handle_t* ctx, uint64_t job,
  * @note accepted types/config: AIPU_CONFIG_TYPE_SIMULATION/aipu_job_config_simulation_t
  */
 aipu_status_t aipu_config_job(const aipu_ctx_handle_t* ctx, uint64_t job, uint64_t types, void* config);
+
 /**
  * @brief This API is used to get AIPU cluster count.
  *
@@ -517,6 +578,7 @@ aipu_status_t aipu_config_job(const aipu_ctx_handle_t* ctx, uint64_t job, uint64
  * @retval AIPU_STATUS_ERROR_INVALID_OP
  */
 aipu_status_t aipu_get_partition_count(const aipu_ctx_handle_t* ctx, uint32_t* cnt);
+
 /**
  * @brief This API is used to get AIPU cluster count.
  *
@@ -530,6 +592,7 @@ aipu_status_t aipu_get_partition_count(const aipu_ctx_handle_t* ctx, uint32_t* c
  * @retval AIPU_STATUS_ERROR_INVALID_OP
  */
 aipu_status_t aipu_get_cluster_count(const aipu_ctx_handle_t* ctx, uint32_t partition_id, uint32_t* cnt);
+
 /**
  * @brief This API is used to get AIPU core count in a specific cluster.
  *
@@ -547,6 +610,7 @@ aipu_status_t aipu_get_cluster_count(const aipu_ctx_handle_t* ctx, uint32_t part
  * @note Cluster ID is numbered within [0, cluster_cnt).
  */
 aipu_status_t aipu_get_core_count(const aipu_ctx_handle_t* ctx, uint32_t partition_id, uint32_t cluster, uint32_t* cnt);
+
 /**
  * @brief This API is used to get information of an AIPU core for debugger to use
  *
@@ -564,6 +628,7 @@ aipu_status_t aipu_get_core_count(const aipu_ctx_handle_t* ctx, uint32_t partiti
  * @note The core or partition ID should be less than core count returned by aipu_get_core_count.
  */
 aipu_status_t aipu_debugger_get_core_info(const aipu_ctx_handle_t* ctx, uint32_t id, aipu_core_info_t* info);
+
 /**
  * @brief This API is used by debugger to get information of a job
  *
@@ -579,6 +644,7 @@ aipu_status_t aipu_debugger_get_core_info(const aipu_ctx_handle_t* ctx, uint32_t
  */
 aipu_status_t aipu_debugger_get_job_info(const aipu_ctx_handle_t* ctx,
     uint64_t job, aipu_debugger_job_info_t* info);
+
 /**
  * @brief This API bind a created job to an idle AIPU core for execution later;
  *        External registers of the specified AIPU core is writen after this API returns,
@@ -599,6 +665,7 @@ aipu_status_t aipu_debugger_get_job_info(const aipu_ctx_handle_t* ctx,
  * @note The core or partition to be bind should be in idle state; otherwise UMD returns error code
  */
 aipu_status_t aipu_debugger_bind_job(const aipu_ctx_handle_t* ctx, uint32_t id, uint64_t job_id);
+
 /**
  * @brief This API trigger a previously bind job to run on a target AIPU core;
  *        This API is a blocking API which returns after the job execution ends on hardware.
@@ -614,6 +681,7 @@ aipu_status_t aipu_debugger_bind_job(const aipu_ctx_handle_t* ctx, uint32_t id, 
  * @retval AIPU_STATUS_ERROR_INVALID_OP
  */
 aipu_status_t aipu_debugger_run_job(const aipu_ctx_handle_t* ctx, uint64_t job_id);
+
 /**
  * @brief This API allocates a buffer for AIPU debugger's usage
  *
@@ -633,6 +701,7 @@ aipu_status_t aipu_debugger_run_job(const aipu_ctx_handle_t* ctx, uint64_t job_i
  *       keep in idle state.
  */
 aipu_status_t aipu_debugger_malloc(const aipu_ctx_handle_t* ctx, uint32_t size, void** va);
+
 /**
  * @brief This API frees a buffer allocated by aipu_debugger_malloc
  *
@@ -645,19 +714,22 @@ aipu_status_t aipu_debugger_malloc(const aipu_ctx_handle_t* ctx, uint32_t size, 
  * @retval AIPU_STATUS_ERROR_BUF_FREE_FAIL
  */
 aipu_status_t aipu_debugger_free(const aipu_ctx_handle_t* ctx, void* va);
+
 /**
  * @brief this API print AIPU execution log information after corresponding job ends
  *
  * @param[in] printf_base   Pointer to a tensor buffer where stores the printf log data
- * @param[in] redirect_file Printf output redirect file path
+ * @param[in] redirect_file File path to store printf data
  *
  * @retval AIPU_STATUS_SUCCESS
  * @retval AIPU_STATUS_ERROR_NULL_PTR
  * @retval AIPU_STATUS_ERROR_PRINTF_FAIL
  *
  * @note Application should get the printf log data via aipu_get_tensor before print it.
+ *       Only support Z1/Z2/Z3/X1.
  */
 aipu_status_t aipu_printf(char* printf_base, char* redirect_file);
+
 /**
  * @brief This API is used to import dma-buf buffers allocated by other device drivers to NPU driver.
  *
@@ -682,6 +754,7 @@ aipu_status_t aipu_printf(char* printf_base, char* redirect_file);
  * @note X86-simulation does not support this feature.
  */
 aipu_status_t aipu_import_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipu_tensor_type_t type, int* fds);
+
 /**
  * @brief This API is used to export dma-buf buffers allocated by NPU driver to other device drivers.
  *
@@ -705,6 +778,138 @@ aipu_status_t aipu_import_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id,
  * @note X86-simulation does not support this feature.
  */
 aipu_status_t aipu_export_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipu_tensor_type_t type, int* fds);
+
+/**
+ * @brief This API is used to get NPU's ARCH information.
+ *
+ * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
+ * @param[out] target Pointer to a memory location allocated by application where UMD stores
+ *                    HW ARCH information
+ *
+ * @retval AIPU_STATUS_SUCCESS
+ * @retval AIPU_STATUS_ERROR_NULL_PTR
+ * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ */
+aipu_status_t aipu_get_target(const aipu_ctx_handle_t *ctx, char *target);
+
+/**
+ * @brief This API is used to get NPU status.
+ *
+ * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
+ * @param[out] status Pointer to a memory location allocated by application where UMD stores
+ *                    NPU status information
+ *
+ * @retval AIPU_STATUS_SUCCESS
+ * @retval AIPU_STATUS_ERROR_NULL_PTR
+ * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ */
+aipu_status_t aipu_get_device_status(const aipu_ctx_handle_t* ctx, device_status_t *status);
+
+/**
+ * @brief This API is used to create a batch queue.
+ *
+ * @param[in] ctx      Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] graph_id Graph id
+ * @param[out] queue_id Pointer to store batch queue id
+ *
+ *
+ * @retval AIPU_STATUS_SUCCESS
+ * @retval AIPU_STATUS_ERROR_NULL_PTR
+ * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
+ *
+ * @note Each thread is subject to call this function to get private batch queue ID.
+ *       It isn't allowed to share batch queue ID between threads.
+ */
+aipu_status_t aipu_create_batch_queue(const aipu_ctx_handle_t *ctx, uint64_t graph_id, uint32_t *queue_id);
+
+/**
+ * @brief This API is used to clean a specific batch queue.
+ *
+ * @param[in] ctx      Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] graph_id Graph id
+ * @param[in] queue_id Pointer to store batch queue id
+ *
+ *
+ * @retval AIPU_STATUS_SUCCESS
+ * @retval AIPU_STATUS_ERROR_NULL_PTR
+ * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
+ */
+aipu_status_t aipu_clean_batch_queue(const aipu_ctx_handle_t *ctx, uint64_t graph_id, uint32_t queue_id);
+
+/**
+ * @brief This API is used to do basic config for batch inference on simulator and HW.
+ *
+ * @param[in] ctx      Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] graph_id Graph id
+ * @param[in] queue_id Batch queue id
+ * @param[in] types    Dump options for each batch job
+ * @param[in] dump_cfg The root path to store dump files of each batch
+ *
+ *
+ * @retval AIPU_STATUS_SUCCESS
+ * @retval AIPU_STATUS_ERROR_NULL_PTR
+ * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
+ * @retval AIPU_STATUS_ERROR_NO_BATCH_QUEUE
+ *
+ * @note
+ *      For simulation on Z1/Z2/Z3/X1: has to set AIPU_CONFIG_TYPE_SIMULATION.
+ *      For dump: set dump options(AIPU_JOB_CONFIG_TYPE_DUMP_TEXT ...)
+ */
+aipu_status_t aipu_config_batch_dump(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
+    uint32_t queue_id, uint64_t types, aipu_job_config_dump_t *dump_cfg);
+
+/**
+ * @brief This API is used to add a group buffers of one frame inference to batch queue.
+ *
+ * @param[in] ctx        Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] graph_id   Graph id
+ * @param[in] queue_id   Batch queue id
+ * @param[in] inputs     Buffer pointers for input tensors
+ * @param[in] outputs    Buffer pointers for output tensors
+ *
+ * @retval AIPU_STATUS_SUCCESS
+ * @retval AIPU_STATUS_ERROR_NULL_PTR
+ * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
+ * @retval AIPU_STATUS_ERROR_NO_BATCH_QUEUE
+ */
+aipu_status_t aipu_add_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
+    uint32_t queue_id, char *inputs[], char *outputs[]);
+
+/**
+ * @brief This API is used to run multiple batch inference.
+ *
+ * @param[in] ctx      Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] graph_id Graph id
+ * @param[in] queue_id Batch queue id
+ * @param[in] create_cfg Config for all batches in one queue
+ *
+ * @retval AIPU_STATUS_SUCCESS
+ * @retval AIPU_STATUS_ERROR_NULL_PTR
+ * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
+ * @retval AIPU_STATUS_ERROR_NO_BATCH_QUEUE
+ */
+aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
+    uint32_t queue_id, aipu_create_job_cfg_t *create_cfg);
+
+/**
+ * @brief This API is used to send specific command to driver.
+ *
+ * @param[in] ctx Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] cmd cmd
+ * @param[inout] arg input or output argument
+ *
+ * @retval AIPU_STATUS_SUCCESS
+ * @retval AIPU_STATUS_ERROR_NULL_PTR
+ * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ * @retval AIPU_STATUS_ERROR_DEV_ABNORMAL
+ */
+aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd, void *arg = nullptr);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

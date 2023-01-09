@@ -29,18 +29,18 @@ ssize_t aipu_common_ext_register_sysfs_show(struct device *dev,
 		    "AIPU is suspended and external registers cannot be read!\n");
 	}
 
-	ret += snprintf(tmp, 1024, "----------------------------------------\n");
+	ret += snprintf(tmp, 1024, "----------------------------------------------\n");
 	strcat(buf, tmp);
 	ret += snprintf(tmp, 1024, "   AIPU External Register Values\n");
 	strcat(buf, tmp);
-	ret += snprintf(tmp, 1024, "----------------------------------------\n");
+	ret += snprintf(tmp, 1024, "----------------------------------------------\n");
 	strcat(buf, tmp);
-	ret += snprintf(tmp, 1024, "%-*s%-*s%-*s\n", 8, "Offset", 22, "Name", 10, "Value");
+	ret += snprintf(tmp, 1024, "%-*s%-*s%-*s\n", 8, "Offset", 28, "Name", 10, "Value");
 	strcat(buf, tmp);
-	ret += snprintf(tmp, 1024, "----------------------------------------\n");
+	ret += snprintf(tmp, 1024, "----------------------------------------------\n");
 	strcat(buf, tmp);
 	ret += partition->ops->sysfs_show(partition, buf);
-	ret += snprintf(tmp, 1024, "----------------------------------------\n");
+	ret += snprintf(tmp, 1024, "----------------------------------------------\n");
 	strcat(buf, tmp);
 
 	return ret;
@@ -241,6 +241,7 @@ int aipu_common_init_reg_irq(struct platform_device *p_dev, struct aipu_partitio
 	struct resource *res = NULL;
 	u64 base = 0;
 	u64 size = 0;
+	int irqnum = 0;
 
 	if (!p_dev || !reg || !irq_obj)
 		return -EINVAL;
@@ -262,15 +263,15 @@ int aipu_common_init_reg_irq(struct platform_device *p_dev, struct aipu_partitio
 	}
 	dev_dbg(&p_dev->dev, "init aipu IO region done: [0x%llx, 0x%llx]\n", base, res->end);
 
-	res = platform_get_resource(p_dev, IORESOURCE_IRQ, 0);
-	if (!res) {
+	irqnum = platform_get_irq(p_dev, 0);
+	if (irqnum < 0) {
 		dev_err(&p_dev->dev, "get aipu IRQ number failed\n");
-		ret = -EINVAL;
+		ret = irqnum;
 		goto init_irq_fail;
 	}
-	dev_dbg(&p_dev->dev, "get aipu IRQ number: 0x%x\n", (int)res->start);
+	dev_dbg(&p_dev->dev, "get aipu IRQ number: 0x%x\n", irqnum);
 
-	*irq_obj = aipu_create_irq_object(&p_dev->dev, res->start, partition, "aipu");
+	*irq_obj = aipu_create_irq_object(&p_dev->dev, irqnum, partition, "aipu");
 	if (!*irq_obj) {
 		dev_err(&p_dev->dev, "create IRQ object failed: IRQ 0x%x\n", (int)res->start);
 		ret = -EFAULT;

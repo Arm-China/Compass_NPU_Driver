@@ -26,6 +26,7 @@ build_help() {
     echo "                    - juno"
     echo "                    - 6cg"
     echo "                    - hybrid"
+    echo "                    - r329"
     echo "                    - android"
     echo "                    - [other platforms you add]"
     echo "-k, --kversion    kernel version (optional)"
@@ -36,10 +37,16 @@ build_help() {
     echo "                    - z2"
     echo "                    - z3"
     echo "                    - x1"
+    echo "                    - x2"
+    echo "                    - all"
     echo "-a, --api         Build UMD API type (optional, by default standard api):"
     echo "                    - standard_api"
     echo "                    - python_api"
     echo "--np              Build NumPy in Python API UMD (optional)"
+    echo "-s, --set         Set UMD and KMD version number"
+    echo "                  format: umd_major,umd_minor,kmd_version"
+    echo "                  eg: 5,2.0,3.3.0 umd: 5.2.0; kmd: 3.3.0"
+    echo "-g, --get         Get UMD and KMD version number"
     echo "-t, --test        Build samples or demo for specific platform"
     echo "                    - sample"
     echo "                    - demo"
@@ -47,41 +54,81 @@ build_help() {
     exit 1
 }
 
-ARGS=`getopt -o hdp:v:k:a:t: --long help,debug,platform:,version:,kversion:,api:,np,test: -n 'build_all.sh' -- "$@"`
+function set_get_version()
+{
+    if [ $# -eq 0 ]; then
+        source bash_env_setup.sh
+        echo "COMPASS_DRV_BTENVAR_UMD_V_MAJOR=$COMPASS_DRV_BTENVAR_UMD_V_MAJOR"
+        echo "COMPASS_DRV_BTENVAR_UMD_V_MINOR=$COMPASS_DRV_BTENVAR_UMD_V_MINOR"
+        echo "COMPASS_DRV_BTENVAR_KMD_VERSION=$COMPASS_DRV_BTENVAR_KMD_VERSION"
+    else
+        item_num=`echo $1 | grep -o , | wc -l`
+        if [ $item_num -eq 2 ]; then
+            umd_major=`echo $1 | cut -d ',' -f 1`
+            umd_minor=`echo $1 | cut -d ',' -f 2`
+            kmd_version=`echo $1 | cut -d ',' -f 3`
+            if [ -z $umd_major ] || [ -z $umd_minor ] || [ -z $kmd_version ]; then
+                echo "some field is null"
+                exit 1
+            fi
+            sed -i "s/setenv COMPASS_DRV_BTENVAR_UMD_V_MAJOR.*/setenv COMPASS_DRV_BTENVAR_UMD_V_MAJOR ${umd_major}/g" env_setup.sh
+            sed -i "s/setenv COMPASS_DRV_BTENVAR_UMD_V_MINOR.*/setenv COMPASS_DRV_BTENVAR_UMD_V_MINOR ${umd_minor}/g" env_setup.sh
+            sed -i "s/setenv COMPASS_DRV_BTENVAR_KMD_VERSION.*/setenv COMPASS_DRV_BTENVAR_KMD_VERSION ${kmd_version}/g" env_setup.sh
+
+            sed -i "s/export COMPASS_DRV_BTENVAR_UMD_V_MAJOR.*/export COMPASS_DRV_BTENVAR_UMD_V_MAJOR=${umd_major}/g" bash_env_setup.sh
+            sed -i "s/export COMPASS_DRV_BTENVAR_UMD_V_MINOR.*/export COMPASS_DRV_BTENVAR_UMD_V_MINOR=${umd_minor}/g" bash_env_setup.sh
+            sed -i "s/export COMPASS_DRV_BTENVAR_KMD_VERSION.*/export COMPASS_DRV_BTENVAR_KMD_VERSION=${kmd_version}/g" bash_env_setup.sh
+        else
+            echo "some field is null, item_num=$item_num"
+            exit 1
+        fi
+    fi
+
+    exit 0
+}
+
+ARGS=`getopt -o hdp:v:k:a:t:s:g --long help,debug,platform:,version:,kversion:,api:,np,test:,set:,get -n 'build_all.sh' -- "$@"`
 eval set -- "$ARGS"
 
 while [ -n "$1" ]
 do
     case "$1" in
-     -h|--help)
-         build_help
-         ;;
-     -d|--debug)
-         BUILD_DEBUG_FLAG=debug
-         ;;
-     -p|--platform)
-         BUILD_TARGET_PLATFORM="$2"
-         shift
-         ;;
-     -v|--version)
-         BUILD_AIPU_VERSION="$2"
-         shift
-         ;;
-     -k|--kversion)
-         BUILD_KERNEL_VERSION="$2"
-         shift
-         ;;
-     -a|--api)
-         BUILD_UMD_API_TYPE="$2"
-         shift
-         ;;
-     --np)
-         BUILD_WITH_NUMPY=yes
-         ;;
-     -t|--test)
-         BUILD_TEST="$2"
-         shift
-         ;;
+    -h|--help)
+        build_help
+        ;;
+    -d|--debug)
+        BUILD_DEBUG_FLAG=debug
+        ;;
+    -p|--platform)
+        BUILD_TARGET_PLATFORM="$2"
+        shift
+        ;;
+    -v|--version)
+        BUILD_AIPU_VERSION="$2"
+        shift
+        ;;
+    -k|--kversion)
+        BUILD_KERNEL_VERSION="$2"
+        shift
+        ;;
+    -a|--api)
+        BUILD_UMD_API_TYPE="$2"
+        shift
+        ;;
+    --np)
+        BUILD_WITH_NUMPY=yes
+        ;;
+    -t|--test)
+        BUILD_TEST="$2"
+        shift
+        ;;
+    -s|--set)
+        set_get_version $2
+        shift
+        ;;
+    -g|--get)
+        set_get_version
+        ;;
      --)
          shift ;
          break
@@ -224,9 +271,10 @@ if [ "$BUILD_TEST"x = "sample"x ]; then
     cd $COMPASS_DRV_BTENVAR_TEST_DIR
     if [ "$BUILD_TARGET_PLATFORM"x = "sim"x ]; then
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=simulation_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=batch_test
     else
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=benchmark_test
-        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=mthread_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=batch_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=flush_job_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=profiler_test
     fi

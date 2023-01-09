@@ -96,6 +96,7 @@ private:
     sim_aipu::Aipu *m_aipu = nullptr;
     uint32_t m_code = 0;
     uint32_t m_log_level;
+    std::string m_log_filepath;
     bool m_verbose;
     bool m_enable_avx;
     bool m_en_eval;
@@ -405,7 +406,8 @@ private:
     static SimulatorV3* m_sim;
 };
 
-inline sim_aipu::config_t sim_create_config(int code, uint32_t log_level = 0, bool verbose = false,
+inline sim_aipu::config_t sim_create_config(int code, uint32_t log_level = 0,
+    std::string log_path = "./sim.log", bool verbose = false,
     bool enable_avx = false, bool en_eval = 0)
 {
     sim_aipu::config_t config;
@@ -414,7 +416,7 @@ inline sim_aipu::config_t sim_create_config(int code, uint32_t log_level = 0, bo
     config.max_pkg_num = -1;
     config.enable_avx = enable_avx;
     config.en_eval = en_eval;
-    config.log.filepath = "./sim.log";
+    config.log.filepath = log_path;
     config.log.level = log_level;
     config.log.verbose = verbose;
     return config;

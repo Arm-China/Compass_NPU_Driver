@@ -17,14 +17,15 @@
 namespace aipudrv
 {
 
-#define TOTAL_SIM_MEM_SZ (2UL << 30)
+#define TOTAL_SIM_MEM_SZ (14UL << 28)
 
 enum {
     MEM_REGION_DDR = 0,
-    MEM_REGION_GM0 = 1,
-    MEM_REGION_GM1 = 2,
-    MEM_REGION_DTCM = 3,
-    MME_REGION_MAX = 4
+    MEM_REGION_SRAM = 1,
+    MEM_REGION_DTCM = 2,
+    MEM_REGION_GM0 = 3,
+    MEM_REGION_GM1 = 4,
+    MME_REGION_MAX = 5
 };
 
 struct MemBlock {
@@ -40,12 +41,15 @@ private:
     MemBlock m_memblock[MME_REGION_MAX] = {
         { .base = 0, .size = TOTAL_SIM_MEM_SZ },
 
-        /* the base address for GM region0/1 are specified dynamicly */
-        { .base = 0, .size = 0 },
-        { .base = 0, .size = 0 },
+        /* just a placehoder */
+        { .base = 0x00000000, .size = 0 },
 
         /* the base address for DTCM is fixed, currently only for X1 */
-        { .base = 0xD0000000, .size = 8 * MB_SIZE }
+        { .base = 0xD0000000, .size = 8 * MB_SIZE },
+
+        /* the base address for GM region0/1 are specified dynamicly */
+        { .base = 0, .size = 0 },
+        { .base = 0, .size = 0 }
     };
     BufferDesc *desc;
     bool m_gm_mean = true;

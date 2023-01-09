@@ -68,6 +68,12 @@ class DbgLogger {
         return *this;
     }
 
+    DbgLogger &operator() (const std::string &format)
+    {
+        m_oss << format.c_str();
+        return *this;
+    }
+
     template <typename ...T>
     DbgLogger &operator() (const std::string &format, const T&... args)
     {
@@ -79,12 +85,6 @@ class DbgLogger {
             m_oss << buffer.get();
         }
 
-        return *this;
-    }
-
-    DbgLogger &operator() (const std::string &format)
-    {
-        m_oss << format.c_str();
         return *this;
     }
 

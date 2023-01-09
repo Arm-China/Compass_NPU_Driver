@@ -93,16 +93,18 @@ class FileWrapper {
     {
         m_fs.open(file, mode);
         if (!m_fs.is_open())
-        {
             std::cout << "FileWrapper open: " << file << " [fail]\n";
-            exit(-1);
-        }
     }
 
     ~FileWrapper()
     {
         if (m_fs.is_open())
             m_fs.close();
+    }
+
+    bool is_open()
+    {
+        return m_fs.is_open();
     }
 
     template <typename T>

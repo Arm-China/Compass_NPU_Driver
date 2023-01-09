@@ -61,12 +61,13 @@ You may build the out-of-tree KMD module with our build_all.sh script:
 
 To build with the default SoC impl.:
 
-    $./build_all.sh -p [juno/6cg] -v x1   #juno/6cg using default SoC impl.
+    $./build_all.sh -p [juno/6cg]   #juno/6cg using default SoC impl.
 
 If you implement your specific SoC integration instead of using the default samples,
+
 you are suggested to update the build_all.sh and build with
 
-    $./build_all.sh -p [MY_SOC] -v x1
+    $./build_all.sh -p [MY_SOC]
 
 The above build commands by default build all the implementations of different Zhouyi architectures.
 If you would like to build for a single/compatible Zhouyi architecture(s), try to execute like:
@@ -75,6 +76,8 @@ If you would like to build for a single/compatible Zhouyi architecture(s), try t
     $./build_all.sh -p MY_SOC -v z2     #build Zhouyi Z2/Z3/X1 compatible version
     $./build_all.sh -p MY_SOC -v z3     #build Zhouyi Z2/Z3/X1 compatible version
     $./build_all.sh -p MY_SOC -v x1     #build Zhouyi Z2/Z3/X1 compatible version
+    $./build_all.sh -p MY_SOC -v x2     #build Zhouyi X2 only
+    $./build_all.sh -p MY_SOC           #build Zhouyi Z1/Z2/Z3/X1/X2 compatible version
 
 2.2 Build in kernel
 -------------------
@@ -369,6 +372,16 @@ Please find the example in 3.1.4.
 Note that the higher 32 bits of the base address of SoC SRAM should be equal to that of the reserved
 DRAM. This ensures all the reuse buffers to share the same ASID parameters.
 
+If host CPUs on your SoC have no access to a SRAM region (but your NPUs have), it is unnecessary to
+reserve a SRAM region in DTS. If you still do this, please ensure that the following macro is set to
+be 0:
+
+    in armchina-aipu/config.h: AIPU_CONFIG_HOST_MAP_SRAM
+
+By default, this macro is 0. You should set 1 if your CPUs also have access to SRAM and you wish to enable
+the sram management by driver. If set, driver will map the address to virtual space and sram allocations
+from userspace will be enabled.
+
 3.1.4.4 DTCM
 ------------
 AIPU Data Tightly Coupled Memory (DTCM) is an address space for high-speed accessing (like SRAM) on
@@ -379,6 +392,16 @@ If DTCM is configured, the size of it should be a value within a list (spec requ
     {512KB, 1MB, 2MB, 3MB, ..., 31MB, 32MB}
 
 DTCM region is optional for X1/X2. Please find the example in 3.1.4.
+
+If host CPUs on your SoC have no access to a DTCM region (but your NPUs have), it is still necessary to
+reserve a DTCM region in DTS because driver should configure the reserved DTCM address in the NPU register.
+In this case, please ensure that the following macro is set to be 0:
+
+    in armchina-aipu/config.h: AIPU_CONFIG_HOST_MAP_DTCM
+
+By default, this macro is 0. You should set 1 if your CPUs also have access to DTCM and you wish to enable
+the dtcm management by driver. If set, driver will map the address to virtual space and dtcm allocations
+from userspace will be enabled.
 
 3.1.5 Host-AIPU-Offset
 ----------------------

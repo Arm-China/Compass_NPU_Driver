@@ -17,6 +17,7 @@
 #include <assert.h>
 #include "aipu.h"
 #include "ukmemory.h"
+#include "job_base.h"
 
 aipudrv::Aipu* aipudrv::Aipu::m_aipu = nullptr;
 
@@ -88,8 +89,6 @@ aipu_ll_status_t aipudrv::Aipu::init()
 
     if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_X2)
     {
-        m_dram->set_gm_enable(false);
-
         if (cap.gm0_size == 0)
             return AIPU_LL_STATUS_ERROR_IOCTL_QUERY_STATUS_FAIL;
 
@@ -133,6 +132,7 @@ void aipudrv::Aipu::deinit()
 
     if (m_fd > 0)
     {
+        ioctl_cmd(AIPU_IOCTL_DISABLE_TICK_COUNTER, nullptr);
         close(m_fd);
         m_fd = 0;
     }
@@ -218,7 +218,7 @@ aipu_ll_status_t aipudrv::Aipu::get_status(std::vector<aipu_job_status_desc>& jo
     }
 
     for (uint32_t i = 0; i < status_query.poll_cnt; i++)
-        jobs_status.push_back(status_query.status[i]);
+        m_job_sts_queue.push_q(status_query.status[i]);
 
 clean:
     delete[] status_query.status;
@@ -228,7 +228,7 @@ clean:
 aipu_ll_status_t aipudrv::Aipu::get_status(std::vector<aipu_job_status_desc>& jobs_status,
     uint32_t max_cnt, void *jobbase)
 {
-    return poll_status(jobs_status, max_cnt, 0, true);
+    return poll_status(jobs_status, max_cnt, 0, true, jobbase);
 }
 
 aipu_ll_status_t aipudrv::Aipu::poll_status(std::vector<aipu_job_status_desc>& jobs_status,
@@ -237,17 +237,70 @@ aipu_ll_status_t aipudrv::Aipu::poll_status(std::vector<aipu_job_status_desc>& j
     aipu_ll_status_t ret = AIPU_LL_STATUS_SUCCESS;
     int kret = 0;
     struct pollfd poll_list;
+    JobBase *job = (JobBase *)jobbase;
+
     poll_list.fd = m_fd;
     poll_list.events = POLLIN | POLLPRI;
 
     assert(max_cnt > 0);
 
+repeat:
     kret = poll(&poll_list, 1, time_out);
     if (kret < 0)
         return AIPU_LL_STATUS_ERROR_POLL_FAIL;
 
     if ((poll_list.revents & POLLIN) == POLLIN)
         ret = get_status(jobs_status, max_cnt, of_this_thread);
+
+    if (m_job_sts_queue.is_job_exist(job->get_id()))
+    {
+        jobs_status.push_back(*m_job_sts_queue.pop_q(job->get_id()));
+        return ret;
+    }
+
+    if (time_out == -1)
+        goto repeat;
+
+    return ret;
+}
+
+aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
+{
+    aipu_ll_status_t ret = AIPU_LL_STATUS_SUCCESS;
+    int kret = 0;
+
+    switch (cmd)
+    {
+        case AIPU_IOCTL_ABORT_CMD_POOL:
+            kret = ioctl(m_fd, AIPU_IOCTL_ABORT_CMD_POOL);
+            if (kret < 0)
+                ret = AIPU_LL_STATUS_ERROR_IOCTL_ABORT_CMDPOOL;
+            break;
+
+        case AIPU_IOCTL_ENABLE_TICK_COUNTER:
+            if (!m_tick_counter)
+            {
+                kret = ioctl(m_fd, AIPU_IOCTL_ENABLE_TICK_COUNTER);
+                if (kret < 0)
+                    ret = AIPU_LL_STATUS_ERROR_IOCTL_TICK_COUNTER;
+                m_tick_counter = true;
+            }
+            break;
+
+        case AIPU_IOCTL_DISABLE_TICK_COUNTER:
+            if (m_tick_counter)
+            {
+                kret = ioctl(m_fd, AIPU_IOCTL_DISABLE_TICK_COUNTER);
+                if (kret < 0)
+                    ret = AIPU_LL_STATUS_ERROR_IOCTL_TICK_COUNTER;
+                m_tick_counter = false;
+            }
+            break;
+
+        default:
+            LOG(LOG_ERR, "AIPU can't support cmd: %d\n", cmd);
+            ret = AIPU_LL_STATUS_ERROR_OPERATION_UNSUPPORTED;
+    }
 
     return ret;
 }

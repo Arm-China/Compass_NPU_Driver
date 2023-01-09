@@ -31,7 +31,7 @@ aipu_status_t aipudrv::GraphLegacy::create_job(JOB_ID* id, const aipu_global_con
     aipu_create_job_cfg_t *config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    JobLegacy* job = new JobLegacy((MainContext*)m_ctx, *this, m_dev);
+    JobLegacy* job = new JobLegacy((MainContext*)m_ctx, *this, m_dev, config);
 
     ret = job->init(cfg);
     if (AIPU_STATUS_SUCCESS != ret)

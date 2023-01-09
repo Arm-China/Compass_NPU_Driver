@@ -275,7 +275,7 @@ aipu_status_t aipu_finish_job(const aipu_ctx_handle_t* ctx, uint64_t job_id, int
         return ret;
 
     ret = job->schedule();
-    if (AIPU_STATUS_SUCCESS != ret)
+   if (AIPU_STATUS_SUCCESS != ret)
         return ret;
 
     if (time_out <= 0)
@@ -288,7 +288,7 @@ aipu_status_t aipu_finish_job(const aipu_ctx_handle_t* ctx, uint64_t job_id, int
     return ret;
 }
 
-aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t id, void* priv)
+aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t id)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     aipudrv::JobBase* job = nullptr;
@@ -626,7 +626,8 @@ aipu_status_t aipu_config_job(const aipu_ctx_handle_t* ctx, uint64_t job_id, uin
          AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT       |
          AIPU_JOB_CONFIG_TYPE_DUMP_REUSE        |
          AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN    |
-         AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION))
+         AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION    |
+         AIPU_JOB_CONFIG_TYPE_DUMP_PROFILE))
         ret = job->config_mem_dump(types, (aipu_job_config_dump_t*)config);
     else if (types == AIPU_CONFIG_TYPE_SIMULATION)
         ret = job->config_simulation(types, (aipu_job_config_simulation_t*)config);
@@ -760,5 +761,153 @@ aipu_status_t aipu_get_device_status(const aipu_ctx_handle_t* ctx, uint32_t *sta
     ret = p_ctx->aipu_get_device_status(status);
 finish:
     return ret;
+}
 
+aipu_status_t aipu_config_batch_dump(const aipu_ctx_handle_t* ctx, uint64_t graph_id,
+    uint32_t queue_id, uint64_t types, aipu_job_config_dump_t *config)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    aipudrv::GraphBase* graph = nullptr;
+
+    if (nullptr == ctx)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
+    if (!aipudrv::valid_graph_id(graph_id))
+        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+    ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
+    if (AIPU_STATUS_SUCCESS != ret)
+        return ret;
+
+    ret = graph->config_for_batch(queue_id, types, config);
+    return ret;
+}
+
+aipu_status_t aipu_create_batch_queue(const aipu_ctx_handle_t* ctx, uint64_t graph_id,
+    uint32_t *queue_id)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    aipudrv::GraphBase *graph = nullptr;
+
+    if (nullptr == ctx)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
+    if (!aipudrv::valid_graph_id(graph_id))
+        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+    ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
+    if (AIPU_STATUS_SUCCESS != ret)
+       goto out;
+
+    ret = graph->get_batch_queue_id(queue_id);
+
+out:
+    return ret;
+}
+
+aipu_status_t aipu_clean_batch_queue(const aipu_ctx_handle_t* ctx, uint64_t graph_id,
+    uint32_t queue_id)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    aipudrv::GraphBase *graph = nullptr;
+
+    if (nullptr == ctx)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
+    if (!aipudrv::valid_graph_id(graph_id))
+        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+    ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
+    if (AIPU_STATUS_SUCCESS != ret)
+       goto out;
+
+    ret = graph->clean_batch_queue(queue_id);
+out:
+    return ret;
+}
+
+aipu_status_t aipu_add_batch(const aipu_ctx_handle_t* ctx, uint64_t graph_id, uint32_t queue_id,
+    char *inputs[], char *outputs[])
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    aipudrv::GraphBase *graph = nullptr;
+    uint32_t in_tensor_cnt = 0, out_tensor_cnt = 0;
+
+    if (nullptr == ctx)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
+    if (!aipudrv::valid_graph_id(graph_id))
+        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+    ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
+    if (AIPU_STATUS_SUCCESS != ret)
+       goto out;
+
+    in_tensor_cnt = graph->m_input_cnt;
+    out_tensor_cnt = graph->m_output_cnt;
+
+    if (in_tensor_cnt == 0)
+    {
+        ret = graph->get_tensor_count(AIPU_TENSOR_TYPE_INPUT, &in_tensor_cnt);
+        if (AIPU_STATUS_SUCCESS != ret)
+           goto out;
+
+        graph->m_input_cnt = in_tensor_cnt;
+    }
+
+    if (out_tensor_cnt == 0)
+    {
+        ret = graph->get_tensor_count(AIPU_TENSOR_TYPE_OUTPUT, &out_tensor_cnt);
+        if (AIPU_STATUS_SUCCESS != ret)
+           goto out;
+
+        graph->m_output_cnt = out_tensor_cnt;
+    }
+
+    ret = graph->add_batch(queue_id, inputs, in_tensor_cnt, outputs, out_tensor_cnt);
+out:
+    return ret;
+}
+
+aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t* ctx, uint64_t graph_id,
+    uint32_t queue_id, aipu_create_job_cfg_t *config)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+    aipudrv::MainContext* p_ctx = nullptr;
+    aipudrv::GraphBase* graph = nullptr;
+
+    if (nullptr == ctx || nullptr == config)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
+    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+    if (nullptr == p_ctx)
+        return AIPU_STATUS_ERROR_INVALID_CTX;
+
+    if (!aipudrv::valid_graph_id(graph_id))
+        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+    ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
+    if (AIPU_STATUS_SUCCESS != ret)
+        return ret;
+
+    ret = p_ctx->run_batch(*graph, queue_id, config);
+    return ret;
+}
+
+aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd, void *arg)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+    aipudrv::MainContext* p_ctx = nullptr;
+
+    if (nullptr == ctx)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
+    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+    if (nullptr == p_ctx)
+        return AIPU_STATUS_ERROR_INVALID_CTX;
+
+    ret = p_ctx->ioctl_cmd(cmd, arg);
+    return ret;
 }

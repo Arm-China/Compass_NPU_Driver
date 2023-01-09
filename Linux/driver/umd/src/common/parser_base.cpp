@@ -115,6 +115,9 @@ aipu_status_t aipudrv::ParserBase::fill_io_tensor_desc_inner(uint32_t reuse_sec_
         case SECTION_TYPE_ERROR_CODE:
             desc.err_code.push_back(io_desc);
             break;
+        case SECTION_TYPE_SEGMMU:
+            desc.segmmus.push_back(io_desc);
+            break;
         default:
             LOG(LOG_WARN, "no sub_section type: %d\n", sub_section_load.type);
             return AIPU_STATUS_ERROR_INVALID_TENSOR_TYPE;
@@ -233,7 +236,8 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
                 (SECTION_TYPE_PROF_DATA == sub_desc_load.type) ||
                 (SECTION_TYPE_PLOG_DATA == sub_desc_load.type) ||
                 (SECTION_TYPE_LAYER_COUNTER == sub_desc_load.type) ||
-                (SECTION_TYPE_ERROR_CODE == sub_desc_load.type))
+                (SECTION_TYPE_ERROR_CODE == sub_desc_load.type) ||
+                (SECTION_TYPE_SEGMMU == sub_desc_load.type))
             {
                 fill_io_tensor_desc_inner<SubSectionDesc>(reuse_sec_iter,
                     sub_sec_iter, sub_desc_load, io, support_dma_buf);
@@ -360,7 +364,7 @@ uint32_t aipudrv::ParserBase::get_graph_bin_version(std::istream& gbin)
 {
     #define EI_NIDENT 16
     uint32_t g_version = 0;
-    const char e_ident[EI_NIDENT] = {0};
+    char e_ident[EI_NIDENT] = {0};
 
     gbin.read((char*)&e_ident, EI_NIDENT);
     gbin.seekg(0, gbin.beg);

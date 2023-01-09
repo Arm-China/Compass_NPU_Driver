@@ -12,7 +12,7 @@ else
 fi
 BUILD_TARGET_PLATFORM=no
 TEST_APP=aipu_${TEST}_test
-BENCHMARK_CASE_DIR=../../benchmarks/z5
+BENCHMARK_CASE_DIR=../../benchmarks/x2
 OUTPUT_DUMP_TOP_DIR=./output
 KMD_RELEASE_DIR=.
 SIM_LOG_LEVEL=0

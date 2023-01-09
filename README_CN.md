@@ -18,18 +18,32 @@ Compass_NPU 驱动包括两部分：内核态驱动(KMD)和用户态驱动(UMD)�
 ### 2.1 交叉编译KMD和UMD
 这里以JUNO(Arm64)开发板为例，如果使用其它的嵌入式平台，请根据实际环境，在bash_env_setup.sh 或 env_setup.sh中，设置以下的环境变量。
 
+#### 准备依赖的BSP资源，如：Linux源码，交叉编译链工具等...
+
+```bash
+/home/ai/scrach01
+|
+|-- AIPU_BSP
+    |-- kernel
+    |   |-- linux-5.11.18
+    |
+    `-- toolchain
+        |-- gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu
+```
+
 - 切换工作目录到驱动源码包中路径 Linux/
 
 - 设置如下公用的环境变量
 
 - 设置顶层编译包依赖的总路径
-CONFIG_DRV_BTENVAR_BASE_DIR=/project/ai/scratch01
+CONFIG_DRV_BTENVAR_BASE_DIR=/home/ai/scratch01
+CONFIG_DRV_BTENVAR_BSP_BASE_DIR=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_BSP
 
 - 指定交叉编译工具链的路径
-CONFIG_DRV_BTENVAR_CROSS_CXX_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_BSP/toolchain/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu/bin
+CONFIG_DRV_BTENVAR_CROSS_CXX_PATH=${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/toolchain/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu/bin
 
 - 指定Linux内核源码包路径
-CONFIG_DRV_BTENVAR_JUNO_KPATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_BSP/kernel/linux-5.11.18
+CONFIG_DRV_BTENVAR_JUNO_KPATH=${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/kernel/linux-5.11.18
 
 - 指定编译UMD库和样例的C++编译器
 COMPASS_DRV_BTENVAR_CROSS_CXX=aarch64-linux-gnu-g++
@@ -51,18 +65,41 @@ or
 
 ### 2.2 编译配合X86上模拟的UMD
 
+#### 准备NPU模拟需要的依赖包资源(模拟器及动态库)，如：aipu_simulator_x1, libaipu_simulator_z2.so...
+
+```bash
+/home/ai/scratch01/
+|
+|-- AIPU_SIMULATOR
+    |
+    |-- bin
+    |   |-- aipu_simulator_x1
+    |   |-- aipu_simulator_x2
+    |   |-- aipu_simulator_z1
+    |   |-- aipu_simulator_z2
+    |   |-- aipu_simulator_z3
+    |
+    `-- lib
+        |-- libaipu_simulator_x1.so
+        |-- libaipu_simulator_x2.so
+        |-- libaipu_simulator_z1.so
+        |-- libaipu_simulator_z2.so
+        |-- libaipu_simulator_z3.so
+```
+
 #### 设置如下公用环境变量
 
 - 设置顶层编译包依赖的总路径
-CONFIG_DRV_BTENVAR_BASE_DIR=/project/ai/scratch01
+CONFIG_DRV_BTENVAR_BASE_DIR=/home/ai/scratch01
+CONFIG_DRV_RTENVAR_SIM_BASE_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_SIMULATOR
 
 - 指定X86平台的g++编译器和依赖库路径
 CONFIG_DRV_BRENVAR_X86_CLPATH=/arm/tools/gnu/gcc/7.3.0/rhe7-x86_64/lib64 (可选)
 COMPASS_DRV_BTENVAR_X86_CXX=g++
 
-- 针对Z1/Z2/Z3/X1模拟的时候，指定模拟器存放的路径
-CONFIG_DRV_RTENVAR_SIM_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_SIMULATOR/
-COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_PATH}/lib/
+- 针对Z1/Z2/Z3/X1/X2模拟的时候，指定模拟器和库存放的路径
+CONFIG_DRV_RTENVAR_SIM_PATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/bin/
+COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/lib/
 
 - 编译命令
 
@@ -71,7 +108,7 @@ COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_PATH}/lib/
 # source bash_env_setup.sh (for bash env)
 or
 # source env_setup.sh (for csh env)
-# ./build_all.sh -p sim -v x1 [-d]
+# ./build_all.sh -p sim [-d]
 ```
 
 - 如果以上命令成功执行，一个驱动加载模块aipu.ko和一个用户态动态链接库libaipudrv.so将产生，并且被存放在bin文件夹中。

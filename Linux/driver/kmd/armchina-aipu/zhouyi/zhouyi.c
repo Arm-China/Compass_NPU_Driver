@@ -67,7 +67,7 @@ int zhouyi_print_reg_info(struct io_region *io, char *buf, const char *name, int
 	if (unlikely(!io || !buf || !name))
 		return -EINVAL;
 
-	return snprintf(buf, 1024, "0x%-*x%-*s0x%08x\n", 6, offset, 22, name,
+	return snprintf(buf, 1024, "0x%-*x%-*s0x%08x\n", 6, offset, 28, name,
 	    aipu_read32(io, offset));
 }
 #endif

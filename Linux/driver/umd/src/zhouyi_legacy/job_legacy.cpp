@@ -12,10 +12,17 @@
 #include <unistd.h>
 #include "job_legacy.h"
 
-aipudrv::JobLegacy::JobLegacy(MainContext* ctx, const GraphBase& graph, DeviceBase* dev):
+aipudrv::JobLegacy::JobLegacy(MainContext* ctx, GraphBase& graph,
+    DeviceBase* dev, aipu_create_job_cfg_t *config):
     JobBase(ctx, graph, dev)
 {
     m_stack.reset();
+
+    if (config != nullptr)
+    {
+        m_fm_mem_region = config->fm_mem_region;
+        graph.set_weight_region(config->wt_mem_region);
+    }
 }
 
 aipudrv::JobLegacy::~JobLegacy()
@@ -56,6 +63,10 @@ aipu_status_t aipudrv::JobLegacy::init(const aipu_global_config_simulation_t* cf
         m_x1_sim = cfg->x1_simulator;
 
     m_log_level = cfg->log_level;
+    m_en_eval = cfg->en_eval;
+
+    if (cfg->log_file_path != nullptr)
+        m_log_path = cfg->log_file_path;
 #endif
 
     /* 1. allocate and load job rodata */
@@ -92,7 +103,7 @@ aipu_status_t aipudrv::JobLegacy::init(const aipu_global_config_simulation_t* cf
         if (size != 0)
         {
             std::string str = "reuse_" + std::to_string(i);
-            ret = m_mem->malloc(size, align_in_page, &buf, str.c_str());
+            ret = m_mem->malloc(size, align_in_page, &buf, str.c_str(), m_fm_mem_region);
             if (AIPU_STATUS_SUCCESS != ret)
                 goto finish;
         }
@@ -104,29 +115,10 @@ aipu_status_t aipudrv::JobLegacy::init(const aipu_global_config_simulation_t* cf
     }
 
     /* 5. init weights address */
-    for (uint32_t i = 0; i < get_graph().m_static_sections.size(); i++)
-    {
-        BufferDesc buf;
+    if ((ret = get_graph().alloc_weight_buffer(get_graph().m_static_sections)) != AIPU_STATUS_SUCCESS)
+        goto finish;
 
-        #if 0
-        /**
-         * if enable this logic, please also enable the corresponding free logic.
-         */
-        buf.reset();
-        std::string str = "static_" + std::to_string(i);
-        const GraphSectionDesc &section_desc = get_graph().m_static_sections[i];
-        ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &buf, str.c_str(), AIPU_BUF_REGION_DTCM);
-        if (AIPU_STATUS_SUCCESS != ret)
-            goto finish;
-
-        m_mem->write(buf.pa, (char *)section_desc.load_src, section_desc.size);
-        #else
-        buf.init(get_graph().m_weight.asid_base, get_graph().m_weight.pa + get_graph().m_static_sections[i].offset,
-            get_graph().m_static_sections[i].size,
-            get_graph().m_static_sections[i].size);
-        #endif
-        m_weights.push_back(buf);
-    }
+    m_weights.assign(get_graph().m_weights.begin(), get_graph().m_weights.end());
 
     /* 6. update rodata & dcr */
     ret = setup_rodata_legacy();
@@ -184,15 +176,7 @@ aipu_status_t aipudrv::JobLegacy::free_job_buffers()
         m_mem->free(&m_reuses[i]);
 
     m_reuses.clear();
-
-    #if 0
-    for (uint32_t i = 0; i < m_weights.size(); i++)
-    {
-        m_mem->free(&m_weights[i]);
-    }
     m_weights.clear();
-    #endif
-
     m_inputs.clear();
     m_outputs.clear();
     m_inter_dumps.clear();
@@ -258,7 +242,10 @@ aipu_status_t aipudrv::JobLegacy::schedule()
     desc.dcr_size = m_descriptor.req_size;
     desc.stack_size = m_stack.req_size;
     desc.reuses = m_reuses;
+    desc.weights = m_weights;
     desc.dump_reuse = !!m_dump_reuse;
+    desc.output_dir = m_data_dir;
+
     for (uint32_t i = 0; i < m_outputs.size(); i++)
     {
         BufferDesc buf;
@@ -270,24 +257,23 @@ aipu_status_t aipudrv::JobLegacy::schedule()
     {
         BufferDesc buf;
         buf.init(0, m_err_code[0].pa, m_err_code[0].size, m_err_code[0].size);
-        desc.outputs.push_back(buf);
+        desc.misc_outputs[desc.output_dir + "/error_code.bin"] = buf;
     }
 
     if (m_profiler.size() > 0)
     {
         BufferDesc buf;
         buf.init(0, m_profiler[0].pa, m_profiler[0].size, m_profiler[0].size);
-        desc.outputs.push_back(buf);
+        desc.profile.push_back(buf);
     }
 
     if (m_printf.size() > 0)
     {
         BufferDesc buf;
         buf.init(0, m_printf[0].pa, m_printf[0].size, m_printf[0].size);
-        desc.outputs.push_back(buf);
+        desc.misc_outputs[desc.output_dir + "/printf_data.bin"] = buf;
     }
 
-    desc.output_dir = m_data_dir;
     if (get_graph().m_hw_version == AIPU_VERSION_ZHOUYI_V1)
         desc.simulator = m_z1_sim;
     else if (get_graph().m_hw_version == AIPU_VERSION_ZHOUYI_V2)
@@ -297,7 +283,13 @@ aipu_status_t aipudrv::JobLegacy::schedule()
     else if (get_graph().m_hw_version == AIPU_VERSION_ZHOUYI_X1)
         desc.simulator = m_x1_sim;
 
+    if (m_log_path.length() != 0)
+        desc.log_path = m_log_path;
+    else
+        desc.log_path = desc.output_dir;
+
     desc.log_level = m_log_level;
+    desc.en_eval = m_en_eval;
 
     if (get_graph().m_sram_flag)
         desc.kdesc.exec_flag |= AIPU_JOB_EXEC_FLAG_SRAM_MUTEX;
@@ -331,7 +323,7 @@ aipu_status_t aipudrv::JobLegacy::config_simulation(uint64_t types, const aipu_j
 
     if(access(config->data_dir, F_OK) != 0)
     {
-        LOG(LOG_ERR, "%s [non-exit]", config->data_dir);
+        LOG(LOG_ERR, "%s [non-exist]", config->data_dir);
         return AIPU_STATUS_ERROR_INVALID_CONFIG;
     }
 

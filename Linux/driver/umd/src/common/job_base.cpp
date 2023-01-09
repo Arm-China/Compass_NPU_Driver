@@ -13,7 +13,7 @@
 #include "job_base.h"
 #include "utils/helper.h"
 
-aipudrv::JobBase::JobBase(MainContext* ctx, const GraphBase& graph, DeviceBase* dev):
+aipudrv::JobBase::JobBase(MainContext* ctx, GraphBase& graph, DeviceBase* dev):
     m_ctx(ctx), m_graph(graph), m_dev(dev)
 {
     m_mem = m_dev->get_mem();
@@ -31,9 +31,16 @@ aipu_status_t aipudrv::JobBase::get_status(aipu_job_status_t* status)
     std::vector<aipu_job_status_desc> jobs_status;
     uint32_t err = 0;
 
-    ret = convert_ll_status(m_dev->get_status(jobs_status, 1, this));
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
+    if (get_subgraph_cnt() == 0)
+    {
+        aipu_job_status_desc desc = {0};
+        desc.state = AIPU_JOB_STATE_DONE;
+        jobs_status.push_back(desc);
+    } else {
+        ret = convert_ll_status(m_dev->get_status(jobs_status, 1, this));
+        if (ret != AIPU_STATUS_SUCCESS)
+            return ret;
+    }
 
     if (jobs_status.size() != 0)
         m_status = jobs_status[0].state;
@@ -59,9 +66,16 @@ aipu_status_t aipudrv::JobBase::get_status_blocking(aipu_job_status_t* status, i
     std::vector<aipu_job_status_desc> jobs_status;
     uint32_t err = 0;
 
-    ret = convert_ll_status(m_dev->poll_status(jobs_status, 1, time_out, true, this));
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
+    if (get_subgraph_cnt() == 0)
+    {
+        aipu_job_status_desc desc = {0};
+        desc.state = AIPU_JOB_STATE_DONE;
+        jobs_status.push_back(desc);
+    } else {
+        ret = convert_ll_status(m_dev->poll_status(jobs_status, 1, time_out, true, this));
+        if (ret != AIPU_STATUS_SUCCESS)
+            return ret;
+    }
 
     if (jobs_status.size() != 0)
         m_status = jobs_status[0].state;
@@ -103,6 +117,7 @@ aipu_status_t aipudrv::JobBase::get_tensor(aipu_tensor_type_t type, uint32_t ten
 {
     DEV_PA_64 pa = 0;
     uint64_t size = 0;
+    uint32_t isa = AIPU_VERSION_ZHOUYI_V1;
     std::vector<struct JobIOBuffer> *iobuffer_vec = nullptr;
 
     if (nullptr == data)
@@ -111,6 +126,8 @@ aipu_status_t aipudrv::JobBase::get_tensor(aipu_tensor_type_t type, uint32_t ten
     /* Applications cannot get tensors if a job is not done status */
     if (m_status != AIPU_JOB_STATUS_DONE)
         return AIPU_STATUS_ERROR_INVALID_OP;
+
+    isa = m_dev->get_npu_version();
 
     switch (type)
     {
@@ -127,11 +144,23 @@ aipu_status_t aipudrv::JobBase::get_tensor(aipu_tensor_type_t type, uint32_t ten
             break;
 
         case AIPU_TENSOR_TYPE_PRINTF:
-            iobuffer_vec = &m_printf;
+            if (isa == AIPU_VERSION_ZHOUYI_X2)
+            {
+                // Todo
+            } else {
+                iobuffer_vec = &m_printf;
+            }
             break;
 
         case AIPU_TENSOR_TYPE_PROFILER:
-            iobuffer_vec = &m_profiler;
+            if (isa == AIPU_VERSION_ZHOUYI_X2)
+            {
+                std::string profile_file_name = m_dump_dir + "/" + m_dump_misc_prefix + "_PerfData.bin";
+                LOG(LOG_ALERT, "check dump file: %s\n", profile_file_name.c_str());
+                return AIPU_STATUS_SUCCESS;
+            } else {
+                iobuffer_vec = &m_profiler;
+            }
             break;
 
         case AIPU_TENSOR_TYPE_LAYER_COUNTER:
@@ -294,6 +323,7 @@ void aipudrv::JobBase::create_io_buffers(const struct GraphIOTensors& io,
     create_io_buffers(m_printf, io.printf, reuses);
     create_io_buffers(m_layer_counter, io.layer_counter, reuses);
     create_io_buffers(m_err_code, io.err_code, reuses);
+    create_io_buffers(m_segmmus, io.segmmus, reuses);
 }
 
 void aipudrv::JobBase::dump_buffer(DEV_PA_64 pa, const char* bin_va, uint32_t size, const char* name)
@@ -329,7 +359,7 @@ aipu_status_t aipudrv::JobBase::config_mem_dump(uint64_t types, const aipu_job_c
     {
         if(access(config->dump_dir, F_OK) != 0)
         {
-            LOG(LOG_ERR, "%s [non-exit]", config->dump_dir);
+            LOG(LOG_ERR, "%s [non-exist]", config->dump_dir);
             ret = AIPU_STATUS_ERROR_INVALID_CONFIG;
             goto finish;
         }
@@ -342,6 +372,9 @@ aipu_status_t aipudrv::JobBase::config_mem_dump(uint64_t types, const aipu_job_c
     if ((nullptr != config) && (nullptr != config->output_prefix))
         m_dump_output_prefix = config->output_prefix;
 
+     if ((nullptr != config) && (nullptr != config->misc_prefix))
+        m_dump_misc_prefix = config->misc_prefix;
+
     m_dump_text = types & AIPU_JOB_CONFIG_TYPE_DUMP_TEXT;
     m_dump_weight = types & AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT;
     m_dump_rodata = types & AIPU_JOB_CONFIG_TYPE_DUMP_RODATA;
@@ -351,6 +384,7 @@ aipu_status_t aipudrv::JobBase::config_mem_dump(uint64_t types, const aipu_job_c
     m_dump_reuse = types & AIPU_JOB_CONFIG_TYPE_DUMP_REUSE;
     m_dump_tcb = types & AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN;
     m_dump_emu = types & AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
+    m_dump_profile = types & AIPU_JOB_CONFIG_TYPE_DUMP_PROFILE;
 
 finish:
     return ret;
@@ -370,7 +404,7 @@ void aipudrv::JobBase::dump_job_shared_buffers()
         dump_buffer(dump_pa, bin_va, dump_size, "Text_BeforeRun");
     }
 
-    if (m_dump_weight)
+    if (m_dump_weight && get_graph().m_weight.size > 0)
     {
         dump_pa = get_graph().m_weight.pa;
         bin_va = get_graph().m_bweight.va;
@@ -430,7 +464,7 @@ void aipudrv::JobBase::dump_job_shared_buffers_after_run()
         dump_single_buffer(dump_pa, dump_size, "Text_AfterRun");
     }
 
-    if (m_dump_weight)
+    if (m_dump_weight && get_graph().m_weight.size > 0)
     {
         dump_pa = get_graph().m_weight.pa;
         dump_size = get_graph().m_bweight.size;
@@ -500,6 +534,12 @@ void aipudrv::JobBase::dump_job_private_buffers_after_run(BufferDesc& rodata, Bu
         dump_size = get_graph().m_bdesc.size;
         if (dump_size != 0)
             dump_buffer(dump_pa, nullptr, dump_size, "Descriptor_AfterRun");
+    }
+
+    if (m_dump_profile)
+    {
+        if (m_profile_fd > 0)
+            close(m_profile_fd);
     }
 }
 

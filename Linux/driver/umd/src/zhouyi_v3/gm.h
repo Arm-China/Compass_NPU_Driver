@@ -34,7 +34,7 @@ class JobV3;
 class GM_V3
 {
     private:
-    bool m_small_model = false;
+    bool m_gm_asm = false;
     std::vector<BufferDesc *> m_gm_free_buffer;
     std::vector<BufferDesc *> m_gm_alloc_buffer;
 

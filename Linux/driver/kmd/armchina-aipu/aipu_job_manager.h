@@ -38,6 +38,16 @@ struct aipu_thread_wait_queue {
 	struct list_head node;
 };
 
+struct job_irq_info {
+	u32 cluster_id;
+	u32 core_id;
+	u32 tec_id;
+	u32 tag_id;
+	u32 tail_tcbp;
+	u32 sig_flag;
+	u64 tick_counter;
+};
+
 /**
  * struct aipu_job - job struct describing a job under scheduling in job manager
  *        Job status will be tracked as soon as interrupt or user evenets come in.
@@ -52,6 +62,7 @@ struct aipu_thread_wait_queue {
  * @done_time: job termination time (enabled by profiling flag in desc)
  * @pdata: profiling data (enabled by profiling flag in desc)
  * @wake_up: wake up flag
+ * @prev_tail_tcb: address of the tail TCB of the previous job linking this job (x2 only)
  */
 struct aipu_job {
 	int uthread_id;
@@ -68,19 +79,23 @@ struct aipu_job {
 	u64 prev_tail_tcb;
 };
 
-struct command_pool {
-	u32 id;
+enum aipu_job_qos {
+	AIPU_JOB_QOS_SLOW = 0,
+	AIPU_JOB_QOS_FAST = 1,
+	AIPU_JOB_QOS_MAX  = 2,
+};
+
+struct qos {
 	u64 pool_head;
 	u64 curr_head;
 	u64 curr_tail;
 };
 
-struct job_irq_info {
-	u32 cluster_id;
-	u32 core_id;
-	u32 tec_id;
-	u32 tag_id;
-	u32 tail_tcbp;
+struct command_pool {
+	u32 id;
+	struct qos qlist[AIPU_JOB_QOS_MAX];
+	bool created;
+	bool aborted;
 };
 
 /**
@@ -99,6 +114,7 @@ struct job_irq_info {
  * @priv: pointer to aipu_priv struct
  */
 struct aipu_job_manager {
+	int version;
 	int partition_cnt;
 	struct aipu_partition *partitions;
 	struct command_pool *pools;
@@ -113,6 +129,9 @@ struct aipu_job_manager {
 	struct aipu_memory_manager *mm;
 	void *priv;
 	u64 asid_base;
+	u16 grid_id;
+	struct aipu_buf_desc exit_tcb;
+	atomic_t tick_counter;
 };
 
 int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_manager *mm,
@@ -131,5 +150,9 @@ int aipu_job_manager_get_job_status(struct aipu_job_manager *manager,
 				    struct aipu_job_status_query *job_status, struct file *filp);
 bool aipu_job_manager_has_end_job(struct aipu_job_manager *manager, struct file *filp,
 				  struct poll_table_struct *wait, int uthread_id);
+int aipu_job_manager_get_hw_status(struct aipu_job_manager *manager, struct aipu_hw_status *hw);
+int aipu_job_manager_abort_cmd_pool(struct aipu_job_manager *manager);
+int aipu_job_manager_disable_tick_counter(struct aipu_job_manager *manager);
+int aipu_job_manager_enable_tick_counter(struct aipu_job_manager *manager);
 
 #endif /* __AIPU_JOB_MANAGER_H__ */

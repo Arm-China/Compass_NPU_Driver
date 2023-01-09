@@ -105,8 +105,7 @@ struct tcb_t
             {
                 uint32_t rsvd0[2];
                 uint32_t gm_ctrl;
-                uint16_t group_id;
-                uint16_t grid_id;
+                uint32_t grid_id;
                 uint32_t gm_rgnx_ctrl[2];
                 addr64_t gm_rgnx_addr[2];
                 addr64_t asids[4];
@@ -162,7 +161,6 @@ struct tcb_t
 
 #define gm_ctl       __data.init.clst.gm_ctrl
 #define igrid_id     __data.init.clst.grid_id
-#define igroup_id    __data.init.clst.group_id
 #define asids        __data.init.clst.asids
 #define gm_rgnx_ctrl __data.init.clst.gm_rgnx_ctrl
 #define gm_rgnx_addr __data.init.clst.gm_rgnx_addr
@@ -185,14 +183,13 @@ struct tcb_t
 #define TCB_FLAG_END_TYPE_END_WITH_DESTROY     (1 << 8)
 
 #define EN_INTERRUPT_DONE              1
-#define EN_INTERRUPT_WAIT              (1 << 1)
 #define EN_INTERRUPT_EXCEPTION         (1 << 2)
 #define EN_INTERRUPT_FAULT             (1 << 3)
 #define EN_INTERRUPT_ERROR             (1 << 4)
 #define EN_INTERRUPT_SIGNAL            (1 << 5)
 #define EN_INTERRUPT_ALL_TYPE          \
-    (EN_INTERRUPT_DONE | EN_INTERRUPT_WAIT | EN_INTERRUPT_EXCEPTION \
-    | EN_INTERRUPT_FAULT | EN_INTERRUPT_ERROR | EN_INTERRUPT_SIGNAL)
+    (EN_INTERRUPT_DONE | EN_INTERRUPT_EXCEPTION | \
+     EN_INTERRUPT_FAULT | EN_INTERRUPT_ERROR | EN_INTERRUPT_SIGNAL)
 #define EN_INTERRUPT_TEC               (1 << 8)
 #define EN_INTERRUPT_CORE              (1 << 9)
 #define EN_INTERRUPT_CLUSTER           (1 << 10)

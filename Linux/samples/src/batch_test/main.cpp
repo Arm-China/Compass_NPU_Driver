@@ -25,26 +25,29 @@
 
 using namespace std;
 
+#define MAX_BATCH 4
+
 int main(int argc, char* argv[])
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     aipu_ctx_handle_t* ctx;
     const char* msg = nullptr;
     uint32_t cluster_cnt, core_cnt;
-    uint64_t graph_id, job_id;
+    uint64_t graph_id;
     uint32_t input_cnt, output_cnt;
     vector<aipu_tensor_desc_t> input_desc;
     vector<char*> input_data;
     vector<aipu_tensor_desc_t> output_desc;
-    vector<char*> output_data;
+    vector<char*> output_data[MAX_BATCH];
     vector<char*> gt;
     cmd_opt_t opt;
-    uint32_t frame_cnt = 1;
-    int pass = 0, loop = 0, total_loop = 1;
-    uint64_t cfg_types = 0;
+    uint32_t batch_loop_cnt = 2;
+    int pass = 0, loop = 0, total_loop = 2;
     aipu_create_job_cfg create_job_cfg = {0};
+    char **input_buf = nullptr, **output_buf[MAX_BATCH];
+    uint32_t queue_id = 0;
 
-    AIPU_CRIT() << "usage: ./aipu_simulation_test -b aipu.bin -i input0.bin -c output.bin -d ./\n";
+    AIPU_CRIT() << "usage: ./aipu_batch_test -b aipu.bin -i input0.bin -c output.bin -d ./\n";
 
     /**
      * For compatibility and avoiding segfault issues in the future,
@@ -58,7 +61,7 @@ int main(int argc, char* argv[])
     aipu_job_config_dump_t mem_dump_config;
     memset(&mem_dump_config, 0, sizeof(mem_dump_config));
 
-    if(init_test_bench(argc, argv, &opt, "simulation_test"))
+    if(init_test_bench(argc, argv, &opt, "batch_test"))
     {
         AIPU_ERR()("invalid command line options/args\n");
         goto finish;
@@ -69,17 +72,10 @@ int main(int argc, char* argv[])
 
     /* works for z1/2/3/x1 simulation */
     if (opt.log_level_set)
-    {
         sim_glb_config.log_level = opt.log_level;
-    }
     else
-    {
-#if ((defined RTDEBUG) && (RTDEBUG == 1))
-        sim_glb_config.log_level = 3;
-#else
         sim_glb_config.log_level = 0;
-#endif
-    }
+
     sim_glb_config.verbose = opt.verbose;
     sim_glb_config.en_eval = true;
 
@@ -92,6 +88,9 @@ int main(int argc, char* argv[])
 
     for (loop = 0; loop < total_loop; loop++)
     {
+        input_desc.clear();
+        output_desc.clear();
+        AIPU_INFO() << "Total loop #" << loop;
         ret = aipu_init_context(&ctx);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -99,8 +98,8 @@ int main(int argc, char* argv[])
             AIPU_ERR()("aipu_init_context: %s\n", msg);
             goto finish;
         }
-        AIPU_INFO()("aipu_init_context success\n");
 
+        AIPU_INFO()("aipu_init_context success\n");
         ret = aipu_config_global(ctx, AIPU_CONFIG_TYPE_SIMULATION, &sim_glb_config);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -114,8 +113,7 @@ int main(int argc, char* argv[])
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(ctx, ret, &msg);
-            AIPU_ERR()("aipu_load_graph_helper: %s (%s)\n",
-                msg, opt.bin_file_name);
+            AIPU_ERR()("aipu_load_graph_helper: %s (%s)\n", msg, opt.bin_file_name);
             goto deinit_ctx;
         }
         AIPU_INFO()("aipu_load_graph_helper success: %s\n", opt.bin_file_name);
@@ -128,7 +126,6 @@ int main(int argc, char* argv[])
                 msg, opt.bin_file_name);
             goto unload_graph;
         }
-        //AIPU_INFO()("aipu_get_cluster_count success: cnt = %u\n", cluster_cnt);
 
         ret = aipu_get_core_count(ctx, 0, 0, &core_cnt);
         if (ret != AIPU_STATUS_SUCCESS)
@@ -138,7 +135,6 @@ int main(int argc, char* argv[])
                 msg, opt.bin_file_name);
             goto unload_graph;
         }
-        //AIPU_INFO()("aipu_get_core_count success: cnt = %u\n", core_cnt);
 
         ret = aipu_get_tensor_count(ctx, graph_id, AIPU_TENSOR_TYPE_INPUT, &input_cnt);
         if (ret != AIPU_STATUS_SUCCESS)
@@ -146,20 +142,6 @@ int main(int argc, char* argv[])
             aipu_get_error_message(ctx, ret, &msg);
             AIPU_ERR()("aipu_get_tensor_count: %s\n", msg);
             goto unload_graph;
-        }
-        //AIPU_INFO()("aipu_get_tensor_count success: input cnt = %d\n", input_cnt);
-
-        for (uint32_t i = 0; i < input_cnt; i++)
-        {
-            aipu_tensor_desc_t desc;
-            ret = aipu_get_tensor_descriptor(ctx, graph_id, AIPU_TENSOR_TYPE_INPUT, i, &desc);
-            if (ret != AIPU_STATUS_SUCCESS)
-            {
-                aipu_get_error_message(ctx, ret, &msg);
-                AIPU_ERR()("aipu_get_tensor_descriptor: %s\n", msg);
-                goto unload_graph;
-            }
-            input_desc.push_back(desc);
         }
 
         ret = aipu_get_tensor_count(ctx, graph_id, AIPU_TENSOR_TYPE_OUTPUT, &output_cnt);
@@ -169,7 +151,6 @@ int main(int argc, char* argv[])
             AIPU_ERR()("aipu_get_tensor_count: %s\n", msg);
             goto unload_graph;
         }
-        //AIPU_INFO()("aipu_get_tensor_count success: output cnt = %d\n", output_cnt);
 
         for (uint32_t i = 0; i < output_cnt; i++)
         {
@@ -183,118 +164,75 @@ int main(int argc, char* argv[])
             }
             output_desc.push_back(desc);
         }
-        //AIPU_INFO()("aipu_get_tensor_descriptor done\n");
 
-        ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
+        input_buf = new char* [input_cnt];
+        for (uint32_t i = 0; i < MAX_BATCH; i++)
+            output_buf[i] = new char* [output_cnt];
+
+        for (uint32_t i = 0; i < input_cnt; i++)
+            input_buf[i] = opt.inputs[i];
+
+        for (uint32_t k = 0; k < MAX_BATCH; k++)
+        {
+            for (uint32_t i = 0; i < output_cnt; i++)
+            {
+                char* output = new char[output_desc[i].size];
+                output_data[k].push_back(output);
+                output_buf[k][i] = output;
+            }
+        }
+
+        ret = aipu_create_batch_queue(ctx, graph_id, &queue_id);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(ctx, ret, &msg);
-            AIPU_ERR()("aipu_create_job: %s\n", msg);
+            AIPU_ERR()("aipu_create_batch_queue: %s\n", msg);
             goto unload_graph;
         }
-        AIPU_INFO()("aipu_create_job success\n");
 
-    #if ((defined RTDEBUG) && (RTDEBUG == 1))
-        cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_TEXT  |
-            AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT        |
-            AIPU_JOB_CONFIG_TYPE_DUMP_RODATA        |
-            AIPU_JOB_CONFIG_TYPE_DUMP_DESCRIPTOR    |
-            AIPU_JOB_CONFIG_TYPE_DUMP_INPUT         |
-            AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT        |
-            AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN     |
-            AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
-    #else
-        cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT;
-    #endif
-        ret = aipu_config_job(ctx, job_id, cfg_types, &mem_dump_config);
+        ret = aipu_config_batch_dump(ctx, graph_id, queue_id,
+            AIPU_CONFIG_TYPE_SIMULATION, &mem_dump_config);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(ctx, ret, &msg);
-            AIPU_ERR()("aipu_config_job: %s\n", msg);
-            goto clean_job;
-        }
-        AIPU_INFO()("set dump config success\n");
-
-        ret = aipu_config_job(ctx, job_id, AIPU_CONFIG_TYPE_SIMULATION, &sim_job_config);
-        if (ret != AIPU_STATUS_SUCCESS)
-        {
-            aipu_get_error_message(ctx, ret, &msg);
-            AIPU_ERR()("aipu_config_job: %s\n", msg);
-            goto clean_job;
-        }
-        AIPU_INFO()("set job simulation config success\n");
-
-        if (opt.inputs.size() != input_cnt)
-        {
-            fprintf(stdout, "[TEST WARN] input file count (%u) != input tensor count (%u)\n",
-                (uint32_t)opt.inputs.size(), input_cnt);
+            AIPU_ERR()("aipu_config_batch_dump: %s\n", msg);
+            goto clean_batch_queue;
         }
 
-        for (uint32_t i = 0; i < output_cnt; i++)
+        for (uint32_t round = 0; round < batch_loop_cnt; round++)
         {
-            char* output = new char[output_desc[i].size];
-            output_data.push_back(output);
-        }
-
-        /* run with with multiple frames */
-
-        for (uint32_t frame = 0; frame < frame_cnt; frame++)
-        {
-            AIPU_INFO()("Frame #%u\n", frame);
-            for (uint32_t i = 0; i < min((uint32_t)opt.inputs.size(), input_cnt); i++)
+            AIPU_INFO() << "Batch round #" << round;
+            for (uint32_t i = 0; i < MAX_BATCH; i++)
             {
-                if (input_desc[i].size > opt.inputs_size[i])
-                {
-                    AIPU_ERR()("input file %s len 0x%x < input tensor %u size 0x%x\n",
-                        opt.input_files[i].c_str(), opt.inputs_size[i], i, input_desc[i].size);
-                    goto clean_job;
-                }
-                ret = aipu_load_tensor(ctx, job_id, i, opt.inputs[i]);
+                ret = aipu_add_batch(ctx, graph_id, queue_id, input_buf, output_buf[i]);
                 if (ret != AIPU_STATUS_SUCCESS)
                 {
                     aipu_get_error_message(ctx, ret, &msg);
-                    AIPU_ERR()("aipu_load_tensor: %s\n", msg);
-                    goto clean_job;
+                    AIPU_ERR()("aipu_add_batch: %s\n", msg);
+                    goto clean_batch_queue;
                 }
-                AIPU_INFO()("load input tensor %d from %s (%u/%u)\n",
-                    i, opt.input_files[i].c_str(), i+1, input_cnt);
             }
 
-            ret = aipu_finish_job(ctx, job_id, -1);
+            ret = aipu_finish_batch(ctx, graph_id, queue_id, &create_job_cfg);
             if (ret != AIPU_STATUS_SUCCESS)
             {
                 aipu_get_error_message(ctx, ret, &msg);
-                AIPU_ERR()("aipu_finish_job: %s\n", msg);
-                pass = -1;
-                goto clean_job;
-            }
-            AIPU_INFO()("aipu_finish_job success\n");
-
-            for (uint32_t i = 0; i < output_cnt; i++)
-            {
-                ret = aipu_get_tensor(ctx, job_id, AIPU_TENSOR_TYPE_OUTPUT, i, output_data[i]);
-                if (ret != AIPU_STATUS_SUCCESS)
-                {
-                    aipu_get_error_message(ctx, ret, &msg);
-                    AIPU_ERR()("aipu_get_tensor: %s\n", msg);
-                    goto clean_job;
-                }
-                AIPU_INFO()("get output tensor %u success (%u/%u)\n",
-                    i, i+1, output_cnt);
+                AIPU_ERR()("aipu_finish_batch: %s\n", msg);
+                goto clean_batch_queue;
             }
 
-            pass = check_result_helper(output_data, output_desc, opt.gt, opt.gt_size);
+            for (uint32_t i = 0; i < MAX_BATCH; i++)
+                pass = check_result_helper(output_data[i], output_desc, opt.gt, opt.gt_size);
         }
 
-    clean_job:
-        ret = aipu_clean_job(ctx, job_id);
+    clean_batch_queue:
+        ret = aipu_clean_batch_queue(ctx, graph_id, queue_id);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(ctx, ret, &msg);
-            AIPU_ERR()("aipu_clean_job: %s\n", msg);
+            AIPU_ERR()("aipu_clean_batch_queue: %s\n", msg);
             goto unload_graph;
         }
-        AIPU_INFO()("aipu_clean_job success\n");
 
     unload_graph:
         ret = aipu_unload_graph(ctx, graph_id);
@@ -318,16 +256,22 @@ int main(int argc, char* argv[])
 
     finish:
         if (AIPU_STATUS_SUCCESS != ret)
-        {
             pass = -1;
-        }
-        for (uint32_t i = 0; i < output_data.size(); i++)
-        {
-            delete[] output_data[i];
-        }
 
-        output_data.clear();
+        if (input_buf != nullptr)
+            delete []input_buf;
+
+        for (uint32_t k = 0; k < MAX_BATCH; k++)
+        {
+            for (uint32_t i = 0; i < output_data[k].size(); i++)
+                delete []output_data[k][i];
+
+            output_data[k].clear();
+            if (output_buf != nullptr)
+                delete []output_buf[k];
+        }
     }
+
     deinit_test_bench(&opt);
     return pass;
 }

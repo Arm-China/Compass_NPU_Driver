@@ -74,6 +74,10 @@ public:
     aipu_status_t config_simulation(uint64_t types, aipu_global_config_simulation_t* config);
     aipu_status_t aipu_get_target(char *target);
     aipu_status_t aipu_get_device_status(uint32_t *status);
+    aipu_status_t run_batch(GraphBase &graph, uint32_t queue_id, aipu_create_job_cfg_t *config);
+    aipu_status_t get_status(JobBase *job, aipu_job_status_t *status);
+    aipu_status_t ioctl_cmd(uint32_t cmd, void *arg);
+
     void disable_version_check()
     {
         m_do_vcheck = false;

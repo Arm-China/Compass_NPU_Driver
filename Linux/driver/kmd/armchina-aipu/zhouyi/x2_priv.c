@@ -60,13 +60,15 @@ static int init_aipu_partition(struct aipu_partition *partition, u32 *clusters, 
 	}
 
 	partition->cluster_cnt = cluster_cnt;
+	partition->ops->initialize(partition);
 
-	/* set partition */
-	for (iter = 0; iter < cluster_cnt; iter++)
-		partition->ops->set_partition(partition, partition->clusters[iter].id);
+#ifdef CONFIG_SYSFS
+	if (IS_ERR(aipu_common_create_attr(partition->dev, &partition->reg_attr, "ext_registers", 0644,
+					 aipu_common_ext_register_sysfs_show,
+					 aipu_common_ext_register_sysfs_store)))
+		dev_err(partition->dev, "init sysfs <ext_registers> failed");
+#endif
 
-	/* config command pool of this partition */
-	partition->ops->config_partition_cmd_pool(partition);
 	partition->is_init = true;
 	return ret;
 }
@@ -182,6 +184,8 @@ finish:
 
 static void x2_destroy_partitions(struct aipu_priv *aipu)
 {
+	int i = 0;
+
 	if (aipu) {
 		if (aipu->irq_obj)
 			aipu_destroy_irq_object(aipu->irq_obj);
@@ -192,6 +196,8 @@ static void x2_destroy_partitions(struct aipu_priv *aipu)
 		aipu->reg.phys = 0;
 		aipu->reg.size = 0;
 		aipu_mm_deinit_gm(&aipu->mm);
+		for (i = 0; i < aipu->partition_cnt; i++)
+			aipu_common_destroy_attr(aipu->partitions[i].dev, &aipu->partitions[i].reg_attr);
 	}
 }
 

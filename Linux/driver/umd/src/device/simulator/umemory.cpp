@@ -59,8 +59,8 @@ aipudrv::UMemory::UMemory(): MemoryBase(), sim_aipu::IMemEngine()
 
     if (is_gm_enable())
     {
-        set_gm_base(0, m_memblock[1].base, m_memblock[1].size);
-        set_gm_base(1, m_memblock[2].base, m_memblock[2].size);
+        set_gm_base(0, m_memblock[MEM_REGION_GM0].base, m_memblock[MEM_REGION_GM0].size);
+        set_gm_base(1, m_memblock[MEM_REGION_GM1].base, m_memblock[MEM_REGION_GM1].size);
     }
 
     if (gm_mean != nullptr)
@@ -122,8 +122,8 @@ void aipudrv::UMemory:: gm_init(uint32_t gm_size_idx)
         m_memblock[MEM_REGION_DDR].size = TOTAL_SIM_MEM_SZ - m_memblock[MEM_REGION_GM0].size
             - m_memblock[MEM_REGION_GM1].size;
 
-        set_gm_base(0, m_memblock[1].base, m_memblock[1].size);
-        set_gm_base(1, m_memblock[2].base, m_memblock[2].size);
+        set_gm_base(0, m_memblock[MEM_REGION_GM0].base, m_memblock[MEM_REGION_GM0].size);
+        set_gm_base(1, m_memblock[MEM_REGION_GM1].base, m_memblock[MEM_REGION_GM1].size);
     }
 
     for (int i = 0; i < MME_REGION_MAX; i++)
@@ -165,7 +165,7 @@ aipu_status_t aipudrv::UMemory::malloc_internal(uint32_t size, uint32_t align, B
     int mem_region = asid_mem_cfg & 0xff;
     Buffer buf;
 
-    if (0 == size)
+    if ((size > m_memblock[mem_region].size) || (0 == size))
         return AIPU_STATUS_ERROR_INVALID_SIZE;
 
     if (nullptr == desc)

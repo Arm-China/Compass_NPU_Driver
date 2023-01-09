@@ -65,14 +65,10 @@ struct SegMMUConfig
 {
     struct MMUAddr
     {
-        uint32_t control0;
-        uint32_t control1;
+        uint32_t control[2];
     };
 
-    MMUAddr seg0 = {0};
-    MMUAddr seg1 = {0};
-    MMUAddr seg2 = {0};
-    MMUAddr seg3 = {0};
+    MMUAddr seg[4] = {0};
     uint32_t SegMMU_ctl = 0;
     uint32_t SegMMU_remap = 0;
     uint32_t reserve0 = 0;
@@ -107,6 +103,7 @@ struct Subgraph {
     struct BinSubGraphSection dcr;
     uint32_t printfifo_size;
     uint32_t profiler_buf_size;
+    uint32_t private_data_size;
     std::vector<uint32_t> precursors;
     int32_t precursor_cnt;
     uint32_t stack_size;
@@ -125,6 +122,7 @@ private:
     std::vector<struct Subgraph> m_subgraphs;
     std::vector<struct GMConfig> m_gmconfig;
     BinSection m_bsegmmu;
+    bool m_fake_subgraph = false;
 
 public:
     std::map<uint32_t, GM_info_desc> m_gm_info[2];
@@ -144,9 +142,17 @@ public:
         m_subgraphs.push_back(sg);
     }
 
+    void set_fake_subgraph()
+    {
+        m_fake_subgraph = true;
+    }
+
     uint32_t get_subgraph_cnt()
     {
-        return m_subgraphs.size();
+        if (m_fake_subgraph)
+            return 0;
+        else
+            return m_subgraphs.size();
     }
 
     const Subgraph &get_subgraph(uint32_t sg_id) const

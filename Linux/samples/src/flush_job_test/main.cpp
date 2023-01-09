@@ -6,7 +6,7 @@
 /**
  * @file  main.cpp
  * @brief AIPU UMD test application: basic benchmark test for arm64 platforms
- *        - using non-blocking API aipu_flush_job without callback
+ *        - using non-blocking API aipu_flush_job
  */
 
 #include <stdio.h>
@@ -44,6 +44,7 @@ int main(int argc, char* argv[])
     vector<char*> gt;
     cmd_opt_t opt;
     aipu_job_status_t status[PIPELINE_JOB_CNT] = { AIPU_JOB_STATUS_NO_STATUS };
+    aipu_create_job_cfg_t create_job_cfg = {0};
     int pass = 0;
 
     aipu_global_config_simulation_t sim_glb_config;
@@ -152,7 +153,7 @@ int main(int argc, char* argv[])
 
     for (uint32_t job = 0; job < PIPELINE_JOB_CNT; job++)
     {
-        ret = aipu_create_job(ctx, graph_id, &job_id[job]);
+        ret = aipu_create_job(ctx, graph_id, &job_id[job], &create_job_cfg);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(ctx, ret, &msg);
@@ -205,7 +206,7 @@ int main(int argc, char* argv[])
                     job_id[job], i, opt.input_files[i].c_str(), i+1, input_cnt);
             }
 
-            ret = aipu_flush_job(ctx, job_id[job], NULL);
+            ret = aipu_flush_job(ctx, job_id[job]);
             if (ret != AIPU_STATUS_SUCCESS)
             {
                 aipu_get_error_message(ctx, ret, &msg);

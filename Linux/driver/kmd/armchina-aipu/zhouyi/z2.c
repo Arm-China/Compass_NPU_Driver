@@ -354,6 +354,29 @@ int zhouyi_v2_soft_reset(struct aipu_partition *core, bool init_regs)
 	return ret;
 }
 
+static int zhouyi_v2_destroy_command_pool(struct aipu_partition *core)
+{
+	return 0;
+}
+
+static int zhouyi_v2_abort_command_pool(struct aipu_partition *core)
+{
+	return 0;
+}
+
+static int zhouyi_v2_exit_dispatch(struct aipu_partition *partition, u32 job_flag, u64 tcb_pa)
+{
+	return 0;
+}
+
+static void zhouyi_v2_disable_tick_counter(struct aipu_partition *partition)
+{
+}
+
+static void zhouyi_v2_enable_tick_counter(struct aipu_partition *partition)
+{
+}
+
 static struct aipu_operations zhouyi_v2_ops = {
 	.get_config = zhouyi_v2_get_hw_config_number,
 	.enable_interrupt = zhouyi_v2_enable_interrupt,
@@ -370,9 +393,11 @@ static struct aipu_operations zhouyi_v2_ops = {
 #endif
 	.soft_reset = zhouyi_v2_soft_reset,
 	.initialize = zhouyi_v2_initialize,
-	.set_partition = NULL,
-	.config_partition_cmd_pool = NULL,
-	.destroy_command_pool = NULL,
+	.destroy_command_pool = zhouyi_v2_destroy_command_pool,
+	.abort_command_pool = zhouyi_v2_abort_command_pool,
+	.exit_dispatch = zhouyi_v2_exit_dispatch,
+	.disable_tick_counter = zhouyi_v2_disable_tick_counter,
+	.enable_tick_counter = zhouyi_v2_enable_tick_counter,
 };
 
 struct aipu_operations *get_zhouyi_v2_ops(void)

@@ -45,13 +45,13 @@ static void help()
     "-i: benchmark input.bin path\n"
     "-c: benchmark output.bin path\n"
     "-d: the result output dir\n"
-    "-a: ARCH args for X2, eg: X2_1204/X2_1204_MP3\n"
+    "-a: ARCH args for X2, eg: X2_1204/X2_1204MP3\n"
     "usage1 for Z1/Z2/Z3/X1:\n"
     "   test -s /demo/sim/aipu_simulator_z1 -b /demo/benchmark/aipu.bin "
     "-i /demo/benchmark/input0.bin,/demo/benchmark/input1.bin -c /demo/benchmark/output.bin "
     "-d /demo/output(create folder firstly)\n"
     "usage2 for X2:\n"
-    "   test -a [X2_1204 | X2_1204_MP3] -b /demo/benchmark/aipu.bin "
+    "   test -a [X2_1204 | X2_1204MP3] -b /demo/benchmark/aipu.bin "
     "-i /demo/benchmark/input0.bin,/demo/benchmark/input1.bin -c /demo/benchmark/output.bin "
     "-d /demo/output(create folder firstly)\n";
 
@@ -117,7 +117,7 @@ int main(int argc, char* argv[])
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     int pass = 0, opt = 0, opt_idx = 0;
     extern char *optarg;
-    string arch = ""; // X2_1204, X2_1204_MP3
+    string arch = ""; // X2_1204, X2_1204MP3
     char simulator[FNAME_MAX_LEN] = { 0 };
     char cfg_file_dir[FNAME_MAX_LEN] = { 0 };
     char bin_file_name[FNAME_MAX_LEN] = { 0 };

@@ -263,6 +263,7 @@ enum aipu_job_execution_flag {
  * @data_1_addr:       [z1/z2/z3/x1 only, must] Address of the 1th data buffer (buf_pa - asid_base)
  * @job_id:            [z1/z2/z3/x1 only, must] ID of this job
  * @enable_prof:       [z1/z2/z3/x1 only, optional] Enable performance profiling counters in SoC (if any)
+ * @profile_fd:        [x2 only] Profile data file fd
  * @enable_poll_opt:   [z1/z2/z3/x1 only, optional] Enable optimizations for job status polling
  * @exec_flag:         [optional] Combinations of execution flags
  * @dtcm_size_kb:      [x1 only, optional] DTCM size in KB
@@ -290,6 +291,7 @@ struct aipu_job_desc {
 	__u32 data_1_addr;
 	__u64 job_id;
 	__u32 enable_prof;
+	__s64 profile_fd;
 	__u32 enable_poll_opt;
 	__u32 exec_flag;
 	__u32 dtcm_size_kb;
@@ -312,6 +314,7 @@ struct aipu_job_status_desc {
 #define AIPU_JOB_STATE_EXCEPTION 0x2
 	__u32 state;
 	struct aipu_ext_profiling_data {
+		__u64 tick_counter;      /* [kmd][x2 only] Value of the tick counter */
 		__s64 execution_time_ns; /* [kmd] Execution time */
 		__u32 rdata_tot_msb;     /* [kmd] Total read transactions (MSB) */
 		__u32 rdata_tot_lsb;     /* [kmd] Total read transactions (LSB) */
@@ -351,6 +354,18 @@ struct aipu_io_req {
 		AIPU_IO_WRITE
 	} rw;
 	__u32 value;
+};
+
+/**
+ * struct aipu_hw_status - AIPU working status.
+ * @status: [kmd] current working status
+ */
+struct aipu_hw_status {
+	enum {
+		AIPU_STATUS_IDLE,
+		AIPU_STATUS_BUSY,
+		AIPU_STATUS_EXCEPTION,
+	} status;
 };
 
 /*
@@ -449,5 +464,41 @@ struct aipu_io_req {
  * ioctl to read/write an external register of an AIPU core; works for Z1/Z2/Z2/X1 only.
  */
 #define AIPU_IOCTL_REQ_IO _IOWR(AIPU_IOCTL_MAGIC, 9, struct aipu_io_req)
+/**
+ * DOC: AIPU_IOCTL_GET_HW_STATUS
+ *
+ * @Description
+ *
+ * ioctl to the hardware status: idle or busy.
+ */
+#define AIPU_IOCTL_GET_HW_STATUS _IOR(AIPU_IOCTL_MAGIC, 10, struct aipu_hw_status)
+/**
+ * DOC: AIPU_IOCTL_ABORT_CMD_POOL
+ *
+ * @Description
+ *
+ * ioctl to issue a command pool abortion command from userspace.
+ * this ioctl shall only be applied in a NPU debugger application.
+ */
+#define AIPU_IOCTL_ABORT_CMD_POOL _IO(AIPU_IOCTL_MAGIC, 11)
+/**
+ * DOC: AIPU_IOCTL_DISABLE_TICK_COUNTER
+ *
+ * @Description
+ *
+ * ioctl to disable X2 tick counter
+ *
+ */
+#define AIPU_IOCTL_DISABLE_TICK_COUNTER _IO(AIPU_IOCTL_MAGIC, 12)
+/**
+ * DOC: AIPU_IOCTL_ENABLE_TICK_COUNTER
+ *
+ * @Description
+ *
+ * ioctl to enable X2 tick counter
+ *
+ * by default, tick counter is disabled.
+ */
+#define AIPU_IOCTL_ENABLE_TICK_COUNTER _IO(AIPU_IOCTL_MAGIC, 13)
 
 #endif /* __UAPI_MISC_ARMCHINA_AIPU_H__ */

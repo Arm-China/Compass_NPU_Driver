@@ -140,7 +140,7 @@ aipu_status_t aipudrv::GraphV3::extract_gm_info(int sg_id)
         } else if (gmconfig->GM_buf_idx[i].buf_type == GM_BUF_TYPE_WEIGHT) {
             if (gmconfig->GM_buf_idx[i].buf_index < m_subgraphs[sg_id].static_sections.size())
             {
-                gm_info_desc.gm_buf_type = GM_SUB_BUF_TYPE_INPUT;
+                gm_info_desc.gm_buf_type = GM_SUB_BUF_TYPE_IGNORE;
             }
         } else {
             LOG(LOG_ERR, "GM buffer type: [%d] invalid\n", gmconfig->GM_buf_idx[i].buf_type);

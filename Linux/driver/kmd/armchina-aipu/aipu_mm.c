@@ -250,15 +250,15 @@ static u64 get_gm_base(struct aipu_memory_manager *mm, struct aipu_mem_region *g
 	return gm_base;
 }
 
-static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
-					   struct aipu_buf_request *buf_req,
-					   struct aipu_mem_region *reg, struct file *filp)
+static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_req,
+					   struct aipu_mem_region *reg, struct file *filp,
+					   struct tcb_buf **tcb_alloc)
 {
 	unsigned long bitmap_no = 0;
 	unsigned long alloc_nr = 0;
 	struct tcb_buf *tcb = NULL;
 
-	/* filp == NULL means GM initialization */
+	/* filp == NULL means GM initialization or exit TCB allocation */
 	if (!mm || !buf_req || !reg)
 		return -EINVAL;
 
@@ -288,6 +288,9 @@ static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
 	buf_req->desc.gm_base = get_gm_base(mm, reg, buf_req);
 
 	if (buf_req->data_type == AIPU_MM_DATA_TYPE_TCB) {
+		if (!tcb_alloc)
+			return -EINVAL;
+
 		tcb = create_tcb_buf(mm);
 		if (!tcb)
 			return -ENOMEM;
@@ -296,7 +299,6 @@ static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
 		tcb->page = reg->pages[bitmap_no];
 		tcb->pfn = bitmap_no;
 		tcb->head = buf_req->desc.pa;
-		list_add_tail(&tcb->node, &reg->tcb_buf_head->node);
 
 		/**
 		 * when head/tail is updated in job manager, all the following fields
@@ -308,6 +310,8 @@ static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
 		tcb->tail = tcb->head + buf_req->desc.bytes - sizeof(struct aipu_tcb);
 		tcb->tail_tcb = NULL;
 		tcb->dep_job_id = 0;
+		tcb->pinned = false;
+		*tcb_alloc = tcb;
 	}
 
 	dev_dbg(reg->dev,
@@ -317,13 +321,12 @@ static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
 	return 0;
 }
 
-static int aipu_mm_free_in_region_no_lock(struct aipu_memory_manager *mm,
-					  struct aipu_buf_desc *buf, struct aipu_mem_region *reg)
+static int aipu_mm_free_in_region_no_lock(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf,
+					  struct aipu_mem_region *reg, struct tcb_buf **tcb)
 {
 	unsigned long bitmap_no = 0;
 	unsigned long alloc_nr = 0;
 	struct aipu_virt_page *page = NULL;
-	struct tcb_buf *tcb = NULL;
 
 	if (!mm || !buf || !reg)
 		return -EINVAL;
@@ -340,21 +343,21 @@ static int aipu_mm_free_in_region_no_lock(struct aipu_memory_manager *mm,
 	if (!alloc_nr)
 		return -EINVAL;
 
-	page->locked = false;
+	if (tcb)
+		*tcb = NULL;
 
-	/* do not free if this tcb is linked by a job;
+	/* do not free if this tcb is linked by a job or pinned;
 	 * marked as unlocked and will be released at an appropriate point;
 	 */
-	tcb = page->tcb;
-	if (tcb) {
-		if (!tcb->dep_job_id) {
-			list_del(&tcb->node);
-			devm_kfree(mm->dev, tcb);
-			tcb = NULL;
-		} else {
-			dev_dbg(reg->dev, "[MM] deferred free: iova 0x%llx\n", buf->pa);
+	page->locked = false;
+	if (page->tcb && tcb) {
+		if (page->tcb->dep_job_id || page->tcb->pinned) {
+			dev_dbg(reg->dev, "[MM] deferred free TCB: iova 0x%llx\n", buf->pa);
 			return 0;
 		}
+
+		*tcb = page->tcb;
+		page->tcb = NULL;
 	}
 
 	bitmap_clear(reg->bitmap, bitmap_no, alloc_nr);
@@ -386,6 +389,8 @@ static void aipu_mm_free_filp_in_region(struct aipu_memory_manager *mm,
 {
 	unsigned long i = 0;
 	unsigned long offset = 0;
+	unsigned long flags;
+	struct tcb_buf *tcb = NULL;
 
 	if (!mm || !reg || !reg->bitmap || !filp)
 		return;
@@ -394,6 +399,14 @@ static void aipu_mm_free_filp_in_region(struct aipu_memory_manager *mm,
 	while ((i = find_next_bit(reg->bitmap, reg->count, offset)) != reg->count) {
 		offset = i + reg->pages[i]->contiguous_alloc_len;
 		if (reg->pages[i] && reg->pages[i]->filp == filp) {
+			spin_lock_irqsave(&mm->slock, flags);
+			tcb = reg->pages[i]->tcb;
+			if (tcb && (tcb->dep_job_id || tcb->pinned)) {
+				reg->pages[i]->locked = false;
+				spin_unlock_irqrestore(&mm->slock, flags);
+				continue;
+			}
+			spin_unlock_irqrestore(&mm->slock, flags);
 			bitmap_clear(reg->bitmap, i, reg->pages[i]->contiguous_alloc_len);
 			memset(reg->pages[i], 0, sizeof(struct aipu_virt_page));
 		}
@@ -550,6 +563,7 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	if (!mm->sram_disable_head)
 		return -ENOMEM;
 	INIT_LIST_HEAD(&mm->sram_disable_head->list);
+	spin_lock_init(&mm->slock);
 
 	for (type = AIPU_MEM_REGION_TYPE_MEMORY; type < AIPU_MEM_REGION_TYPE_MAX; type++) {
 		reg = devm_kzalloc(mm->dev, sizeof(*reg), GFP_KERNEL);
@@ -653,6 +667,12 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 			continue;
 		}
 
+		/* bypass mapping SoC SRAM if CPU cannot access it */
+		if (type == AIPU_MEM_REGION_TYPE_SRAM && !AIPU_CONFIG_HOST_MAP_SRAM) {
+			idx++;
+			continue;
+		}
+
 		if (of_address_to_resource(np, 0, &res)) {
 			of_node_put(np);
 			ret = -EINVAL;
@@ -668,15 +688,22 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 		if (of_property_read_u64(np, "host-aipu-offset", &host_aipu_offset))
 			host_aipu_offset = 0;
 
-		ret = aipu_mm_create_region(mm, &mm->mem[type], res.start, size, host_aipu_offset, idx);
-		if (ret)
-			goto err;
-
+		/* dtcm register is configured based on these info */
 		if (!mm->mem[type].offset)
 			mm->mem[type].offset = host_aipu_offset;
 		if (mm->mem[type].base > res.start)
 			mm->mem[type].base = res.start;
 		mm->mem[type].tot_size += size;
+
+		/* bypass mapping DTCM if CPU cannot access it */
+		if (type == AIPU_MEM_REGION_TYPE_DTCM && !AIPU_CONFIG_HOST_MAP_DTCM) {
+			idx++;
+			continue;
+		}
+
+		ret = aipu_mm_create_region(mm, &mm->mem[type], res.start, size, host_aipu_offset, idx);
+		if (ret)
+			goto err;
 
 		if (type == AIPU_MEM_REGION_TYPE_MEMORY || type == AIPU_MEM_REGION_TYPE_SRAM) {
 			u64 asid_base = ((res.start - host_aipu_offset) >> 32) << 32;
@@ -741,8 +768,10 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 	int ret = 0;
 	struct aipu_mem_region *reg = NULL;
 	int type;
+	unsigned long flags;
+	struct tcb_buf *tcb = NULL;
 
-	if (!mm || !buf_req || !filp)
+	if (!mm || !buf_req)
 		return -EINVAL;
 
 	if (!buf_req->bytes || !is_power_of_2(buf_req->align_in_page))
@@ -771,7 +800,7 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 
 	/* allocate from the specified regions first */
 	list_for_each_entry(reg, &mm->mem[type].reg->list, list) {
-		ret = aipu_mm_alloc_in_region_no_lock(mm, buf_req, reg, filp);
+		ret = aipu_mm_alloc_in_region_no_lock(mm, buf_req, reg, filp, &tcb);
 		if (!ret)
 			break;
 	}
@@ -780,7 +809,7 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 	if (ret && type != AIPU_MEM_REGION_TYPE_MEMORY) {
 		dev_info(mm->dev, "mm allocate region type %d failed, fall back to memory regions\n", type);
 		list_for_each_entry(reg, &mm->mem[AIPU_MEM_REGION_TYPE_MEMORY].reg->list, list) {
-			ret = aipu_mm_alloc_in_region_no_lock(mm, buf_req, reg, filp);
+			ret = aipu_mm_alloc_in_region_no_lock(mm, buf_req, reg, filp, &tcb);
 			if (!ret)
 				break;
 		}
@@ -797,6 +826,11 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 
 unlock:
 	mutex_unlock(&mm->lock);
+	if (reg && tcb) {
+		spin_lock_irqsave(&mm->slock, flags);
+		list_add_tail(&tcb->node, &reg->tcb_buf_head->node);
+		spin_unlock_irqrestore(&mm->slock, flags);
+	}
 	return ret;
 }
 
@@ -812,6 +846,8 @@ int aipu_mm_free(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf, stru
 {
 	int ret = 0;
 	struct aipu_mem_region *reg = NULL;
+	unsigned long flags;
+	struct tcb_buf *tcb = NULL;
 
 	if (!mm || !buf || !filp)
 		return -EINVAL;
@@ -821,10 +857,32 @@ int aipu_mm_free(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf, stru
 		return -EINVAL;
 
 	mutex_lock(&mm->lock);
-	ret = aipu_mm_free_in_region_no_lock(mm, buf, reg);
+	ret = aipu_mm_free_in_region_no_lock(mm, buf, reg, &tcb);
 	mutex_unlock(&mm->lock);
 
+	if (reg && tcb) {
+		spin_lock_irqsave(&mm->slock, flags);
+		list_del(&tcb->node);
+		devm_kfree(mm->dev, tcb);
+		tcb = NULL;
+		spin_unlock_irqrestore(&mm->slock, flags);
+	}
+
 	return ret;
+}
+
+char* aipu_mm_get_va(struct aipu_memory_manager *mm, u64 dev_pa)
+{
+	struct aipu_mem_region *reg = NULL;
+
+	if (!mm)
+		return NULL;
+
+	reg = aipu_mm_find_region(mm, dev_pa);
+	if (!reg)
+		return NULL;
+
+	return (char*)((unsigned long)reg->base_va + dev_pa + reg->host_aipu_offset - reg->base_iova);
 }
 
 /**
@@ -1016,14 +1074,23 @@ static struct tcb_buf *aipu_mm_find_tcb_buf_no_lock(struct aipu_memory_manager *
 	return NULL;
 }
 
-struct tcb_buf *aipu_mm_find_tcb_buf(struct aipu_memory_manager *mm, u64 iova)
+struct aipu_tcb *aipu_mm_get_tcb_va(struct aipu_memory_manager *mm, u64 dev_pa)
 {
 	struct aipu_mem_region *reg = NULL;
-	struct tcb_buf *tcb = NULL;
+	struct tcb_buf *tbuf = NULL;
+	unsigned long flags;
+	struct aipu_tcb *tcb = NULL;
 
-	mutex_lock(&mm->lock);
-	tcb = aipu_mm_find_tcb_buf_no_lock(mm, &reg, iova);
-	mutex_unlock(&mm->lock);
+	spin_lock_irqsave(&mm->slock, flags);
+	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, &reg, dev_pa);
+	if (!tbuf || !reg)
+		goto unlock;
+
+	tcb = (struct aipu_tcb *)((char*)(reg->base_va) + dev_pa + reg->host_aipu_offset -
+	       reg->base_iova);
+
+unlock:
+	spin_unlock_irqrestore(&mm->slock, flags);
 	return tcb;
 }
 
@@ -1031,9 +1098,10 @@ int aipu_mm_set_tcb_tail(struct aipu_memory_manager *mm, u64 tail)
 {
 	struct aipu_mem_region *reg = NULL;
 	struct tcb_buf *tcb = NULL;
+	unsigned long flags;
 	int ret = 0;
 
-	mutex_lock(&mm->lock);
+	spin_lock_irqsave(&mm->slock, flags);
 	tcb = aipu_mm_find_tcb_buf_no_lock(mm, &reg, tail);
 	if (!tcb || !reg) {
 		ret = -EFAULT;
@@ -1045,7 +1113,7 @@ int aipu_mm_set_tcb_tail(struct aipu_memory_manager *mm, u64 tail)
 			reg->base_iova);
 
 unlock:
-	mutex_unlock(&mm->lock);
+	spin_unlock_irqrestore(&mm->slock, flags);
 	return ret;
 }
 
@@ -1053,26 +1121,33 @@ int aipu_mm_link_tcb(struct aipu_memory_manager *mm, u64 prev_tail, u32 next_hea
 		     int next_job_id)
 {
 	struct aipu_mem_region *reg = NULL;
-	struct tcb_buf *tcb = NULL;
+	struct tcb_buf *tbuf = NULL;
+	unsigned long flags;
 	int ret = 0;
 
-	mutex_lock(&mm->lock);
+	spin_lock_irqsave(&mm->slock, flags);
 
 	/**
 	 * if no prev TCB is found, job manager should destroy the pool,
 	 * and re-create & re-dispatch with the new head.
 	 */
-	tcb = aipu_mm_find_tcb_buf_no_lock(mm, &reg, prev_tail);
-	if (!tcb) {
+	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, &reg, prev_tail);
+	if (!tbuf) {
 		ret = -EFAULT;
 		goto unlock;
 	}
 
-	tcb->tail_tcb->next = next_head_32;
-	tcb->dep_job_id = next_job_id;
+	/* tail TCB should be set first */
+	if (!tbuf->tail_tcb) {
+		ret = -EINVAL;
+		goto unlock;
+	}
+
+	tbuf->tail_tcb->next = next_head_32;
+	tbuf->dep_job_id = next_job_id;
 
 unlock:
-	mutex_unlock(&mm->lock);
+	spin_unlock_irqrestore(&mm->slock, flags);
 	return ret;
 }
 
@@ -1082,34 +1157,69 @@ int aipu_mm_unlink_tcb(struct aipu_memory_manager *mm, u64 prev_tail)
 	struct tcb_buf *tbuf = NULL;
 	struct aipu_buf_desc buf;
 	struct aipu_virt_page *page = NULL;
+	unsigned long flags;
+	struct tcb_buf *tcb = NULL;
 	int ret = 0;
 
-	mutex_lock(&mm->lock);
+	spin_lock_irqsave(&mm->slock, flags);
 	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, &reg, prev_tail);
 	if (!tbuf || !reg) {
 		ret = -EFAULT;
 		goto unlock;
 	}
 
+	/* tail TCB should be set first */
+	if (!tbuf->tail_tcb) {
+		ret = -EINVAL;
+		goto unlock;
+	}
+
 	tbuf->tail_tcb->next = 0;
 	tbuf->dep_job_id = 0;
+	tbuf->pinned = false;
 
 	page = tbuf->page;
+	if (!page) {
+		ret = -EFAULT;
+		goto unlock;
+	}
+
 	if (!page->locked) {
 		buf.pa = tbuf->head;
 		buf.bytes = page->contiguous_alloc_len << PAGE_SHIFT;
-		ret = aipu_mm_free_in_region_no_lock(mm, &buf, reg);
+		ret = aipu_mm_free_in_region_no_lock(mm, &buf, reg, &tcb);
 		if (ret)
 			goto unlock;
 
-		list_del(&tbuf->node);
-		devm_kfree(mm->dev, tbuf);
-		page->tcb = NULL;
+		/* tbuf has been deleted already */
+		tbuf = NULL;
+
+		WARN_ON(!tcb);
+		list_del(&tcb->node);
+		devm_kfree(mm->dev, tcb);
+		tcb = NULL;
 	}
 
 unlock:
-	mutex_unlock(&mm->lock);
+	spin_unlock_irqrestore(&mm->slock, flags);
 	return ret;
+}
+
+void aipu_mm_pin_tcb(struct aipu_memory_manager *mm, u64 tail)
+{
+	struct aipu_mem_region *reg = NULL;
+	struct tcb_buf *tbuf = NULL;
+	unsigned long flags;
+
+	spin_lock_irqsave(&mm->slock, flags);
+	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, &reg, tail);
+	if (!tbuf || !reg)
+		goto unlock;
+
+	tbuf->pinned = true;
+
+unlock:
+	spin_unlock_irqrestore(&mm->slock, flags);
 }
 
 void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap)
@@ -1155,7 +1265,7 @@ int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes, int cluster_id)
 	buf_req.bytes = bytes;
 
 	list_for_each_entry(reg, &mm->mem[AIPU_MEM_REGION_TYPE_MEMORY].reg->list, list) {
-		ret = aipu_mm_alloc_in_region_no_lock(mm, &buf_req, reg, NULL);
+		ret = aipu_mm_alloc_in_region_no_lock(mm, &buf_req, reg, NULL, NULL);
 		if (!ret)
 			break;
 	}

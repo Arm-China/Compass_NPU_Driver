@@ -4,6 +4,13 @@
 #ifndef __AIPU_TCB_H__
 #define __AIPU_TCB_H__
 
+/**
+ * #reserved[8:11], dtcm_en[7], rd_en[6], wr_en[5], size[0:4]
+ */
+#define ASID_WR (1 << 5)
+#define ASID_RD (1 << 6)
+#define DTCM_EN (1 << 7)
+
 enum
 {
     TCB_INIT = 0,
@@ -110,5 +117,26 @@ struct aipu_tcb
         } init;
     } __data;
 };
+
+#define TCB_FLAG_TASK_TYPE_INIT        0
+#define TCB_FLAG_TASK_TYPE_TASK        1
+#define TCB_FLAG_TASK_TYPE_LOOP_TASK   2
+#define TCB_FLAG_END_TYPE_GRID_END     (1 << 7)
+
+#define GET_SEGMMU_CONFIG_CNT(flag)     (((flag) >> 16) & 0x1f)
+#define IS_INIT_TCB(flag)               (((flag) & 0x3) == TCB_FLAG_TASK_TYPE_INIT)
+#define IS_TASK_TCB(flag)               (((flag) & 0x3) == TCB_FLAG_TASK_TYPE_TASK)
+#define IS_GRID_END(flag)               ((flag) & TCB_FLAG_END_TYPE_GRID_END)
+
+#define gridid       __data.noninit.gridid
+#define groupid       __data.noninit.groupid
+#define taskid       __data.noninit.taskid
+#define grid_dim_x   __data.noninit.grid_dim_x
+#define group_dim_x  __data.noninit.group_dim_x
+#define pprint       __data.noninit.pprint
+
+#define gm_ctrl      __data.init.clst.gm_ctrl
+#define gm_rgnx_ctrl __data.init.clst.gm_rgnx_ctrl
+#define asids        __data.init.clst.asids
 
 #endif /* __AIPU_TCB_H__ */

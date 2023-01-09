@@ -47,7 +47,7 @@ namespace sim_aipu
         enum
         {
             X2_1204 = 1,
-            X2_1204_MP3
+            X2_1204MP3
         };
         int code;
         bool enable_avx;

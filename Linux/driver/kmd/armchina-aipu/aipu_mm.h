@@ -7,6 +7,7 @@
 #include <linux/platform_device.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
+#include <linux/spinlock.h>
 #include <uapi/misc/armchina_aipu.h>
 #include "aipu_tcb.h"
 
@@ -57,6 +58,7 @@ struct tcb_buf
 	int dep_job_id;
 	struct aipu_tcb *tail_tcb;
 	struct list_head node;
+	bool pinned;
 };
 
 /**
@@ -145,6 +147,7 @@ struct aipu_memory_manager {
 	struct aipu_mem_region_list mem[AIPU_MEM_REGION_TYPE_MAX];
 	struct aipu_sram_disable_per_fd *sram_disable_head;
 	struct device_attribute *gm_policy_attr;
+	spinlock_t slock; /* Protect tcb_buf list */
 };
 
 int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, int version);
@@ -153,15 +156,17 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 		  struct file *filp);
 int aipu_mm_free(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf, struct file *filp);
 void aipu_mm_free_buffers(struct aipu_memory_manager *mm, struct file *filp);
+char* aipu_mm_get_va(struct aipu_memory_manager *mm, u64 dev_pa);
 int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 		     struct file *filp);
 int aipu_mm_disable_sram_allocation(struct aipu_memory_manager *mm, struct file *filp);
 int aipu_mm_enable_sram_allocation(struct aipu_memory_manager *mm, struct file *filp);
-struct tcb_buf *aipu_mm_find_tcb_buf(struct aipu_memory_manager *mm, u64 iova);
 int aipu_mm_set_tcb_tail(struct aipu_memory_manager *mm, u64 tail);
+struct aipu_tcb *aipu_mm_get_tcb_va(struct aipu_memory_manager *mm, u64 dev_pa);
 int aipu_mm_link_tcb(struct aipu_memory_manager *mm, u64 prev_tail, u32 next_head_32,
 		     int next_job_id);
 int aipu_mm_unlink_tcb(struct aipu_memory_manager *mm, u64 prev_tail);
+void aipu_mm_pin_tcb(struct aipu_memory_manager *mm, u64 tail);
 void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap);
 int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes, int cluster_id);
 void aipu_mm_deinit_gm(struct aipu_memory_manager *mm);

@@ -10,16 +10,20 @@
 
 #include <cstring>
 #include <assert.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "job_v3.h"
 #include "graph_v3.h"
 #include "parser_base.h"
 #include "utils/helper.h"
 
-#if defined(SIMULATION) && defined(ZHOUYI_V3)
+#if defined(SIMULATION)
 #include "simulator/simulator_v3.h"
 #endif
-aipudrv::JobV3::JobV3(MainContext* ctx, const GraphBase& graph, DeviceBase* dev, aipu_create_job_cfg_t *config):
-    JobBase(ctx, graph, dev), m_partition_id(config->partition_id), m_qos(config->qos_level)
+aipudrv::JobV3::JobV3(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_create_job_cfg_t *config):
+    JobBase(ctx, graph, dev), m_partition_id(config->partition_id), m_qos(config->qos_level),
+    m_fm_mem_region(config->fm_mem_region)
 {
     m_tcbs.reset();
     m_init_tcb.init(0);
@@ -31,14 +35,8 @@ aipudrv::JobV3::JobV3(MainContext* ctx, const GraphBase& graph, DeviceBase* dev,
     m_bind_cmdpool_id = 0xffffffff;
 #endif
 
-    set_job_params(get_graph().m_subgraphs.size(), m_dev->tec_cnt_per_core(config->partition_id),
-        get_graph().m_remap_flag);
-
-    /**
-     * allocate buffer for backup tcb chain, this is just for support run the same job
-     * multiple times based on the same one Job struct created by aipu_create_job()
-     */
-    m_backup_tcb.reset(new char[m_tot_tcb_cnt * sizeof(tcb_t)]);
+    m_fm_mem_region = config->fm_mem_region;
+    graph.set_weight_region(config->wt_mem_region);
 
     m_segmmu_num = get_graph().m_segmmu_num;
     m_gm = new GM_V3(*this);
@@ -49,7 +47,8 @@ aipudrv::JobV3::~JobV3()
     delete m_gm;
 }
 
-void aipudrv::JobV3::set_job_params(uint32_t sg_cnt, uint32_t task_per_sg, uint32_t remap)
+void aipudrv::JobV3::set_job_params(uint32_t sg_cnt, uint32_t task_per_sg,
+    uint32_t remap, uint32_t core_cnt)
 {
     m_sg_cnt = sg_cnt;
     m_task_per_sg = task_per_sg;
@@ -62,6 +61,10 @@ void aipudrv::JobV3::set_job_params(uint32_t sg_cnt, uint32_t task_per_sg, uint3
      * - if using SegMMU, m_tot_tcb_cnt will be extended accordingly.
      */
     m_tot_tcb_cnt = m_sg_cnt * m_task_per_sg + 1 + 1;
+    if (m_segmmu_num > 0)
+        m_tot_tcb_cnt += (m_segmmu_tcb_num + 1) / 2;
+
+    m_backup_tcb.reset(new char[m_tot_tcb_cnt * sizeof(tcb_t)]);
 }
 
 void aipudrv::JobV3::setup_gm_sync_from_ddr(tcb_t *tcb)
@@ -143,7 +146,6 @@ void aipudrv::JobV3::setup_gm_sync_to_ddr(tcb_t *tcb)
                 | TCB_FLAG_END_TYPE_GROUP_END
                 | TCB_FLAG_END_TYPE_GRID_END;
     tcb->igrid_id = pre_tcb.gridid;
-    tcb->igroup_id = pre_tcb.groupid;
     tcb->gm_rgnx_addr[0].v64 = 0;
     tcb->gm_rgnx_addr[1].v64 = 0;
     tcb->gm_rgnx_addr[gm_region_idx].v64 = m_gm->m_gm_base;
@@ -159,87 +161,74 @@ void aipudrv::JobV3::setup_gm_sync_to_ddr(tcb_t *tcb)
         (const char*)tcb, sizeof(tcb_t));
 }
 
-#define SEGMMU_MME_CTRL_EN (1 << 0)
+#define SEGMMU_MEM_CTRL_EN (1 << 0)
+#define SEGMMU_REMAP_EN  (1 << 4)
 #define SEGMMU_REMAP_SHARE_EN  (1 << 5)
 #define SEGMMU_IN_ASID_WR (1 << 0)
 #define SEGMMU_IN_ASID_RD (1 << 1)
-inline uint32_t get_segmmu_and_reg_idx(uint32_t offset)
-{
-    uint32_t segmmu_idx = 0;
-
-    // get segmmu index
-    if (offset < 8)
-        segmmu_idx = 0;
-    else if (offset < 16)
-        segmmu_idx = 1;
-    else if (offset < 24)
-        segmmu_idx = 2;
-    else if (offset < 32)
-        segmmu_idx = 3;
-    else
-        LOG(LOG_WARN, "SegMMU entry offset is invalid\n");
-
-    return segmmu_idx;
-}
-
 aipu_status_t aipudrv::JobV3::setup_segmmu(SubGraphTask &sg)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    const std::vector<struct GraphParamMapLoadDesc>& param_map =
-        get_graph().m_subgraphs[0].param_map;
-    std::vector<BufferDesc>& reuse_buf  = sg.reuses;
-    uint32_t *start = nullptr, *entry = nullptr;
-    uint32_t total_segmmu_sz = 0;
     SegMMUConfig *segmmu = nullptr;
+    union segmmu_id
+    {
+        uint32_t id;
+        struct {
+        uint32_t segmmu_ctrl_idx:8;
+        uint32_t segmmu_idx:8;
+        uint32_t core_id_mask:16;
+        };
+    };
 
     if (m_segmmu_num == 0)
         goto out;
 
-    m_segmmu_sec = get_graph().m_bsegmmu;
-    start = (uint32_t *)m_segmmu_sec.va;
-    segmmu = (SegMMUConfig *)start;
-    total_segmmu_sz = sizeof(SegMMUConfig) * m_segmmu_num;
-
-    for (uint32_t i = 0; i < param_map.size(); i++)
+    segmmu = (SegMMUConfig *)get_graph().m_bsegmmu.va;
+    for (uint32_t i = 0; i < m_core_cnt; i++)
     {
-        if (param_map[i].buf_type != SECTION_TYPE_SEGMMU)
-            continue;
+        if (m_segmmu_num != 1)
+            segmmu++;
 
-        uint32_t buf_idx = param_map[i].ref_section_iter;
-        uint32_t sec_offset = param_map[i].sub_section_offset;
-        uint32_t offset_in_map = param_map[i].offset_in_map;
-        uint32_t segmmu_core_idx = offset_in_map / sizeof(SegMMUConfig);
-        uint32_t segmmu_reg_idx = get_segmmu_and_reg_idx(offset_in_map % sizeof(SegMMUConfig));
+        segmmu->SegMMU_ctl = SEGMMU_REMAP_SHARE_EN | SEGMMU_MEM_CTRL_EN;
+        segmmu->SegMMU_remap = 0;
 
-        if (offset_in_map < total_segmmu_sz)
+        m_segmmu_sec.push_back(*segmmu);
+    }
+
+    for (auto &iobuf : m_segmmus)
+    {
+        segmmu_id s_id = { .id = iobuf.id };
+
+        if ((s_id.core_id_mask & ((1 << m_core_cnt) - 1)) == 0)
         {
-            uint32_t seg_limit_sz = 0;
+            LOG(LOG_ERR, "Segmmu core idx invalid, (core_id, seg_idx, ctrl_idx): (%x, %d, %d)\n",
+                s_id.core_id_mask, s_id.segmmu_idx, s_id.segmmu_ctrl_idx);
+            goto out;
+        }
 
-            entry = start + offset_in_map;
-            seg_limit_sz = (*entry & 0x7f) << 14; // 16KB unit
+        for (uint32_t core_idx = 0; core_idx < m_core_cnt; core_idx++)
+        {
+            if (!(s_id.core_id_mask & (1 << core_idx)))
+                continue;
 
-            /* buffer size is orght to larger than segmmu_limit */
-            if (reuse_buf[buf_idx].size > seg_limit_sz)
+            if (s_id.segmmu_idx >= 0 && s_id.segmmu_idx < 4)
             {
-                *entry &= ~0xffffc000;
-                *entry |= (reuse_buf[buf_idx].pa + sec_offset) & 0xffffc000;
-                segmmu[segmmu_core_idx].SegMMU_ctl |= SEGMMU_REMAP_SHARE_EN | SEGMMU_MME_CTRL_EN;
-
-                /**
-                 * config RW (seg0_in_ASID) for segmmu, actually this will
-                 * be ignored due to SEGMMU_REMAP_SHARE_EN (set)
-                 */
-                segmmu[segmmu_core_idx].SegMMU_remap |= (SEGMMU_IN_ASID_RD | SEGMMU_IN_ASID_WR)
-                    << (16 + 4 * segmmu_reg_idx);
+                if (s_id.segmmu_ctrl_idx >= 0 && s_id.segmmu_ctrl_idx <= 1)
+                {
+                    uint32_t ctrl = m_segmmu_sec[core_idx].seg[s_id.segmmu_idx].control[s_id.segmmu_ctrl_idx];
+                    ctrl &= 0x3fff;
+                    ctrl |= (iobuf.pa & (~0x3fff));
+                    m_segmmu_sec[core_idx].seg[s_id.segmmu_idx].control[s_id.segmmu_ctrl_idx] = ctrl;
+                } else {
+                    LOG(LOG_ERR, "Segmmu ctrl idx invalid, (core_id, seg_idx, ctrl_idx): (%x, %d, %d)\n",
+                        core_idx, s_id.segmmu_idx, s_id.segmmu_ctrl_idx);
+                    goto out;
+                }
             } else {
-                LOG(LOG_ERR, "SegMMU: remap buffer size too small\n");
-                ret = AIPU_STATUS_ERROR_INVALID_SEGMMU;
+                LOG(LOG_ERR, "Segmmu seg idx invalid, (core_id, seg_idx, ctrl_idx): (%x, %d, %d)\n",
+                    core_idx, s_id.segmmu_idx, s_id.segmmu_ctrl_idx);
                 goto out;
             }
-        } else {
-            LOG(LOG_ERR, "SegMMU: entry offset beyond scope\n");
-            ret = AIPU_STATUS_ERROR_INVALID_SEGMMU;
-            goto out;
         }
     }
 
@@ -282,7 +271,7 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
             /* FIX ME: type */
             if ((section_desc.support_dma_buf == false) && (section_desc.size != 0))
             {
-                std::string buf_name = "reuse_priv_" + std::to_string(k);
+                std::string buf_name = "priv_" + std::to_string(sg_idx) + "_" + std::to_string(k);
 
                 ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &buf, buf_name.c_str());
                 if (AIPU_STATUS_SUCCESS != ret)
@@ -314,7 +303,8 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                     {
                         ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, buf);
                     } else {
-                        ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &buf, buf_name.c_str());
+                        ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &buf,
+                            buf_name.c_str(), m_fm_mem_region);
                     }
 
                     if (AIPU_STATUS_SUCCESS != ret)
@@ -328,6 +318,7 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
             }
 
             /* init task weights address */
+            #if 0
             for (uint32_t w = 0; w < get_graph().m_subgraphs[0].static_sections.size(); w++)
             {
                 const GraphSectionDesc &section_desc = get_graph().m_subgraphs[0].static_sections[w];
@@ -360,9 +351,25 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                 }
                 sg.weights.push_back(buf);
             }
+            #else
+            ret = get_graph().alloc_weight_buffer(get_graph().m_subgraphs[0].static_sections);
+            if (ret != AIPU_STATUS_SUCCESS)
+                goto out;
+
+            sg.weights.assign(get_graph().m_weights.begin(), get_graph().m_weights.end());
+            #endif
         }
 
         m_sg_job.push_back(sg);
+    }
+
+    if ( get_subgraph_cnt() > 0 && get_graph().m_subgraphs[0].printfifo_size > 0)
+    {
+        std::string buf_name = "printf";
+        m_pprint.reset();
+        ret = m_mem->malloc(get_subgraph_cnt() * AIPU_PAGE_SIZE, 0, &m_pprint, buf_name.c_str());
+        if (ret != AIPU_STATUS_SUCCESS)
+            goto out;
     }
 
 out:
@@ -372,6 +379,10 @@ out:
 aipu_status_t aipudrv::JobV3::init_per_task_data()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    uint32_t segmmu_tcb_skip = 0;
+
+    if (m_segmmu_num != 0)
+        segmmu_tcb_skip = (m_segmmu_tcb_num + 1) / 2;
 
     for (uint32_t i = 0; i < m_sg_cnt; i++)
     {
@@ -384,7 +395,7 @@ aipu_status_t aipudrv::JobV3::init_per_task_data()
             memset((void *)&task, 0, sizeof(task));
 
             /* 1.1. init task tcb */
-            task.tcb.init(m_tcbs.pa + (i * m_task_per_sg + j + 1)* sizeof(tcb_t));
+            task.tcb.init(m_tcbs.pa + (i * m_task_per_sg + j + 1 + segmmu_tcb_skip) * sizeof(tcb_t));
 
             /* 1.2. allocate task stack */
             ret = m_mem->malloc(get_graph().m_subgraphs[0].stack_size, get_graph().m_subgraphs[0].stack_align_in_page,
@@ -393,13 +404,13 @@ aipu_status_t aipudrv::JobV3::init_per_task_data()
                 goto out;
 
             /* 1.3. allocate and load task dp */
-            if (get_graph().m_bdata.size != 0)
+            if (get_graph().m_subgraphs[i].private_data_size != 0)
             {
-                ret = m_mem->malloc(get_graph().m_bdata.size, 0, &task.dp_cc, "data_cc");
+                ret = m_mem->malloc(get_graph().m_subgraphs[i].private_data_size, 0, &task.private_data, "dp_data");
                 if (AIPU_STATUS_SUCCESS != ret)
                     goto out;
 
-                m_mem->write(task.dp_cc.pa, get_graph().m_bdata.va, get_graph().m_bdata.size);
+                m_mem->mem_bzero(task.private_data.pa, task.private_data.size);
             }
             sg.tasks.push_back(task);
         }
@@ -435,9 +446,6 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
     }
 
     /* 3. allocate and reset job TCBs */
-    if (m_segmmu_num > 0)
-        m_tot_tcb_cnt += (m_core_cnt + 1) / 2; // extend total tcb number if Segmmu needs
-
     ret = m_mem->malloc(m_tot_tcb_cnt * sizeof(tcb_t), 0, &m_tcbs, "tcbs");
     if (AIPU_STATUS_SUCCESS != ret)
         goto finish;
@@ -455,7 +463,12 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
     if (AIPU_STATUS_SUCCESS != ret)
         goto finish;
 
-    /* 6. setup rodata & dcr, update entry for all subgraphs in global RO/DCR section */
+    /* 6. get IO buffer address, all subgraphs share the same copy of reuse buffers */
+    create_io_buffers(get_graph().m_subgraphs[0].io, m_sg_job[0].reuses);
+    if (get_subgraph_cnt() == 0)
+        goto finish;
+
+    /* 7. setup rodata & dcr, update entry for all subgraphs in global RO/DCR section */
     ret = setup_rodata_sg(0, get_graph().m_subgraphs[0].param_map, m_sg_job[0].reuses, m_sg_job[0].weights);
     if (AIPU_STATUS_SUCCESS != ret)
         goto finish;
@@ -472,11 +485,8 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
             goto finish;
     }
 
-    /* 7. setup remap */
+    /* 8. setup remap */
     setup_remap(m_rodata, m_descriptor);
-
-    /* 8. get IO buffer address, all subgraphs share the same copy of reuse buffers */
-    create_io_buffers(get_graph().m_subgraphs[0].io, m_sg_job[0].reuses);
 
     /* 9. parse SegMMU config */
     ret = setup_segmmu(m_sg_job[0]);
@@ -517,8 +527,8 @@ void aipudrv::JobV3::free_sg_buffers(const SubGraphTask& sg)
         if (sg.tasks[i].stack.size != 0)
             m_mem->free(&sg.tasks[i].stack);
 
-        if (sg.tasks[i].dp_cc.size != 0)
-            m_mem->free(&sg.tasks[i].dp_cc);
+        if (sg.tasks[i].private_data.size != 0)
+            m_mem->free(&sg.tasks[i].private_data);
     }
 }
 
@@ -531,15 +541,23 @@ aipu_status_t aipudrv::JobV3::free_job_buffers()
         m_mem->free(&m_rodata);
         m_rodata.reset();
     }
+
     if (m_descriptor.size != 0)
     {
         m_mem->free(&m_descriptor);
         m_descriptor.reset();
     }
+
     if (m_tcbs.size != 0)
     {
         m_mem->free(&m_tcbs, "tcbs");
         m_tcbs.reset();
+    }
+
+    if (m_pprint.size != 0)
+    {
+        m_mem->free(&m_pprint, "printf");
+        m_pprint.reset();
     }
     m_init_tcb.init(0);
 
@@ -560,6 +578,7 @@ aipu_status_t aipudrv::JobV3::free_job_buffers()
 aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, uint32_t core_id, uint32_t task_id)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    GraphV3& graph = get_graph();
     Task& task = m_sg_job[sg_id].tasks[task_id];
     tcb_t* tcb = new tcb_t;
     TCB* next_tcb = nullptr;
@@ -573,9 +592,13 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
 
     memset(tcb, 0, sizeof(tcb_t));
     tcb->flag = TCB_FLAG_TASK_TYPE_TASK;
+    tcb->interrupt = EN_INTERRUPT_ALL_TYPE;
 
-    if (task_id == (m_task_per_sg - 1))
+    if (task_id == (m_task_per_sg - 1)) {
         tcb->flag |= TCB_FLAG_END_TYPE_GROUP_END;
+        if (!next_tcb)
+            tcb->interrupt |= EN_INTERRUPT_CORE;
+    }
 
     if (next_tcb != nullptr)
     {
@@ -583,12 +606,18 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
     } else {
         tcb->next = 0;
         tcb->flag |= TCB_FLAG_END_TYPE_GRID_END;
+        tcb->interrupt |= EN_INTERRUPT_CLUSTER;
+
+        #ifndef SIMULATION
+        if (m_sg_cnt == 1)
+            tcb->flag &= ~TCB_FLAG_END_TYPE_GRID_END;
+        #endif
     }
 
     /* It is assumed that subgraphs are topology sorted. */
     if (task_id == 0)
     {
-        switch (get_graph().m_subgraphs[sg_id].precursor_cnt)
+        switch (graph.m_subgraphs[sg_id].precursor_cnt)
         {
             case 0:
                 tcb->flag |= TCB_FLAG_DEP_TYPE_NONE;
@@ -600,14 +629,17 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
                 tcb->flag |= TCB_FLAG_DEP_TYPE_PRE_ALL;
                 break;
             default:
-                printf("subgraph %u, precursor_cnt=%d\n", sg_id,
-                    get_graph().m_subgraphs[sg_id].precursor_cnt);
+                LOG(LOG_ERR, "subgraph %u, precursor_cnt=%d\n", sg_id,
+                    graph.m_subgraphs[sg_id].precursor_cnt);
                 return AIPU_STATUS_ERROR_INVALID_GBIN;
         }
+
+        /* to parallel model which runs only on single core, unset depend-all flag */
+        if (m_sg_cnt == 1)
+            tcb->flag &= ~TCB_FLAG_DEP_TYPE_PRE_ALL;
     }
 
-    tcb->interrupt = EN_INTERRUPT_ALL_TYPE | EN_INTERRUPT_CLUSTER | EN_INTERRUPT_CORE;
-    tcb->spc = get_low_32(get_graph().m_text.pa + get_graph().m_subgraphs[sg_id].text.offset);
+    tcb->spc = get_low_32(graph.m_text.pa + graph.m_subgraphs[sg_id].text.offset);
     tcb->gridid = (uint16_t)grid_id;
     tcb->groupid = (uint16_t)core_id;
     tcb->taskid = (uint16_t)task_id;
@@ -625,18 +657,23 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
     tcb->task_id_z = 0;
     tcb->tcbp = get_low_32(task.tcb.pa - m_tcbs.asid_base);
     tcb->sp = get_low_32(task.stack.pa);
-    tcb->pp = get_low_32(m_rodata.pa + get_graph().m_subgraphs[sg_id].rodata.offset);
+    tcb->pp = get_low_32(m_rodata.pa + graph.m_subgraphs[sg_id].rodata.offset);
+    tcb->dp = get_low_32(task.private_data.pa);
 
     /* const rodata */
-    if (get_graph().m_crodata.size > 0)
-        tcb->cp = get_low_32(get_graph().m_crodata.pa);
-
-    /* the below arg, not used currenltly */
-    tcb->dp = get_low_32(task.dp_cc.pa);
+    if (graph.m_crodata.size > 0)
+        tcb->cp = get_low_32(graph.m_crodata.pa);
 
     /* update profile buffer offset according to subgraph index */
     if (m_profiler.size() > 0)
-        tcb->pprofiler = get_low_32(m_profiler[0].pa +  get_graph().m_subgraphs[sg_id].profiler_buf_size);
+        tcb->pprofiler = get_low_32(m_profiler[0].pa +  graph.m_subgraphs[sg_id].profiler_buf_size);
+
+    if (graph.m_subgraphs[sg_id].printfifo_size > 0)
+    {
+        uint32_t pa = m_pprint.pa + AIPU_PAGE_SIZE * core_id + 1024 * task_id;
+        tcb->pprint = get_low_32(pa);
+        tcb->interrupt |= EN_INTERRUPT_TEC;
+    }
 
     /* flush TCB to AIPU mem */
     m_mem->write(task.tcb.pa, (const char*)tcb, sizeof(*tcb));
@@ -672,7 +709,7 @@ aipu_status_t aipudrv::JobV3::setup_tcbs()
     if (m_segmmu_num == 0)
         tcb->flag = TCB_FLAG_TASK_TYPE_INIT;
     else
-        tcb->flag = ((m_core_cnt & 0x1f) << 16) | TCB_FLAG_TASK_TYPE_INIT;
+        tcb->flag = (m_segmmu_tcb_num << 16) | TCB_FLAG_TASK_TYPE_INIT;
 
     tcb->next = get_low_32(m_sg_job[0].tasks[0].tcb.pa);
     tcb->igrid_id = m_grid_id;
@@ -696,47 +733,38 @@ aipu_status_t aipudrv::JobV3::setup_tcbs()
     /* 1.3 config SegMMU if need */
     if (m_segmmu_num > 0)
     {
-        for (uint32_t i = 0; i < m_core_cnt; i++)
+        for (uint32_t i = 0; i < m_segmmu_tcb_num; i++)
         {
-            SegMMUConfig *segmmu = nullptr;
-
-            if (m_segmmu_num == 1)
-                segmmu = (SegMMUConfig *)m_segmmu_sec.va;
-            else
-                segmmu = (SegMMUConfig *)m_segmmu_sec.va + i;
+            SegMMUConfig &segmmu = m_segmmu_sec[i];
 
             if (i % 2 == 0)
             {
                 memset(tcb, 0, sizeof(tcb_t));
-                tcb->smmu.ctrl = segmmu->SegMMU_ctl;
-                tcb->smmu.remap = segmmu->SegMMU_remap;
-                tcb->smmu.segs[0].ctrl0 = segmmu->seg0.control0;
-                tcb->smmu.segs[0].ctrl1 = segmmu->seg0.control1;
-                tcb->smmu.segs[1].ctrl0 = segmmu->seg1.control0;
-                tcb->smmu.segs[1].ctrl1 = segmmu->seg1.control1;
-                tcb->smmu.segs[2].ctrl0 = segmmu->seg2.control0;
-                tcb->smmu.segs[2].ctrl1 = segmmu->seg2.control1;
-                tcb->smmu.segs[3].ctrl0 = segmmu->seg3.control0;
-                tcb->smmu.segs[3].ctrl1 = segmmu->seg3.control1;
+                tcb->smmu.ctrl = segmmu.SegMMU_ctl;
+                tcb->smmu.remap = segmmu.SegMMU_remap;
+
+                for (int j = 0; j < 4; j++)
+                {
+                    tcb->smmu.segs[j].ctrl0 = segmmu.seg[j].control[0];
+                    tcb->smmu.segs[j].ctrl1 = segmmu.seg[j].control[1];
+                }
 
                 /* handle the last one segmmu config */
-                if (i == m_core_cnt - 1)
+                if (i == m_segmmu_tcb_num - 1)
                 {
                     m_mem->write(m_init_tcb.pa + (1 + i/2) * sizeof(tcb_t),
                         (const char*)tcb, sizeof(*tcb));
                     break;
                 }
             } else {
-                tcb->next_core_smmu.ctrl = segmmu->SegMMU_ctl;
-                tcb->next_core_smmu.remap = segmmu->SegMMU_remap;
-                tcb->next_core_smmu.segs[0].ctrl0 = segmmu->seg0.control0;
-                tcb->next_core_smmu.segs[0].ctrl1 = segmmu->seg0.control1;
-                tcb->next_core_smmu.segs[1].ctrl0 = segmmu->seg1.control0;
-                tcb->next_core_smmu.segs[1].ctrl1 = segmmu->seg1.control1;
-                tcb->next_core_smmu.segs[2].ctrl0 = segmmu->seg2.control0;
-                tcb->next_core_smmu.segs[2].ctrl1 = segmmu->seg2.control1;
-                tcb->next_core_smmu.segs[3].ctrl0 = segmmu->seg3.control0;
-                tcb->next_core_smmu.segs[3].ctrl1 = segmmu->seg3.control1;
+                tcb->smmu.ctrl = segmmu.SegMMU_ctl;
+                tcb->smmu.remap = segmmu.SegMMU_remap;
+
+                for (int j = 0; j < 4; j++)
+                {
+                    tcb->smmu.segs[j].ctrl0 = segmmu.seg[j].control[0];
+                    tcb->smmu.segs[j].ctrl1 = segmmu.seg[j].control[1];
+                }
 
                 m_mem->write(m_init_tcb.pa + (1 + i/2) * sizeof(tcb_t),
                     (const char*)tcb, sizeof(*tcb));
@@ -778,11 +806,23 @@ aipu_status_t aipudrv::JobV3::init(const aipu_global_config_simulation_t* cfg)
     }
 
     m_dev->get_core_count(m_partition_id, m_grid_id, &m_core_cnt);
+    set_job_params(get_graph().m_subgraphs.size(), m_dev->tec_cnt_per_core(m_partition_id),
+        get_graph().m_remap_flag, m_core_cnt);
 
     /* allocate and load job buffers */
     ret = alloc_load_job_buffers();
     if (AIPU_STATUS_SUCCESS != ret)
         goto finish;
+
+    /**
+     * no need to create TCBs if there's no subgraphs,
+     * just directly return.
+     */
+    if (get_subgraph_cnt() == 0)
+    {
+        m_status = AIPU_JOB_STATUS_INIT;
+        goto finish;
+    }
 
     ret = setup_tcbs();
     if (AIPU_STATUS_SUCCESS != ret)
@@ -790,6 +830,16 @@ aipu_status_t aipudrv::JobV3::init(const aipu_global_config_simulation_t* cfg)
 
     if (m_backup_tcb != nullptr)
         m_mem->read(m_init_tcb.pa, m_backup_tcb.get(), m_tot_tcb_cnt * sizeof(tcb_t));
+
+    if (m_dump_profile && m_profiler.size() > 0)
+    {
+        std::string profile_file_name = m_dump_dir + "/" + m_dump_misc_prefix + "_PerfData.bin";
+        m_profile_fd = open(profile_file_name.c_str(), O_RDWR);
+        if (m_profile_fd < 0)
+            LOG(LOG_ALERT, "open: %s [fail], ret: %d\n", profile_file_name.c_str(), m_profile_fd);
+
+        ret = convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_DISABLE_TICK_COUNTER, nullptr));
+    }
 
 finish:
     return ret;
@@ -806,6 +856,9 @@ aipu_status_t aipudrv::JobV3::schedule()
 
     if (m_err_code.size() == 1)
         m_mem->zeroize(m_err_code[0].pa, m_err_code[0].size);
+
+    if (get_subgraph_cnt() == 0)
+        return ret;
 
     /* with the backup tcbchain if run the job again */
     if (m_backup_tcb != nullptr && m_backup_tcb_used == true)
@@ -832,9 +885,21 @@ aipu_status_t aipudrv::JobV3::schedule()
     /* for X2 HW */
     desc.kdesc.exec_flag = (m_qos == AIPU_JOB_QOS_HIGH)
         ? AIPU_JOB_EXEC_FLAG_QOS_FAST : AIPU_JOB_EXEC_FLAG_QOS_SLOW;
+    desc.kdesc.exec_flag |= (m_sg_cnt == 1)
+        ? AIPU_JOB_EXEC_FLAG_SINGLE_GROUP : AIPU_JOB_EXEC_FLAG_MULTI_GROUP;
+
+    desc.kdesc.profile_fd = m_profile_fd;
     desc.kdesc.aipu_version = get_graph().m_hw_version;
     desc.kdesc.partition_id = m_partition_id;
+
     desc.kdesc.head_tcb_pa = m_init_tcb.pa;
+
+    /* small model share one common init-tcb on HW, skip the head init-tcb */
+    #ifndef SIMULATION
+    if ((m_sg_cnt == 1) && (m_segmmu_num == 0))
+        desc.kdesc.head_tcb_pa = m_init_tcb.pa + sizeof(tcb_t);
+    #endif
+
     desc.kdesc.last_task_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa;
     desc.kdesc.tail_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa;
 
@@ -883,22 +948,26 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     DEV_PA_64 dump_pa;
     uint32_t dump_size;
     char dump_name[4096];
-    int emu_input_cnt = 3 + m_inputs.size() + (get_graph().m_bweight.size != 0 ? 1 : 0) +
-        (m_descriptor.size != 0 ? 1 : 0);
+    int emu_input_cnt = 3 + m_inputs.size() + (m_descriptor.size != 0 ? 1 : 0);
     int emu_output_cnt = m_outputs.size();
     int file_id = -1;
     tcb_t tcb;
     bool default_output_prefix = true;
-    FileWrapper ofs(m_dump_dir + "/runtime.cfg", std::ios_base::in | std::ios_base::out | std::ios_base::trunc);
-    FileWrapper ofsmt(m_dump_dir + "/metadata.txt", std::ios_base::in | std::ios_base::out | std::ios_base::trunc);
+    std::string runtime_cfg = m_dump_dir + "/runtime.cfg";
+    std::string metadata_txt = m_dump_dir + "/metadata.txt";
 
     if (m_dump_emu == false)
         return AIPU_STATUS_SUCCESS;
 
+    FileWrapper ofs(runtime_cfg, std::ios_base::in | std::ios_base::out | std::ios_base::trunc);
+    FileWrapper ofsmt(metadata_txt, std::ios_base::in | std::ios_base::out | std::ios_base::trunc);
+    if (!ofs.is_open() || !ofsmt.is_open())
+        return AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
+
     ofs << "[COMMON]\n";
 
     /* runtime.cfg: config */
-    ofs << "#configuration 1:X2_1204 2:X2_1204_MP3\n";
+    ofs << "#configuration 1:X2_1204 2:X2_1204MP3\n";
     ofs << "CONFIG=" << m_dev->get_config_code() << "\n";
 
     /* runtime.cfg: enable_avx */
@@ -931,16 +1000,27 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
         ofs << "ENABLE_CALLOC=false\n";
 
     /* runtime.cfg: en_eval */
-    ofs << "## EN_EVAL\n";
+    ofs << "\n[PROFILE]\n";
     if (m_cfg->en_eval)
-        ofs << "EN_EVAL=true\n";
+        ofs << "EN_EVAL=1\n";
     else
-        ofs << "EN_EVAL=false\n";
+        ofs << "EN_EVAL=0\n";
+
+    if(m_profiler.size() == 1)
+    {
+        ofs << "\nPROFILE_BUF_ADDR=0x" << std::hex << m_profiler[0].pa << "\n";
+        ofs << "PROFILE_BUF_SIZE=0x" << std::hex << m_profiler[0].size << "\n";
+    }
     ofs << "\n";
 
     ofs.dump_to_string(m_dumpcfg_header);
 
     /* runtime.cfg: [INPUT] */
+    if (get_graph().m_weight.size != 0)
+        emu_input_cnt += 1;
+    else
+        emu_input_cnt += m_sg_job[0].weights.size();
+
     ofs << "[INPUT]\n";
     ofs << "COUNT=" << emu_input_cnt << "\n";
 
@@ -959,7 +1039,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
 
     /* dump temp.weight */
     dump_pa = get_graph().m_weight.pa;
-    dump_size = get_graph().m_bweight.size;
+    dump_size = get_graph().m_weight.size;
     if (dump_size != 0)
     {
         snprintf(dump_name, 128, "%s/%s.weight", m_dump_dir.c_str(), m_dump_prefix.c_str());
@@ -968,6 +1048,21 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
         ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".weight\n";
         ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
         m_dumpcfg_input.push_back({dump_name, dump_pa});
+    } else {
+        for (uint32_t i = 0; i < m_sg_job[0].weights.size(); i++)
+        {
+            std::string name;
+
+            dump_pa = m_sg_job[0].weights[i].pa;
+            dump_size = m_sg_job[0].weights[i].size;
+            // snprintf(dump_name, 128, "%s/%s.weight", m_dump_dir.c_str(), m_dump_prefix.c_str());
+            name = m_dump_dir + "/" + m_dump_prefix + ".weight" + std::to_string(i);
+            m_mem->dump_file(dump_pa, name.c_str(), dump_size);
+
+            ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".weight\n";
+            ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
+            m_dumpcfg_input.push_back({name.c_str(), dump_pa});
+        }
     }
 
     /* dump temp.rodata */
@@ -1073,7 +1168,6 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     ofsmt << "next: 0x" << tcb.next << "\n";
 
     ofsmt << "GM_CTRL: 0x" << tcb.gm_ctl << "\n";
-    ofsmt << "group_id: " << std::dec << tcb.igroup_id << "\n";
     ofsmt << "grid_id: " << std::dec << tcb.igrid_id << "\n";
     ofsmt << "GM0_CTRL: 0x" << std::hex << tcb.gm_rgnx_ctrl[0] << "\n";
     ofsmt << "GM1_CTRL: 0x" << tcb.gm_rgnx_ctrl[1] << "\n";
@@ -1142,7 +1236,6 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
         ofsmt << "next: 0x" << tcb.next << "\n";
 
         ofsmt << "GM_CTRL: 0x" << tcb.gm_ctl << "\n";
-        ofsmt << "group_id: " << std::dec << tcb.igroup_id << "\n";
         ofsmt << "grid_id: " << std::dec << tcb.igrid_id << "\n";
         ofsmt << "GM0_CTRL: 0x" << std::hex << tcb.gm_rgnx_ctrl[0] << "\n";
         ofsmt << "GM1_CTRL: 0x" << tcb.gm_rgnx_ctrl[1] << "\n";
@@ -1188,14 +1281,20 @@ void aipudrv::JobV3::dumpcfg_alljob()
 {
     JobV3 *job = nullptr;
     std::vector<uint32_t> cluster_id[4];
-    FileWrapper ofs("./runtime.cfg", std::ios::out);
-    FileWrapper ofsmt("./metadata.txt", std::ios::out);
     uint32_t count = 0, cmdpool_mask = 0;
     MainContext *ctx = static_cast<MainContext *>(get_graph().m_ctx);
     GraphTable &graphs = ctx->get_graphtable();
     GraphV3 *graph = nullptr;
     std::ostringstream oss;
     SimulatorV3 *sim = static_cast<SimulatorV3 *>(m_dev);
+
+    if (!m_dump_emu)
+        return;
+
+    FileWrapper ofs("./runtime.cfg", std::ios::out);
+    FileWrapper ofsmt("./metadata.txt", std::ios::out);
+    if (!ofs.is_open() || !ofsmt.is_open())
+        return;
 
     /**
      * set destroy flag for each tcbchain in all cmdpool, the simulator

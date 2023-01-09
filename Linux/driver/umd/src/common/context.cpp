@@ -9,6 +9,7 @@
  */
 
 #include <set>
+#include <queue>
 #include <iomanip>
 #include <sstream>
 #include <unistd.h>
@@ -348,9 +349,6 @@ aipu_status_t aipudrv::MainContext::load_graph(const char* graph_buf, uint32_t g
     pthread_rwlock_unlock(&m_glock);
     *id = _id;
 
-    /* TBD */
-    return ret;
-
 finish:
     delete gbin_str;
     return ret;
@@ -598,6 +596,12 @@ aipu_status_t aipudrv::MainContext::aipu_get_target(char *target)
         "X2_1204"
     };
 
+    #if SIMULATION
+    const char *nul_ptr = "null";
+    strncpy(target, nul_ptr, 4);
+    return ret;
+    #endif
+
     isa = m_dev->get_npu_version();
     config = m_dev->get_npu_config();
 
@@ -665,4 +669,206 @@ aipu_status_t aipudrv::MainContext::aipu_get_device_status(uint32_t *status)
     }
 
     return ret;
+}
+
+aipu_status_t aipudrv::MainContext::get_status(JobBase *job, aipu_job_status_t *status)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    const char *msg = nullptr;
+    int timeout = 3600 * 50; // prompt per 1 hour
+
+    auto sleep_ms = [](int ms){
+            struct timeval delay;
+            delay.tv_sec = 0;
+            delay.tv_usec = ms * 1000;
+            select(0, NULL, NULL, NULL, &delay);
+    };
+
+    while ((*status != AIPU_JOB_STATUS_DONE) && (*status != AIPU_JOB_STATUS_EXCEPTION))
+    {
+        ret = job->get_status(status);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            get_status_msg(ret, &msg);
+            LOG(LOG_ERR, "job status: %s\n", msg);
+            goto out;
+        }
+
+        if ((*status == AIPU_JOB_STATUS_DONE) || (*status == AIPU_JOB_STATUS_EXCEPTION))
+            break;
+
+        sleep_ms(20);
+        if (--timeout == 0)
+        {
+            ret = AIPU_STATUS_ERROR_TIMEOUT;
+            LOG(LOG_WARN, "job: %p polled over 1h\n", job);
+            goto out;
+        }
+    }
+
+out:
+    return ret;
+}
+
+aipu_status_t aipudrv::MainContext::run_batch(GraphBase &graph, uint32_t queue_id, aipu_create_job_cfg_t *config)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    JOB_ID job_id;
+    JobBase *job = nullptr;
+    aipu_job_status_t status = AIPU_JOB_STATUS_NO_STATUS;
+    typedef struct job_info {
+        JOB_ID job_id;
+        JobBase *job;
+        batch_info_t *batch;
+    } job_info_t;
+
+    job_info_t job_info_item;
+    std::queue<job_info_t> job_queue;
+    uint32_t types = 0;
+    uint32_t batch_num = 0;
+    uint32_t max_in_flight = 3;
+    uint32_t batch_queue_size = 0;
+    const char *umd_max_batch = getenv("UMD_MAX_BATCH");
+
+    if (!graph.is_valid_batch_queue(queue_id))
+        return AIPU_STATUS_ERROR_NO_BATCH_QUEUE;
+
+    if (umd_max_batch != nullptr)
+    {
+        int max_batch = atoi(umd_max_batch);
+        max_in_flight = (max_batch != 0) ? max_batch : max_in_flight;
+    }
+
+    batch_queue_size = graph.get_batch_queue_size(queue_id);
+    types = graph.get_batch_dump_type(queue_id);
+repeat:
+    for (; batch_num < batch_queue_size; batch_num++)
+    {
+        if (job_queue.size() >= max_in_flight)
+            break;
+
+        batch_info_t &batch = graph.get_batch_queue_item(queue_id, batch_num);
+        ret = graph.create_job(&job_id, &m_sim_cfg, config);
+        if (ret != AIPU_STATUS_SUCCESS)
+            goto out;
+
+        job = graph.get_job(job_id);
+        #ifdef SIMULATION
+        if (types & AIPU_CONFIG_TYPE_SIMULATION)
+        {
+            aipu_job_config_simulation_t sim_config = {0};
+
+            sim_config.data_dir = graph.get_batch_dump_path(queue_id);
+            ret = job->config_simulation(AIPU_CONFIG_TYPE_SIMULATION, &sim_config);
+            if (ret != AIPU_STATUS_SUCCESS)
+                goto out;
+        }
+        #endif
+
+        if (types & (~AIPU_CONFIG_TYPE_SIMULATION))
+        {
+            aipu_job_config_dump_t dump_config = {0};
+
+            dump_config.dump_dir = graph.get_batch_dump_path(queue_id);
+            ret = job->config_mem_dump(types, &dump_config);
+            if (ret != AIPU_STATUS_SUCCESS)
+                goto out;
+        }
+
+        for (uint32_t in_idx = 0; in_idx < batch.inputs.size(); in_idx++)
+        {
+            ret = job->load_tensor(in_idx, batch.inputs[in_idx]);
+            if (ret != AIPU_STATUS_SUCCESS)
+                goto out;
+        }
+
+        ret = job->schedule();
+        if (ret != AIPU_STATUS_SUCCESS)
+            goto out;
+
+        job_info_item.job_id = job_id;
+        job_info_item.job = job;
+        job_info_item.batch = &batch;
+        job_queue.push(job_info_item);
+    }
+
+    while (job_queue.size() > 0)
+    {
+        #ifdef SIMULATION
+        uint32_t min_in_flight = (job_queue.size() < max_in_flight) ?
+            job_queue.size() : max_in_flight;
+        for (uint32_t i = 0; i < min_in_flight; i++)
+        {
+            job_info_item = job_queue.front();
+            job_queue.pop();
+
+            status = AIPU_JOB_STATUS_NO_STATUS;
+            ret = get_status(job_info_item.job, &status);
+            if (ret != AIPU_STATUS_SUCCESS)
+                goto out;
+
+            for (uint32_t out_idx = 0; out_idx < job_info_item.batch->outputs.size(); out_idx++)
+            {
+                ret = job_info_item.job->get_tensor(AIPU_TENSOR_TYPE_OUTPUT, out_idx,
+                    job_info_item.batch->outputs[out_idx]);
+                if (ret != AIPU_STATUS_SUCCESS)
+                    goto out;
+            }
+
+            ret = graph.destroy_job(job_info_item.job_id);
+            if (ret != AIPU_STATUS_SUCCESS)
+                goto out;
+        }
+        #else
+        job_info_t job_info_item = job_queue.front();
+        job_queue.pop();
+        status = AIPU_JOB_STATUS_NO_STATUS;
+        ret = get_status(job_info_item.job, &status);
+        if (ret != AIPU_STATUS_SUCCESS)
+            goto out;
+
+        if (status == AIPU_JOB_STATUS_EXCEPTION)
+        {
+            LOG(LOG_ERR, "job exception, check HW status\n");
+            goto out;
+        }
+
+        for (uint32_t out_idx = 0; out_idx < job_info_item.batch->outputs.size(); out_idx++)
+        {
+            ret = job_info_item.job->get_tensor(AIPU_TENSOR_TYPE_OUTPUT, out_idx,
+                job_info_item.batch->outputs[out_idx]);
+            if (ret != AIPU_STATUS_SUCCESS)
+                goto out;
+        }
+
+        ret = graph.destroy_job(job_info_item.job_id);
+        if (ret != AIPU_STATUS_SUCCESS)
+            goto out;
+        #endif
+
+        if (batch_num < graph.get_batch_queue_size(queue_id))
+            goto repeat;
+    }
+
+out:
+    for(uint32_t i = 0; i < job_queue.size(); i++)
+    {
+        job_info_t job_info_item = job_queue.front();
+        job_queue.pop();
+        graph.destroy_job(job_info_item.job_id);
+    }
+    graph.clean_batches(queue_id);
+    return ret;
+}
+
+aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
+{
+    aipu_status_t ret= AIPU_STATUS_SUCCESS;
+
+    #if SIMULATION
+        return ret;
+    #endif
+
+   ret = convert_ll_status(m_dev->ioctl_cmd(cmd, arg));
+   return ret;
 }

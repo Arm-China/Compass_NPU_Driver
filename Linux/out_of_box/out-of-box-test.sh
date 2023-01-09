@@ -11,5 +11,4 @@ bash build_umd.sh
 make
 
 # run test
-source ../bash_env_setup.sh
 bash run.sh -c resnet_50

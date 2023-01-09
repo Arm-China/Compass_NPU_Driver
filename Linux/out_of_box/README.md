@@ -29,4 +29,4 @@ To build & run this demo application, please follow these steps:
         $./run.sh -c resnet_50
 
         - for X2
-        $./run.sh -a [X2_1204|X2_1204_MP3] -c resnet_50
+        $./run.sh -a [X2_1204|X2_1204MP3] -c resnet_50

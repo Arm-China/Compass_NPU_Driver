@@ -31,6 +31,9 @@ aipudrv::SimulatorV3::SimulatorV3(const aipu_global_config_simulation_t* cfg)
         m_verbose = cfg->verbose;
         m_enable_avx = cfg->enable_avx;
         m_en_eval = cfg->en_eval;
+
+        if (cfg->log_file_path != nullptr)
+            m_log_filepath = cfg->log_file_path;
         if (cfg->x2_arch_desc != nullptr)
             m_arch_desc = cfg->x2_arch_desc;
     }
@@ -51,8 +54,11 @@ aipudrv::SimulatorV3::~SimulatorV3()
         m_aipu = nullptr;
     }
 
-    for (auto item : m_reserve_mem)
-        delete item;
+    for (auto buf : m_reserve_mem)
+    {
+        m_dram->free(buf, "rsv");
+        delete buf;
+    }
 
     pthread_rwlock_destroy(&m_lock);
     delete m_dram;
@@ -72,7 +78,7 @@ aipu_status_t aipudrv::SimulatorV3::parse_config(uint32_t config, uint32_t &sim_
     std::map<std::string, arch_item_t> npu_arch_map =
     {
         {"X2_1204", { 1204, 1, 1, sim_aipu::config_t::X2_1204}},
-        {"X2_1204_MP3", { 1204, 3, 1, sim_aipu::config_t::X2_1204_MP3}}
+        {"X2_1204MP3", { 1204, 3, 1, sim_aipu::config_t::X2_1204MP3}}
     };
 
     if (!m_arch_desc.empty() && npu_arch_map.count(m_arch_desc) > 0)
@@ -107,6 +113,7 @@ aipu_status_t aipudrv::SimulatorV3::parse_config(uint32_t config, uint32_t &sim_
 
 bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t config, uint32_t rev)
 {
+    aipu_partition_cap aipu_cap = {0};
     uint32_t reg_val = 0, sim_code = 0;
     bool ret = false;
 
@@ -126,7 +133,8 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
         goto unlock;
     }
 
-    m_config = sim_create_config(sim_code, m_log_level, m_verbose, m_enable_avx, m_en_eval);
+    m_config = sim_create_config(sim_code, m_log_level, m_log_filepath,
+        m_verbose,m_enable_avx, m_en_eval);
     m_aipu = new sim_aipu::Aipu(m_config, static_cast<UMemory&>(*m_dram));
     if (m_aipu == nullptr)
     {
@@ -134,7 +142,7 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
         goto unlock;
     }
 
-    if (sim_code == sim_aipu::config_t::X2_1204 || sim_code == sim_aipu::config_t::X2_1204_MP3)
+    if (sim_code == sim_aipu::config_t::X2_1204 || sim_code == sim_aipu::config_t::X2_1204MP3)
         m_dram->gm_init(3);
 
     m_code = sim_code;
@@ -161,6 +169,11 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
         ret = false;
         goto unlock;
     }
+
+    aipu_cap.arch = arch;
+    aipu_cap.version = version;
+    aipu_cap.config = config;
+    m_part_caps.push_back(aipu_cap);
 
     ret = true;
 
@@ -227,6 +240,9 @@ aipu_ll_status_t aipudrv::SimulatorV3::get_status(std::vector<aipu_job_status_de
     uint32_t cmd_pool_id = job->m_bind_cmdpool_id;
     uint32_t cmd_pool_status_reg = CMD_POOL0_STATUS + 0x40 * cmd_pool_id;
 
+    if (job->get_subgraph_cnt() == 0)
+        return AIPU_LL_STATUS_SUCCESS;
+
     /**
      * dump a combination runtime.cfg for all jobs in one running period
      */
@@ -279,20 +295,24 @@ aipu_ll_status_t aipudrv::SimulatorV3::poll_status(std::vector<aipu_job_status_d
     uint32_t cmd_pool_id = job->m_bind_cmdpool_id;
     uint32_t cmd_pool_status_reg = CMD_POOL0_STATUS + 0x40 * cmd_pool_id;
 
-    while (m_aipu->read_register(cmd_pool_status_reg, value) > 0)
+    if (job->get_subgraph_cnt() != 0)
     {
-        if (value & CMD_POOL0_IDLE)
+        while (m_aipu->read_register(cmd_pool_status_reg, value) > 0)
         {
-            m_aipu->write_register(TSM_CMD_SCHED_CTRL, DESTROY_CMD_POOL);
-            LOG(LOG_INFO, "simulation done.");
-            break;
+            if (value & CMD_POOL0_IDLE)
+            {
+                m_aipu->write_register(TSM_CMD_SCHED_CTRL, DESTROY_CMD_POOL);
+                LOG(LOG_INFO, "simulation done.");
+                break;
+            }
+            sleep(1);
+            LOG(LOG_INFO, "wait for simulation execution...");
         }
-        sleep(1);
-        LOG(LOG_INFO, "wait for simulation execution...");
+        cmd_pool_erase_job(cmd_pool_id, job);
     }
 
     desc.state = AIPU_JOB_STATE_DONE;
     jobs_status.push_back(desc);
-    cmd_pool_erase_job(cmd_pool_id, job);
+
     return AIPU_LL_STATUS_SUCCESS;
 }

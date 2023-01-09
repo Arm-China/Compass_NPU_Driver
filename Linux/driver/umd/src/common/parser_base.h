@@ -99,7 +99,8 @@ enum SubSectionType {
     SECTION_TYPE_PLOG_DATA  = 12,
     SECTION_TYPE_LAYER_COUNTER = 13,
     SECTION_TYPE_ERROR_CODE = 14,
-    SECTION_TYPE_SEGMMU = 0xff,
+    SECTION_TYPE_ZEROCPY_CONSTANT = 15,
+    SECTION_TYPE_SEGMMU = 255,
 };
 
 /**
@@ -119,12 +120,19 @@ struct BSSHeader {
 /**
  * @brief struct sub-section data descriptor v3/4/5
  *        sub-section data need no additional memory allocation
+ *
+ * @note for segmmu type, ID field meaning
+ *      16:31	Identify  core0-core15 use this buffer, for example 0b11 means,
+ *              core0 and core1 share this buffer for segmmu.
+ *      8:15	Identify which segment [0-3] are available, [4-255] are reserved.
+ *      0:7	    Identify which control [0-1] are available,  value [2,255] are reserved.
+ *      and addr_mask is also used as mask for rewrite segmmu controls.
  */
 struct SubSectionDesc {
     uint32_t offset_in_section_exec; /**< offset in a section */
     uint32_t size;                   /**< tensor size */
     uint32_t type;                   /**< tensor type: 0: input; 1: output; 2: saved/dump; 3: intermediate */
-    uint32_t id;                     /**< tensor ID, used for identifying different inputs/outputs */
+    uint32_t id;                     /**< tensor ID, used for identifying different inputs/outputs/segmmus */
     uint32_t data_type;              /**< tensor layout type: 0: none; 1: bool; 2: uint8; 3: int8; 4: uint16; 5: int16; */
     float    scale;                  /**< scale */
     float    zero_point;             /**< zero point */

@@ -25,6 +25,8 @@ typedef enum {
     AIPU_LL_STATUS_ERROR_IOCTL_REQ_IO_FAIL,
     AIPU_LL_STATUS_ERROR_POLL_FAIL,
     AIPU_LL_STATUS_ERROR_IOCTL_QUERY_STATUS_FAIL,
+    AIPU_LL_STATUS_ERROR_IOCTL_ABORT_CMDPOOL,
+    AIPU_LL_STATUS_ERROR_IOCTL_TICK_COUNTER,
 } aipu_ll_status_t;
 
 inline aipu_status_t convert_ll_status(aipu_ll_status_t status)
@@ -48,6 +50,8 @@ inline aipu_status_t convert_ll_status(aipu_ll_status_t status)
         case AIPU_LL_STATUS_ERROR_IOCTL_REQ_IO_FAIL:
         case AIPU_LL_STATUS_ERROR_POLL_FAIL:
         case AIPU_LL_STATUS_ERROR_IOCTL_QUERY_STATUS_FAIL:
+        case AIPU_LL_STATUS_ERROR_IOCTL_ABORT_CMDPOOL:
+        case AIPU_LL_STATUS_ERROR_IOCTL_TICK_COUNTER:
             return AIPU_STATUS_ERROR_DEV_ABNORMAL;
 
         default:
@@ -85,10 +89,15 @@ struct JobDesc
     uint32_t dcr_size;
     uint32_t stack_size;
     std::vector<BufferDesc> reuses;
+    std::vector<BufferDesc> weights;
     std::vector<BufferDesc> outputs;
+    std::vector<BufferDesc> profile;
+    std::map<std::string, BufferDesc> misc_outputs;
     std::string output_dir;
     std::string simulator;
+    std::string log_path;
     uint32_t log_level;
+    bool en_eval;
 };
 
 enum DeviceType
@@ -112,6 +121,10 @@ protected:
 
 public:
     virtual bool has_target(uint32_t arch, uint32_t version, uint32_t config, uint32_t rev) = 0;
+    virtual aipu_ll_status_t ioctl_cmd(uint32_t cmd, void *arg)
+    {
+        return AIPU_LL_STATUS_SUCCESS;
+    };
     virtual aipu_status_t get_cluster_id(uint32_t part_id, std::vector<uint32_t> &)
     {
         return AIPU_STATUS_ERROR_INVALID_PARTITION_ID;

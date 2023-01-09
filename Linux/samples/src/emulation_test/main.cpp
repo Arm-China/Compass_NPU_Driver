@@ -5,7 +5,7 @@
 
 /**
  * @file  main.cpp
- * @brief Z5 AIPU UMD test application: for emulation test
+ * @brief X2 AIPU UMD test application: for emulation test
  *        After running this test, dumped files can be used for emulation tests.
  */
 
