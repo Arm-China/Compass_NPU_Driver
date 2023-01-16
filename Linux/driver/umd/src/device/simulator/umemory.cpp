@@ -119,8 +119,8 @@ void aipudrv::UMemory:: gm_init(uint32_t gm_size_idx)
 
         m_memblock[MEM_REGION_DDR].base = m_memblock[MEM_REGION_GM1].base
             + m_memblock[MEM_REGION_GM1].size;
-        m_memblock[MEM_REGION_DDR].size = TOTAL_SIM_MEM_SZ - m_memblock[MEM_REGION_GM0].size
-            - m_memblock[MEM_REGION_GM1].size;
+        m_memblock[MEM_REGION_DDR].size = TOTAL_SIM_MEM_SZ - m_memblock[MEM_REGION_SRAM].size
+            - m_memblock[MEM_REGION_GM0].size - m_memblock[MEM_REGION_GM1].size;
 
         set_gm_base(0, m_memblock[MEM_REGION_GM0].base, m_memblock[MEM_REGION_GM0].size);
         set_gm_base(1, m_memblock[MEM_REGION_GM1].base, m_memblock[MEM_REGION_GM1].size);
@@ -128,6 +128,9 @@ void aipudrv::UMemory:: gm_init(uint32_t gm_size_idx)
 
     for (int i = 0; i < MME_REGION_MAX; i++)
     {
+        if (m_memblock[i].size == 0)
+            continue;
+
         m_memblock[i].bit_cnt = m_memblock[i].size / AIPU_PAGE_SIZE;
 
         if (m_memblock[i].bitmap)

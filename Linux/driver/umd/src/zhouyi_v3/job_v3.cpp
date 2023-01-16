@@ -35,9 +35,7 @@ aipudrv::JobV3::JobV3(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_
     m_bind_cmdpool_id = 0xffffffff;
 #endif
 
-    m_fm_mem_region = config->fm_mem_region;
     graph.set_weight_region(config->wt_mem_region);
-
     m_segmmu_num = get_graph().m_segmmu_num;
     m_gm = new GM_V3(*this);
 }

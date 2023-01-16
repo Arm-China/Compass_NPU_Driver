@@ -41,8 +41,8 @@ private:
     MemBlock m_memblock[MME_REGION_MAX] = {
         { .base = 0, .size = TOTAL_SIM_MEM_SZ },
 
-        /* just a placehoder */
-        { .base = 0x00000000, .size = 0 },
+        /* SRAM memory region, this base is higher than DDR base default */
+        { .base = 0, .size = 0 },
 
         /* the base address for DTCM is fixed, currently only for X1 */
         { .base = 0xD0000000, .size = 8 * MB_SIZE },
