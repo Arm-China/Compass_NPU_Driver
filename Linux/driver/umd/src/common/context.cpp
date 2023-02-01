@@ -635,7 +635,7 @@ aipu_status_t aipudrv::MainContext::aipu_get_target(char *target)
     return ret;
 }
 
-aipu_status_t aipudrv::MainContext::aipu_get_device_status(uint32_t *status)
+aipu_status_t aipudrv::MainContext::aipu_get_device_status(device_status_t *status)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     uint32_t reg_addr = 0x4, value = 0;
@@ -644,6 +644,10 @@ aipu_status_t aipudrv::MainContext::aipu_get_device_status(uint32_t *status)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     *status = DEV_IDLE;
+    #ifdef SIMULATION
+    return ret;
+    #endif
+
     if (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_X2)
         reg_addr = 0x804;
 

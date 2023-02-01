@@ -739,7 +739,7 @@ finish:
     return ret;
 }
 
-aipu_status_t aipu_get_device_status(const aipu_ctx_handle_t* ctx, uint32_t *status)
+aipu_status_t aipu_get_device_status(const aipu_ctx_handle_t* ctx, device_status_t *status)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
