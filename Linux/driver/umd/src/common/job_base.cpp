@@ -153,14 +153,14 @@ aipu_status_t aipudrv::JobBase::get_tensor(aipu_tensor_type_t type, uint32_t ten
             break;
 
         case AIPU_TENSOR_TYPE_PROFILER:
-            if (isa == AIPU_VERSION_ZHOUYI_X2)
-            {
-                std::string profile_file_name = m_dump_dir + "/" + m_dump_misc_prefix + "_PerfData.bin";
-                LOG(LOG_ALERT, "check dump file: %s\n", profile_file_name.c_str());
-                return AIPU_STATUS_SUCCESS;
-            } else {
+            // if (isa == AIPU_VERSION_ZHOUYI_X2)
+            // {
+            //     std::string profile_file_name = m_dump_dir + "/" + m_dump_misc_prefix + "_PerfData.bin";
+            //     LOG(LOG_ALERT, "check dump file: %s\n", profile_file_name.c_str());
+            //     return AIPU_STATUS_SUCCESS;
+            // } else {
                 iobuffer_vec = &m_profiler;
-            }
+            // }
             break;
 
         case AIPU_TENSOR_TYPE_LAYER_COUNTER:
