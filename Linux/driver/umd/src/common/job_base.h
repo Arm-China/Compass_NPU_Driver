@@ -89,7 +89,10 @@ protected:
     bool m_dump_output = false;
     bool m_dump_tcb = false;
     bool m_dump_emu = false;
+
+    /* for X2 profile dump control */
     bool m_dump_profile = false;
+
     std::string m_dump_dir = "./";
     std::string m_dump_prefix = "temp";
     std::string m_dump_output_prefix = "temp";

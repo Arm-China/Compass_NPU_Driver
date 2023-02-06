@@ -829,16 +829,6 @@ aipu_status_t aipudrv::JobV3::init(const aipu_global_config_simulation_t* cfg)
     if (m_backup_tcb != nullptr)
         m_mem->read(m_init_tcb.pa, m_backup_tcb.get(), m_tot_tcb_cnt * sizeof(tcb_t));
 
-    if (m_dump_profile && m_profiler.size() > 0)
-    {
-        // std::string profile_file_name = m_dump_dir + "/" + m_dump_misc_prefix + "_PerfData.bin";
-        // m_profile_fd = open(profile_file_name.c_str(), O_RDWR);
-        // if (m_profile_fd < 0)
-        //     LOG(LOG_ALERT, "open: %s [fail], ret: %d\n", profile_file_name.c_str(), m_profile_fd);
-
-        ret = convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_ENABLE_TICK_COUNTER, nullptr));
-    }
-
 finish:
     return ret;
 }
@@ -938,6 +928,16 @@ void aipudrv::JobV3::dump_specific_buffers()
         dump_size = m_tot_tcb_cnt * sizeof(tcb_t);
         if (dump_size != 0)
             dump_buffer(dump_pa, nullptr, dump_size, "TCBs");
+    }
+
+    if (m_dump_profile && m_profiler.size() > 0)
+    {
+        // std::string profile_file_name = m_dump_dir + "/" + m_dump_misc_prefix + "_PerfData.bin";
+        // m_profile_fd = open(profile_file_name.c_str(), O_RDWR);
+        // if (m_profile_fd < 0)
+        //     LOG(LOG_ALERT, "open: %s [fail], ret: %d\n", profile_file_name.c_str(), m_profile_fd);
+
+        convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_ENABLE_TICK_COUNTER, nullptr));
     }
 }
 
