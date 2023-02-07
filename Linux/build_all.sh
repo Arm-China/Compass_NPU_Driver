@@ -185,9 +185,14 @@ else
     export CXX=$COMPASS_DRV_BTENVAR_CROSS_CXX
     export AR=$COMPASS_DRV_BTENVAR_CROSS_AR
     export PATH=$CONFIG_DRV_BTENVAR_CROSS_CXX_PATH:$PATH
+    if [ "$BUILD_TARGET_PLATFORM"x = "android"x ]; then
+        export PATH=$CONFIG_DRV_BTENVAR_CROSS_CXX_ANDROID_PATH:$PATH
+    fi
 
     if [ "$BUILD_TARGET_PLATFORM"x = "hybrid"x ]; then
         export CROSS_COMPILE=$COMPASS_DRV_BTENVAR_CROSS_COMPILE
+    elif [ "$BUILD_TARGET_PLATFORM"x = "android"x ]; then
+        export CROSS_COMPILE=$COMPASS_DRV_BTENVAR_CROSS_COMPILE_ANDROID
     else
         export CROSS_COMPILE=$COMPASS_DRV_BTENVAR_CROSS_COMPILE_GNU
     fi
@@ -264,7 +269,6 @@ ln -bs $COMPASS_DRV_BTENVAR_UMD_A_NAME_MAJOR   $BUILD_AIPU_DRV_ODIR/$COMPASS_DRV
 
 ### Build Armchina private test application(s)
 rm -rf $COMPASS_DRV_BTENVAR_TEST_BUILD_DIR
-
 
 if [ "$BUILD_TEST"x = "sample"x ]; then
     # Build for either simulator or arm64

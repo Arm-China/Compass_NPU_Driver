@@ -54,8 +54,18 @@ export CONFIG_DRV_BTENVAR_JUNO_4_9_KPATH=${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/kern
 export CONFIG_DRV_BTENVAR_JUNO_KPATH=${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/kernel/linux-5.11.18
 export CONFIG_DRV_BTENVAR_6CG_KPATH=${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/kernel/linux-xlnx-armchina
 
+# Android Configuration
+export CONFIG_DRV_BTENVAR_ANDROID_NDK_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/build_env/android_ndk/android-ndk-r20b
+export CONFIG_DRV_BTENVAR_ANDROID_CXX_PATH=${CONFIG_DRV_BTENVAR_ANDROID_NDK_PATH}/toolchains/llvm/prebuilt/linux-x86_64/bin
+export CONFIG_DRV_BTENVAR_CROSS_CXX_ANDROID_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/build_env/aarch64-linux-android-4.9/bin
+export CONFIG_DRV_BTENVAR_ANDROID_KPATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/linux-kernel/linux-android-4.14.59
+
 ### Toolchains
 ### add toolchain/kernel path of your supported platform(s)
+# Target platform: android
+export COMPASS_DRV_BTENVAR_ANDROID_CXX=clang++
+export COMPASS_DRV_BTENVAR_ANDROID_AR=llvm-ar
+
 # Target platform: x86
 export COMPASS_DRV_BTENVAR_X86_CXX=g++
 export COMPASS_DRV_BTENVAR_X86_AR=ar
@@ -66,6 +76,7 @@ export COMPASS_DRV_BTENVAR_CROSS_AR=aarch64-linux-gnu-ar
 export COMPASS_DRV_BTENVAR_ARCH=arm64
 export COMPASS_DRV_BTENVAR_CROSS_COMPILE=aarch64-linux-
 export COMPASS_DRV_BTENVAR_CROSS_COMPILE_GNU=aarch64-linux-gnu-
+export COMPASS_DRV_BTENVAR_CROSS_COMPILE_ANDROID=aarch64-linux-android-
 
 ### Simulation common part
 export CONFIG_DRV_RTENVAR_SIM_PATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/bin

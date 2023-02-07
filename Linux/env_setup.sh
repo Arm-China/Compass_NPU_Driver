@@ -60,6 +60,7 @@ setenv CONFIG_DRV_BTENVAR_ANDROID_KPATH      ${CONFIG_DRV_BTENVAR_BASE_DIR}/tool
 setenv CONFIG_DRV_BTENVAR_CROSS_CXX_PATH     ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/toolchain/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu/bin
 setenv CONFIG_DRV_BTENVAR_ANDROID_NDK_PATH   ${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/build_env/android_ndk/android-ndk-r20b
 setenv CONFIG_DRV_BTENVAR_ANDROID_CXX_PATH   ${CONFIG_DRV_BTENVAR_ANDROID_NDK_PATH}/toolchains/llvm/prebuilt/linux-x86_64/bin
+setenv CONFIG_DRV_BTENVAR_CROSS_CXX_ANDROID_PATH ${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/build_env/aarch64-linux-android-4.9/bin
 # add C/C++ libs path(s) here for your platform(s)
 
 # 1.3. Other paths
@@ -84,6 +85,7 @@ setenv COMPASS_DRV_BTENVAR_CROSS_AR          aarch64-linux-gnu-ar
 setenv COMPASS_DRV_BTENVAR_ARCH              arm64
 setenv COMPASS_DRV_BTENVAR_CROSS_COMPILE     aarch64-linux-
 setenv COMPASS_DRV_BTENVAR_CROSS_COMPILE_GNU aarch64-linux-gnu-
+setenv COMPASS_DRV_BTENVAR_CROSS_COMPILE_ANDROID aarch64-linux-android-
 
 # Add toolchain(s) here for your supported platform(s)
 
