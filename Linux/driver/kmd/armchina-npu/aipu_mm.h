@@ -8,7 +8,7 @@
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
-#include <uapi/misc/armchina_aipu.h>
+#include <armchina_aipu.h>
 #include "aipu_tcb.h"
 
 enum aipu_gm_policy {

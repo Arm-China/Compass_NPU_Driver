@@ -237,14 +237,12 @@ echo -e "$COMPASS_DRV_BRENVAR_INFO UMD API type is $BUILD_UMD_API_TYPE"
 if [ "$BUILD_TARGET_PLATFORM"x != "sim"x ]; then
     cd $COMPASS_DRV_BTENVAR_KMD_DIR
         echo -e "$COMPASS_DRV_BRENVAR_INFO Build KMD..."
-        cp -f include/uapi/misc/armchina_aipu.h $COMPASS_DRV_BTENVAR_KPATH/include/uapi/misc
         make $MAKE_JOBS_NUM ARCH=$COMPASS_DRV_BTENVAR_ARCH CROSS_COMPILE=$CROSS_COMPILE
         if [ -f aipu.ko ]; then
             cp aipu.ko $BUILD_AIPU_DRV_ODIR
             echo -e "$COMPASS_DRV_BRENVAR_INFO Build KMD done: binaries are in $BUILD_AIPU_DRV_ODIR"
         fi
         make clean
-        rm -f $COMPASS_DRV_BTENVAR_KPATH/include/uapi/misc/armchina_aipu.h
     cd -
 fi
 

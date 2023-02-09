@@ -8,7 +8,7 @@
 #include <linux/wait.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
-#include <uapi/misc/armchina_aipu.h>
+#include <armchina_aipu.h>
 #include "aipu_partition.h"
 #include "aipu_mm.h"
 #include "x2.h"

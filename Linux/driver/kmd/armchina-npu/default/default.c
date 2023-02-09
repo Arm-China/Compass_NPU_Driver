@@ -8,7 +8,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/of.h>
-#include "../armchina-aipu/include/armchina_aipu_soc.h"
+#include "armchina_aipu_soc.h"
 
 static struct aipu_soc default_soc = {
 	.priv = NULL,

@@ -6,7 +6,7 @@
 
 #include <linux/platform_device.h>
 #include <linux/device.h>
-#include <uapi/misc/armchina_aipu.h>
+#include <armchina_aipu.h>
 #include "aipu_io.h"
 #include "config.h"
 

@@ -8,7 +8,7 @@
 #include <linux/device.h>
 #include <linux/sysfs.h>
 #include <linux/atomic.h>
-#include <uapi/misc/armchina_aipu.h>
+#include <armchina_aipu.h>
 #include "aipu_irq.h"
 #include "aipu_io.h"
 #include "zhouyi/zhouyi.h"

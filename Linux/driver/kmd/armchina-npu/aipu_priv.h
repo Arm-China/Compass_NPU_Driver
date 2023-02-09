@@ -8,7 +8,7 @@
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <linux/types.h>
-#include "include/armchina_aipu_soc.h"
+#include "armchina_aipu_soc.h"
 #include "aipu_irq.h"
 #include "aipu_io.h"
 #include "aipu_partition.h"

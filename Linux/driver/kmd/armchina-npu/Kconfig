@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# ArmChina Zhouyi NPU driver
+#
+
+config ARMCHINA_NPU
+	bool "ArmChina Zhouyi NPU"
+	help
+	  Say Y if you are using any Zhouyi NPU.
+
+	  For other cases, say N.
+
+config ARMCHINA_NPU_ARCH_LEGACY
+	bool "ArmChina NPU architecture: z1/z2/z3/x1"
+	select ARMCHINA_NPU
+	help
+	  Say Y if the NPU version on your SoC is Zhouyi Z1/Z2/Z3/X1.
+
+	  For other architecture versions, say N.
+
+config ARMCHINA_NPU_ARCH_X2
+	bool "ArmChina NPU architecture: x2"
+	select ARMCHINA_NPU
+	help
+	  Say Y if the NPU version on your SoC is Zhouyi X2.
+
+	  For other architecture versions, say N.
+
+config ARMCHINA_NPU_SOC_DEFAULT
+	bool "Default SoC APIs"
+	help
+	  Say Y if you use the default SoC API implementations provided by ArmChina.
+
+	  For other SoCs, say N.
+
+config ARMCHINA_NPU_SOC_R329
+	bool "R329 SoC APIs"
+	help
+	  Say Y if you use the Allwinner R329 SoC API implementations.
+
+	  For other SoCs, say N.

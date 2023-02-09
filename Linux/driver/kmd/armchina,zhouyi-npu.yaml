@@ -17,6 +17,9 @@ properties:
     items:
       - const: armchina,zhouyi-v1
       - const: armchina,zhouyi-v2
+      - const: armchina,zhouyi-v3
+      - const: armchina,zhouyi-x1
+      - const: armchina,zhouyi-x2
       - const: armchina,zhouyi
 
   reg:
@@ -42,16 +45,16 @@ examples:
                 #size-cells = <2>;
                 ranges;
 
-                aipu_ddr_reserved: aipu-shmem@0xA0000000 {
+                aipu_res_0: memory@A0000000 {
                         compatible = "shared-dma-pool";
                         no-map;
                         reg = <0x0 0xA0000000 0x0 0x4000000>;
                 };
     };
 
-    aipu0@0x64000000 {
+    aipu0@64000000 {
                 compatible = "armchina,zhouyi";
                 reg = <0x0 0x64000000 0x0 0x1000>;
-                memory-region=<&aipu_ddr_reserved>;
+                memory-region=<&aipu_res_0>;
                 interrupts = <0 168 1>;
     };

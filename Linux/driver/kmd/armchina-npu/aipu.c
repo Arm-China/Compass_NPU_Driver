@@ -11,8 +11,8 @@
 #include <linux/uaccess.h>
 #include <linux/poll.h>
 #include <linux/compat.h>
-#include <uapi/misc/armchina_aipu.h>
-#include "include/armchina_aipu_soc.h"
+#include <armchina_aipu.h>
+#include "armchina_aipu_soc.h"
 #include "aipu_mm.h"
 #include "aipu_job_manager.h"
 #include "aipu_priv.h"

@@ -1,17 +1,15 @@
-###########################################################
-#   Arm China Zhouyi AIPU Kernel Mode Driver (KMD) Readme
-###########################################################
+################################################################
+#   Arm China Zhouyi NPU Kernel Mode Driver (KMD) Porting Guide
+################################################################
 
 1. File Hierarchy
 =================
 .
-|-- README.txt                      -> This readme
-|-- Makefile                        -> KMD makefile (out of tree)
-|-- include                         -> API header for user space
-|   `-- uapi
-|       `-- misc
-|           `-- armchina_aipu.h
-|-- armchina-aipu                   -> KMD core source files
+|-- porting_guide.txt               -> This porting guide doc.
+|-- armchina-npu                    -> ArmChina Zhouyi NPU driver source dir
+|   |-- include                     -> API headers
+|   |   |-- armchina_aipu.h         -> The header for user space applications
+|   |   `-- armchina_aipu_soc.h     -> The header for SoC vendors' integrations
 |   |-- Kconfig
 |   |-- Makefile
 |   |-- aipu.c                      -> Architecture independent implementations
@@ -30,29 +28,33 @@
 |   |-- aipu_priv.h
 |   |-- aipu_tcb.h
 |   |-- config.h
-|   |-- include                     -> API header for SoC vendor's integrations
-|   |   `-- armchina_aipu_soc.h
-|   `-- zhouyi                      -> Architecture specific implementations
+|   |-- zhouyi                      -> Architecture specific implementations
+|   |   |-- Makefile
+|   |   |-- x2.c                    -> Zhouyi X2 specific
+|   |   |-- x2.h
+|   |   |-- x2_priv.c
+|   |   |-- z1.c                    -> Zhouyi Z1 specific
+|   |   |-- z1.h
+|   |   |-- z2.c                    -> Zhouyi Z2/Z3/X1 specific
+|   |   |-- z2.h
+|   |   |-- legacy_priv.c           -> Common for Zhouyi Z1/Z2/Z3/X1
+|   |   |-- zhouyi.c                -> Common for Zhouyi architectures
+|   |   `-- zhouyi.h
+|   |-- default                     -> SoC integration implementation sample (default version)
+|   |   |-- Makefile
+|   |   `-- default.c
+|   `-- r329                        -> SoC integration implementation sample (R329 version)
 |       |-- Makefile
-|       |-- x2.c                    -> Zhouyi X2 specific
-|       |-- x2.h
-|       |-- x2_priv.c
-|       |-- z1.c                    -> Zhouyi Z1 specific
-|       |-- z1.h
-|       |-- z2.c                    -> Zhouyi Z2/Z3/X1 specific
-|       |-- z2.h
-|       |-- legacy_priv.c           -> Common for Zhouyi Z1/Z2/Z3/X1
-|       |-- zhouyi.c                -> Common for Zhouyi architectures
-|       `-- zhouyi.h
-|-- default                         -> SoC integration implementation sample (default version)
-|   `-- default.c
+|       `-- r329.c
+|-- Makefile                        -> KMD makefile (out of tree)
 |-- armchina,zhouyi-npu.yaml        -> Linux kernel version DTS bindings
-|-- checkpatch.pl                   -> Linux kernel checkpatch script
+|-- checkpatch.sh                   -> Linux kernel checkpatch script
 |-- const_structs.checkpatch
-|-- kmd_check_patch.sh
-`-- spelling.txt
+|-- check_patch.pl
+|-- spelling.txt
+`-- LICENSE.TXT
 
-2. Build AIPU KMD
+2. Build NPU KMD
 =================
 2.1 Build an out-of-tree module
 -------------------------------
@@ -81,9 +83,51 @@ If you would like to build for a single/compatible Zhouyi architecture(s), try t
 
 2.2 Build in kernel
 -------------------
-KMD supports to be built in kernel. You should copy the armchina_aipu.h header into
-./include/uapi/misc directory before building. The source files are suggested to
-be built under ./drivers/misc.
+KMD supports to be built in Linux kernel. To build NPU driver in-tree, please follow steps:
+
+    1. copy the ./armchina-npu directory into kernel path: drivers/misc.
+    2. add your SoC specific implementations and update NPU driver Kconfig & Makefile:
+        drivers/misc/armchina-npu/Kconfig
+        drivers/misc/armchina-npu/Makefile
+    3. update kernel Kconfig & Makefile:
+        (add the following line into drivers/misc/Kconfig)
+        source "drivers/misc/armchina-npu/Kconfig"
+
+        (add the following line into drivers/misc/Makefile)
+        obj-$(CONFIG_ARMCHINA_NPU)      += armchina-npu/
+    4. config NPU driver by executing "make menuconfig ARCH=arm64":
+        4.1. if you use Zhouyi Z1/Z2/Z3/X1 NPUs, please select
+
+                "ArmChina NPU architecture: z1/z2/z3/x1"
+
+            to set CONFIG_ARMCHINA_NPU_ARCH_LEGACY. CONFIG_ARMCHINA_NPU will be set
+            if you select this config.
+
+        4.2. if you use Zhouyi X2 NPUs, please select
+
+                "ArmChina NPU architecture: x2"
+
+            to set CONFIG_ARMCHINA_NPU_ARCH_X2. CONFIG_ARMCHINA_NPU will be set
+            if you select this config.
+
+        4.3. if you use the default SoC API implementations provided by ArmChina,
+             please select
+
+                "Default SoC APIs"
+
+            to set CONFIG_ARMCHINA_NPU_SOC_DEFAULT.
+
+        4.4. if you use the R329 SoC API implementations provided by Allwinner,
+             please select
+
+                "R329 SoC APIs"
+
+            to set CONFIG_ARMCHINA_NPU_SOC_R329.
+
+        4.5. if you use your own SoC, please add your corresponding configurations.
+    5. build kernel.
+
+The supported Linux kernel version numbers are listed in <9. Compatibility>.
 
 3. Device Tree Source (DTS) Bindings
 ====================================
@@ -215,7 +259,7 @@ For *memory* or *sram* type, you can reserve one or mutiple region(s) for it. We
 regions to be reserved to be 32 because Linux kernel accepts 64 at maximum.
 
 For *dtcm* type, currently we only accept to reserve at maximum one region. If you would like to reserve
-an address in SRAM or memory to be used as DTCM region, please use the *dtcm* type. *dtcm* type only works
+an address in SRAM or memory to be used as a DTCM region, please use the *dtcm* type. *dtcm* type only works
 for X1 and X2.
 
 The regions can be reserved in any sequence.
@@ -566,9 +610,63 @@ or power configurations for AIPU of your SoC can be added.
 Note that your MY_SOC_probe()/MY_SOC_remove() implementations should call
 armchina_aipu_probe()/armchina_aipu_remove(), respectively.
 
-5. Soft-reset Delay Time
-========================
-For Zhouyi X1, you may configure AIPU_CONFIG_DEFAULT_RESET_DELAY_US in ./armchina-aipu/config.h
+5. Soft-reset Configurations
+============================
+5.1 Zhouyi Z1/Z2/Z3
+-------------------
+Zhouyi Z1/Z2/Z3 NPUs do not support soft reset function itself. SoC vendors should add this
+feature in SoC level and provide a reset related register externally for driver to use.
+
+Zhouyi driver reserve a group of interfaces for you to integrate NPU reset function. Please
+follow these steps to bring up this feature:
+
+    1. implement reset/clock gating function in SoC hardware and provide a control register;
+    2. configure the reset control register address into NPU devicetree file (for details
+       please read <3.1.3 Register base>);
+    3. implement a second platform_get_resource() for the SoC reset control register
+       in the driver probe phase (suggested after the 1st platform_get_resource for NPU registers);
+    4. implement the enable_clk()/disable_clk() interfaces defined in aipu_soc_operations, or
+       implement your own reset interfaces and add them into aipu_soc_operations; in the above
+       implementations, configure the reset control register you defined and obtained in step 1~3;
+    5. pass the aipu_soc_operations struct you defined to the probe function and call the reset
+       function in your desired positions (you may refer to default/default.c); generally, you should
+       reset the NPU if a runtime error/exception occurs;
+
+5.2 Zhouyi X1
+-------------
+Zhouyi X1 NPUs support soft reset function. Host CPU can trigger a soft reset operation by
+configuring external register: Soft Reset Reister (0x200). You can find the speficication
+of this register in the Zhouyi X1 NPU TRM doc.
+
+By default, Zhouyi NPU driver has implemented this feature. The soft reset should be triggered in
+the following situations:
+
+    1. insmod/rmmod Zhouyi KMD;
+    2. a runtime exception/fault occurs in a NPU job;
+    3. user triggered by configuring the sysfs interface (for debug usage);
+
+You may also add your specific implementations about soft reset.
+
+5.3 Zhouyi X2
+-------------
+Zhouyi X2 NPUs support soft reset function. Host CPU can trigger a soft reset operation by
+configuring external register: TSM Soft Reset Register (0x20). You can find the speficication
+of this register in the Zhouyi X2 NPU TRM doc.
+
+Please be noted that a command pool abortion command will result in a soft reset internally
+as well. You should try to use command pool abortion first rather than to use soft reset directly.
+
+By default, Zhouyi NPU driver has implemented this feature. The soft reset should be triggered in
+the following situations:
+
+    1. insmod/rmmod Zhouyi KMD (reset the whole NPUs);
+    2. a runtime error/exception signal occurs in an NPU job (abort the command pool);
+
+You may also add your specific implementations about soft reset.
+
+5.4 Soft-reset Delay time
+-------------------------
+For Zhouyi X1, you may configure AIPU_CONFIG_DEFAULT_RESET_DELAY_US in ./armchina-npu/config.h
 to set the soft-reset delay time. When a soft-reset is triggered, driver will check the hardware
 status after this time delay since the reset happens. If the status is abnormal, driver will report
 error and stop to schedule tasks. By default this delay value is 50us.
@@ -706,15 +804,15 @@ Programming Guide (Chapter of Driver).
 
 8. Coding Style
 ===============
-To check the coding style of AIPU KMD, you can execute:
+To check the coding style of Zhouyi NPU KMD, you can execute:
 
-    $./kmd_check_patch.sh
+    $./check_patch.sh
 
 This script uses Linux kernel checkpatch scripts.
 
 9. Compatibility
 ================
-Zhouyi AIPU KMD supports Linux kernel version from 4.x to 5.x. Specifically, we tested the code on
+Zhouyi NPU KMD supports Linux kernel version from 4.x to 5.x. Specifically, we tested the code on
 the following Linux kernel versions:
 
     4.9.51
