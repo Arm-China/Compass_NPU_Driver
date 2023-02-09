@@ -664,7 +664,10 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
 
     /* update profile buffer offset according to subgraph index */
     if (m_profiler.size() > 0)
+    {
         tcb->pprofiler = get_low_32(m_profiler[0].pa +  graph.m_subgraphs[sg_id].profiler_buf_size);
+        tcb->__data.noninit.rsvd2[3] = m_profiler[0].pa;
+    }
 
     if (graph.m_subgraphs[sg_id].printfifo_size > 0)
     {
@@ -877,6 +880,11 @@ aipu_status_t aipudrv::JobV3::schedule()
         ? AIPU_JOB_EXEC_FLAG_SINGLE_GROUP : AIPU_JOB_EXEC_FLAG_MULTI_GROUP;
 
     desc.kdesc.profile_fd = m_profile_fd;
+    if (m_profiler.size() > 0)
+    {
+        desc.kdesc.profile_pa = m_profiler[0].pa;
+        desc.kdesc.profile_sz = m_profiler[0].size;
+    }
     desc.kdesc.aipu_version = get_graph().m_hw_version;
     desc.kdesc.partition_id = m_partition_id;
 
@@ -932,10 +940,10 @@ void aipudrv::JobV3::dump_specific_buffers()
 
     if (m_dump_profile && m_profiler.size() > 0)
     {
-        // std::string profile_file_name = m_dump_dir + "/" + m_dump_misc_prefix + "_PerfData.bin";
-        // m_profile_fd = open(profile_file_name.c_str(), O_RDWR);
-        // if (m_profile_fd < 0)
-        //     LOG(LOG_ALERT, "open: %s [fail], ret: %d\n", profile_file_name.c_str(), m_profile_fd);
+        std::string profile_file_name = m_dump_dir + "/" + m_dump_misc_prefix + "_PerfData.bin";
+        m_profile_fd = open(profile_file_name.c_str(), O_RDWR);
+        if (m_profile_fd < 0)
+            LOG(LOG_ALERT, "open: %s [fail], ret: %d\n", profile_file_name.c_str(), m_profile_fd);
 
         convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_ENABLE_TICK_COUNTER, nullptr));
     }

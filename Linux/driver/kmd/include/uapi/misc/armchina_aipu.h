@@ -291,6 +291,8 @@ struct aipu_job_desc {
 	__u64 job_id;
 	__u32 enable_prof;
 	__s64 profile_fd;
+	__u64 profile_pa;
+	__u32 profile_sz;
 	__u32 enable_poll_opt;
 	__u32 exec_flag;
 	__u32 dtcm_size_kb;
