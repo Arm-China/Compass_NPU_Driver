@@ -28,6 +28,8 @@ struct aipu_soc {
  * @disable_clk:        disable clock/enable clock gating
  * @is_clk_enabled:     is in clock enabled or disabled
  * @is_aipu_irq:        is the shared interrupt is for an AIPU core or not
+ * @init_mm:            customized mm initilization of SoC vendors
+ * @deinit_mm:          customized mm de-initilization of SoC vendors
  *
  * SoC vendors should register the SoC operations into struct aipu_private while
  * probing if they would like to implement and use their private SoC operation methods.
@@ -41,6 +43,8 @@ struct aipu_soc_operations {
 	int (*disable_clk)(struct device *dev, struct aipu_soc *soc);
 	bool (*is_clk_enabled)(struct device *dev, struct aipu_soc *soc);
 	bool (*is_aipu_irq)(struct device *dev, struct aipu_soc *soc, int core_id);
+	int (*init_mm)(struct device *dev, struct aipu_soc *soc);
+	int (*deinit_mm)(struct device *dev, struct aipu_soc *soc);
 };
 
 int armchina_aipu_probe(struct platform_device *p_dev, struct aipu_soc *soc,

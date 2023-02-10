@@ -537,10 +537,13 @@ static int aipu_mm_create_region(struct aipu_memory_manager *mm, struct aipu_mem
  * @mm:      pointer to memory manager struct to be initialized
  * @p_dev:   pointer to the platform device struct
  * @version: AIPU ISA version
+ * @soc:     SoC specific private data provided by vendors
+ * @soc_ops: SoC specific operations provided by vendors
  *
  * Return: 0 on success and error code otherwise.
  */
-int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, int version)
+int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, int version,
+		 struct aipu_soc *soc, struct aipu_soc_operations *soc_ops)
 {
 	int ret = 0;
 	enum aipu_mem_region_type type;
@@ -564,6 +567,11 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 		return -ENOMEM;
 	INIT_LIST_HEAD(&mm->sram_disable_head->list);
 	spin_lock_init(&mm->slock);
+
+	mm->soc = soc;
+	mm->soc_ops = soc_ops;
+	if (soc_ops && soc_ops->init_mm)
+		return soc_ops->init_mm(mm->dev, soc);
 
 	for (type = AIPU_MEM_REGION_TYPE_MEMORY; type < AIPU_MEM_REGION_TYPE_MAX; type++) {
 		reg = devm_kzalloc(mm->dev, sizeof(*reg), GFP_KERNEL);
@@ -735,10 +743,13 @@ finish:
  * @aipu_deinit_mm() - de-initialize mm module while kernel module unloading
  * @mm: pointer to memory manager struct initialized in aipu_init_mm()
  */
-void aipu_deinit_mm(struct aipu_memory_manager *mm)
+int aipu_deinit_mm(struct aipu_memory_manager *mm)
 {
 	int type = 0;
 	struct aipu_mem_region *reg = NULL;
+
+	if (mm->soc_ops && mm->soc_ops->deinit_mm)
+		return mm->soc_ops->deinit_mm(mm->dev, mm->soc);
 
 	/* deinit GM regions in a different way */
 	for (type = 0; type < AIPU_MEM_REGION_TYPE_GM; type++) {
@@ -752,6 +763,8 @@ void aipu_deinit_mm(struct aipu_memory_manager *mm)
 		aipu_common_destroy_attr(mm->dev, &mm->gm_policy_attr);
 		mm->gm_policy_attr = NULL;
 	}
+
+	return 0;
 }
 
 /**

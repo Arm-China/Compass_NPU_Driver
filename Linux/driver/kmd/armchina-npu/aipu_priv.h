@@ -33,6 +33,7 @@ struct aipu_priv_operations {
  * @reg:           AIPU register base (x2 only)
  * @irq_obj:       interrupt object (x2 only)
  * @dev:           device struct pointer (of core 0 for z1/z2/z3/x1)
+ * @soc:           SoC private data
  * @soc_ops:       SoC operation pointer
  * @aipu_fops:     file operation struct
  * @misc:          misc driver struct
