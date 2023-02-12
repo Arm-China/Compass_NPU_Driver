@@ -43,18 +43,8 @@ public:
 public:
     static UKMemory* get_memory(int fd)
     {
-        if (nullptr == m_mem)
-        {
-            m_mem = new UKMemory(fd);
-        }
-
-        return m_mem;
-    }
-
-    static void put_memory()
-    {
-        delete m_mem;
-        m_mem = nullptr;
+        static UKMemory mem_instance(fd);
+        return &mem_instance;
     }
 
     virtual ~UKMemory();
@@ -63,7 +53,6 @@ public:
 
 private:
     UKMemory(int fd);
-    static UKMemory* m_mem;
 };
 }
 

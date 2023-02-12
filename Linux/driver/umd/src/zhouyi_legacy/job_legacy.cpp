@@ -97,21 +97,32 @@ aipu_status_t aipudrv::JobLegacy::init(const aipu_global_config_simulation_t* cf
     {
         uint32_t size = get_graph().m_reuse_sections[i].size;
         uint32_t align_in_page = get_graph().m_reuse_sections[i].align_in_page;
-        BufferDesc buf;
+        BufferDesc bufferDesc;
 
-        buf.reset();
-        if (size != 0)
+        if (get_graph().m_shared_tensor_map.count(i) == 1)
         {
-            std::string str = "reuse_" + std::to_string(i);
-            ret = m_mem->malloc(size, align_in_page, &buf, str.c_str(), m_fm_mem_region);
-            if (AIPU_STATUS_SUCCESS != ret)
+            Buffer buffer;
+            if(m_mem->get_shared_buffer(get_graph().m_shared_tensor_map[i], size, buffer) != 0)
+            {
+                ret = AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
                 goto finish;
+            }
+            bufferDesc = buffer.desc;
+        } else {
+            bufferDesc.reset();
+            if (size != 0)
+            {
+                std::string str = "reuse_" + std::to_string(i);
+                ret = m_mem->malloc(size, align_in_page, &bufferDesc, str.c_str(), m_fm_mem_region);
+                if (AIPU_STATUS_SUCCESS != ret)
+                    goto finish;
+            }
         }
 
         if (m_dump_reuse)
-            m_mem->mem_bzero(buf.pa, buf.size);
+            m_mem->mem_bzero(bufferDesc.pa, bufferDesc.size);
 
-        m_reuses.push_back(buf);
+        m_reuses.push_back(bufferDesc);
     }
 
     /* 5. init weights address */

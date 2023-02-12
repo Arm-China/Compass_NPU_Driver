@@ -185,6 +185,40 @@ aipu_status_t aipudrv::JobBase::get_tensor(aipu_tensor_type_t type, uint32_t ten
     return AIPU_STATUS_SUCCESS;
 }
 
+aipu_status_t aipudrv::JobBase::mark_shared_tensor(aipu_tensor_type_t type, uint32_t tensor, uint64_t &pa_addr)
+{
+    DEV_PA_64 addr;
+    uint32_t size;
+    std::vector<struct JobIOBuffer> *iobuffer_vec = nullptr;
+
+    switch (type)
+    {
+        case AIPU_TENSOR_TYPE_INPUT:
+            iobuffer_vec = &m_inputs;
+            break;
+
+        case AIPU_TENSOR_TYPE_OUTPUT:
+            iobuffer_vec = &m_outputs;
+            break;
+
+        default:
+            return AIPU_STATUS_ERROR_INVALID_OP;
+    }
+
+    if (tensor >= iobuffer_vec->size())
+        return AIPU_STATUS_ERROR_INVALID_TENSOR_ID;
+
+    addr = iobuffer_vec->at(tensor).pa;
+    size = iobuffer_vec->at(tensor).size;
+
+    if(m_mem->mark_shared_buffer(addr, size) != 0)
+        return AIPU_STATUS_ERROR_MARK_SHARED_TENSOR;
+
+    pa_addr = addr;
+
+    return AIPU_STATUS_SUCCESS;
+}
+
 aipu_status_t aipudrv::JobBase::setup_rodata(
     const std::vector<struct GraphParamMapLoadDesc>& param_map,
     const std::vector<BufferDesc>& reuse_buf,

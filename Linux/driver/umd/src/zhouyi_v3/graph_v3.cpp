@@ -249,3 +249,30 @@ aipu_status_t aipudrv::GraphV3::get_tensor_descriptor(aipu_tensor_type_t type, u
 
     return AIPU_STATUS_SUCCESS;
 }
+
+aipu_status_t aipudrv::GraphV3::assign_shared_tensor(aipu_tensor_type_t type,
+    uint32_t tensor_idx, uint64_t shared_pa_addr)
+{
+    std::vector<struct GraphIOTensorDesc> *iobuffer_vec = nullptr;
+
+    switch (type)
+    {
+        case AIPU_TENSOR_TYPE_INPUT:
+            iobuffer_vec = &m_subgraphs[0].io.inputs;
+            break;
+
+        case AIPU_TENSOR_TYPE_OUTPUT:
+            iobuffer_vec = &m_subgraphs[0].io.outputs;
+            break;
+
+        default:
+            return AIPU_STATUS_ERROR_INVALID_OP;
+    }
+
+    if (tensor_idx >= iobuffer_vec->size())
+        return AIPU_STATUS_ERROR_INVALID_TENSOR_ID;
+
+    m_shared_tensor_map[iobuffer_vec->at(tensor_idx).ref_section_iter] = shared_pa_addr;
+
+    return AIPU_STATUS_SUCCESS;
+}

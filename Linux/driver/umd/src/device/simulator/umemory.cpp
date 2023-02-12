@@ -14,8 +14,6 @@
 #include "utils/log.h"
 #include "utils/helper.h"
 
-aipudrv::UMemory* aipudrv::UMemory::m_mem = nullptr;
-
 aipudrv::UMemory::UMemory(): MemoryBase(), sim_aipu::IMemEngine()
 {
     /**
@@ -78,10 +76,7 @@ aipudrv::UMemory::~UMemory()
         delete[] m_memblock[i].bitmap;
 
     for (auto bm_iter = m_allocated.begin(); bm_iter != m_allocated.end(); bm_iter++)
-        delete[] bm_iter->second.va;
-
-    if (m_mem != nullptr)
-        m_mem = nullptr;
+        bm_iter->second.ref_put();
 }
 
 void aipudrv::UMemory:: gm_init(uint32_t gm_size_idx)
@@ -201,10 +196,10 @@ aipu_status_t aipudrv::UMemory::malloc_internal(uint32_t size, uint32_t align, B
         {
             desc->init(0, m_memblock[mem_region].base + i * AIPU_PAGE_SIZE,
                 malloc_size, size, 0, mem_region, m_memblock[mem_region].base);
-            buf.desc = *desc;
-            buf.va = new char[malloc_size];
+            buf.init(new char[malloc_size], *desc);
             memset(buf.va, 0, malloc_size);
             m_allocated[desc->pa] = buf;
+            LOG(LOG_INFO, "m_allocated.size=%ld, buffer_pa=%lx", m_allocated.size(), desc->pa);
             for (uint32_t j = 0; j < malloc_page; j++)
                 m_memblock[mem_region].bitmap[i + j] = false;
 
@@ -255,13 +250,19 @@ aipu_status_t aipudrv::UMemory::free(const BufferDesc* desc, const char* str)
         goto unlock;
     }
 
-    b_start = (iter->second.desc.pa - m_memblock[desc->ram_region].base) / AIPU_PAGE_SIZE;
-    b_end = b_start + iter->second.desc.size / AIPU_PAGE_SIZE;
-    for (uint64_t i = b_start; i < b_end; i++)
-        m_memblock[desc->ram_region].bitmap[i] = true;
+    iter->second.ref_put();
+    if (iter->second.get_Buffer_refcnt() == 0)
+    {
+        b_start = (iter->second.desc.pa - m_memblock[desc->ram_region].base) / AIPU_PAGE_SIZE;
+        b_end = b_start + iter->second.desc.size / AIPU_PAGE_SIZE;
+        for (uint64_t i = b_start; i < b_end; i++)
+            m_memblock[desc->ram_region].bitmap[i] = true;
 
-    delete[] iter->second.va;
-    m_allocated.erase(desc->pa);
+        LOG(LOG_INFO, "free buffer_pa=%lx\n", iter->second.desc.pa);
+        delete []iter->second.va;
+        iter->second.va = nullptr;
+        m_allocated.erase(desc->pa);
+    }
 
 unlock:
     pthread_rwlock_unlock(&m_lock);

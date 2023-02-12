@@ -168,6 +168,56 @@ auto aipudrv::MemoryBase::get_allocated_buffer(std::map<DEV_PA_64, Buffer> *buff
     return buffer_pool->end();
 }
 
+int aipudrv::MemoryBase::mark_shared_buffer(uint64_t addr, uint64_t size)
+{
+    int ret = 0;
+    auto iter = m_allocated.end();
+
+    pthread_rwlock_wrlock(&m_lock);
+    iter = get_allocated_buffer((std::map<DEV_PA_64, Buffer> *)&m_allocated, addr);
+    if (iter == m_allocated.end())
+    {
+        ret = -1;
+        LOG(LOG_ERR, "invalid pa addr 0x%lx/size 0x%lx is used: no buffer\n", addr, size);
+        goto unlock;
+    }
+
+    /* found the buffer in m_allocated/m_reserved */
+    if ((addr + size) > (iter->second.desc.pa + iter->second.desc.size))
+    {
+        ret = -2;
+        LOG(LOG_ERR, "invalid pa addr 0x%lx/size 0x%lx is used: out of range\n", addr, size);
+        goto unlock;
+    }
+
+    iter->second.ref_get();
+
+unlock:
+    pthread_rwlock_unlock(&m_lock);
+    return ret;
+}
+
+int aipudrv::MemoryBase::get_shared_buffer(uint64_t addr, uint64_t size, Buffer &buffer)
+{
+    int ret = 0;
+    auto iter = m_allocated.end();
+
+    pthread_rwlock_wrlock(&m_lock);
+    iter = get_allocated_buffer((std::map<DEV_PA_64, Buffer> *)&m_allocated, addr);
+    if (iter == m_allocated.end())
+    {
+        ret = -1;
+        LOG(LOG_ERR, "invalid pa addr 0x%lx/size 0x%lx is used: no buffer\n", addr, size);
+        goto unlock;
+    }
+
+    buffer = iter->second;
+
+unlock:
+    pthread_rwlock_unlock(&m_lock);
+    return ret;
+}
+
 int aipudrv::MemoryBase::pa_to_va(uint64_t addr, uint64_t size, char** va) const
 {
     int ret = 0;

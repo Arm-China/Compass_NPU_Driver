@@ -12,6 +12,7 @@
 #define _AIPU_H_
 
 #include <vector>
+#include <mutex>
 #include "device_base.h"
 #include "type.h"
 #include "ukmemory.h"
@@ -102,10 +103,9 @@ public:
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
         if (nullptr == dev)
-        {
             return AIPU_STATUS_ERROR_NULL_PTR;
-        }
 
+        std::lock_guard<std::mutex> lock_(m_tex);
         if (m_aipu == nullptr)
         {
             m_aipu = new Aipu();
@@ -116,16 +116,15 @@ public:
                 m_aipu = nullptr;
                 return ret;
             }
-            m_aipu->inc_ref_cnt();
         }
 
+        m_aipu->inc_ref_cnt();
         *dev = m_aipu;
         return AIPU_STATUS_SUCCESS;
     };
 
     static void put_aipu(DeviceBase* dev)
     {
-        UKMemory::put_memory();
         delete (Aipu *)dev;
         dev = nullptr;
         m_aipu = nullptr;
@@ -137,6 +136,7 @@ public:
 
 private:
     Aipu();
+    static std::mutex m_tex;
     static Aipu* m_aipu;
 };
 }

@@ -140,6 +140,8 @@ public:
     virtual aipu_status_t destroy() = 0;
     aipu_status_t load_tensor(uint32_t tensor, const void* data);
     aipu_status_t get_tensor(aipu_tensor_type_t type, uint32_t tensor, void* data);
+    aipu_status_t mark_shared_tensor(aipu_tensor_type_t type, uint32_t tensor, uint64_t &pa_addr);
+    aipu_status_t assign_shared_tensor(aipu_tensor_type_t type, uint32_t tensor, uint64_t share_pa_addr);
     virtual aipu_status_t get_status(aipu_job_status_t* status);
     virtual aipu_status_t get_status_blocking(aipu_job_status_t* status, int32_t time_out);
     aipu_status_t config_mem_dump(uint64_t types, const aipu_job_config_dump_t* config);

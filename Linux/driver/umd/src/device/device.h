@@ -123,12 +123,10 @@ inline aipu_status_t get_device(DeviceBase** dev)
     return ret;
 }
 
-inline void put_device(DeviceBase* dev)
+inline bool put_device(DeviceBase* dev)
 {
     if (nullptr == dev)
-    {
-        return;
-    }
+        return false;
 
     if (dev->dec_ref_cnt() == 0)
     {
@@ -138,6 +136,10 @@ inline void put_device(DeviceBase* dev)
     #else
         Aipu::put_aipu(dev);
     #endif
+
+        return true;
+    } else {
+        return false;
     }
 }
 }

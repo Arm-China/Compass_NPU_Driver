@@ -90,18 +90,16 @@ public:
 public:
     static UMemory* get_memory()
     {
-        if (nullptr == m_mem)
-            m_mem = new UMemory();
-
-        return m_mem;
+        static UMemory mem_instance;
+        return &mem_instance;
     }
+
     virtual ~UMemory();
     UMemory(const UMemory& mem) = delete;
     UMemory& operator=(const UMemory& mem) = delete;
 
 private:
     UMemory();
-    static UMemory* m_mem;
 };
 }
 

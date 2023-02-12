@@ -112,6 +112,9 @@ protected:
     /* DTCM size, KB unit */
     int m_dtcm_size = 0;
 
+    /* the map: <io_buffer index, shared buffer PA addr> */
+    std::map<uint32_t, DEV_PA_64> m_shared_tensor_map;
+
 public:
     virtual void set_stack(uint32_t sg_id, uint32_t size, uint32_t align) = 0;
     virtual void add_param(uint32_t sg_id, struct GraphParamMapLoadDesc param) = 0;
@@ -131,6 +134,8 @@ public:
     virtual aipu_status_t get_tensor_count(aipu_tensor_type_t type, uint32_t* cnt) = 0;
     virtual aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type,
         uint32_t tensor, aipu_tensor_desc_t* desc) = 0;
+    virtual aipu_status_t assign_shared_tensor(aipu_tensor_type_t type,
+        uint32_t tensor_idx, uint64_t shared_pa_addr) = 0;
     aipu_status_t alloc_weight_buffer(std::vector<struct GraphSectionDesc> &static_sections);
 
 public:

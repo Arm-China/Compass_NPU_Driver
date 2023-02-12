@@ -38,6 +38,8 @@ public:
     virtual aipu_status_t get_tensor_count(aipu_tensor_type_t type, uint32_t* cnt);
     virtual aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type,
         uint32_t tensor, aipu_tensor_desc_t* desc);
+    virtual aipu_status_t assign_shared_tensor(aipu_tensor_type_t type,
+        uint32_t tensor_idx, uint64_t shared_pa_addr);
 
 public:
     void set_enrty(uint32_t offset)

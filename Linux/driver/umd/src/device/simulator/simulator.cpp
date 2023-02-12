@@ -25,7 +25,6 @@ aipudrv::Simulator::Simulator()
 
 aipudrv::Simulator::~Simulator()
 {
-    delete m_dram;
     m_dram = nullptr;
     m_sim = nullptr;
 }

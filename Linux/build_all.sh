@@ -274,11 +274,13 @@ if [ "$BUILD_TEST"x = "sample"x ]; then
     if [ "$BUILD_TARGET_PLATFORM"x = "sim"x ]; then
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=simulation_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=batch_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=sharebuffer_test
     else
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=benchmark_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=batch_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=flush_job_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=profiler_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=sharebuffer_test
     fi
     cd -
 elif [ "$BUILD_TEST"x = "demo"x ]; then

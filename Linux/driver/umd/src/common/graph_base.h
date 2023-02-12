@@ -113,6 +113,8 @@ public:
     virtual aipu_status_t get_tensor_count(aipu_tensor_type_t type, uint32_t* cnt) = 0;
     virtual aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type,
         uint32_t tensor, aipu_tensor_desc_t* desc) = 0;
+    virtual aipu_status_t assign_shared_tensor(aipu_tensor_type_t type,
+        uint32_t tensor_idx, uint64_t shared_pa_addr) = 0;
     virtual DEV_PA_64 debugger_get_instr_base() = 0;
 
     JobBase* get_job(JOB_ID id)

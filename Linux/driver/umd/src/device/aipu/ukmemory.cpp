@@ -21,8 +21,6 @@
 #include "utils/log.h"
 #include "utils/helper.h"
 
-aipudrv::UKMemory* aipudrv::UKMemory::m_mem = nullptr;
-
 aipudrv::UKMemory::UKMemory(int fd): MemoryBase()
 {
     m_fd = fd;
@@ -117,17 +115,22 @@ aipu_status_t aipudrv::UKMemory::free(const BufferDesc* desc, const char* str)
         goto unlock;
     }
 
-    kdesc.pa = desc->pa;
-    kdesc.bytes = desc->size;
-    munmap(iter->second.va, kdesc.bytes);
-    kret = ioctl(m_fd, free_cmd, &kdesc);
-    if (kret != 0)
+    iter->second.ref_put();
+    if (iter->second.get_Buffer_refcnt() == 0)
     {
-        ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
-        goto unlock;
-    }
+        kdesc.pa = desc->pa;
+        kdesc.bytes = desc->size;
+        munmap(iter->second.va, kdesc.bytes);
+        kret = ioctl(m_fd, free_cmd, &kdesc);
+        if (kret != 0)
+        {
+            ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
+            goto unlock;
+        }
 
-    m_allocated.erase(desc->pa);
+        LOG(LOG_INFO, "free buffer_pa=%lx\n", iter->second.desc.pa);
+        m_allocated.erase(desc->pa);
+    }
 
 unlock:
     pthread_rwlock_unlock(&m_lock);

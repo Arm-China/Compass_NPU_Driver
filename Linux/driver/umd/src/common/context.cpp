@@ -108,13 +108,11 @@ void aipudrv::MainContext::force_deinit()
         iter->second->unload();
 
     m_graphs.clear();
-    pthread_rwlock_unlock(&m_glock);
-    if (m_dev != nullptr)
-    {
-        put_device(m_dev);
-        m_dev = nullptr;
+
+    if (put_device(m_dev))
         m_dram = nullptr;
-    }
+
+    pthread_rwlock_unlock(&m_glock);
 }
 
 aipu_status_t aipudrv::MainContext::deinit()
@@ -868,11 +866,53 @@ out:
 aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
 {
     aipu_status_t ret= AIPU_STATUS_SUCCESS;
+    aipudrv::JobBase* job = nullptr;
+    GraphBase* p_gobj = nullptr;
 
-    #if SIMULATION
-        return ret;
-    #endif
+    if (cmd >= AIPU_IOCTL_MARK_SHARED_TENSOR && cmd <= AIPU_IOCTL_SET_SHARED_TENSOR)
+    {
+        aipu_shared_tensor_info_t *shared_tensor_info;
 
-   ret = convert_ll_status(m_dev->ioctl_cmd(cmd, arg));
+        if (nullptr == arg)
+            return AIPU_STATUS_ERROR_NULL_PTR;
+
+        shared_tensor_info = (aipu_shared_tensor_info_t *)arg;
+
+        switch (cmd)
+        {
+            case AIPU_IOCTL_MARK_SHARED_TENSOR:
+                if (!aipudrv::valid_job_id(shared_tensor_info->id))
+                    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+
+                job = get_job_object(shared_tensor_info->id);
+                if (nullptr == job)
+                    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+
+                ret = job->mark_shared_tensor(shared_tensor_info->type,
+                        shared_tensor_info->tensor_idx, shared_tensor_info->pa);
+                if (ret != AIPU_STATUS_SUCCESS)
+                    return ret;
+                break;
+
+            case AIPU_IOCTL_SET_SHARED_TENSOR:
+                if (!aipudrv::valid_graph_id(shared_tensor_info->id))
+                    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+                p_gobj = get_graph_object(shared_tensor_info->id);
+                if (nullptr == p_gobj)
+                    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+                ret = p_gobj->assign_shared_tensor(shared_tensor_info->type,
+                        shared_tensor_info->tensor_idx, shared_tensor_info->pa);
+                if (ret != AIPU_STATUS_SUCCESS)
+                    return ret;
+
+                break;
+        }
+    } else {
+        #ifndef SIMULATION
+        ret = convert_ll_status(m_dev->ioctl_cmd(cmd, arg));
+        #endif
+    }
    return ret;
 }

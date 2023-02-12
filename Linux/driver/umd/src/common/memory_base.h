@@ -12,6 +12,7 @@
 #define _MEMORY_BASE_H_
 
 #include <map>
+#include <atomic>
 #include <pthread.h>
 #include <fstream>
 #include <iostream>
@@ -57,6 +58,7 @@ struct BufferDesc
         ram_region = _ram_region;
         gm_base = _gm_base;
     }
+
     void reset()
     {
         pa = 0;
@@ -72,12 +74,54 @@ struct BufferDesc
 
 struct Buffer
 {
+    std::atomic_int refcnt{0};
     char* va;
     BufferDesc desc;
+
+    Buffer()
+    {
+        va = nullptr;
+        desc.reset();
+        refcnt = 0;
+    }
+
+    Buffer &operator=(const Buffer &_Buffer)
+    {
+        this->va = _Buffer.va;
+        this->desc = _Buffer.desc;
+        this->refcnt = _Buffer.refcnt.load();
+
+        return *this;
+    }
+
     void init(char* _va, BufferDesc _desc)
     {
         va = _va;
         desc = _desc;
+        refcnt = 1;
+    }
+
+    void reset()
+    {
+        va = nullptr;
+        desc.reset();
+        refcnt = 0;
+    }
+
+    void ref_get()
+    {
+        refcnt++;
+    }
+
+    void ref_put()
+    {
+        refcnt--;
+        LOG(LOG_INFO, "Buffer.refcnt=%d, buffer_pa=%lx", refcnt.load(), this->desc.pa);
+    }
+
+    int get_Buffer_refcnt()
+    {
+        return this->refcnt.load();
     }
 };
 
@@ -241,6 +285,8 @@ public:
 public:
     /* Interfaces */
     int pa_to_va(uint64_t addr, uint64_t size, char** va) const;
+    int mark_shared_buffer(uint64_t addr, uint64_t size);
+    int get_shared_buffer(uint64_t addr, uint64_t size, Buffer &buffer);
     virtual aipu_status_t malloc(uint32_t size, uint32_t align, BufferDesc* buf,
         const char* str = nullptr, uint32_t asid_qos_cfg = 0) = 0;
     virtual aipu_status_t free(const BufferDesc* buf, const char* str = nullptr) = 0;

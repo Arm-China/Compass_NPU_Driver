@@ -81,6 +81,10 @@ std::map<uint32_t, std::string> aipudrv::MainContext::umd_status_string =
         "Timeout on polling job's status" },
     { AIPU_STATUS_ERROR_NO_BATCH_QUEUE,
         "There's no specific batch queue" },
+    { AIPU_STATUS_ERROR_MARK_SHARED_TENSOR,
+        "Mark shared tensor: no tensor" },
+    { AIPU_STATUS_ERROR_SET_SHARED_TENSOR,
+        "Setting shared tensor: no tensor" },
     { AIPU_STATUS_MAX,
         "Status Max value which should not be returned to application." },
     /* AIPU layer library runtime error code */

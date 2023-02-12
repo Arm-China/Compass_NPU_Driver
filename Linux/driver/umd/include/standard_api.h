@@ -194,6 +194,31 @@ typedef union aipu_create_job_cfg {
 } aipu_create_job_cfg_t;
 
 /**
+ * @struct aipu_shared_tensor
+ *
+ * @brief mark one tensor buffer of one graph as shared with other graphs.
+ *
+ * @note the share action is based on one process contex, not among multiple processes.
+ *       1, mark a tensor buffer as shared in one graph and get its base physical address;
+ *       2, assign the shared tensor buffer to other graphs and as input or output.
+ */
+typedef struct aipu_shared_tensor_info {
+    uint64_t id;                 /**< pass job ID for marking one io buffer as shared
+                                      pass graph ID for sharing one shared buffer marked previously */
+    aipu_tensor_type_t type;     /**< the shared tensor's type: input/output */
+    uint32_t tensor_idx;         /**< the shared tensor's index */
+    uint64_t pa;                 /**< the physical address of shared tensor */
+} aipu_shared_tensor_info_t;
+
+/**
+ * @brief ioctl commands to operate shared tensor buffer
+ */
+enum {
+    AIPU_IOCTL_MARK_SHARED_TENSOR = 0x255,
+    AIPU_IOCTL_SET_SHARED_TENSOR
+};
+
+/**
  * @brief This aipu_status_t enumeration captures the result of any API function
  *        that has been executed. Success is represented by AIPU_STATUS_SUCCESS
  *        which has a value of zero. Error statuses are assigned positive integers
@@ -238,7 +263,9 @@ typedef enum {
     AIPU_STATUS_ERROR_INVALID_TENSOR_CNT   = 0x22,
     AIPU_STATUS_ERROR_TIMEOUT              = 0x23,
     AIPU_STATUS_ERROR_NO_BATCH_QUEUE       = 0x24,
-    AIPU_STATUS_MAX                        = 0x25,
+    AIPU_STATUS_ERROR_MARK_SHARED_TENSOR   = 0x25,
+    AIPU_STATUS_ERROR_SET_SHARED_TENSOR     = 0x26,
+    AIPU_STATUS_MAX                        = 0x27,
     /* AIPU layer library runtime error code */
     AIPU_STATUS_ERROR_UNKNOWN_ERROR        = 0x200,
     AIPU_STATUS_ERROR_KEYBOARD_INTERRUPT   = 0x300,
@@ -906,7 +933,7 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
  *
  * @param[in] ctx Pointer to a context handle struct returned by aipu_init_context
  * @param[in] cmd cmd
- * @param[inout] arg input or output argument
+ * @param[inout] arg input or output argument according to 'cmd'
  *
  * @retval AIPU_STATUS_SUCCESS
  * @retval AIPU_STATUS_ERROR_NULL_PTR

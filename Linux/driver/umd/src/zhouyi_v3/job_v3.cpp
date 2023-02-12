@@ -288,31 +288,43 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
             for (uint32_t k = 0; k < get_graph().m_subgraphs[0].reuse_sections.size(); k++)
             {
                 const GraphSectionDesc &section_desc = get_graph().m_subgraphs[0].reuse_sections[k];
-                BufferDesc buf;
-                buf.reset();
+                BufferDesc bufferDesc;
 
-                /* FIX ME: type */
-                if ((section_desc.support_dma_buf == false) && (section_desc.size != 0))
+                if (__glibc_unlikely(get_graph().m_shared_tensor_map.count(k) == 1))
                 {
-                    std::string buf_name = "reuse_" + std::to_string(k);
-
-                    /* handle buffer if allocated from GM */
-                    if (m_gm->gm_is_gm_buffer(k, GM_BUF_TYPE_REUSE))
+                    Buffer buffer;
+                    if(m_mem->get_shared_buffer(get_graph().m_shared_tensor_map[k], section_desc.size, buffer) != 0)
                     {
-                        ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, buf);
-                    } else {
-                        ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &buf,
-                            buf_name.c_str(), m_fm_mem_region);
-                    }
-
-                    if (AIPU_STATUS_SUCCESS != ret)
+                        ret = AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
                         goto out;
+                    }
+                    bufferDesc = buffer.desc;
+                } else {
+                    bufferDesc.reset();
+
+                    /* FIX ME: type */
+                    if ((section_desc.support_dma_buf == false) && (section_desc.size != 0))
+                    {
+                        std::string buf_name = "reuse_" + std::to_string(k);
+
+                        /* handle buffer if allocated from GM */
+                        if (m_gm->gm_is_gm_buffer(k, GM_BUF_TYPE_REUSE))
+                        {
+                            ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, bufferDesc);
+                        } else {
+                            ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
+                                buf_name.c_str(), m_fm_mem_region);
+                        }
+
+                        if (AIPU_STATUS_SUCCESS != ret)
+                            goto out;
+                    }
                 }
 
                 if (m_dump_reuse)
-                    m_mem->mem_bzero(buf.pa, buf.size);
+                    m_mem->mem_bzero(bufferDesc.pa, bufferDesc.size);
 
-                sg.reuses.push_back(buf);
+                sg.reuses.push_back(bufferDesc);
             }
 
             /* init task weights address */
