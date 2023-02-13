@@ -11,12 +11,14 @@
 /**
  * struct aipu_soc - a struct contains AIPU SoC specific information
  * @priv: SoC private data structure
+ * @mm:   Pointer to struct aipu_memory_manager
  *
  * This struct contains reference to SoC level private data, which is registered while probing,
  * and used as arguments of the corresponding SoC operation methods.
  */
 struct aipu_soc {
 	void *priv;
+	void *mm;
 };
 
 /**
@@ -30,6 +32,9 @@ struct aipu_soc {
  * @is_aipu_irq:        is the shared interrupt is for an AIPU core or not
  * @init_mm:            customized mm initilization of SoC vendors
  * @deinit_mm:          customized mm de-initilization of SoC vendors
+ * @malloc:             customized mm allocation of SoC vendors
+ * @free:               customized mm free of SoC vendors
+ * @mmap:               customized mm mmap of SoC vendors
  *
  * SoC vendors should register the SoC operations into struct aipu_private while
  * probing if they would like to implement and use their private SoC operation methods.
@@ -45,6 +50,10 @@ struct aipu_soc_operations {
 	bool (*is_aipu_irq)(struct device *dev, struct aipu_soc *soc, int core_id);
 	int (*init_mm)(struct device *dev, struct aipu_soc *soc);
 	int (*deinit_mm)(struct device *dev, struct aipu_soc *soc);
+	int (*malloc)(struct device *dev, struct aipu_soc *soc,
+		      struct aipu_buf_request *buf_req);
+	int (*free)(struct device *dev, struct aipu_soc *soc, struct aipu_buf_desc *buf);
+	int (*mmap)(struct device *dev, struct aipu_soc *soc, struct vm_area_struct *vma);
 };
 
 int armchina_aipu_probe(struct platform_device *p_dev, struct aipu_soc *soc,

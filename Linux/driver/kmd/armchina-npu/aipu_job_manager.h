@@ -5,9 +5,10 @@
 #define __AIPU_JOB_MANAGER_H__
 
 #include <linux/slab.h>
-#include <linux/wait.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
+#include <linux/wait.h>
+#include <linux/poll.h>
 #include <armchina_aipu.h>
 #include "aipu_partition.h"
 #include "aipu_mm.h"

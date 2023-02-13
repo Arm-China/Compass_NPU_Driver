@@ -101,6 +101,9 @@ static struct aipu_soc_operations r329_ops = {
 	.is_aipu_irq = NULL,
 	.init_mm = NULL,
 	.deinit_mm = NULL,
+	.malloc = NULL,
+	.free = NULL,
+	.mmap = NULL,
 };
 
 static int r329_probe(struct platform_device *p_dev)

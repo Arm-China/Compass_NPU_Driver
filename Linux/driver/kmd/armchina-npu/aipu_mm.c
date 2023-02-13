@@ -790,6 +790,9 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 	if (!buf_req->bytes || !is_power_of_2(buf_req->align_in_page))
 		return -EINVAL;
 
+	if (mm->soc_ops && mm->soc_ops->malloc)
+		return mm->soc_ops->malloc(mm->dev, mm->soc, buf_req);
+
 	if (buf_req->region == AIPU_BUF_REGION_QOS_SLOW_GM || buf_req->region == AIPU_BUF_REGION_QOS_FAST_GM)
 		type = AIPU_MEM_REGION_TYPE_GM;
 	else if (buf_req->region < AIPU_MEM_REGION_TYPE_MAX)
@@ -865,6 +868,9 @@ int aipu_mm_free(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf, stru
 	if (!mm || !buf || !filp)
 		return -EINVAL;
 
+	if (mm->soc_ops && mm->soc_ops->free)
+		return mm->soc_ops->free(mm->dev, mm->soc, buf);
+
 	reg = aipu_mm_find_region(mm, buf->pa);
 	if (!reg)
 		return -EINVAL;
@@ -936,6 +942,9 @@ int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 
 	if (!mm || !vma)
 		return -EINVAL;
+
+	if (mm->soc_ops && mm->soc_ops->mmap)
+		return mm->soc_ops->mmap(mm->dev, mm->soc, vma);
 
 	offset = vma->vm_pgoff * PAGE_SIZE;
 	len = vma->vm_end - vma->vm_start;
