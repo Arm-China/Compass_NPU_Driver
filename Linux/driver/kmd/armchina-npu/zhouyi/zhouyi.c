@@ -108,24 +108,18 @@ int zhouyi_get_hw_version_number(struct io_region *io)
 
 	revision_id = aipu_read32(io, ZHOUYI_REVISION_ID_REG_OFFSET);
 
-#if (defined BUILD_ZHOUYI_Z1 || defined BUILD_ZHOUYI_ALL)
-	if (revision_id == ZHOUYI_Z1_REVISION_ID)
+	switch(revision_id) {
+	case ZHOUYI_Z1_REVISION_ID:
 		return AIPU_ISA_VERSION_ZHOUYI_Z1;
-#endif
-
-#if (defined BUILD_ZHOUYI_Z2 || defined BUILD_ZHOUYI_Z3 || defined BUILD_ZHOUYI_X1 || defined BUILD_ZHOUYI_ALL)
-	if (revision_id == ZHOUYI_Z2_REVISION_ID)
+	case ZHOUYI_Z2_REVISION_ID:
 		return AIPU_ISA_VERSION_ZHOUYI_Z2;
-	else if (revision_id == ZHOUYI_Z3_REVISION_ID)
+	case ZHOUYI_Z3_REVISION_ID:
 		return AIPU_ISA_VERSION_ZHOUYI_Z3;
-	else if (revision_id == ZHOUYI_X1_REVISION_ID)
+	case ZHOUYI_X1_REVISION_ID:
 		return AIPU_ISA_VERSION_ZHOUYI_X1;
-#endif
-
-#if (defined BUILD_ZHOUYI_X2 || defined BUILD_ZHOUYI_ALL)
-	if (revision_id == ZHOUYI_X2_REVISION_ID)
+	case ZHOUYI_X2_REVISION_ID:
 		return AIPU_ISA_VERSION_ZHOUYI_X2;
-#endif
+	}
 
 	return 0;
 }

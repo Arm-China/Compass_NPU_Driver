@@ -75,13 +75,12 @@ int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,
 	dev_dbg(aipu->dev, "AIPU core0 ISA version %d, configuration %d\n", version, config);
 	aipu->version = version;
 
-#if (defined BUILD_ZHOUYI_X2 || defined BUILD_ZHOUYI_ALL)
+#ifdef CONFIG_ARMCHINA_NPU_ARCH_X2
 	if (version == AIPU_ISA_VERSION_ZHOUYI_X2)
 		aipu->ops = get_x2_priv_ops();
 #endif
 
-#if (defined BUILD_ZHOUYI_Z1 || defined BUILD_ZHOUYI_Z2 || defined BUILD_ZHOUYI_Z3 || \
-	defined BUILD_ZHOUYI_X1 || defined BUILD_ZHOUYI_ALL)
+#ifdef CONFIG_ARMCHINA_NPU_ARCH_LEGACY
 	if (version > 0 && version <= AIPU_ISA_VERSION_ZHOUYI_X1)
 		aipu->ops = get_legacy_priv_ops();
 #endif

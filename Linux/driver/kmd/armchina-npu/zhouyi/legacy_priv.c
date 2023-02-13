@@ -36,22 +36,15 @@ static int init_aipu_core(struct aipu_partition *core, int version, int id, stru
 	/* unused fields */
 	core->cluster_cnt = 0;
 
-#if (defined BUILD_ZHOUYI_Z1 || defined BUILD_ZHOUYI_ALL)
 	if (version == AIPU_ISA_VERSION_ZHOUYI_Z1) {
 		core->max_sched_num = ZHOUYI_V1_MAX_SCHED_JOB_NUM;
 		core->ops = get_zhouyi_v1_ops();
-	}
-#endif
-
-#if (defined BUILD_ZHOUYI_Z2 || defined BUILD_ZHOUYI_Z3 || \
-	defined BUILD_ZHOUYI_X1 || defined BUILD_ZHOUYI_ALL)
-	if (version == AIPU_ISA_VERSION_ZHOUYI_Z2 ||
-	    version == AIPU_ISA_VERSION_ZHOUYI_Z3 ||
-	    version == AIPU_ISA_VERSION_ZHOUYI_X1) {
+	} else if (version == AIPU_ISA_VERSION_ZHOUYI_Z2 ||
+		   version == AIPU_ISA_VERSION_ZHOUYI_Z3 ||
+		   version == AIPU_ISA_VERSION_ZHOUYI_X1) {
 		core->max_sched_num = ZHOUYI_V2_MAX_SCHED_JOB_NUM;
 		core->ops = get_zhouyi_v2_ops();
 	}
-#endif
 
 	core->reg = devm_kzalloc(core->dev, sizeof(*core->reg), GFP_KERNEL);
 	if (!core->reg)
