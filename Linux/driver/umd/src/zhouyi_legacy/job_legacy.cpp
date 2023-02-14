@@ -99,7 +99,7 @@ aipu_status_t aipudrv::JobLegacy::init(const aipu_global_config_simulation_t* cf
         uint32_t align_in_page = get_graph().m_reuse_sections[i].align_in_page;
         BufferDesc bufferDesc;
 
-        if (__glibc_unlikely(get_graph().m_shared_tensor_map.count(i) == 1))
+        if (get_graph().m_shared_tensor_map.count(i) == 1)
         {
             Buffer buffer;
             if(m_mem->get_shared_buffer(get_graph().m_shared_tensor_map[i], size, buffer) != 0)

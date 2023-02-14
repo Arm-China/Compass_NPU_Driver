@@ -290,7 +290,7 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                 const GraphSectionDesc &section_desc = get_graph().m_subgraphs[0].reuse_sections[k];
                 BufferDesc bufferDesc;
 
-                if (__glibc_unlikely(get_graph().m_shared_tensor_map.count(k) == 1))
+                if (get_graph().m_shared_tensor_map.count(k) == 1)
                 {
                     Buffer buffer;
                     if(m_mem->get_shared_buffer(get_graph().m_shared_tensor_map[k], section_desc.size, buffer) != 0)
