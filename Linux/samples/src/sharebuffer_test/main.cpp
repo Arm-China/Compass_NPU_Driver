@@ -8,7 +8,7 @@
  * @brief share some io buffers in process context
  *
  * @note
- *        1, run same model(graph) in loop-0 and loop-1
+ *        1, run same model(eg: alexnet) with only one input tensor in loop-0 and loop-1
  *        2, loop == 0: mark one input tensor buffer of graph-0 as shared
  *           after aipu_create_job()
  *        3, loop == 1: assign the buffer marked shared in loop-0 to new graph-1
@@ -223,6 +223,8 @@ int main(int argc, char* argv[])
         //AIPU_INFO()("aipu_get_tensor_descriptor done\n");
 
         /**
+         * NOTE:
+         *
          * assign one shared buffer to 2nd graph,
          */
         if (loop == 1)
@@ -254,6 +256,8 @@ int main(int argc, char* argv[])
         AIPU_INFO()("aipu_create_job success\n");
 
         /**
+         * NOTE:
+         *
          * mark one tensor buffer of 1st graph as shared
          */
         if (loop == 0)
@@ -333,15 +337,25 @@ int main(int argc, char* argv[])
                         opt.input_files[i].c_str(), opt.inputs_size[i], i, input_desc[i].size);
                     goto clean_job;
                 }
-                ret = aipu_load_tensor(ctx, job_id, i, opt.inputs[i]);
-                if (ret != AIPU_STATUS_SUCCESS)
+
+                /**
+                 * NOTE:
+                 *
+                 * it doesn't load input tensor for the 2nd graph due to the 2nd graph
+                 * shares the same input tensor buffer with the 1st graph.
+                 */
+                if (loop == 0)
                 {
-                    aipu_get_error_message(ctx, ret, &msg);
-                    AIPU_ERR()("aipu_load_tensor: %s\n", msg);
-                    goto clean_job;
+                    ret = aipu_load_tensor(ctx, job_id, i, opt.inputs[i]);
+                    if (ret != AIPU_STATUS_SUCCESS)
+                    {
+                        aipu_get_error_message(ctx, ret, &msg);
+                        AIPU_ERR()("aipu_load_tensor: %s\n", msg);
+                        goto clean_job;
+                    }
+                    AIPU_INFO()("load input tensor %d from %s (%u/%u)\n",
+                        i, opt.input_files[i].c_str(), i+1, input_cnt);
                 }
-                AIPU_INFO()("load input tensor %d from %s (%u/%u)\n",
-                    i, opt.input_files[i].c_str(), i+1, input_cnt);
             }
 
             ret = aipu_finish_job(ctx, job_id, -1);

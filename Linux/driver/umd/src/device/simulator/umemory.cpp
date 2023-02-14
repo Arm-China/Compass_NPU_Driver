@@ -76,7 +76,9 @@ aipudrv::UMemory::~UMemory()
         delete[] m_memblock[i].bitmap;
 
     for (auto bm_iter = m_allocated.begin(); bm_iter != m_allocated.end(); bm_iter++)
-        bm_iter->second.ref_put();
+        free(&bm_iter->second.desc, nullptr);
+
+    m_allocated.clear();
 }
 
 void aipudrv::UMemory:: gm_init(uint32_t gm_size_idx)
