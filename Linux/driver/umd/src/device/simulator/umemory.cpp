@@ -81,33 +81,31 @@ aipudrv::UMemory::~UMemory()
     m_allocated.clear();
 }
 
-void aipudrv::UMemory:: gm_init(uint32_t gm_size_idx)
+void aipudrv::UMemory:: gm_init(uint32_t gm_size)
 {
-    uint32_t size_idx = gm_size_idx; // fix 4MB GM currently
-    uint64_t gm_size[] = {
-        512 * 1024,
-        1 * MB_SIZE,
-        2 * MB_SIZE,
-        4 * MB_SIZE,
-        8 * MB_SIZE,
-        16 * MB_SIZE,
-        32 * MB_SIZE,
-        64 * MB_SIZE
-    };
-
+    /**
+     * 512 * 1024,
+     * 1 * MB_SIZE,
+     * 2 * MB_SIZE,
+     * 4 * MB_SIZE,
+     * 8 * MB_SIZE,
+     * 16 * MB_SIZE,
+     * 32 * MB_SIZE,
+     * 64 * MB_SIZE
+     */
     if (is_gm_enable())
     {
         if (m_gm_mean)
         {
             m_memblock[MEM_REGION_GM0].base = 0;
-            m_memblock[MEM_REGION_GM0].size = gm_size[size_idx] >> 1;
+            m_memblock[MEM_REGION_GM0].size = gm_size >> 1;
 
             m_memblock[MEM_REGION_GM1].base = m_memblock[MEM_REGION_GM0].base
                 + m_memblock[MEM_REGION_GM0].size;
-            m_memblock[MEM_REGION_GM1].size = gm_size[size_idx] >> 1;
+            m_memblock[MEM_REGION_GM1].size = gm_size >> 1;
         } else {
             m_memblock[MEM_REGION_GM0].base = 0;
-            m_memblock[MEM_REGION_GM0].size = gm_size[size_idx];
+            m_memblock[MEM_REGION_GM0].size = gm_size;
 
             m_memblock[MEM_REGION_GM1].base = m_memblock[MEM_REGION_GM0].base
                 + m_memblock[MEM_REGION_GM0].size;

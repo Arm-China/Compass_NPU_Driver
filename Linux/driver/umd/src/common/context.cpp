@@ -46,6 +46,7 @@ aipudrv::MainContext::MainContext()
     m_sim_cfg.enable_avx = false;
     m_sim_cfg.enable_calloc = false;
     m_sim_cfg.en_eval = false;
+    m_sim_cfg.gm_size = 4 * MB_SIZE;
 
     if (umd_log_level_env != nullptr)
     {
@@ -459,6 +460,18 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     char *sim_npu_arch_env = getenv("SIM_NPU_ARCH");
 
+    // X2 GM size
+    std::set<uint32_t> gm_sz_cfg = {
+        512 << 10, // 512KB
+        1 << 20,   // 1MB
+        2 << 20,
+        4 << 20,
+        8 << 20,
+        16 << 20,
+        32 << 20,
+        64 << 20
+    };
+
     if (nullptr == config)
         return AIPU_STATUS_ERROR_INVALID_JOB_ID;
 
@@ -500,6 +513,10 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
     m_sim_cfg.enable_avx = config->enable_avx;
     m_sim_cfg.enable_calloc = config->enable_calloc;
     m_sim_cfg.en_eval = config->en_eval;
+
+    m_sim_cfg.gm_size = config->gm_size;
+    if (gm_sz_cfg.count(m_sim_cfg.gm_size) != 1)
+        m_sim_cfg.gm_size = 4 * MB_SIZE;
 
     if ((config->x2_arch_desc != nullptr) || (sim_npu_arch_env != nullptr))
     {

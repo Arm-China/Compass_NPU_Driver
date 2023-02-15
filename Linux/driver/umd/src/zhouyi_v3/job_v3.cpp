@@ -973,6 +973,16 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     bool default_output_prefix = true;
     std::string runtime_cfg = m_dump_dir + "/runtime.cfg";
     std::string metadata_txt = m_dump_dir + "/metadata.txt";
+    std::map<uint32_t, std::string> gm_info = {
+        {512 << 10, "512K"},
+        {1 << 20, "1M"},
+        {2 << 20, "2M"},
+        {4 << 20, "4M"},
+        {8 << 20, "8M"},
+        {16 << 20, "16M"},
+        {32 << 20, "32M"},
+        {64 << 20, "64M"},
+    };
 
     if (m_dump_emu == false)
         return AIPU_STATUS_SUCCESS;
@@ -1011,11 +1021,15 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
         ofs << "LOG_VERBOSE=false\n";
 
     /* runtime.cfg: enable_calloc */
-    ofs << "##if ENABLE_CALLOC is true the allocation memory is set to zero.\n";
+    ofs << "#if ENABLE_CALLOC is true the allocation memory is set to zero.\n";
     if (m_cfg->enable_calloc)
         ofs << "ENABLE_CALLOC=true\n";
     else
         ofs << "ENABLE_CALLOC=false\n";
+
+    /* runtime.cfg: gm_size */
+    ofs << "#GM support: 512KiB,1MiB,2MiB,4MiB,8MiB,16MiB,32MiB,64MiB.\n";
+    ofs << "GM_SIZE=" << gm_info[m_cfg->gm_size] << "\n";
 
     /* runtime.cfg: en_eval */
     ofs << "\n[PROFILE]\n";

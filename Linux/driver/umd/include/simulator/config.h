@@ -62,6 +62,7 @@ namespace sim_aipu
         aiff_log_ctl_t aiff_log;
         aiff_dump_ctl_t aiff_dump;
         bool en_eval = 0;
+        uint32_t gm_size;
     };
 } //!sim_aipu
 

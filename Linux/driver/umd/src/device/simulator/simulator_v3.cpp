@@ -26,11 +26,13 @@ aipudrv::SimulatorV3::SimulatorV3(const aipu_global_config_simulation_t* cfg)
         m_verbose = false;
         m_enable_avx = false;
         m_en_eval = false;
+        m_gm_size = 4 * MB_SIZE;
     } else {
         m_log_level = cfg->log_level;
         m_verbose = cfg->verbose;
         m_enable_avx = cfg->enable_avx;
         m_en_eval = cfg->en_eval;
+        m_gm_size = cfg->gm_size;
 
         if (cfg->log_file_path != nullptr)
             m_log_filepath = cfg->log_file_path;
@@ -133,7 +135,7 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
     }
 
     m_config = sim_create_config(sim_code, m_log_level, m_log_filepath,
-        m_verbose,m_enable_avx, m_en_eval);
+        m_verbose, m_enable_avx, m_en_eval, m_gm_size);
     m_aipu = new sim_aipu::Aipu(m_config, static_cast<UMemory&>(*m_dram));
     if (m_aipu == nullptr)
     {
@@ -142,7 +144,7 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
     }
 
     if (sim_code == sim_aipu::config_t::X2_1204 || sim_code == sim_aipu::config_t::X2_1204MP3)
-        m_dram->gm_init(3);
+        m_dram->gm_init(m_config.gm_size);
 
     m_code = sim_code;
     m_aipu->read_register(TSM_BUILD_INFO, reg_val);

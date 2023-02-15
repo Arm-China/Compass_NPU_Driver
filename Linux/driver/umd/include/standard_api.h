@@ -131,6 +131,7 @@ typedef struct {
     const char* log_file_path;
     const char *x2_arch_desc;
     uint32_t log_level;
+    uint32_t gm_size;
     bool verbose;
     bool enable_avx;
     bool enable_calloc;
