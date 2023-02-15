@@ -307,7 +307,8 @@ aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t id)
     return job->schedule();
 }
 
-aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t id, aipu_job_status_t* status)
+aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t id,
+    aipu_job_status_t* status, int32_t time_out)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     aipudrv::JobBase* job = nullptr;
@@ -322,7 +323,7 @@ aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t id, aip
     if (AIPU_STATUS_SUCCESS != ret)
         return ret;
 
-    return job->get_status(status);
+    return job->get_status_blocking(status, time_out);
 }
 
 aipu_status_t aipu_clean_job(const aipu_ctx_handle_t* ctx, uint64_t id)

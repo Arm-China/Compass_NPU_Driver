@@ -237,27 +237,40 @@ aipu_ll_status_t aipudrv::Aipu::poll_status(std::vector<aipu_job_status_desc>& j
     struct pollfd poll_list;
     JobBase *job = (JobBase *)jobbase;
 
-    poll_list.fd = m_fd;
-    poll_list.events = POLLIN | POLLPRI;
-
-    assert(max_cnt > 0);
-
-repeat:
-    kret = poll(&poll_list, 1, time_out);
-    if (kret < 0)
-        return AIPU_LL_STATUS_ERROR_POLL_FAIL;
-
-    if ((poll_list.revents & POLLIN) == POLLIN)
-        ret = get_status(jobs_status, max_cnt, of_this_thread);
-
+    /**
+     * the laterly committed job maybe finished firstly, but the current polling job
+     * isn't the laterly committed job, so it has to cache the laterly committed but
+     * firstly finished job. so it's necesssary to check the cache queue containing
+     * finished job firstly. if there's no target job, switch to poll NPU HW.
+     */
     if (m_job_sts_queue.is_job_exist(job->get_id()))
     {
         jobs_status.push_back(*m_job_sts_queue.pop_q(job->get_id()));
         return ret;
     }
 
-    if (time_out == -1)
-        goto repeat;
+    poll_list.fd = m_fd;
+    poll_list.events = POLLIN | POLLPRI;
+    assert(max_cnt > 0);
+
+    do
+    {
+        kret = poll(&poll_list, 1, time_out);
+        if (kret < 0)
+            return AIPU_LL_STATUS_ERROR_POLL_FAIL;
+        else if (kret == 0)
+            return AIPU_LL_STATUS_ERROR_POLL_TIMEOUT;
+
+        /* normally return */
+        if ((poll_list.revents & POLLIN) == POLLIN)
+            ret = get_status(jobs_status, max_cnt, of_this_thread);
+
+        if (m_job_sts_queue.is_job_exist(job->get_id()))
+        {
+            jobs_status.push_back(*m_job_sts_queue.pop_q(job->get_id()));
+            return ret;
+        }
+    } while (time_out == -1);
 
     return ret;
 }

@@ -114,7 +114,10 @@ aipu_status_t aipudrv::GraphBase::config_for_batch(uint32_t queue_id, uint64_t t
 {
     pthread_rwlock_wrlock(&m_batch_queue_lock);
     if (m_batch_queue.count(queue_id) == 0)
+    {
+        pthread_rwlock_unlock(&m_batch_queue_lock);
         return AIPU_STATUS_ERROR_NO_BATCH_QUEUE;
+    }
 
     m_batch_queue[queue_id].batch_dump_dir = config->dump_dir;
     m_batch_queue[queue_id].batch_dump_types = types;
