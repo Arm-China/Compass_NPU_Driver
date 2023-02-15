@@ -35,8 +35,8 @@
 |   |   |-- x2_priv.c
 |   |   |-- z1.c                    -> Zhouyi Z1 specific
 |   |   |-- z1.h
-|   |   |-- z2.c                    -> Zhouyi Z2/Z3/X1 specific
-|   |   |-- z2.h
+|   |   |-- x1.c                    -> Zhouyi Z2/Z3/X1 specific
+|   |   |-- x1.h
 |   |   |-- legacy_priv.c           -> Common for Zhouyi Z1/Z2/Z3/X1
 |   |   |-- zhouyi.c                -> Common for Zhouyi architectures
 |   |   `-- zhouyi.h
@@ -96,35 +96,42 @@ KMD supports to be built in Linux kernel. To build NPU driver in-tree, please fo
         (add the following line into drivers/misc/Makefile)
         obj-$(CONFIG_ARMCHINA_NPU)      += armchina-npu/
     4. config NPU driver by executing "make menuconfig ARCH=arm64":
-        4.1. if you use Zhouyi Z1/Z2/Z3/X1 NPUs, please select
+        4.1. if you use Zhouyi Z1 NPUs, please select
 
-                "ArmChina NPU architecture: z1/z2/z3/x1"
+                "ArmChina NPU architecture: z1"
 
-            to set CONFIG_ARMCHINA_NPU_ARCH_LEGACY. CONFIG_ARMCHINA_NPU will be set
+            to set CONFIG_ARMCHINA_NPU_ARCH_Z1. CONFIG_ARMCHINA_NPU will be set
             if you select this config.
 
-        4.2. if you use Zhouyi X2 NPUs, please select
+        4.2. if you use Zhouyi Z2/Z3/X1 NPUs, please select
+
+                "ArmChina NPU architecture: z2/z3/x1"
+
+            to set CONFIG_ARMCHINA_NPU_ARCH_X1. CONFIG_ARMCHINA_NPU will be set
+            if you select this config.
+
+        4.3. if you use Zhouyi X2 NPUs, please select
 
                 "ArmChina NPU architecture: x2"
 
             to set CONFIG_ARMCHINA_NPU_ARCH_X2. CONFIG_ARMCHINA_NPU will be set
             if you select this config.
 
-        4.3. if you use the default SoC API implementations provided by ArmChina,
+        4.4. if you use the default SoC API implementations provided by ArmChina,
              please select
 
                 "Default SoC APIs"
 
             to set CONFIG_ARMCHINA_NPU_SOC_DEFAULT.
 
-        4.4. if you use the R329 SoC API implementations provided by Allwinner,
+        4.5. if you use the R329 SoC API implementations provided by Allwinner,
              please select
 
                 "R329 SoC APIs"
 
             to set CONFIG_ARMCHINA_NPU_SOC_R329.
 
-        4.5. if you use your own SoC, please add your corresponding configurations.
+        4.6. if you use your own SoC, please add your corresponding configurations.
     5. build kernel.
 
 The supported Linux kernel version numbers are listed in <9. Compatibility>.

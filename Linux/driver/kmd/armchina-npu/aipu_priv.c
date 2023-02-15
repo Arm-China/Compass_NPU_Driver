@@ -6,7 +6,7 @@
 #include "aipu_priv.h"
 #include "config.h"
 #include "z1.h"
-#include "z2.h"
+#include "x1.h"
 #include "x2.h"
 
 static int init_misc_dev(struct aipu_priv *aipu)
@@ -80,7 +80,7 @@ int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,
 		aipu->ops = get_x2_priv_ops();
 #endif
 
-#ifdef CONFIG_ARMCHINA_NPU_ARCH_LEGACY
+#if (defined CONFIG_ARMCHINA_NPU_ARCH_Z1) || (defined CONFIG_ARMCHINA_NPU_ARCH_X1)
 	if (version > 0 && version <= AIPU_ISA_VERSION_ZHOUYI_X1)
 		aipu->ops = get_legacy_priv_ops();
 #endif

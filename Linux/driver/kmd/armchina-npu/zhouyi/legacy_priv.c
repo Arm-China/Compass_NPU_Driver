@@ -9,7 +9,7 @@
 #include "aipu_common.h"
 #include "zhouyi.h"
 #include "z1.h"
-#include "z2.h"
+#include "x1.h"
 
 static int init_aipu_core(struct aipu_partition *core, int version, int id, struct aipu_priv *priv,
 			  struct platform_device *p_dev)
@@ -36,15 +36,21 @@ static int init_aipu_core(struct aipu_partition *core, int version, int id, stru
 	/* unused fields */
 	core->cluster_cnt = 0;
 
+#ifdef CONFIG_ARMCHINA_NPU_ARCH_Z1
 	if (version == AIPU_ISA_VERSION_ZHOUYI_Z1) {
 		core->max_sched_num = ZHOUYI_V1_MAX_SCHED_JOB_NUM;
 		core->ops = get_zhouyi_v1_ops();
-	} else if (version == AIPU_ISA_VERSION_ZHOUYI_Z2 ||
-		   version == AIPU_ISA_VERSION_ZHOUYI_Z3 ||
-		   version == AIPU_ISA_VERSION_ZHOUYI_X1) {
-		core->max_sched_num = ZHOUYI_V2_MAX_SCHED_JOB_NUM;
-		core->ops = get_zhouyi_v2_ops();
 	}
+#endif
+
+#ifdef CONFIG_ARMCHINA_NPU_ARCH_X1
+	if (version == AIPU_ISA_VERSION_ZHOUYI_Z2 ||
+	    version == AIPU_ISA_VERSION_ZHOUYI_Z3 ||
+	    version == AIPU_ISA_VERSION_ZHOUYI_X1) {
+		core->max_sched_num = ZHOUYI_X1_MAX_SCHED_JOB_NUM;
+		core->ops = get_zhouyi_x1_ops();
+	}
+#endif
 
 	core->reg = devm_kzalloc(core->dev, sizeof(*core->reg), GFP_KERNEL);
 	if (!core->reg)

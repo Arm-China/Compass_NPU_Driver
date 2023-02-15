@@ -17,7 +17,7 @@
 #include "aipu_priv.h"
 #include "aipu_mm.h"
 #include "aipu_common.h"
-#include "z2.h"
+#include "x1.h"
 
 static struct device *aipu_mm_create_child_dev(struct device *dev, u32 idx)
 {

@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* Copyright (c) 2022 Arm Technology (China) Co. Ltd. All rights reserved. */
 
-#ifndef __Z2_H__
-#define __Z2_H__
+#ifndef __X1_H__
+#define __X1_H__
 
 #include "zhouyi.h"
 
@@ -15,11 +15,11 @@
 #define ZHOUYIV2_IRQ_ENABLE_FLAG            (ZHOUYIV2_IRQ)
 #define ZHOUYIV2_IRQ_DISABLE_FLAG           (ZHOUYI_IRQ_NONE)
 
-#define ZHOUYI_V2_MAX_SCHED_JOB_NUM         1
+#define ZHOUYI_X1_MAX_SCHED_JOB_NUM         1
 
-#define ZHOUYI_V2_ASE_READ_ENABLE           BIT(31)
-#define ZHOUYI_V2_ASE_WRITE_ENABLE          BIT(30)
-#define ZHOUYI_V2_ASE_RW_ENABLE             (ZHOUYI_V2_ASE_READ_ENABLE | ZHOUYI_V2_ASE_WRITE_ENABLE)
+#define ZHOUYI_X1_ASE_READ_ENABLE           BIT(31)
+#define ZHOUYI_X1_ASE_WRITE_ENABLE          BIT(30)
+#define ZHOUYI_X1_ASE_RW_ENABLE             (ZHOUYI_X1_ASE_READ_ENABLE | ZHOUYI_X1_ASE_WRITE_ENABLE)
 #define ZHOUYI_X1_DTCM_ENABLE               BIT(16)
 #define ZHOUYI_X1_DTCM_MAX_BYTES            (32 * SZ_1M) /* 32MB at maximum */
 
@@ -50,6 +50,6 @@
 #define ZHOUYI_X1_MAX_REG_OFFSET            (ZHOUYI_X1_SOFT_RESET_OFFSET)
 
 struct aipu_priv_operations *get_legacy_priv_ops(void);
-struct aipu_operations *get_zhouyi_v2_ops(void);
+struct aipu_operations *get_zhouyi_x1_ops(void);
 
-#endif /* __Z2_H__ */
+#endif /* __X1_H__ */

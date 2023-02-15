@@ -10,11 +10,19 @@ config ARMCHINA_NPU
 
 	  For other cases, say N.
 
-config ARMCHINA_NPU_ARCH_LEGACY
-	bool "ArmChina NPU architecture: z1/z2/z3/x1"
+config ARMCHINA_NPU_ARCH_Z1
+	bool "ArmChina NPU architecture: z1"
 	select ARMCHINA_NPU
 	help
-	  Say Y if the NPU version on your SoC is Zhouyi Z1/Z2/Z3/X1.
+	  Say Y if the NPU version on your SoC is Zhouyi Z1.
+
+	  For other architecture versions, say N.
+
+config ARMCHINA_NPU_ARCH_X1
+	bool "ArmChina NPU architecture: z2/z3/x1"
+	select ARMCHINA_NPU
+	help
+	  Say Y if the NPU version on your SoC is Zhouyi Z2/Z3/X1.
 
 	  For other architecture versions, say N.
 
