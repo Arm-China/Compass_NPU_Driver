@@ -338,15 +338,17 @@ void pipeline()
     {
         aipu_job_sts = AIPU_JOB_STATUS_NO_STATUS;
         while ((aipu_job_sts != AIPU_JOB_STATUS_DONE) &&
-                (aipu_job_sts != AIPU_JOB_STATUS_EXCEPTION)) {
-            aipu_sts = aipu_get_job_status(ctx, job_id_vec[frame], &aipu_job_sts);
-            if (aipu_sts != AIPU_STATUS_SUCCESS) {
+            (aipu_job_sts != AIPU_JOB_STATUS_EXCEPTION))
+        {
+            aipu_sts = aipu_get_job_status(ctx, job_id_vec[frame], &aipu_job_sts, 5);
+            if (aipu_sts == AIPU_STATUS_ERROR_TIMEOUT)
+                continue;
+            else if (aipu_sts != AIPU_STATUS_SUCCESS) {
                 aipu_get_error_message(ctx, aipu_sts, &msg);
                 AIPU_ERR()("aipu_get_job_status: %s\n", msg);
                 break;
             }
             AIPU_INFO()(" job %lx still running...\n", job_id_vec[frame]);
-            sleep(1);
         }
         if (aipu_sts == AIPU_STATUS_SUCCESS )
         {

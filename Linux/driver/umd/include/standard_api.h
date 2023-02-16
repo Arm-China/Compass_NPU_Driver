@@ -487,6 +487,13 @@ aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t job);
  * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
  * @param[in]  job    Job ID returned by aipu_create_job
  * @param[out] status Pointer to a memory location allocated by the application where UMD stores the job status
+ *                    AIPU_JOB_STATUS_DONE: job is normally done
+ *                    AIPU_JOB_STATUS_EXCEPTION: exception occurring on this job
+ *                    AIPU_JOB_STATUS_NO_STATUS: job is in handling
+ * @param[in]  timeout timeout value(ms) to poll job's status
+ *                     timeout > 0: the max polling time window is 'timeout'
+ *                     timeout = 0: non-blocking and return job's status immediatelly.
+ *                     timeout = -1: blocking until job is really done or exception.
  *
  * @retval AIPU_STATUS_SUCCESS
  * @retval AIPU_STATUS_ERROR_NULL_PTR

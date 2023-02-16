@@ -222,8 +222,10 @@ int main(int argc, char* argv[])
             while ((status[job] != AIPU_JOB_STATUS_DONE) &&
                 (status[job] != AIPU_JOB_STATUS_EXCEPTION))
             {
-                ret = aipu_get_job_status(ctx, job_id[job], &status[job]);
-                if (ret != AIPU_STATUS_SUCCESS)
+                ret = aipu_get_job_status(ctx, job_id[job], &status[job], 5);
+                if (ret == AIPU_STATUS_ERROR_TIMEOUT)
+                    continue;
+                else if (ret != AIPU_STATUS_SUCCESS)
                 {
                     aipu_get_error_message(ctx, ret, &msg);
                     AIPU_ERR()("aipu_get_job_status: %s\n", msg);
@@ -231,7 +233,6 @@ int main(int argc, char* argv[])
                     goto clean_job;
                 }
                 AIPU_INFO()("job %lu still running...\n", job_id[job]);
-                sleep(1);
             }
 
             if (status[job] == AIPU_JOB_STATUS_DONE)

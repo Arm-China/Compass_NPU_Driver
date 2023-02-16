@@ -281,6 +281,7 @@ if [ "$BUILD_TEST"x = "sample"x ]; then
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=flush_job_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=profiler_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=sharebuffer_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=multi_model_test
     fi
     cd -
 elif [ "$BUILD_TEST"x = "demo"x ]; then
