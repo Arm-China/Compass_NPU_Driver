@@ -135,7 +135,7 @@ struct SubSectionDesc {
     uint32_t id;                     /**< tensor ID, used for identifying different inputs/outputs/segmmus */
     uint32_t data_type;              /**< tensor layout type: 0: none; 1: bool; 2: uint8; 3: int8; 4: uint16; 5: int16; */
     float    scale;                  /**< scale */
-    float    zero_point;             /**< zero point */
+    int32_t  zero_point;             /**< zero point */
     uint32_t reserved[3];            /**< reserved unused */
     uint32_t addr_mask;              /**< sub-section addr mask, ro_new = (addr & addr_mask) | (ro_old & ~addr_mask) */
     uint32_t offset_in_ro_cnt;       /**< number of offset(s) in rodata section where sub-section base address should be loaded */
