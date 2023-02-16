@@ -36,7 +36,9 @@ public:
     aipudrv::MainContext* p_ctx = nullptr;
     DeviceBase* m_dev = nullptr;
     aipu_global_config_simulation_t m_sim_cfg = {0};
-    string graph_file = "./benchamrk/aipu.bin";
+    string graph_file = "./benchmark/aipu.bin";
+    string input_file = "./benchmark/input0.bin";
+    char* input_dest = nullptr;
     std::ifstream gbin;
     uint64_t _id = 0;
     uint32_t g_version = 0;
@@ -70,6 +72,36 @@ public:
 
     finish:
         return g_version;
+    }
+
+    void *help_map_file(string &filename)
+    {
+        void *ptr = nullptr;
+        struct stat statbuf;
+        int fd = -1;
+
+        if (stat(filename.c_str(), &statbuf) != 0) {
+            fprintf(stderr, "stat: %s [error]\n", filename.c_str());
+            ptr = nullptr;
+            goto finish;
+        }
+
+        fd = open(filename.c_str(), O_RDONLY);
+        if (fd <= 0) {
+            fprintf(stderr, "open file failed: %s! (errno = %d)\n", filename.c_str(), errno);
+            ptr = nullptr;
+            goto finish;
+        }
+
+        ptr = mmap(NULL, statbuf.st_size, PROT_READ, MAP_SHARED, fd, 0);
+        if (ptr == MAP_FAILED) {
+            fprintf(stderr, "load data failed (errno = %d): %s\n", errno, filename.c_str());
+            ptr = nullptr;
+            goto finish;
+        }
+
+        finish:
+            return ptr;
     }
 
     aipu_status_t test_get_device(uint32_t graph_version, DeviceBase** dev,
@@ -165,6 +197,7 @@ public:
         p_gobj = new GraphV3(p_ctx, _id, m_dev);
         graphv3 = static_cast<GraphV3 *>(p_gobj);
 #endif
+        input_dest = (char *)help_map_file(input_file);
     }
 
     ~GraphTest()
