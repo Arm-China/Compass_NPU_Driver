@@ -222,10 +222,12 @@ int main(int argc, char* argv[])
             while ((status[job] != AIPU_JOB_STATUS_DONE) &&
                 (status[job] != AIPU_JOB_STATUS_EXCEPTION))
             {
-                ret = aipu_get_job_status(ctx, job_id[job], &status[job], 5);
+                ret = aipu_get_job_status(ctx, job_id[job], &status[job], 2000);
                 if (ret == AIPU_STATUS_ERROR_TIMEOUT)
+                {
+                    AIPU_INFO()("flush job timeout\n");
                     continue;
-                else if (ret != AIPU_STATUS_SUCCESS)
+                } else if (ret != AIPU_STATUS_SUCCESS)
                 {
                     aipu_get_error_message(ctx, ret, &msg);
                     AIPU_ERR()("aipu_get_job_status: %s\n", msg);

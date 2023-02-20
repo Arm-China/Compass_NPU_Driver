@@ -694,33 +694,22 @@ aipu_status_t aipudrv::MainContext::get_status(JobBase *job, aipu_job_status_t *
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     const char *msg = nullptr;
-    int timeout = 3600 * 50; // prompt per 1 hour
-
-    auto sleep_ms = [](int ms){
-            struct timeval delay;
-            delay.tv_sec = 0;
-            delay.tv_usec = ms * 1000;
-            select(0, NULL, NULL, NULL, &delay);
-    };
+    int timeout = 3600; // prompt per 1 hour
 
     while ((*status != AIPU_JOB_STATUS_DONE) && (*status != AIPU_JOB_STATUS_EXCEPTION))
     {
-        ret = job->get_status(status);
-        if (ret != AIPU_STATUS_SUCCESS)
+        ret = job->get_status_blocking(status, 1000);
+        if (ret == AIPU_STATUS_ERROR_TIMEOUT)
         {
+            if (--timeout == 0)
+            {
+                ret = AIPU_STATUS_ERROR_TIMEOUT;
+                LOG(LOG_WARN, "job: %p polled over 1h\n", job);
+            }
+            continue;
+        } else if (ret != AIPU_STATUS_SUCCESS) {
             get_status_msg(ret, &msg);
             LOG(LOG_ERR, "job status: %s\n", msg);
-            goto out;
-        }
-
-        if ((*status == AIPU_JOB_STATUS_DONE) || (*status == AIPU_JOB_STATUS_EXCEPTION))
-            break;
-
-        sleep_ms(20);
-        if (--timeout == 0)
-        {
-            ret = AIPU_STATUS_ERROR_TIMEOUT;
-            LOG(LOG_WARN, "job: %p polled over 1h\n", job);
             goto out;
         }
     }
