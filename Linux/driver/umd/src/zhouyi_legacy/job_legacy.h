@@ -60,7 +60,8 @@ private:
     aipu_status_t setup_rodata_legacy();
 
 public:
-    virtual aipu_status_t init(const aipu_global_config_simulation_t* cfg);
+    virtual aipu_status_t init(const aipu_global_config_simulation_t* cfg,
+        const aipu_global_config_hw_t* hw_cfg);
     virtual aipu_status_t schedule();
     virtual aipu_status_t destroy();
     aipu_status_t config_simulation(uint64_t types, const aipu_job_config_simulation_t* config);

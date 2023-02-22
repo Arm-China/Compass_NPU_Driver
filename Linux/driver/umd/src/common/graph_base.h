@@ -109,7 +109,7 @@ public:
     virtual aipu_status_t load(std::istream& gbin, uint32_t size, bool ver_check = true) = 0;
     virtual aipu_status_t unload() = 0;
     virtual aipu_status_t create_job(JOB_ID* id, const aipu_global_config_simulation_t* cfg,
-        aipu_create_job_cfg_t *config = nullptr) = 0;
+        aipu_global_config_hw_t* hw_cfg, aipu_create_job_cfg_t *config = nullptr) = 0;
     virtual aipu_status_t get_tensor_count(aipu_tensor_type_t type, uint32_t* cnt) = 0;
     virtual aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type,
         uint32_t tensor, aipu_tensor_desc_t* desc) = 0;

@@ -103,6 +103,10 @@ protected:
 protected:
     uint32_t m_status = AIPU_JOB_STATUS_NO_STATUS;
 
+protected:
+    const aipu_global_config_simulation_t* m_cfg;
+    const aipu_global_config_hw_t* m_hw_cfg;
+
 private:
     DEV_PA_64 get_base_pa(int sec_type, BufferDesc& rodata,
         BufferDesc& descriptor, bool align_asid);
@@ -135,7 +139,8 @@ protected:
     aipu_status_t validate_schedule_status();
 
 public:
-    virtual aipu_status_t init(const aipu_global_config_simulation_t* cfg) = 0;
+    virtual aipu_status_t init(const aipu_global_config_simulation_t* cfg,
+       const aipu_global_config_hw_t* hw_cfg) = 0;
     virtual aipu_status_t schedule() = 0;
     virtual aipu_status_t destroy() = 0;
     aipu_status_t load_tensor(uint32_t tensor, const void* data);

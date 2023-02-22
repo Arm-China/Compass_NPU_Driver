@@ -656,8 +656,14 @@ aipu_status_t aipu_config_global(const aipu_ctx_handle_t* ctx, uint64_t types, v
         goto finish;
     }
 
-    if (types & AIPU_CONFIG_TYPE_SIMULATION)
+    if (types & AIPU_CONFIG_TYPE_HW)
     {
+        ret = p_ctx->config_hw(types, (aipu_global_config_hw_t*)config);
+        if (ret != AIPU_STATUS_SUCCESS)
+            goto finish;
+
+        types &= ~AIPU_CONFIG_TYPE_HW;
+    } else if (types & AIPU_CONFIG_TYPE_SIMULATION) {
         ret = p_ctx->config_simulation(types, (aipu_global_config_simulation_t*)config);
         if (ret != AIPU_STATUS_SUCCESS)
             goto finish;

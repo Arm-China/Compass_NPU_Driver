@@ -804,12 +804,13 @@ finish:
     return ret;
 }
 
-aipu_status_t aipudrv::JobV3::init(const aipu_global_config_simulation_t* cfg)
+aipu_status_t aipudrv::JobV3::init(const aipu_global_config_simulation_t* cfg,
+    const aipu_global_config_hw_t* hw_cfg)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    assert(cfg != nullptr);
     m_cfg = cfg;
+    m_hw_cfg = hw_cfg;
 
     ret = m_dev->get_next_cluster_id(m_partition_id, m_grid_id);
     if (ret != AIPU_STATUS_SUCCESS)

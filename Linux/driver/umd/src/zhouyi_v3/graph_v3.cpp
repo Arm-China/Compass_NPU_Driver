@@ -158,7 +158,7 @@ out:
 }
 
 aipu_status_t aipudrv::GraphV3::create_job(JOB_ID* id, const aipu_global_config_simulation_t* glb_sim_cfg,
-    aipu_create_job_cfg_t *job_config)
+    aipu_global_config_hw_t *hw_cfg, aipu_create_job_cfg_t *job_config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     JobV3 *job = nullptr;
@@ -175,7 +175,7 @@ aipu_status_t aipudrv::GraphV3::create_job(JOB_ID* id, const aipu_global_config_
         return AIPU_STATUS_ERROR_INVALID_QOS;
 
     job = new JobV3((MainContext*)m_ctx, *this, m_dev, job_config);
-    ret = job->init(glb_sim_cfg);
+    ret = job->init(glb_sim_cfg, hw_cfg);
     if (AIPU_STATUS_SUCCESS != ret)
         return ret;
 

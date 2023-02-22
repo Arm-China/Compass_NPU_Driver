@@ -37,9 +37,13 @@ aipu_status_t aipudrv::JobLegacy::setup_rodata_legacy()
     return setup_rodata(param_map, m_reuses, m_weights, m_rodata, m_descriptor);
 }
 
-aipu_status_t aipudrv::JobLegacy::init(const aipu_global_config_simulation_t* cfg)
+aipu_status_t aipudrv::JobLegacy::init(const aipu_global_config_simulation_t* cfg,
+    const aipu_global_config_hw_t* hw_cfg)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+    m_cfg = cfg;
+    m_hw_cfg = hw_cfg;
 
 #if (defined SIMULATION)
     if (nullptr == cfg)

@@ -72,7 +72,8 @@ aipu_status_t aipudrv::JobBase::get_status_blocking(aipu_job_status_t* status, i
         desc.state = AIPU_JOB_STATE_DONE;
         jobs_status.push_back(desc);
     } else {
-        ret = convert_ll_status(m_dev->poll_status(jobs_status, 1, time_out, true, this));
+        ret = convert_ll_status(m_dev->poll_status(jobs_status, 1, time_out,
+            m_hw_cfg->poll_in_commit_thread, this));
         if (ret != AIPU_STATUS_SUCCESS)
             return ret;
     }

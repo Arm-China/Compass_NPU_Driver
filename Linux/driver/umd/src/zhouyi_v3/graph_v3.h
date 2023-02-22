@@ -132,7 +132,7 @@ public:
     void print_parse_info();
     aipu_status_t extract_gm_info(int sg_id);
     aipu_status_t create_job(JOB_ID* id, const aipu_global_config_simulation_t* cfg,
-        aipu_create_job_cfg_t *config  = nullptr);
+        aipu_global_config_hw_t* hw_cfg, aipu_create_job_cfg_t *config  = nullptr);
     aipu_status_t get_tensor_count(aipu_tensor_type_t type, uint32_t* cnt);
     aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor, aipu_tensor_desc_t* desc);
     aipu_status_t assign_shared_tensor(aipu_tensor_type_t type,

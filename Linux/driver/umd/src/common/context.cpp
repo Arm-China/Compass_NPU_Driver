@@ -48,6 +48,8 @@ aipudrv::MainContext::MainContext()
     m_sim_cfg.en_eval = false;
     m_sim_cfg.gm_size = 4 * MB_SIZE;
 
+    m_hw_cfg.poll_in_commit_thread = true;
+
     if (umd_log_level_env != nullptr)
     {
         int32_t log_level = umd_log_level_env[0] - '0';
@@ -398,7 +400,7 @@ aipu_status_t aipudrv::MainContext::create_job(GRAPH_ID graph, JOB_ID* id, aipu_
         goto finish;
     }
 
-    ret = p_gobj->create_job(id, &m_sim_cfg, config);
+    ret = p_gobj->create_job(id, &m_sim_cfg, &m_hw_cfg, config);
 
 finish:
     return ret;
@@ -473,7 +475,7 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
     };
 
     if (nullptr == config)
-        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+        return AIPU_STATUS_ERROR_NULL_PTR;
 
     if (config->z1_simulator != nullptr)
     {
@@ -533,6 +535,17 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
             goto out;
     }
 out:
+    return ret;
+}
+
+aipu_status_t aipudrv::MainContext::config_hw(uint64_t types, aipu_global_config_hw_t *config)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+    if (nullptr == config)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
+    m_hw_cfg = *config;
     return ret;
 }
 
@@ -756,7 +769,7 @@ repeat:
             break;
 
         batch_info_t &batch = graph.get_batch_queue_item(queue_id, batch_num);
-        ret = graph.create_job(&job_id, &m_sim_cfg, config);
+        ret = graph.create_job(&job_id, &m_sim_cfg, &m_hw_cfg, config);
         if (ret != AIPU_STATUS_SUCCESS)
             goto out;
 
@@ -773,8 +786,7 @@ repeat:
         }
         #endif
 
-        if (types & (~AIPU_CONFIG_TYPE_SIMULATION))
-        {
+        if (types & (~AIPU_CONFIG_TYPE_SIMULATION)) {
             aipu_job_config_dump_t dump_config = {0};
 
             dump_config.dump_dir = graph.get_batch_dump_path(queue_id);

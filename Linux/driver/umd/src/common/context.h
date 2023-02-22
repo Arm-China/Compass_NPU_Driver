@@ -41,6 +41,7 @@ private:
 
 private:
     aipu_global_config_simulation_t m_sim_cfg;
+    aipu_global_config_hw_t m_hw_cfg;
 
 private:
     uint64_t create_unique_graph_id_inner() const;
@@ -72,6 +73,7 @@ public:
     aipu_status_t get_core_info(uint32_t core_id, aipu_core_info_t* info);
     aipu_status_t debugger_get_job_info(JOB_ID job, aipu_debugger_job_info_t* info);
     aipu_status_t config_simulation(uint64_t types, aipu_global_config_simulation_t* config);
+    aipu_status_t config_hw(uint64_t types, aipu_global_config_hw_t* config);
     aipu_status_t aipu_get_target(char *target);
     aipu_status_t aipu_get_device_status(device_status_t *status);
     aipu_status_t run_batch(GraphBase &graph, uint32_t queue_id, aipu_create_job_cfg_t *config);

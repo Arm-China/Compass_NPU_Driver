@@ -90,8 +90,9 @@ typedef enum {
     AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION       = 0x100,
     AIPU_JOB_CONFIG_TYPE_DUMP_PROFILE         = 0x200,
     AIPU_CONFIG_TYPE_SIMULATION               = 0x400,
-    AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK = 0x800,
-    AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK  = 0x1000,
+    AIPU_CONFIG_TYPE_HW                       = 0x800,
+    AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK = 0x1000,
+    AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK  = 0x2000,
 } aipu_config_type_t;
 
 typedef struct {
@@ -120,6 +121,9 @@ typedef struct {
     const char* data_dir;
 } aipu_job_config_simulation_t;
 
+/**
+ * @brief Simulation related configuration
+ */
 typedef struct {
     /* configure one or more simulator file name for z1/z2/z3/x1 */
     /* set z[n]/x[n]_simulator to be NULL for x2 */
@@ -137,6 +141,24 @@ typedef struct {
     bool enable_calloc;
     bool en_eval;
 } aipu_global_config_simulation_t;
+
+/**
+ * @brief HW related configuration
+ */
+typedef struct {
+    /**  set false if job polling thread isn't commit thread;
+     *   set true if job polling thread is commit thread.
+     *
+     *   default(no config via this structure): the polling thread is identical with commit thread.
+     *
+     *   eg: poll job in non-commit thread
+     *      hw_config->poll_in_commit_thread = false;
+     *      aipu_config_global(ctx, AIPU_CONFIG_TYPE_HW, hw_config);
+     *
+     *   note: the config is effictive in only one process contex.
+     */
+    bool poll_in_commit_thread;
+} aipu_global_config_hw_t;
 
 /**
  * @brief AIPU core info struct; returned by UMD API for AIPU debugger to use

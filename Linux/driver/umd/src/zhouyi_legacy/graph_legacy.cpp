@@ -28,12 +28,12 @@ aipudrv::GraphLegacy::~GraphLegacy()
 }
 
 aipu_status_t aipudrv::GraphLegacy::create_job(JOB_ID* id, const aipu_global_config_simulation_t* cfg,
-    aipu_create_job_cfg_t *config)
+    aipu_global_config_hw_t *hw_cfg, aipu_create_job_cfg_t *config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     JobLegacy* job = new JobLegacy((MainContext*)m_ctx, *this, m_dev, config);
 
-    ret = job->init(cfg);
+    ret = job->init(cfg, hw_cfg);
     if (AIPU_STATUS_SUCCESS != ret)
         return ret;
 

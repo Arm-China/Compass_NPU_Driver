@@ -106,9 +106,6 @@ private:
     std::vector<dumpcfg_output_desc> m_dumpcfg_output;
     std::string m_dumpcfg_meta;
 
-private:
-    const aipu_global_config_simulation_t* m_cfg;
-
 public:
     GraphV3& get_graph()
     {
@@ -143,7 +140,8 @@ private:
     aipu_status_t dump_for_emulation();
 
 public:
-    aipu_status_t init(const aipu_global_config_simulation_t* cfg);
+    aipu_status_t init(const aipu_global_config_simulation_t* cfg,
+        const aipu_global_config_hw_t* hw_cfg);
     aipu_status_t schedule();
     aipu_status_t destroy();
     aipu_status_t bind_core(uint32_t core_id);
