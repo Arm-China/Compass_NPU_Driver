@@ -184,8 +184,8 @@
  */
 #define IS_COUNTER_OVERFLOW(status_32)              (((status_32) >> 8) & 0x1)
 #define CLEAR_COUNTER                               0x2
-#define ENABLE_COUNTER                              (CLEAR_COUNTER)
-#define DISABLE_COUNTER                             (CLEAR_COUNTER | 0x1)
+#define ENABLE_COUNTER                              0x0
+#define DISABLE_COUNTER                             ((CLEAR_COUNTER) | 0x1)
 
 #define TICK_COUNTER_CONTROL_STATUS_REG             0x68
 
