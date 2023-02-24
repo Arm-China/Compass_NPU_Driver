@@ -61,15 +61,10 @@ int main(int argc, char* argv[])
         set_shared_tensor_info = {0};
     int run_on_platform = ON_SIMULATOR;
 
-    if (!strncmp(argv[1], "sw", 2))
-        run_on_platform = ON_SIMULATOR;
-    else if (!strncmp(argv[1], "hw", 2))
+    AIPU_CRIT() << "usage: ./aipu_sharebuffer_test -b aipu.bin -i input0.bin -c output.bin -d ./\n";
+
+    if (access("/dev/aipu", F_OK) == 0)
         run_on_platform = ON_HW;
-    else
-    {
-        AIPU_CRIT() << "usage: ./aipu_sharebuffer_test sw/hw -b aipu.bin -i input0.bin -c output.bin -d ./\n";
-        exit(-1);
-    }
 
     /**
      * For compatibility and avoiding segfault issues in the future,
@@ -83,7 +78,7 @@ int main(int argc, char* argv[])
     aipu_job_config_dump_t mem_dump_config;
     memset(&mem_dump_config, 0, sizeof(mem_dump_config));
 
-    if(init_test_bench(argc, argv, &opt, "simulation_test"))
+    if(init_test_bench(argc, argv, &opt, "sharebuffer_test"))
     {
         AIPU_ERR()("invalid command line options/args\n");
         goto finish;
@@ -321,6 +316,7 @@ int main(int argc, char* argv[])
         for (uint32_t i = 0; i < output_cnt; i++)
         {
             char* output = new char[output_desc[i].size];
+            memset(output, 0x00, output_desc[i].size);
             output_data.push_back(output);
         }
 

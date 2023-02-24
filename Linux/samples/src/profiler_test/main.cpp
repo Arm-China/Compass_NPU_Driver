@@ -88,6 +88,7 @@ finish:
 int main(int argc, char* argv[])
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    aipu_create_job_cfg_t create_job_cfg = {0};
     aipu_ctx_handle_t* ctx;
     const char* msg = nullptr;
     uint64_t graph_id, job_id;
@@ -173,7 +174,7 @@ int main(int argc, char* argv[])
     }
     //fprintf(stderr, "[TEST INFO] aipu_get_tensor_descriptor done\n");
 
-    ret = aipu_create_job(ctx, graph_id, &job_id);
+    ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
     if (ret != AIPU_STATUS_SUCCESS)
     {
         aipu_get_error_message(ctx, ret, &msg);

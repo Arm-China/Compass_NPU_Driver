@@ -30,6 +30,7 @@ int g_pass = -1;
 void non_pipeline()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    aipu_create_job_cfg_t create_job_cfg = {0};
     const char* msg = nullptr;
     uint64_t graph_id, job_id;
     uint32_t input_cnt, output_cnt;
@@ -98,7 +99,7 @@ void non_pipeline()
     }
     //AIPU_ERR()("aipu_get_tensor_descriptor done\n");
 
-    ret = aipu_create_job(ctx, graph_id, &job_id);
+    ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
     if (ret != AIPU_STATUS_SUCCESS)
     {
         aipu_get_error_message(ctx, ret, &msg);
@@ -203,6 +204,7 @@ finish:
 void pipeline()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    aipu_create_job_cfg_t create_job_cfg = {0};
     const char* msg = nullptr;
     uint64_t graph_id;
     uint32_t input_cnt, output_cnt;
@@ -276,7 +278,7 @@ void pipeline()
 
     for (uint32_t i = 0; i < pipe_cnt; i++)
     {
-        ret = aipu_create_job(ctx, graph_id, &job_id_vec[i]);
+        ret = aipu_create_job(ctx, graph_id, &job_id_vec[i], &create_job_cfg);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(ctx, ret, &msg);

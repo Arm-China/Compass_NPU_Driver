@@ -29,6 +29,7 @@ using namespace std;
 int main(int argc, char* argv[])
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    aipu_create_job_cfg_t create_job_cfg = {0};
     aipu_ctx_handle_t* ctx;
     const char* msg = nullptr;
     uint32_t cluster_cnt, core_cnt;
@@ -51,7 +52,7 @@ int main(int argc, char* argv[])
     aipu_job_config_dump_t mem_dump_config;
     memset(&mem_dump_config, 0, sizeof(mem_dump_config));
 
-    if(init_test_bench(argc, argv, &opt, "simulation_test"))
+    if(init_test_bench(argc, argv, &opt, "emulation_test"))
     {
         AIPU_ERR()("invalid command line options/args\n");
         goto finish;
@@ -72,7 +73,7 @@ int main(int argc, char* argv[])
     }
     sim_glb_config.verbose = opt.verbose;
 
-   if (access("/dev/aipu", F_OK) != 0)
+    if (access("/dev/aipu", F_OK) != 0)
     {
         sim_glb_config.z1_simulator = opt.z1_simulator;
         sim_glb_config.z2_simulator = opt.z2_simulator;
@@ -176,7 +177,7 @@ int main(int argc, char* argv[])
         output_desc.push_back(desc);
     }
 
-    ret = aipu_create_job(ctx, graph_id, &job_id);
+    ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
     if (ret != AIPU_STATUS_SUCCESS)
     {
         aipu_get_error_message(ctx, ret, &msg);

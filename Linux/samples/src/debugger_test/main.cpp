@@ -196,7 +196,7 @@ int main(int argc, char* argv[])
     int retval = -1;
     aipu_create_job_cfg create_job_cfg = {0};
 
-    if(init_test_bench(argc, argv, &opt, "load_graph_test"))
+    if(init_test_bench(argc, argv, &opt, "debugger_test"))
     {
         AIPU_ERR()("invalid command line options/args\n");
         goto finish;

@@ -71,7 +71,7 @@ void pipeline()
     vector<char*> gt;
     aipu_status_t aipu_sts = AIPU_STATUS_SUCCESS;
     aipu_job_status_t aipu_job_sts = AIPU_JOB_STATUS_NO_STATUS;
-    int pass = -1;
+    int pass = 0;
 
     AIPU_DBG() << "pipeline()";
 
