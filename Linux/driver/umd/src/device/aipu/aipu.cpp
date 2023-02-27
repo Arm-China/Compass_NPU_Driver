@@ -43,12 +43,14 @@ aipu_ll_status_t aipudrv::Aipu::init()
     if (m_fd <= 0)
     {
         m_fd = 0;
+        LOG(LOG_ERR, "open /dev/aipu [fail]");
         return AIPU_LL_STATUS_ERROR_OPEN_FAIL;
     }
 
     kret = ioctl(m_fd, AIPU_IOCTL_QUERY_CAP, &cap);
     if (kret || (0 == cap.partition_cnt))
     {
+        LOG(LOG_ERR, "query capability [fail]");
         ret = AIPU_LL_STATUS_ERROR_IOCTL_QUERY_CAP_FAIL;
         goto fail;
     }
@@ -57,6 +59,7 @@ aipu_ll_status_t aipudrv::Aipu::init()
     kret = ioctl(m_fd, AIPU_IOCTL_QUERY_PARTITION_CAP, part_caps);
     if (kret)
     {
+        LOG(LOG_ERR, "query partition [fail]");
         delete[] part_caps;
         ret = AIPU_LL_STATUS_ERROR_IOCTL_QUERY_CORE_CAP_FAIL;
         goto fail;
@@ -162,7 +165,10 @@ aipu_ll_status_t aipudrv::Aipu::read_reg(uint32_t core_id, uint32_t offset, uint
     ioreq.offset = offset;
     kret = ioctl(m_fd, AIPU_IOCTL_REQ_IO, &ioreq);
     if (kret)
+    {
+        LOG(LOG_ERR, "request register read [fail]");
         return AIPU_LL_STATUS_ERROR_IOCTL_REQ_IO_FAIL;
+    }
 
     /* success */
     *value = ioreq.value;
@@ -180,7 +186,10 @@ aipu_ll_status_t aipudrv::Aipu::write_reg(uint32_t core_id, uint32_t offset, uin
     ioreq.value = value;
     kret = ioctl(m_fd, AIPU_IOCTL_REQ_IO, &ioreq);
     if (kret)
+    {
+        LOG(LOG_ERR, "request register write [fail]");
         return AIPU_LL_STATUS_ERROR_IOCTL_REQ_IO_FAIL;
+    }
 
     return AIPU_LL_STATUS_SUCCESS;
 }
@@ -191,7 +200,10 @@ aipu_status_t aipudrv::Aipu::schedule(const JobDesc& job)
 
     kret = ioctl(m_fd, AIPU_IOCTL_SCHEDULE_JOB, &job.kdesc);
     if (kret)
+    {
+        LOG(LOG_ERR, "schedule job [fail]");
         return AIPU_STATUS_ERROR_INVALID_OP;
+    }
 
     return AIPU_STATUS_SUCCESS;
 }
@@ -211,6 +223,7 @@ aipu_ll_status_t aipudrv::Aipu::get_status(std::vector<aipu_job_status_desc>& jo
     kret = ioctl(m_fd, AIPU_IOCTL_QUERY_STATUS, &status_query);
     if (kret)
     {
+        LOG(LOG_ERR, "query job status [fail]");
         ret = AIPU_LL_STATUS_ERROR_IOCTL_QUERY_STATUS_FAIL;
         goto clean;
     }
@@ -257,9 +270,12 @@ aipu_ll_status_t aipudrv::Aipu::poll_status(std::vector<aipu_job_status_desc>& j
     {
         kret = poll(&poll_list, 1, time_out);
         if (kret < 0)
+        {
+            LOG(LOG_ERR, "poll /dev/aipu [fail]");
             return AIPU_LL_STATUS_ERROR_POLL_FAIL;
-        else if (kret == 0)
+        } else if (kret == 0) {
             return AIPU_LL_STATUS_ERROR_POLL_TIMEOUT;
+        }
 
         /* normally return */
         if ((poll_list.revents & POLLIN) == POLLIN)
@@ -285,7 +301,10 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
         case AIPU_IOCTL_ABORT_CMD_POOL:
             kret = ioctl(m_fd, AIPU_IOCTL_ABORT_CMD_POOL);
             if (kret < 0)
+            {
+                LOG(LOG_ERR, "abort cmdpool [fail]");
                 ret = AIPU_LL_STATUS_ERROR_IOCTL_ABORT_CMDPOOL;
+            }
             break;
 
         case AIPU_IOCTL_ENABLE_TICK_COUNTER:
@@ -293,7 +312,10 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             {
                 kret = ioctl(m_fd, AIPU_IOCTL_ENABLE_TICK_COUNTER);
                 if (kret < 0)
+                {
+                    LOG(LOG_ERR, "enable tick counter [fail]");
                     ret = AIPU_LL_STATUS_ERROR_IOCTL_TICK_COUNTER;
+                }
                 m_tick_counter = true;
             }
             break;
@@ -303,7 +325,10 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             {
                 kret = ioctl(m_fd, AIPU_IOCTL_DISABLE_TICK_COUNTER);
                 if (kret < 0)
+                {
+                    LOG(LOG_ERR, "disable tick counter [fail]");
                     ret = AIPU_LL_STATUS_ERROR_IOCTL_TICK_COUNTER;
+                }
                 m_tick_counter = false;
             }
             break;

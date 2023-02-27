@@ -63,7 +63,10 @@ aipu_status_t aipudrv::UKMemory::malloc(uint32_t size, uint32_t align, BufferDes
 
     kret = ioctl(m_fd, cmd, &buf_req);
     if (kret != 0)
+    {
+        LOG(LOG_ERR, "alloc buffer: size 0x%x [fail]", size);
         return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
+    }
 
     ptr = (char*)mmap(NULL, buf_req.desc.bytes, PROT_READ | PROT_WRITE, MAP_SHARED,
         m_fd, buf_req.desc.dev_offset);
@@ -124,6 +127,7 @@ aipu_status_t aipudrv::UKMemory::free(const BufferDesc* desc, const char* str)
         kret = ioctl(m_fd, free_cmd, &kdesc);
         if (kret != 0)
         {
+            LOG(LOG_ERR, "free buffer 0x%lx [fail]", desc->pa);
             ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
             goto unlock;
         }

@@ -123,7 +123,10 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
                 ret = m_mem->malloc(static_section->size, static_section->align_in_page, &buf, str.c_str(),
                     get_weight_region());
                 if (AIPU_STATUS_SUCCESS != ret)
+                {
+                    LOG(LOG_ERR, "alloc weight buffer %d [fail]", i);
                     goto finish;
+                }
 
                 m_mem->write(buf.pa, (char *)static_section->load_src, static_section->size);
             }

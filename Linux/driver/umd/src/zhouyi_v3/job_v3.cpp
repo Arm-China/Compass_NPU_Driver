@@ -273,7 +273,10 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
 
                 ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &buf, buf_name.c_str());
                 if (AIPU_STATUS_SUCCESS != ret)
+                {
+                    LOG(LOG_ERR, "alloc private buffer %d [fail]", k);
                     goto out;
+                }
             }
 
             if (m_dump_reuse)
@@ -317,7 +320,10 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                         }
 
                         if (AIPU_STATUS_SUCCESS != ret)
+                        {
+                            LOG(LOG_ERR, "alloc reuse buffer %d [fail]", k);
                             goto out;
+                        }
                     }
                 }
 
@@ -856,7 +862,10 @@ aipu_status_t aipudrv::JobV3::schedule()
 
     ret = validate_schedule_status();
     if (ret != AIPU_STATUS_SUCCESS)
+    {
+        LOG(LOG_ERR, "Job state %d is invalid", m_status);
         return ret;
+    }
 
     if (m_err_code.size() == 1)
         m_mem->zeroize(m_err_code[0].pa, m_err_code[0].size);

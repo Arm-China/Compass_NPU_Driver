@@ -169,10 +169,18 @@ aipu_status_t aipudrv::GraphV3::create_job(JOB_ID* id, const aipu_global_config_
 
     m_dev->get_partition_count(&part_cnt);
     if (job_config->partition_id > part_cnt)
+    {
+        LOG(LOG_ERR, "partition id: %d invalid, max partition id: %d\n",
+            job_config->partition_id, part_cnt-1);
         return AIPU_STATUS_ERROR_INVALID_PARTITION_ID;
+    }
 
     if (job_config->qos_level > AIPU_JOB_QOS_HIGH)
+    {
+        LOG(LOG_ERR, "QoS level: %d invalid, max level: %d",
+            job_config->qos_level, AIPU_JOB_QOS_HIGH);
         return AIPU_STATUS_ERROR_INVALID_QOS;
+    }
 
     job = new JobV3((MainContext*)m_ctx, *this, m_dev, job_config);
     ret = job->init(glb_sim_cfg, hw_cfg);
@@ -217,10 +225,16 @@ aipu_status_t aipudrv::GraphV3::get_tensor_descriptor(aipu_tensor_type_t type, u
 
     get_tensor_count(type, &cnt);
     if (tensor >= cnt)
+    {
+        LOG(LOG_ERR, "tensor id: %d invalid, max id: %d", tensor, cnt-1);
         return AIPU_STATUS_ERROR_INVALID_TENSOR_ID;
+    }
 
     if (nullptr == desc)
+    {
+        LOG(LOG_ERR, "arg desc is NULL");
         return AIPU_STATUS_ERROR_NULL_PTR;
+    }
 
     switch (type)
     {
@@ -270,7 +284,10 @@ aipu_status_t aipudrv::GraphV3::assign_shared_tensor(aipu_tensor_type_t type,
     }
 
     if (tensor_idx >= iobuffer_vec->size())
+    {
+        LOG(LOG_WARN, "tensor_idx %d is invalid", tensor_idx);
         return AIPU_STATUS_ERROR_INVALID_TENSOR_ID;
+    }
 
     m_shared_tensor_map[iobuffer_vec->at(tensor_idx).ref_section_iter] = shared_pa_addr;
 
