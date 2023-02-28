@@ -91,6 +91,9 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
     struct GraphSectionDesc *static_section = nullptr;
 
     pthread_rwlock_wrlock(&m_alloc_wt_lock);
+    if (m_weight.size != 0 || m_weights.size() != 0)
+        goto finish;
+
     if (get_weight_region() == AIPU_MEM_REGION_DEFAULT)
     {
         if (m_weight.size == 0 && m_bweight.size != 0)
@@ -113,9 +116,9 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
     } else {
         for (uint32_t i = 0; i < static_sections.size(); i++)
         {
-            BufferDesc buf;
             if (m_weights.size() != static_sections.size())
             {
+                BufferDesc buf;
                 std::string str = "static_" + std::to_string(i);
                 static_section = &static_sections[i];
 
@@ -129,8 +132,8 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
                 }
 
                 m_mem->write(buf.pa, (char *)static_section->load_src, static_section->size);
+                m_weights.push_back(buf);
             }
-            m_weights.push_back(buf);
         }
     }
 
@@ -159,13 +162,19 @@ aipu_status_t aipudrv::Graph::unload()
         m_crodata.reset();
     }
 
-    if (m_weight.size != 0)
+    if (get_weight_region() == AIPU_MEM_REGION_DEFAULT)
     {
-        m_mem->free(&m_weight);
-        m_weight.reset();
+        if (m_weight.size != 0)
+        {
+            m_mem->free(&m_weight);
+            m_weight.reset();
+        }
+
+        m_weights.clear();
     } else {
         for (uint32_t i = 0; i < m_weights.size(); i++)
             m_mem->free(&m_weights[i]);
+
         m_weights.clear();
     }
 
