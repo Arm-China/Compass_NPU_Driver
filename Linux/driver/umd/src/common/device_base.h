@@ -11,6 +11,7 @@
 #ifndef _DEVICE_BASE_H_
 #define _DEVICE_BASE_H_
 
+#include <atomic>
 #include "kmd/armchina_aipu.h"
 #include "memory_base.h"
 #include "type.h"
@@ -121,7 +122,7 @@ protected:
     uint32_t m_partition_cnt = 0;
     uint32_t m_cluster_cnt = 0;
     uint32_t m_core_cnt = 1;
-    uint32_t m_ref_cnt = 0;
+    std::atomic_int m_ref_cnt{0};
 
 public:
     virtual bool has_target(uint32_t arch, uint32_t version, uint32_t config, uint32_t rev) = 0;

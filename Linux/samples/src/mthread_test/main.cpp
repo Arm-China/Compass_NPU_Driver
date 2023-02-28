@@ -20,12 +20,33 @@
 using namespace std;
 
 /**
- * aipu_mthread_test [-p] -b aipu.bin -i input.bin -c output.bin -d /output/
+ * @brief multiple threads demo
+ *
+ * @note
+ *        non-pipeline: aipu_mthread_test -b aipu.bin -i input.bin -c output.bin -d ./output/
+ *        pipeline: aipu_mthread_test -p -b aipu.bin -i input.bin -c output.bin -d ./output/
+ *
+ *        support running both on HW and Simulator, note that it has to insmod aipu.ko firstly
+ *        on HW platform.
  */
+
+/**
+ * Max thread number
+ */
+#define THREAD_NUM 2
+
+/**
+ * 1: run on simulator
+ * 0: run on HW
+ */
+#define ON_SIMULATOR 1
+#define ON_HW  0
 
 aipu_ctx_handle_t* ctx;
 cmd_opt_t opt;
-int g_pass = -1;
+int g_pass = 0;
+int run_on_platform = ON_SIMULATOR;
+aipu_global_config_simulation_t sim_glb_config;
 
 void non_pipeline()
 {
@@ -39,10 +60,18 @@ void non_pipeline()
     vector<aipu_tensor_desc_t> output_desc;
     vector<shared_ptr<char> >output_data_vec;
     vector<char*> gt;
-    uint32_t frame_cnt = 5;
-    int pass = -1;
+    uint32_t frame_cnt = 2;
+    uint64_t cfg_types = 0;
+    std::string path;
+    aipu_job_config_simulation_t tmp_sim_job_config = {0};
+    aipu_job_config_dump_t tmp_mem_dump_config = {0};
+    int pass = 0;
 
     AIPU_DBG() << "non_pipeline()";
+
+    path = opt.dump_dir;
+    path = path + "/" + std::to_string(gettid());
+    help_create_dir(path.c_str());
 
     ret = aipu_load_graph(ctx, opt.bin_file_name, &graph_id);
     if (ret != AIPU_STATUS_SUCCESS)
@@ -52,7 +81,7 @@ void non_pipeline()
             msg, opt.bin_file_name);
         goto finish;
     }
-    AIPU_INFO() << "Graph id= " << graph_id;
+    AIPU_INFO() << "Graph id= " << std::hex << graph_id;
 
     ret = aipu_get_tensor_count(ctx, graph_id, AIPU_TENSOR_TYPE_INPUT, &input_cnt);
     if (ret != AIPU_STATUS_SUCCESS)
@@ -107,6 +136,42 @@ void non_pipeline()
         goto unload_graph;
     }
     AIPU_INFO()("aipu_create_job success\n");
+
+    #if ((defined RTDEBUG) && (RTDEBUG == 1))
+        cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_TEXT  |
+            AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT        |
+            AIPU_JOB_CONFIG_TYPE_DUMP_RODATA        |
+            AIPU_JOB_CONFIG_TYPE_DUMP_DESCRIPTOR    |
+            AIPU_JOB_CONFIG_TYPE_DUMP_INPUT         |
+            AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT        |
+            AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN     |
+            AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
+    #else
+        cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT;
+    #endif
+    tmp_mem_dump_config.dump_dir = path.c_str();
+    AIPU_INFO() << tmp_mem_dump_config.dump_dir;
+    ret = aipu_config_job(ctx, job_id, cfg_types, &tmp_mem_dump_config);
+    if (ret != AIPU_STATUS_SUCCESS)
+    {
+        aipu_get_error_message(ctx, ret, &msg);
+        AIPU_ERR()("aipu_config_job: %s\n", msg);
+        goto clean_job;
+    }
+    AIPU_INFO()("set dump config success\n");
+
+    if (run_on_platform == ON_SIMULATOR)
+    {
+        tmp_sim_job_config.data_dir = path.c_str();
+        ret = aipu_config_job(ctx, job_id, AIPU_CONFIG_TYPE_SIMULATION, &tmp_sim_job_config);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(ctx, ret, &msg);
+            AIPU_ERR()("aipu_config_job: %s\n", msg);
+            goto clean_job;
+        }
+        AIPU_INFO()("set job simulation config success\n");
+    }
 
     if (opt.inputs.size() != input_cnt)
     {
@@ -172,6 +237,10 @@ void non_pipeline()
         }
 
         pass = check_result(output_data_vec, output_desc, opt.gt, opt.gt_size);
+
+        // clear the stale data for next loop
+        for (uint32_t i = 0; i < output_cnt; i++)
+            memset(output_data_vec[i].get(), 0x00, output_desc[i].size);
     }
 
 clean_job:
@@ -197,7 +266,8 @@ unload_graph:
     AIPU_INFO()("aipu_unload_graph success\n");
 
 finish:
-    g_pass = pass;
+    g_pass |= pass;
+    AIPU_INFO()  << "g_pass =" << g_pass;
     return;
 }
 
@@ -213,13 +283,21 @@ void pipeline()
     vector<aipu_tensor_desc_t> output_desc;
     vector<shared_ptr<char>> output_data_vec;
     vector<char*> gt;
-    uint32_t pipe_cnt = 3;
+    uint32_t pipe_cnt = 2;
     uint64_t job_id_vec[pipe_cnt] = {0};
     aipu_status_t aipu_sts = AIPU_STATUS_SUCCESS;
     aipu_job_status_t aipu_job_sts = AIPU_JOB_STATUS_NO_STATUS;
-    int pass = -1;
+    uint32_t cfg_types = 0;
+    std::string path, tmp_path;
+    aipu_job_config_simulation_t tmp_sim_job_config = {0};
+    aipu_job_config_dump_t tmp_mem_dump_config = {0};
+    int pass = 0;
 
     AIPU_DBG() << "pipeline()";
+
+    path = opt.dump_dir;
+    path = path + "/" + std::to_string(gettid());
+    AIPU_DBG() << path;
 
     ret = aipu_load_graph(ctx, opt.bin_file_name, &graph_id);
     if (ret != AIPU_STATUS_SUCCESS)
@@ -229,7 +307,7 @@ void pipeline()
             msg, opt.bin_file_name);
         goto finish;
     }
-    AIPU_INFO() << "Graph id= " << graph_id;
+    AIPU_INFO() << "Graph id= " << std::hex << graph_id;
 
     ret = aipu_get_tensor_count(ctx, graph_id, AIPU_TENSOR_TYPE_INPUT, &input_cnt);
     if (ret != AIPU_STATUS_SUCCESS)
@@ -302,10 +380,51 @@ void pipeline()
 
     }
 
+    #if ((defined RTDEBUG) && (RTDEBUG == 1))
+        cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_TEXT  |
+            AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT        |
+            AIPU_JOB_CONFIG_TYPE_DUMP_RODATA        |
+            AIPU_JOB_CONFIG_TYPE_DUMP_DESCRIPTOR    |
+            AIPU_JOB_CONFIG_TYPE_DUMP_INPUT         |
+            AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT        |
+            AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN     |
+            AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
+    #else
+        cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT;
+    #endif
+
     /* run with with multiple frames */
     for (uint32_t frame = 0; frame < pipe_cnt; frame++)
     {
         AIPU_INFO()("Frame #%u\n", frame);
+
+        tmp_path = path + "/" + std::to_string(frame);
+        tmp_mem_dump_config.dump_dir = tmp_path.c_str();
+        help_create_dir(tmp_mem_dump_config.dump_dir);
+        AIPU_INFO() << tmp_mem_dump_config.dump_dir;
+        ret = aipu_config_job(ctx, job_id_vec[frame], cfg_types, &tmp_mem_dump_config);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(ctx, ret, &msg);
+            AIPU_ERR()("aipu_config_job: %s\n", msg);
+            goto clean_job;
+        }
+        AIPU_INFO()("set dump config success\n");
+
+        if (run_on_platform == ON_SIMULATOR)
+        {
+            tmp_sim_job_config.data_dir = tmp_path.c_str();
+            ret = aipu_config_job(ctx, job_id_vec[frame], AIPU_CONFIG_TYPE_SIMULATION,
+                &tmp_sim_job_config);
+            if (ret != AIPU_STATUS_SUCCESS)
+            {
+                aipu_get_error_message(ctx, ret, &msg);
+                AIPU_ERR()("aipu_config_job: %s\n", msg);
+                goto clean_job;
+            }
+            AIPU_INFO()("set job simulation config success\n");
+        }
+
         for (uint32_t i = 0; i < min((uint32_t)opt.inputs.size(), input_cnt); i++)
         {
             if (input_desc[i].size > opt.inputs_size[i])
@@ -352,6 +471,7 @@ void pipeline()
             }
             AIPU_INFO()(" job %lx still running...\n", job_id_vec[frame]);
         }
+
         if (aipu_sts == AIPU_STATUS_SUCCESS )
         {
             if (aipu_job_sts == AIPU_JOB_STATUS_DONE)
@@ -374,6 +494,10 @@ void pipeline()
                 result = check_result(output_data_vec, output_desc, opt.gt, opt.gt_size);
                 if (result != 0)
                     pass = result;
+
+                // clear the stale data for next loop
+                for (uint32_t i = 0; i < output_cnt; i++)
+                    memset(output_data_vec[i].get(), 0x00, output_desc[i].size);
             }  else if (aipu_job_sts == AIPU_JOB_STATUS_EXCEPTION) {
                 AIPU_ERR()("get_job_status (%lx): status=%x [exception]\n",
                     job_id_vec[frame], aipu_sts);
@@ -386,9 +510,6 @@ void pipeline()
             pass = -1;
             goto clean_job;
         }
-
-        for (uint32_t i = 0; i < output_data_vec.size(); i++)
-            memset(output_data_vec[i].get(), 0xff, output_desc[i].size);
     }
 
 clean_job:
@@ -417,7 +538,7 @@ unload_graph:
     AIPU_INFO()("aipu_unload_graph success\n");
 
 finish:
-    g_pass = pass;
+    g_pass |= pass;
     return;
 }
 
@@ -429,6 +550,10 @@ int main(int argc, char *argv[])
     vector<shared_ptr<thread>> thd_vec;
     void (*thread_cb)();
 
+    run_on_platform = ON_SIMULATOR;
+    if (access("/dev/aipu", F_OK) == 0)
+        run_on_platform = ON_HW;
+
     AIPU_CRIT() << "usage: ./aipu_mthread_test [-p] -b aipu.bin -i input0.bin -c output.bin -d ./\n";
 
     for (int i = 0; i < argc; i++)
@@ -437,11 +562,35 @@ int main(int argc, char *argv[])
             pipeline_enable = true;
     }
 
-    if(init_test_bench(argc, argv, &opt, "mthread_test"))
+    memset(&sim_glb_config, 0, sizeof(sim_glb_config));
+
+    if(init_test_bench(argc, argv, &opt, "multithread_test"))
     {
         AIPU_ERR()("invalid command line options/args\n");
-        return -1;
+        goto finish;
     }
+
+    /* works for z1/2/3/x1 simulation */
+    if (opt.log_level_set)
+    {
+        sim_glb_config.log_level = opt.log_level;
+    }
+    else
+    {
+#if ((defined RTDEBUG) && (RTDEBUG == 1))
+        sim_glb_config.log_level = 3;
+#else
+        sim_glb_config.log_level = 0;
+#endif
+    }
+    sim_glb_config.verbose = opt.verbose;
+    sim_glb_config.en_eval = true;
+
+    /* works for z1/z2/z3/x1 simulations only */
+    sim_glb_config.z1_simulator = opt.z1_simulator;
+    sim_glb_config.z2_simulator = opt.z2_simulator;
+    sim_glb_config.z3_simulator = opt.z3_simulator;
+    sim_glb_config.x1_simulator = opt.x1_simulator;
 
     ret = aipu_init_context(&ctx);
     if (ret != AIPU_STATUS_SUCCESS)
@@ -452,22 +601,28 @@ int main(int argc, char *argv[])
     }
     AIPU_INFO()("aipu_init_context success\n");
 
+    if (run_on_platform == ON_SIMULATOR)
+    {
+        ret = aipu_config_global(ctx, AIPU_CONFIG_TYPE_SIMULATION, &sim_glb_config);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(ctx, ret, &msg);
+            AIPU_ERR()("aipu_config_global: %s\n", msg);
+            exit(-1);
+        }
+        AIPU_INFO()("set global simulation config success\n");
+    }
+
     if (pipeline_enable)
-    {
         thread_cb = pipeline;
-    } else {
+    else
         thread_cb = non_pipeline;
-    }
 
-    for (int i = 0; i < 2; i++)
-    {
+    for (int i = 0; i < THREAD_NUM; i++)
         thd_vec.push_back(make_shared<thread>(thread_cb));
-    }
 
-    for (int i = 0; i < 2; i++)
-    {
+    for (int i = 0; i < THREAD_NUM; i++)
         thd_vec[i]->join();
-    }
 
     ret = aipu_deinit_context(ctx);
     if (ret != AIPU_STATUS_SUCCESS)

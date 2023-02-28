@@ -18,6 +18,7 @@
 #include "helper.h"
 #include "dbg.hpp"
 
+std::shared_ptr<SemOp> semOp_sp = nullptr;
 std::mutex m_mtx;
 
 static struct option opts[] = {
@@ -185,6 +186,8 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
     }
     opt->gt = dest;
     opt->gt_size = size;
+
+    semOp_sp = std::make_shared<SemOp>();
 
 finish:
     if (ret != 0)

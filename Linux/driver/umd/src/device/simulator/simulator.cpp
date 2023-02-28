@@ -15,8 +15,6 @@
 #include "parser_base.h"
 #include "utils/helper.h"
 
-aipudrv::Simulator* aipudrv::Simulator::m_sim = nullptr;
-
 aipudrv::Simulator::Simulator()
 {
     m_dev_type = DEV_TYPE_SIMULATOR_LEGACY;
@@ -26,7 +24,6 @@ aipudrv::Simulator::Simulator()
 aipudrv::Simulator::~Simulator()
 {
     m_dram = nullptr;
-    m_sim = nullptr;
 }
 
 bool aipudrv::Simulator::has_target(uint32_t arch, uint32_t version, uint32_t config, uint32_t rev)
@@ -35,7 +32,6 @@ bool aipudrv::Simulator::has_target(uint32_t arch, uint32_t version, uint32_t co
 
     if ((arch != 0) || (version > AIPU_VERSION_ZHOUYI_X1))
         return false;
-
 
     aipu_cap.arch = arch;
     aipu_cap.version = version;

@@ -12,7 +12,11 @@
 #define _LOG_H_
 
 #include <cstdio>
+#include <unistd.h>
+#include <sys/syscall.h>
 #include "debug.h"
+
+#define gettid() syscall(SYS_gettid)
 
 /**
  * @brief Log level
@@ -45,11 +49,11 @@ extern volatile int32_t UMD_LOG_LEVEL;
     else if (LogLevel==LOG_WARN) \
         LOG_DETAILED("[UMD WARN] ", FMT, ## ARGS) \
     else if (LogLevel==LOG_ALERT) \
-        printf("[UMD ALERT] " FMT "\n", ## ARGS); \
+        printf("[UMD ALERT] <%ld> " FMT "\n", gettid(), ## ARGS); \
     else if (LogLevel==LOG_INFO) \
-        printf("[UMD INFO] " FMT "\n", ## ARGS); \
+        printf("[UMD INFO] <%ld> " FMT "\n", gettid(), ## ARGS); \
     else if (LogLevel==LOG_DEBUG) \
-        printf("[UMD DEBUG] " FMT "\n", ## ARGS); \
+        printf("[UMD DEBUG] <%ld> " FMT "\n", gettid(), ## ARGS); \
     else if (LogLevel==LOG_DEFAULT) \
         printf("" FMT "\n", ## ARGS); \
     } while (0)

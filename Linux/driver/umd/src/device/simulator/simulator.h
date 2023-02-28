@@ -65,11 +65,9 @@ public:
 public:
     static Simulator* get_simulator()
     {
-        if (nullptr == m_sim)
-            m_sim = new Simulator();
-
-        m_sim->inc_ref_cnt();
-        return m_sim;
+        static Simulator sim_instance;
+        sim_instance.inc_ref_cnt();
+        return &sim_instance;
     }
     virtual ~Simulator();
     Simulator(const Simulator& sim) = delete;
@@ -77,7 +75,6 @@ public:
 
 private:
     Simulator();
-    static Simulator* m_sim;
 };
 }
 

@@ -383,11 +383,9 @@ public:
 public:
     static SimulatorV3* get_v3_simulator(const aipu_global_config_simulation_t* cfg)
     {
-        if (nullptr == m_sim)
-            m_sim = new SimulatorV3(cfg);
-
-        m_sim->inc_ref_cnt();
-        return m_sim;
+        static SimulatorV3 sim_instance(cfg);
+        sim_instance.inc_ref_cnt();
+        return &sim_instance;
     }
     aipu_status_t get_cluster_id(uint32_t part_id, std::vector<uint32_t> &cluster_in_part)
     {
@@ -404,7 +402,6 @@ public:
 
 private:
     SimulatorV3(const aipu_global_config_simulation_t* cfg);
-    static SimulatorV3* m_sim;
 };
 
 inline sim_aipu::config_t sim_create_config(int code, uint32_t log_level = 0,

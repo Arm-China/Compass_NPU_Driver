@@ -13,8 +13,6 @@
 #include <assert.h>
 #include "simulator_v3.h"
 
-aipudrv::SimulatorV3* aipudrv::SimulatorV3::m_sim = nullptr;
-
 aipudrv::SimulatorV3::SimulatorV3(const aipu_global_config_simulation_t* cfg)
 {
     BufferDesc *desc = new BufferDesc;
@@ -64,7 +62,6 @@ aipudrv::SimulatorV3::~SimulatorV3()
 
     pthread_rwlock_destroy(&m_lock);
     m_dram = nullptr;
-    m_sim = nullptr;
 }
 
 aipu_status_t aipudrv::SimulatorV3::parse_config(uint32_t config, uint32_t &sim_code)
@@ -268,6 +265,7 @@ aipu_ll_status_t aipudrv::SimulatorV3::get_status(std::vector<aipu_job_status_de
             m_cmdpools[cmd_pool_id]->set_destroy_flag();
             while (m_aipu->read_register(cmd_pool_status_reg, value) > 0)
             {
+                LOG(LOG_INFO, "wait for simulation execution, cmdpool sts=%x", value);
                 if (value & CMD_POOL0_IDLE)
                 {
                     m_aipu->write_register(TSM_CMD_SCHED_CTRL, DESTROY_CMD_POOL);
@@ -275,13 +273,15 @@ aipu_ll_status_t aipudrv::SimulatorV3::get_status(std::vector<aipu_job_status_de
                     break;
                 }
                 sleep(1);
-                LOG(LOG_INFO, "wait for simulation execution...");
             }
         }
 
         desc.state = AIPU_JOB_STATE_DONE;
         jobs_status.push_back(desc);
+
+        pthread_rwlock_wrlock(&m_lock);
         cmd_pool_erase_job(cmd_pool_id, job);
+        pthread_rwlock_unlock(&m_lock);
     }
 
     return AIPU_LL_STATUS_SUCCESS;
@@ -296,10 +296,12 @@ aipu_ll_status_t aipudrv::SimulatorV3::poll_status(std::vector<aipu_job_status_d
     uint32_t cmd_pool_id = job->m_bind_cmdpool_id;
     uint32_t cmd_pool_status_reg = CMD_POOL0_STATUS + 0x40 * cmd_pool_id;
 
+    LOG(LOG_INFO, "Enter %s...", __FUNCTION__);
     if (job->get_subgraph_cnt() != 0)
     {
         while (m_aipu->read_register(cmd_pool_status_reg, value) > 0)
         {
+            LOG(LOG_INFO, "wait for simulation execution, cmdpool sts=%x", value);
             if (value & CMD_POOL0_IDLE)
             {
                 m_aipu->write_register(TSM_CMD_SCHED_CTRL, DESTROY_CMD_POOL);
@@ -307,13 +309,14 @@ aipu_ll_status_t aipudrv::SimulatorV3::poll_status(std::vector<aipu_job_status_d
                 break;
             }
             sleep(1);
-            LOG(LOG_INFO, "wait for simulation execution...");
         }
+        pthread_rwlock_wrlock(&m_lock);
         cmd_pool_erase_job(cmd_pool_id, job);
+        pthread_rwlock_unlock(&m_lock);
     }
+    LOG(LOG_INFO, "Exit %s...", __FUNCTION__);
 
     desc.state = AIPU_JOB_STATE_DONE;
     jobs_status.push_back(desc);
-
     return AIPU_LL_STATUS_SUCCESS;
 }

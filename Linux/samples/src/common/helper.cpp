@@ -229,3 +229,47 @@ int check_result(std::vector< std::shared_ptr<char> >outputs, const std::vector<
 
     return pass;
 }
+
+/**
+ * @brief create multiple level directory for specific benchmark case, thread safe
+ */
+int help_create_dir(const char *path)
+{
+    const char *delim = "/";
+    char data[1024] = {0};
+    char new_path[1024] = {0};
+    char *p = nullptr;
+
+    semOp_sp->semaphore_p();
+    strncpy(data, path, strlen(path));
+    // printf("create_dir: %s\n", path);
+    if (!strncmp(data, "/", 1))
+    {
+        const char *split_dim = "/";
+        strncpy(new_path, split_dim, 1);
+    }
+
+    p = strtok(data, delim);
+    strcpy(new_path + strlen(new_path), p);
+    strcat(new_path, "/");
+    while((p = strtok(NULL, delim))) {
+        strcpy(new_path + strlen(new_path), p);
+        strcat(new_path, "/");
+
+        // printf("path: %s\n", new_path);
+        if(!strcmp(p, ".") || (strlen(p) == 0))
+            continue;
+
+        if(access(new_path, F_OK) == 0)
+            continue;
+
+        if(mkdir(new_path, 0750) == -1){
+            printf("%s: mkdir %s failed\n", __FUNCTION__, new_path);
+            semOp_sp->semaphore_v();
+            exit(-1);
+        }
+    }
+
+    semOp_sp->semaphore_v();
+    return 0 ;
+}

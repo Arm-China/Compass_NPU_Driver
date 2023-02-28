@@ -32,7 +32,7 @@ class DbgLogger {
             exit(-1);
         }
 
-        m_oss << log_arr[m_loglevel] << std::hex << "<" << std::this_thread::get_id() << ">  ";
+        m_oss << log_arr[m_loglevel] << "<" << gettid() << ">  ";
     }
 
     template <typename ...T>
