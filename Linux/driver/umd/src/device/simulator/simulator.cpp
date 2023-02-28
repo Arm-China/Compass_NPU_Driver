@@ -339,16 +339,19 @@ aipu_status_t aipudrv::Simulator::schedule(const JobDesc& job)
     if (sys_ret == -1)
     {
         LOG(LOG_ERR, "Simulation execution failed!");
+        ret = AIPU_STATUS_ERROR_JOB_EXCEPTION;
         goto error;
     }
     else if (WIFEXITED(sys_ret) && (WEXITSTATUS(sys_ret) != 0))
     {
         LOG(LOG_ERR, "Simulation execution failed! (simulator ret = %d)", WEXITSTATUS(sys_ret));
+        ret = AIPU_STATUS_ERROR_JOB_EXCEPTION;
         goto error;
     }
     else if (WIFSIGNALED(sys_ret))
     {
         LOG(LOG_ERR, "Simulation terminated by signal %d!", WTERMSIG(sys_ret));
+        ret = AIPU_STATUS_ERROR_JOB_EXCEPTION;
         goto error;
     }
 
