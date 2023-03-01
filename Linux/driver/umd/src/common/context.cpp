@@ -649,6 +649,7 @@ aipu_status_t aipudrv::MainContext::aipu_get_target(char *target)
             break;
         case AIPU_VERSION_ZHOUYI_X2:
             isa_version = "X2_";
+            config = 1204; // fix in future
             break;
         default:
             return AIPU_STATUS_ERROR_INVALID_CONFIG;
