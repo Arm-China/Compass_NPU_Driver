@@ -509,7 +509,7 @@ static int aipu_mm_create_region(struct aipu_memory_manager *mm, struct aipu_mem
 			upper &= U32_MAX;
 
 		if (upper > mm->limit) {
-			dev_err(reg->dev,
+			dev_err(mm->dev,
 				"region is beyond valid region used by AIPU (0x%llx > 0x%llx)\n",
 				upper, mm->limit);
 			return -EINVAL;
