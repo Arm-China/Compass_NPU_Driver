@@ -901,6 +901,8 @@ aipu_status_t aipudrv::JobV3::schedule()
     desc.kdesc.exec_flag |= (m_sg_cnt == 1)
         ? AIPU_JOB_EXEC_FLAG_SINGLE_GROUP : AIPU_JOB_EXEC_FLAG_MULTI_GROUP;
 
+    desc.kdesc.enable_poll_opt = !m_hw_cfg->poll_in_commit_thread;
+
     desc.kdesc.profile_fd = m_profile_fd;
     if (m_profiler.size() > 0)
     {

@@ -376,6 +376,7 @@ aipu_status_t aipu_get_error_message(const aipu_ctx_handle_t* ctx, aipu_status_t
  * @note accepted types/config: AIPU_CONFIG_TYPE_SIMULATION/aipu_global_config_simulation_t
  * @note accepted types/config: AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK/none
  * @note accepted types/config: AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK/none
+ * @note accepted types/config: AIPU_CONFIG_TYPE_HW
  */
 aipu_status_t aipu_config_global(const aipu_ctx_handle_t* ctx, uint64_t types, void* config);
 
