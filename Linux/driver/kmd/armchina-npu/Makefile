@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0
-# Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
 
 subdir-ccflags-y += -I$(src)
 subdir-ccflags-y += -I$(src)/include

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) 2022 Arm Technology (China) Co. Ltd. All rights reserved. */
+/* Copyright (c) 2023 Arm Technology (China) Co. Ltd. All rights reserved. */
 
 #include <linux/slab.h>
 #include <linux/string.h>
