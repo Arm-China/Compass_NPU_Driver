@@ -117,6 +117,7 @@ struct command_pool {
 struct aipu_job_manager {
 	int version;
 	int partition_cnt;
+	struct device *dev;
 	struct aipu_partition *partitions;
 	struct command_pool *pools;
 	bool *idle_bmap;

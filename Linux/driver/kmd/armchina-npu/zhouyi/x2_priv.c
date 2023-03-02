@@ -54,8 +54,6 @@ static int init_aipu_partition(struct aipu_partition *partition, u32 *clusters, 
 			aipu_write32(partition->reg, DEBUG_PAGE_SELECTION_REG, DISABLE_DEBUG);
 			ret = aipu_mm_init_gm(&partition->priv->mm, partition->clusters[cluster_cnt - 1].gm_bytes,
 					 partition->clusters[cluster_cnt - 1].id);
-			if (ret)
-				dev_err(partition->dev, "malloc GM buffer failed");
 		}
 	}
 
@@ -66,7 +64,7 @@ static int init_aipu_partition(struct aipu_partition *partition, u32 *clusters, 
 	if (IS_ERR(aipu_common_create_attr(partition->dev, &partition->reg_attr, "ext_registers", 0644,
 					 aipu_common_ext_register_sysfs_show,
 					 aipu_common_ext_register_sysfs_store)))
-		dev_err(partition->dev, "init sysfs <ext_registers> failed");
+		dev_err(partition->dev, "[init_partition] init sysfs <ext_registers> failed");
 #endif
 
 	partition->is_init = true;
@@ -103,16 +101,20 @@ static struct aipu_partition *x2_create_partitions(struct aipu_priv *aipu,
 	 * One cluster should only be within one partition.
 	 */
 	ret = of_property_count_u32_elems(p_dev->dev.of_node, "cluster-partition");
-	if (ret <= 0)
+	if (ret <= 0) {
+		dev_err(&p_dev->dev, "check your dts: no cluster-partition found");
 		return ERR_PTR(ret);
+	}
 
 	cluster_cnt = ret >> 1;
 	WARN_ON(!cluster_cnt);
 
 	cluster_arr = devm_kzalloc(&p_dev->dev, cluster_cnt * 2 * sizeof(u32), GFP_KERNEL);
 	if (of_property_read_u32_array(p_dev->dev.of_node, "cluster-partition", cluster_arr,
-				       cluster_cnt * 2))
+				       cluster_cnt * 2)) {
+		dev_err(&p_dev->dev, "check your dts: read cluster-partition failed");
 		return ERR_PTR(-EINVAL);
+	}
 
 	for (iter = 0; iter < cluster_cnt; iter++) {
 		if (cluster_arr[2 * iter + 1] > (partition_cnt - 1))
@@ -131,8 +133,10 @@ static struct aipu_partition *x2_create_partitions(struct aipu_priv *aipu,
 
 	/* global soft-reset before per partition config */
 	ret = aipu->ops->global_soft_reset(aipu);
-	if (ret)
+	if (ret) {
+		dev_err(&p_dev->dev, "[init partition] global soft reset failed");
 		return ERR_PTR(ret);
+	}
 
 	build_info = aipu_read32(&aipu->reg, TSM_BUILD_INFO_REG);
 	aipu->max_partition_cnt = GET_MAX_PARTITION_NUM(build_info);
@@ -145,7 +149,7 @@ static struct aipu_partition *x2_create_partitions(struct aipu_priv *aipu,
 	/* check if clusters are all present after reg init */
 	for (iter = 0; iter < cluster_cnt; iter++) {
 		if (!IS_CLUSTER_PRESENT(aipu_read32(&aipu->reg, CLUSTER_CONFIG_REG(iter)))) {
-			dev_err(aipu->dev, "AIPU cluster #%d was not found but registered in dts\n", iter);
+			dev_err(&p_dev->dev, "AIPU cluster #%d was not found but registered in dts\n", iter);
 			return ERR_PTR(-EINVAL);
 		}
 	}

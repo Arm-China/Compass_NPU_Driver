@@ -235,10 +235,8 @@ int armchina_aipu_probe(struct platform_device *p_dev, struct aipu_soc *soc,
 
 	WARN_ON(!aipu->ops);
 	partition = aipu->ops->create_partitions(aipu, id, p_dev);
-	if (IS_ERR(partition)) {
-		dev_err(dev, "AIPU KMD probe failed\n");
+	if (IS_ERR(partition))
 		goto out_clean;
-	}
 
 	platform_set_drvdata(p_dev, partition);
 	goto finish;

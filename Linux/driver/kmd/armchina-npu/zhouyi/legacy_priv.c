@@ -66,6 +66,7 @@ static int init_aipu_core(struct aipu_partition *core, int version, int id, stru
 	if (IS_ERR(aipu_common_create_attr(core->dev, &core->reg_attr, "ext_registers", 0644,
 					 aipu_common_ext_register_sysfs_show,
 					 aipu_common_ext_register_sysfs_store))) {
+		dev_err(core->dev, "[init_core] create sysfs attribute failed: ext_registers");
 		ret = -EFAULT;
 		goto init_sysfs_fail;
 	}
@@ -75,6 +76,7 @@ static int init_aipu_core(struct aipu_partition *core, int version, int id, stru
 	    IS_ERR(aipu_common_create_attr(core->dev, &core->clk_attr, "soc_clock", 0644,
 					 aipu_common_clock_sysfs_show,
 					 aipu_common_clock_sysfs_store))) {
+		dev_err(core->dev, "[init_core] create sysfs attribute failed: soc_clock");
 		ret = -EFAULT;
 		goto init_sysfs_fail;
 	}
@@ -82,6 +84,7 @@ static int init_aipu_core(struct aipu_partition *core, int version, int id, stru
 	if (IS_ERR(aipu_common_create_attr(core->dev, &core->disable_attr, "disable", 0644,
 					 aipu_common_disable_sysfs_show,
 					 aipu_common_disable_sysfs_store))) {
+		dev_err(core->dev, "[init_core] create sysfs attribute failed: disable");
 		ret = -EFAULT;
 		goto init_sysfs_fail;
 	}
@@ -96,8 +99,10 @@ static int init_aipu_core(struct aipu_partition *core, int version, int id, stru
 	core->reset_delay_us = AIPU_CONFIG_DEFAULT_RESET_DELAY_US;
 
 	ret = core->ops->soft_reset(core, true);
-	if (ret)
+	if (ret) {
+		dev_err(core->dev, "[init_core] soft reset failed");
 		goto soft_reset_fail;
+	}
 	core->ops->print_hw_id_info(core);
 
 	core->is_init = 1;

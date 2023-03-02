@@ -59,8 +59,10 @@ struct aipu_irq_object *aipu_create_irq_object(struct device *dev, u32 irqnum, v
 
 	ret = request_irq(irqnum, aipu_irq_handler_upper_half, IRQF_SHARED,
 			  description, irq_obj->dev);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "request_irq failed: irqnum %u", irqnum);
 		goto err_handle;
+	}
 
 	irq_obj->irqnum = irqnum;
 	irq_obj->partition = partition;

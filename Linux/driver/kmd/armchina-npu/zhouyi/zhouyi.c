@@ -45,11 +45,15 @@ int zhouyi_detect_aipu_version(struct platform_device *p_dev, int *version, int 
 		return -EINVAL;
 
 	res = platform_get_resource(p_dev, IORESOURCE_MEM, 0);
-	if (!res)
+	if (!res) {
+		dev_err(&p_dev->dev, "detect aipu version failed: in getting platform res");
 		return -EINVAL;
+	}
 
-	if (init_aipu_ioregion(&io, res->start, res->end - res->start + 1))
+	if (init_aipu_ioregion(&io, res->start, res->end - res->start + 1)) {
+		dev_err(&p_dev->dev, "detect aipu version failed: in init ioregion");
 		return -EINVAL;
+	}
 
 	*version = zhouyi_get_hw_version_number(&io);
 	if (*version > 0 && *version < ZHOUYI_X2_REVISION_ID)

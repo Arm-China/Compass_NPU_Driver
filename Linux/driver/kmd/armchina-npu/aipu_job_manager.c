@@ -314,8 +314,10 @@ static int schedule_x2_job_no_lock(struct aipu_job_manager *manager, struct aipu
 		}
 
 		ret = partition->ops->exit_dispatch(partition, job->desc.exec_flag, manager->exit_tcb.pa);
-		if (ret)
+		if (ret) {
+			dev_err(partition->dev, "exit dispatch failed: job ID 0x%llx", job->desc.job_id);
 			return ret;
+		}
 
 		qlist->curr_tail = manager->exit_tcb.pa;
 
@@ -407,6 +409,8 @@ static int schedule_new_job(struct aipu_job_manager *manager, struct aipu_job_de
 		if (user_job->aipu_version < AIPU_ISA_VERSION_ZHOUYI_X2 &&
 		    (user_job->partition_id >= manager->partition_cnt ||
 		     !manager->idle_bmap[user_job->partition_id])) {
+			dev_err(manager->dev, "schedule new job (0x%llx) failed: invalid core ID %u",
+				kern_job->desc.job_id, user_job->partition_id);
 			ret = -EINVAL;
 			goto unlock;
 		}
@@ -453,11 +457,12 @@ static int trigger_deferred_job_run(struct aipu_job_manager *manager,
 	}
 	spin_unlock_irqrestore(&manager->lock, flags);
 
-	if (!triggered)
+	if (!triggered) {
+		dev_err(manager->dev, "trigger deferred job (0x%llx) failed",
+			user_job->job_id);
 		return -EINVAL;
+	}
 
-	dev_dbg(sched_core->dev, "[Job %lld of Thread %d] trigger deferred job running done\n",
-		user_job->job_id, task_pid_nr(current));
 	return 0;
 }
 
@@ -481,6 +486,7 @@ int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_m
 
 	manager->is_init = 0;
 	manager->version = ((struct aipu_priv *)priv)->version;
+	manager->dev = ((struct aipu_priv *)priv)->dev;
 	manager->partition_cnt = 0;
 	manager->partitions = NULL;
 	manager->pools = NULL;
@@ -508,16 +514,22 @@ int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_m
 		buf.align_in_page = 1;
 		buf.data_type = AIPU_MM_DATA_TYPE_TCB;
 		ret = aipu_mm_alloc(mm, &buf, NULL);
-		if (ret)
+		if (ret) {
+			dev_err(manager->dev, "init job manager failed: TCB alloc failed");
 			return ret;
+		}
 
 		manager->exit_tcb = buf.desc;
 		ret = config_exit_tcb(manager, &buf.desc);
-		if (ret)
+		if (ret) {
+			dev_err(manager->dev, "init job manager failed: config exit TCB failed");
 			return ret;
+		}
 		ret = aipu_mm_set_tcb_tail(manager->mm, manager->exit_tcb.pa);
-		if (ret)
+		if (ret) {
+			dev_err(manager->dev, "init job manager failed: set TCB tail failed");
 			return ret;
+		}
 	} else {
 		memset(&manager->exit_tcb, 0, sizeof(manager->exit_tcb));
 	}
@@ -580,8 +592,10 @@ int aipu_job_manager_scheduler(struct aipu_job_manager *manager, struct aipu_job
 	if (unlikely(!manager || !user_job || !filp))
 		return -EINVAL;
 
-	if (unlikely(!is_user_job_valid(manager, user_job)))
+	if (unlikely(!is_user_job_valid(manager, user_job))) {
+		dev_err(manager->dev, "[scheduler] invalid user job (0x%llx)", user_job->job_id);
 		return -EINVAL;
+	}
 
 	if (!user_job->is_defer_run)
 		ret = schedule_new_job(manager, user_job, filp, 1);
@@ -590,6 +604,10 @@ int aipu_job_manager_scheduler(struct aipu_job_manager *manager, struct aipu_job
 	else
 		ret = trigger_deferred_job_run(manager, user_job);
 
+	if (ret)
+		dev_err(manager->dev,
+			"[scheduler] schedule job (0x%llx) failed: is_defer_run %d, do_trigger %d",
+			user_job->job_id, user_job->is_defer_run, user_job->do_trigger);
 	return ret;
 }
 
