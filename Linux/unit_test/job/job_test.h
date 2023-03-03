@@ -14,9 +14,9 @@
 #include <sys/mman.h>
 #include <string>
 #include "doctest.h"
-#include "graph_legacy.h"
+#include "graph_v1v2.h"
 #include "graph_v3.h"
-#include "job_legacy.h"
+#include "job_v1v2.h"
 #include "job_v3.h"
 #include "standard_api.h"
 #include "context.h"
@@ -40,6 +40,7 @@ public:
     aipudrv::MainContext* p_ctx = nullptr;
     DeviceBase* m_dev = nullptr;
     aipu_global_config_simulation_t m_sim_cfg = {0};
+    aipu_global_config_hw_t m_hw_cfg = {0};
     aipu_job_config_simulation_t sim_job_config = {0};
     aipu_job_config_dump_t mem_dump_config;
     aipu_create_job_cfg create_job_cfg = {0};
@@ -149,7 +150,7 @@ public:
     #if (defined ZHOUYI_V12)
         if (AIPU_LOADABLE_GRAPH_V0005 == graph_version)
         {
-            if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_LEGACY))
+            if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V1V2))
             {
                 return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
             }
@@ -220,12 +221,12 @@ public:
         ret = test_get_device(g_version, &m_dev, &m_sim_cfg);
 #if (defined ZHOUYI_V12)
         if (AIPU_LOADABLE_GRAPH_V0005 == g_version) {
-            p_gobj = new GraphLegacy(p_ctx, _id, m_dev);
+            p_gobj = new GraphV12(p_ctx, _id, m_dev);
             ret = p_gobj->load(gbin, fsize, m_do_vcheck);
             if (ret != AIPU_STATUS_SUCCESS) {
                 printf("load graphj fail");
             }
-            p_job = new JobLegacy(p_ctx, *p_gobj, m_dev);
+            p_job = new JobV12(p_ctx, *p_gobj, m_dev);
         }
 #endif
 #if (defined ZHOUYI_V3)

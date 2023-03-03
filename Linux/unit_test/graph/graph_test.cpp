@@ -30,10 +30,11 @@ TEST_CASE_FIXTURE(GraphTest, "create_job")
 {
     aipu_status_t ret;
     aipu_create_job_cfg create_job_cfg = {0};
+    aipu_global_config_hw_t m_hw_cfg = {0};
     JOB_ID id;
 
     p_gobj->load(gbin, fsize, m_do_vcheck);
-    ret = p_gobj->create_job(&id, &m_sim_cfg, &create_job_cfg);
+    ret = p_gobj->create_job(&id, &m_sim_cfg, &m_hw_cfg, &create_job_cfg);
     CHECK(ret == AIPU_STATUS_SUCCESS);
 }
 

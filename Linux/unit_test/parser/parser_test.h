@@ -13,9 +13,9 @@
 #include <sys/mman.h>
 #include <string>
 #include "doctest.h"
-#include "graph_legacy.h"
+#include "graph_v1v2.h"
 #include "graph_v3.h"
-#include "parser_legacy.h"
+#include "parser_v1v2.h"
 #include "parser_elf.h"
 #include "context.h"
 #include "helper.h"
@@ -90,7 +90,7 @@ public:
     #if (defined ZHOUYI_V12)
         if (AIPU_LOADABLE_GRAPH_V0005 == graph_version)
         {
-            if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_LEGACY))
+            if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V1V2))
             {
                 return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
             }
@@ -154,8 +154,8 @@ public:
         test_get_device(g_version, &m_dev, &m_sim_cfg);
 #if (defined ZHOUYI_V12)
         if (AIPU_LOADABLE_GRAPH_V0005 == g_version) {
-            p_gobj = new GraphLegacy(p_ctx, _id, m_dev);
-            m_parser = new ParserLegacy();
+            p_gobj = new GraphV12(p_ctx, _id, m_dev);
+            m_parser = new ParserV12();
         }
 #endif
 #if (defined ZHOUYI_V3)

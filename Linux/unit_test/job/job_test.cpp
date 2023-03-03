@@ -11,7 +11,7 @@ TEST_CASE_FIXTURE(JobTest, "init")
 {
     aipu_status_t ret;
 
-    ret = p_job->init(&m_sim_cfg);
+    ret = p_job->init(&m_sim_cfg, &m_hw_cfg);
     CHECK(ret == AIPU_STATUS_SUCCESS);
 }
 
@@ -20,7 +20,7 @@ TEST_CASE_FIXTURE(JobTest, "get_part_id")
 {
     uint32_t part_id;
 
-    p_job->init(&m_sim_cfg);
+    p_job->init(&m_sim_cfg, &m_hw_cfg);
     part_id = job_v3->get_part_id();
     CHECK((part_id == 0) == true);
 }
@@ -29,7 +29,7 @@ TEST_CASE_FIXTURE(JobTest, "get_qos")
 {
     uint32_t qos;
 
-    p_job->init(&m_sim_cfg);
+    p_job->init(&m_sim_cfg, &m_hw_cfg);
     qos = job_v3->get_qos();
     CHECK((qos == 0) == true);
 }
@@ -39,7 +39,7 @@ TEST_CASE_FIXTURE(JobTest, "load_tensor")
 {
     aipu_status_t ret;
 
-    p_job->init(&m_sim_cfg);
+    p_job->init(&m_sim_cfg, &m_hw_cfg);
 
     ret = p_job->load_tensor(0, nullptr);
     CHECK(ret == AIPU_STATUS_ERROR_NULL_PTR);
@@ -55,7 +55,7 @@ TEST_CASE_FIXTURE(JobTest, "schedule")
 {
     aipu_status_t ret;
 
-    p_job->init(&m_sim_cfg);
+    p_job->init(&m_sim_cfg, &m_hw_cfg);
     p_job->load_tensor(0, input_file.c_str());
 #if (defined SIMULATION)
     p_job->config_simulation(AIPU_CONFIG_TYPE_SIMULATION, &sim_job_config);
@@ -74,7 +74,7 @@ TEST_CASE_FIXTURE(JobTest, "get_status_blocking")
     aipu_status_t ret;
     aipu_job_status_t status;
 
-    p_job->init(&m_sim_cfg);
+    p_job->init(&m_sim_cfg, &m_hw_cfg);
     p_job->load_tensor(0, input_file.c_str());
 #if (defined SIMULATION)
     p_job->config_simulation(AIPU_CONFIG_TYPE_SIMULATION, &sim_job_config);
@@ -90,7 +90,7 @@ TEST_CASE_FIXTURE(JobTest, "destroy")
     aipu_status_t ret;
     aipu_job_status_t status;
 
-    p_job->init(&m_sim_cfg);
+    p_job->init(&m_sim_cfg, &m_hw_cfg);
     p_job->load_tensor(0, input_file.c_str());
 #if (defined SIMULATION)
     p_job->config_simulation(AIPU_CONFIG_TYPE_SIMULATION, &sim_job_config);
@@ -108,7 +108,7 @@ TEST_CASE_FIXTURE(JobTest, "get_tensor")
     aipu_job_status_t status;
     char* output_data;
 
-    p_job->init(&m_sim_cfg);
+    p_job->init(&m_sim_cfg, &m_hw_cfg);
     p_job->load_tensor(0, input_file.c_str());
 #if (defined SIMULATION)
     p_job->config_simulation(AIPU_CONFIG_TYPE_SIMULATION, &sim_job_config);
@@ -132,7 +132,7 @@ TEST_CASE_FIXTURE(JobTest, "config_simulation")
 {
     aipu_status_t ret;
 
-    p_job->init(&m_sim_cfg);
+    p_job->init(&m_sim_cfg, &m_hw_cfg);
     p_job->load_tensor(0, input_file.c_str());
 
 #if (defined ZHOUYI_V12)
@@ -149,7 +149,7 @@ TEST_CASE_FIXTURE(JobTest, "config_mem_dump")
 {
     aipu_status_t ret;
 
-    p_job->init(&m_sim_cfg);
+    p_job->init(&m_sim_cfg, &m_hw_cfg);
     p_job->load_tensor(0, input_file.c_str());
 
     ret = p_job->config_mem_dump(AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT, nullptr);
@@ -163,7 +163,7 @@ TEST_CASE_FIXTURE(JobTest, "bind_core")
 {
     aipu_status_t ret;
 
-    p_job->init(&m_sim_cfg);
+    p_job->init(&m_sim_cfg, &m_hw_cfg);
     p_job->load_tensor(0, input_file.c_str());
 #if (defined SIMULATION)
     p_job->config_simulation(AIPU_CONFIG_TYPE_SIMULATION, &sim_job_config);
@@ -178,7 +178,7 @@ TEST_CASE_FIXTURE(JobTest, "mark_shared_tensor")
     aipu_status_t ret;
     DEV_PA_64 addr = 0;
 
-    p_job->init(&m_sim_cfg);
+    p_job->init(&m_sim_cfg, &m_hw_cfg);
 
     ret = p_job->mark_shared_tensor(AIPU_TENSOR_TYPE_INPUT, 0, addr);
     CHECK(ret == AIPU_STATUS_SUCCESS);
