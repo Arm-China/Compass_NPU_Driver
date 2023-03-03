@@ -8,8 +8,8 @@
  * @brief AIPU User Mode Driver (UMD) aipu v1/v2 graph module header
  */
 
-#ifndef _GRAPH_LEGACY_H_
-#define _GRAPH_LEGACY_H_
+#ifndef _GRAPH_V12_H_
+#define _GRAPH_V12_H_
 
 #include <map>
 #include <vector>
@@ -78,4 +78,4 @@ public:
 };
 }
 
-#endif /* _GRAPH_LEGACY_H_ */
+#endif /* _GRAPH_V12_H_ */

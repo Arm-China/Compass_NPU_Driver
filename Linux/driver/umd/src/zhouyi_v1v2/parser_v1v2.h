@@ -8,8 +8,8 @@
  * @brief AIPU User Mode Driver (UMD) aipu v1/v2 graph parser class header
  */
 
-#ifndef _PARSER_LEGACY_H_
-#define _PARSER_LEGACY_H_
+#ifndef _PARSER_V12_H_
+#define _PARSER_V12_H_
 
 #include <fstream>
 #include <stdint.h>
@@ -69,4 +69,4 @@ public:
 };
 }
 
-#endif /* _PARSER_LEGACY_H_ */
+#endif /* _PARSER_V12_H_ */

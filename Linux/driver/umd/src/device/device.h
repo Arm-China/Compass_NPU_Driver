@@ -50,7 +50,7 @@ inline aipu_status_t test_get_device(uint32_t graph_version, DeviceBase** dev,
     #if (defined ZHOUYI_V12)
         if (AIPU_LOADABLE_GRAPH_V0005 == graph_version)
         {
-            if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_LEGACY))
+            if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V1V2))
                 return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
             else if (nullptr == *dev)
                 *dev = Simulator::get_simulator();

@@ -18,7 +18,7 @@
 
 aipudrv::Simulator::Simulator()
 {
-    m_dev_type = DEV_TYPE_SIMULATOR_LEGACY;
+    m_dev_type = DEV_TYPE_SIMULATOR_V1V2;
     m_dram = UMemory::get_memory();
 }
 

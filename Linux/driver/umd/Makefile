@@ -8,14 +8,14 @@ SRC_ROOT := ./src
 INC_DIR  := ./include
 
 SRC_COMMON = $(SRC_ROOT)/common/
-SRC_ZHOUYI_LEGACY = $(SRC_ROOT)/zhouyi_v1v2/
+SRC_ZHOUYI_V1V2 = $(SRC_ROOT)/zhouyi_v1v2/
 SRC_ZHOUYI_V3 = $(SRC_ROOT)/zhouyi_v3/
 SRC_MISC = $(SRC_ROOT)/misc/
 SRC_UTIL = $(SRC_ROOT)/utils/
 SRC_DEVICE = $(SRC_ROOT)/device/
 
 CXXFLAGS := -std=c++14 -fPIC -Wall -Werror
-INCD := -I$(INC_DIR) -I$(SRC_ROOT) -I$(SRC_COMMON) -I$(SRC_DEVICE) -I$(SRC_MISC) -I$(SRC_UTIL) -I$(SRC_ZHOUYI_LEGACY) -I$(SRC_ZHOUYI_V3)
+INCD := -I$(INC_DIR) -I$(SRC_ROOT) -I$(SRC_COMMON) -I$(SRC_DEVICE) -I$(SRC_MISC) -I$(SRC_UTIL) -I$(SRC_ZHOUYI_V1V2) -I$(SRC_ZHOUYI_V3)
 LDFLAGS = -shared -Wl,-soname,$(COMPASS_DRV_BTENVAR_UMD_SO_NAME)
 ANDROIDCXXFLAGS := --target=aarch64-none-linux-android21 \
                    --gcc-toolchain=$(BUILD_ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64 \
@@ -49,7 +49,7 @@ ifeq ($(BUILD_TARGET_PLATFORM), sim)
     CXXFLAGS += -DSIMULATION
 endif
 
-SRC_DIRS = $(SRC_MISC) $(SRC_COMMON) $(SRC_UTIL) $(SRC_DEVICE) $(SRC_ZHOUYI_LEGACY) $(SRC_ZHOUYI_V3)
+SRC_DIRS = $(SRC_MISC) $(SRC_COMMON) $(SRC_UTIL) $(SRC_DEVICE) $(SRC_ZHOUYI_V1V2) $(SRC_ZHOUYI_V3)
 SRCS = $(SRC_COMMON)/context.cpp           \
        $(SRC_COMMON)/ctx_ref_map.cpp       \
        $(SRC_COMMON)/graph_base.cpp        \
@@ -84,9 +84,9 @@ ifneq ($(BUILD_AIPU_VERSION), z123)
 endif
 
 ifneq ($(BUILD_AIPU_VERSION), x2)
-    SRCS += $(SRC_ZHOUYI_LEGACY)/graph_v1v2.cpp \
-            $(SRC_ZHOUYI_LEGACY)/job_v1v2.cpp   \
-            $(SRC_ZHOUYI_LEGACY)/parser_v1v2.cpp
+    SRCS += $(SRC_ZHOUYI_V1V2)/graph_v1v2.cpp \
+            $(SRC_ZHOUYI_V1V2)/job_v1v2.cpp   \
+            $(SRC_ZHOUYI_V1V2)/parser_v1v2.cpp
     ifeq ($(BUILD_TARGET_PLATFORM), sim)
         SRCS += $(SRC_DEVICE)/simulator/simulator.cpp
     endif

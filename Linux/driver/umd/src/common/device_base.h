@@ -108,7 +108,7 @@ struct JobDesc
 enum DeviceType
 {
     DEV_TYPE_NONE             = 0,
-    DEV_TYPE_SIMULATOR_LEGACY = 1,
+    DEV_TYPE_SIMULATOR_V1V2 = 1,
     DEV_TYPE_SIMULATOR_V3     = 2,
     DEV_TYPE_AIPU             = 3,
 };

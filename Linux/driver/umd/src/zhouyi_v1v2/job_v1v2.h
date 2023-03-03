@@ -8,8 +8,8 @@
  * @brief AIPU User Mode Driver (UMD) aipu v1/v2 job class header
  */
 
-#ifndef _JOB_LEGACY_H_
-#define _JOB_LEGACY_H_
+#ifndef _JOB_V12_H_
+#define _JOB_V12_H_
 
 #include <vector>
 #include <pthread.h>
@@ -89,4 +89,4 @@ public:
 };
 }
 
-#endif /* _JOB_LEGACY_H_ */
+#endif /* _JOB_V12_H_ */
