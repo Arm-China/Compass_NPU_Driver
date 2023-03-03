@@ -1,11 +1,11 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 
 /**
  * @file  main.cpp
- * @brief X2 AIPU UMD test application: basic simulation test
+ * @brief aipu v3 AIPU UMD test application: basic simulation test
  */
 
 #include <stdio.h>
@@ -64,10 +64,7 @@ int main(int argc, char* argv[])
         goto finish;
     }
 
-    /* works for z1/2/3/5 simulation and execution on AIPU */
     mem_dump_config.dump_dir = opt.dump_dir;
-
-    /* works for z1/2/3/5 simulation */
     if (opt.log_level_set)
     {
         sim_glb_config.log_level = opt.log_level;
@@ -84,7 +81,6 @@ int main(int argc, char* argv[])
     if (!opt.x2_arch_desc.empty())
         sim_glb_config.x2_arch_desc = opt.x2_arch_desc.c_str();
 
-    /* works for z1/z2/z3/x1 simulations only */
     sim_glb_config.z1_simulator = opt.z1_simulator;
     sim_glb_config.z2_simulator = opt.z2_simulator;
     sim_glb_config.z3_simulator = opt.z3_simulator;
@@ -114,8 +110,8 @@ int main(int argc, char* argv[])
 
         /**
          * just detect partition, cluster, core information once.
-         * it has to be called after the first calling aipu_load_graph since
-         * creating x2_simulator will refer graph information.
+         * it has to be called after calling aipu_load_graph because
+         * creating aipu v3 simulator will refer graph information.
          */
         if (part_cnt == 0)
         {

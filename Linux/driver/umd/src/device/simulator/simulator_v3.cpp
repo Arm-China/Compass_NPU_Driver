@@ -1,11 +1,11 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 
 /**
  * @file  simulator_v3.cpp
- * @brief AIPU User Mode Driver (UMD) zhouyi x2 simulator module implementation
+ * @brief AIPU User Mode Driver (UMD) zhouyi aipu v3 simulator module implementation
  */
 
 #include <cstring>

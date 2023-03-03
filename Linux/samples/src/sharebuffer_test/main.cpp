@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -84,10 +84,7 @@ int main(int argc, char* argv[])
         goto finish;
     }
 
-    /* works for z1/2/3/x1 simulation and execution on AIPU */
     mem_dump_config.dump_dir = opt.dump_dir;
-
-    /* works for z1/2/3/x1 simulation */
     if (opt.log_level_set)
     {
         sim_glb_config.log_level = opt.log_level;
@@ -103,7 +100,6 @@ int main(int argc, char* argv[])
     sim_glb_config.verbose = opt.verbose;
     sim_glb_config.en_eval = true;
 
-    /* works for z1/z2/z3/x1 simulations only */
     sim_glb_config.z1_simulator = opt.z1_simulator;
     sim_glb_config.z2_simulator = opt.z2_simulator;
     sim_glb_config.z3_simulator = opt.z3_simulator;

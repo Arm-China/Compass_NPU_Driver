@@ -1,11 +1,11 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 
 /**
- * @file  job_legacy.h
- * @brief AIPU User Mode Driver (UMD) legacy job class header
+ * @file  job_v1v2.h
+ * @brief AIPU User Mode Driver (UMD) aipu v1/v2 job class header
  */
 
 #ifndef _JOB_LEGACY_H_
@@ -14,13 +14,13 @@
 #include <vector>
 #include <pthread.h>
 #include "standard_api.h"
-#include "graph_legacy.h"
+#include "graph_v1v2.h"
 #include "job_base.h"
 #include "type.h"
 
 namespace aipudrv
 {
-class JobLegacy: public JobBase
+class JobV12: public JobBase
 {
 private:
     DEV_PA_64 m_spc = 0;
@@ -42,9 +42,9 @@ private:
     uint32_t m_fm_mem_region = AIPU_BUF_REGION_DEFAULT;
 
 private:
-    GraphLegacy& get_graph()
+    GraphV12& get_graph()
     {
-        return static_cast<GraphLegacy&>(m_graph);
+        return static_cast<GraphV12&>(m_graph);
     }
 
     virtual uint32_t get_subgraph_cnt()
@@ -57,7 +57,7 @@ private:
         return static_cast< std::vector<BufferDesc>& >(m_reuses);
     }
     aipu_status_t free_job_buffers();
-    aipu_status_t setup_rodata_legacy();
+    aipu_status_t setup_rodata_v12();
 
 public:
     virtual aipu_status_t init(const aipu_global_config_simulation_t* cfg,
@@ -81,11 +81,11 @@ public:
     }
 
 public:
-    JobLegacy(MainContext* ctx, GraphBase& graph, DeviceBase* dev,
+    JobV12(MainContext* ctx, GraphBase& graph, DeviceBase* dev,
         aipu_create_job_cfg_t *config = nullptr);
-    virtual ~JobLegacy();
-    JobLegacy(const JobLegacy& job) = delete;
-    JobLegacy& operator=(const JobLegacy& job) = delete;
+    virtual ~JobV12();
+    JobV12(const JobV12& job) = delete;
+    JobV12& operator=(const JobV12& job) = delete;
 };
 }
 

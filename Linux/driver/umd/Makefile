@@ -1,4 +1,4 @@
-# Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+# Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 MD  := mkdir -p
@@ -8,7 +8,7 @@ SRC_ROOT := ./src
 INC_DIR  := ./include
 
 SRC_COMMON = $(SRC_ROOT)/common/
-SRC_ZHOUYI_LEGACY = $(SRC_ROOT)/zhouyi_legacy/
+SRC_ZHOUYI_LEGACY = $(SRC_ROOT)/zhouyi_v1v2/
 SRC_ZHOUYI_V3 = $(SRC_ROOT)/zhouyi_v3/
 SRC_MISC = $(SRC_ROOT)/misc/
 SRC_UTIL = $(SRC_ROOT)/utils/
@@ -84,9 +84,9 @@ ifneq ($(BUILD_AIPU_VERSION), z123)
 endif
 
 ifneq ($(BUILD_AIPU_VERSION), x2)
-    SRCS += $(SRC_ZHOUYI_LEGACY)/graph_legacy.cpp \
-            $(SRC_ZHOUYI_LEGACY)/job_legacy.cpp   \
-            $(SRC_ZHOUYI_LEGACY)/parser_legacy.cpp
+    SRCS += $(SRC_ZHOUYI_LEGACY)/graph_v1v2.cpp \
+            $(SRC_ZHOUYI_LEGACY)/job_v1v2.cpp   \
+            $(SRC_ZHOUYI_LEGACY)/parser_v1v2.cpp
     ifeq ($(BUILD_TARGET_PLATFORM), sim)
         SRCS += $(SRC_DEVICE)/simulator/simulator.cpp
     endif

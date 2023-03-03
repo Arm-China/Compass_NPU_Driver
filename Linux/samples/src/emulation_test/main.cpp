@@ -1,11 +1,10 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
-
 /**
  * @file  main.cpp
- * @brief X2 AIPU UMD test application: for emulation test
+ * @brief aipu v3 AIPU UMD test application: for emulation test
  *        After running this test, dumped files can be used for emulation tests.
  */
 

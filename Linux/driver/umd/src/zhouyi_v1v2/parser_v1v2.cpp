@@ -1,23 +1,23 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 
 /**
- * @file  parser_legacy.cpp
- * @brief AIPU User Mode Driver (UMD) legacy parser module implementation
+ * @file  parser_v1v2.cpp
+ * @brief AIPU User Mode Driver (UMD) aipu v1/v2 parser module implementation
  */
 
 #include <cstring>
-#include "parser_legacy.h"
+#include "parser_v1v2.h"
 #include "utils/helper.h"
 #include "utils/log.h"
 
-aipudrv::ParserLegacy::ParserLegacy()
+aipudrv::ParserV12::ParserV12()
 {
 }
 
-aipudrv::ParserLegacy::~ParserLegacy()
+aipudrv::ParserV12::~ParserV12()
 {
     for (uint32_t i = 0; i < m_sections.size(); i++)
     {
@@ -25,17 +25,17 @@ aipudrv::ParserLegacy::~ParserLegacy()
     }
 }
 
-aipu_status_t aipudrv::ParserLegacy::parse_graph_header_check(std::istream& gbin, uint32_t gbin_sz)
+aipu_status_t aipudrv::ParserV12::parse_graph_header_check(std::istream& gbin, uint32_t gbin_sz)
 {
     BinHeaderTop top_header;
-    LegacyHeaderBottom bot_header;
+    HeaderBottomV12 bot_header;
     unsigned int header_sz = 0, tmp = 0;
     unsigned int cur_pos = gbin.tellg();
     #define GBIN_HEADER_MIN_SZ (104)
 
     gbin.read((char*)&top_header, sizeof(BinHeaderTop));
-    gbin.read((char*)&bot_header, sizeof(LegacyHeaderBottom));
-    if (gbin.gcount() != sizeof(LegacyHeaderBottom))
+    gbin.read((char*)&bot_header, sizeof(HeaderBottomV12));
+    if (gbin.gcount() != sizeof(HeaderBottomV12))
         goto finish;
 
     header_sz = top_header.header_size;
@@ -105,13 +105,13 @@ finish:
     return AIPU_STATUS_ERROR_INVALID_GBIN;
 }
 
-aipu_status_t aipudrv::ParserLegacy::parse_graph_header_bottom(std::istream& gbin, Graph& gobj)
+aipu_status_t aipudrv::ParserV12::parse_graph_header_bottom(std::istream& gbin, Graph& gobj)
 {
-    LegacyHeaderBottom header;
-    LegacySectionDesc desc;
+    HeaderBottomV12 header;
+    SectionDescV12 desc;
 
-    gbin.read((char*)&header, sizeof(LegacyHeaderBottom));
-    if (gbin.gcount() != sizeof(LegacyHeaderBottom))
+    gbin.read((char*)&header, sizeof(HeaderBottomV12));
+    if (gbin.gcount() != sizeof(HeaderBottomV12))
         return AIPU_STATUS_ERROR_INVALID_GBIN;
 
     gobj.set_enrty(header.entry);
@@ -133,13 +133,13 @@ aipu_status_t aipudrv::ParserLegacy::parse_graph_header_bottom(std::istream& gbi
     return AIPU_STATUS_SUCCESS;
 }
 
-aipu_status_t aipudrv::ParserLegacy::parse_graph(std::istream& gbin, uint32_t size, Graph& gobj)
+aipu_status_t aipudrv::ParserV12::parse_graph(std::istream& gbin, uint32_t size, Graph& gobj)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     BinSection section;
     char* remap = nullptr;
 
-    if (size < (BIN_HDR_TOP_SIZE + sizeof(LegacyHeaderBottom)))
+    if (size < (BIN_HDR_TOP_SIZE + sizeof(HeaderBottomV12)))
         return AIPU_STATUS_ERROR_INVALID_GBIN;
 
     ret = parse_graph_header_check(gbin, size);

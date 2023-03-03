@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -21,7 +21,7 @@
 #include "utils/debug.h"
 #include "utils/helper.h"
 #include "device.h"
-#include "graph_legacy.h"
+#include "graph_v1v2.h"
 #include "graph_v3.h"
 #include "super_graph.h"
 #include "job_base.h"
@@ -185,7 +185,7 @@ aipu_status_t aipudrv::MainContext::create_graph_object(std::istream& gbin, uint
 
 #if (defined ZHOUYI_V12)
     if (AIPU_LOADABLE_GRAPH_V0005 == g_version)
-        p_gobj = new GraphLegacy(this, id, m_dev);
+        p_gobj = new GraphV12(this, id, m_dev);
 #endif
 #if (defined ZHOUYI_V3)
     if (AIPU_LOADABLE_GRAPH_ELF_V0 == g_version)
@@ -462,7 +462,7 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     char *sim_npu_arch_env = getenv("SIM_NPU_ARCH");
 
-    // X2 GM size
+    // aipu v3 GM size
     std::set<uint32_t> gm_sz_cfg = {
         512 << 10, // 512KB
         1 << 20,   // 1MB
@@ -613,7 +613,7 @@ aipu_status_t aipudrv::MainContext::debugger_free(void* va)
 aipu_status_t aipudrv::MainContext::aipu_get_target(char *target)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    uint32_t isa = AIPU_VERSION_ZHOUYI_V1;
+    uint32_t isa = AIPU_ISA_VERSION_ZHOUYI_Z1;
     uint32_t config = 904;
     std::string isa_version, arch_cfg;
     std::stringstream config_ss;
@@ -635,19 +635,19 @@ aipu_status_t aipudrv::MainContext::aipu_get_target(char *target)
 
     switch (isa)
     {
-        case AIPU_VERSION_ZHOUYI_V1:
+        case AIPU_ISA_VERSION_ZHOUYI_Z1:
             isa_version = "Z1_";
             break;
-        case AIPU_VERSION_ZHOUYI_V2:
+        case AIPU_ISA_VERSION_ZHOUYI_Z2:
             isa_version = "Z2_";
             break;
-        case AIPU_VERSION_ZHOUYI_V3:
+        case AIPU_ISA_VERSION_ZHOUYI_Z3:
             isa_version = "Z3_";
             break;
-        case AIPU_VERSION_ZHOUYI_X1:
+        case AIPU_ISA_VERSION_ZHOUYI_X1:
             isa_version = "X1_";
             break;
-        case AIPU_VERSION_ZHOUYI_X2:
+        case AIPU_ISA_VERSION_ZHOUYI_X2:
             isa_version = "X2_";
             config = 1204; // fix in future
             break;

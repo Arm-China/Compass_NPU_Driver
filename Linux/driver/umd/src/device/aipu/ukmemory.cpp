@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -80,7 +80,7 @@ aipu_status_t aipudrv::UKMemory::malloc(uint32_t size, uint32_t align, BufferDes
      * adjust PA filled into RO section.
      * depend on condition:
      * - ASID low 32-bits address is non-zero
-     * - buffer alocated from DTCM region, only for X1
+     * - buffer alocated from DTCM region, only for aipu v2
      */
     if (buf_req.desc.region == AIPU_BUF_REGION_DTCM)
         base = get_dtcm_base() - 0xD0000000;

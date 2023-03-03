@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -104,7 +104,7 @@ protected:
     /* weight in a whole buffer case */
     BufferDesc m_weight;
 
-    /* weigh in split buffer case */
+    /* weight in split buffer case */
     std::vector<BufferDesc> m_weights;
 
     bool m_do_vcheck = true;

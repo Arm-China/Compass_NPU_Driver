@@ -8,7 +8,7 @@
 #include <linux/ioctl.h>
 
 /*
- * Zhouyi KMD currently supports Zhouyi Z1/Z2/Z3/X1/X2 AIPU hardwares.
+ * Zhouyi KMD currently supports Zhouyi aipu v1/v2/v3 hardwares.
  *
  * Structures defined in this header are shared by all hardware versions, but some fields
  * of the structs are specific to certain hardware version(s).
@@ -35,11 +35,11 @@ enum aipu_arch {
 
 /**
  * emum aipu_isa_version - AIPU ISA version number
- * @AIPU_ISA_VERSION_ZHOUYI_Z1: AIPU ISA version is Zhouyi Z1.
- * @AIPU_ISA_VERSION_ZHOUYI_Z2: AIPU ISA version is Zhouyi Z2.
- * @AIPU_ISA_VERSION_ZHOUYI_Z3: AIPU ISA version is Zhouyi Z3.
- * @AIPU_ISA_VERSION_ZHOUYI_X1: AIPU ISA version is Zhouyi X1.
- * @AIPU_ISA_VERSION_ZHOUYI_X2: AIPU ISA version is Zhouyi X2.
+ * @AIPU_ISA_VERSION_ZHOUYI_Z1: AIPU ISA version is Zhouyi aipu v1(Z1).
+ * @AIPU_ISA_VERSION_ZHOUYI_Z2: AIPU ISA version is Zhouyi aipu v2(Z2).
+ * @AIPU_ISA_VERSION_ZHOUYI_Z3: AIPU ISA version is Zhouyi aipu v2(Z3).
+ * @AIPU_ISA_VERSION_ZHOUYI_X1: AIPU ISA version is Zhouyi aipu v2(X1).
+ * @AIPU_ISA_VERSION_ZHOUYI_X2: AIPU ISA version is Zhouyi aipu v3(X2).
  *
  * Zhouyi architecture has multiple ISA versions released.
  * This enum is used to indicate the ISA version of an AIPU core in the system.
@@ -55,9 +55,9 @@ enum aipu_isa_version {
 /**
  * What is an AIPU partition?
  *
- *     For Z1/Z2/Z3/X1, a *partition* represents an AIPU core, and the partition count
+ *     For aipu v1/v2, a *partition* represents an AIPU core, and the partition count
  *         is the count of AIPU cores in current system.
- *     For X2, a *partition* represents a group of clusters in the same power/computation
+ *     For aipu v3, a *partition* represents a group of clusters in the same power/computation
  *         domain, and the partition count is the count of such cluster groups. All partitions
  *         share the same TSM and external register base address.
  */
@@ -68,18 +68,18 @@ enum aipu_isa_version {
  * @id:      [kmd] AIPU partition ID
  * @arch:    [kmd] Architecture number
  * @version: [kmd] ISA version number
- * @config:  [kmd][z1/z2/z3/x1 only] Configuration number
+ * @config:  [kmd][aipu v1/v2 only] Configuration number
  * @info:    [kmd] Debugging information
- * @cluster_cnt: [kmd][x2 only] Cluster count of this partition
- * @clusters:    [kmd][x2 only] Cluster capacity of this partition
+ * @cluster_cnt: [kmd][aipu v3 only] Cluster count of this partition
+ * @clusters:    [kmd][aipu v3 only] Cluster capacity of this partition
  *
  * For example,
- *    Z2-1104:
+ *    aipu v2(Z2-1104):
  *    arch == AIPU_ARCH_ZHOUYI (0)
  *    version == AIPU_ISA_VERSION_ZHOUYI_Z2 (2)
  *    config == 1104
  *
- *    X2:
+ *    aipu v3(X2):
  *    arch == AIPU_ARCH_ZHOUYI (0)
  *    version == AIPU_ISA_VERSION_ZHOUYI_X2 (5)
  *    config == 0, not applicable
@@ -107,22 +107,22 @@ struct aipu_partition_cap {
  * @asid1_base:     [kmd] ASID 1 base address
  * @asid2_base:     [kmd] ASID 2 base address
  * @asid3_base:     [kmd] ASID 3 base address
- * @dtcm_base:      [kmd][x1/x2] DTCM base address
- * @dtcm_size:      [kmd][x1/x2] DTCM size
- * @gm0_base:       [kmd][x2 only] GM region 0 base address (valid if gm0_size > 0)
- * @gm1_base:       [kmd][x2 only] GM region 1 base address (valid if gm1_size > 0)
- * @gm0_size:       [kmd][x2 only] GM region 0 size (in bytes)
- * @gm1_size:       [kmd][x2 only] GM region 1 size (in bytes)
+ * @dtcm_base:      [kmd][aipu v2(x1)/v3] DTCM base address
+ * @dtcm_size:      [kmd][aipu v2(x1)/v3] DTCM size
+ * @gm0_base:       [kmd][aipu v3 only] GM region 0 base address (valid if gm0_size > 0)
+ * @gm1_base:       [kmd][aipu v3 only] GM region 1 base address (valid if gm1_size > 0)
+ * @gm0_size:       [kmd][aipu v3 only] GM region 0 size (in bytes)
+ * @gm1_size:       [kmd][aipu v3 only] GM region 1 size (in bytes)
  * @partition_cap:  [kmd] Capability of the single AIPU partition
  *
- * For Z1/Z2/Z3/X1, AIPU driver supports the management of multiple AIPU cores.
+ * For aipu v1/v2, AIPU driver supports the management of multiple AIPU cores.
  * This struct is used to indicate the common capability of all AIPU core(s).
  * User mode driver should get this capability via AIPU_IOCTL_QUERY_CAP command.
  * If the core count is 1, the per-core capability is in the partition_cap member;
  * otherwise user mode driver should get all the per-core capabilities as the
  * partition_cnt indicates via AIPU_IOCTL_QUERY_PARTITION_CAP command.
  *
- * For X2, user mode driver should get the cluster counts by AIPU_IOCTL_QUERY_PARTITION_CAP
+ * For aipu v3, user mode driver should get the cluster counts by AIPU_IOCTL_QUERY_PARTITION_CAP
  * command if partition_cnt > 1.
  */
 struct aipu_cap {
@@ -149,7 +149,7 @@ struct aipu_cap {
  * @AIPU_MM_DATA_TYPE_STACK:  Stack
  * @AIPU_MM_DATA_TYPE_STATIC: Static data (weights)
  * @AIPU_MM_DATA_TYPE_REUSE:  Reuse data (feature maps)
- * @AIPU_MM_DATA_TYPE_TCB:    X2 TCB
+ * @AIPU_MM_DATA_TYPE_TCB:    aipu v3 TCB
  */
 enum aipu_mm_data_type {
 	AIPU_MM_DATA_TYPE_NONE,
@@ -163,10 +163,10 @@ enum aipu_mm_data_type {
 
 /**
  * enum aipu_buf_region - ASID regions
- * @AIPU_BUF_ASID_0: [z2/z3/x1/x2 only] ASID 0 region
- * @AIPU_BUF_ASID_1: [z2/z3/x1/x2 only] ASID 1 region
- * @AIPU_BUF_ASID_2: [z2/z3/x1/x2 only] ASID 2 region
- * @AIPU_BUF_ASID_3: [x2 only] ASID 3 region
+ * @AIPU_BUF_ASID_0: [aipu v2/v3 only] ASID 0 region
+ * @AIPU_BUF_ASID_1: [aipu v2/v3 only] ASID 1 region
+ * @AIPU_BUF_ASID_2: [aipu v2/v3 only] ASID 2 region
+ * @AIPU_BUF_ASID_3: [aipu v3 only] ASID 3 region
  */
 enum aipu_buf_region {
 	AIPU_BUF_ASID_0 = 0,
@@ -177,11 +177,11 @@ enum aipu_buf_region {
 
 /**
  * enum aipu_buf_region - buffer region type
- * @AIPU_BUF_DEFAULT:     [z1/z2/z3/x1/x2] default DDR region
- * @AIPU_BUF_REGION_SRAM: [z1/z2/z3/x1/x2] SRAM region
- * @AIPU_BUF_REGION_DTCM: [x1/x2] DTCM region
- * @AIPU_BUF_REGION_QOS_SLOW_GM: [x2 only] GM region
- * @AIPU_BUF_REGION_QOS_FAST_GM: [x2 only] GM region
+ * @AIPU_BUF_DEFAULT:     [aipu v1/v2/v3] default DDR region
+ * @AIPU_BUF_REGION_SRAM: [aipu v1/v2/v3] SRAM region
+ * @AIPU_BUF_REGION_DTCM: [aipu v2(x1)] DTCM region
+ * @AIPU_BUF_REGION_QOS_SLOW_GM: [aipu v3 only] GM region
+ * @AIPU_BUF_REGION_QOS_FAST_GM: [aipu v3 only] GM region
  */
 enum aipu_buf_region_type {
 	AIPU_BUF_REGION_DEFAULT     = 0,
@@ -216,7 +216,7 @@ struct aipu_buf_desc {
  * @align_in_page: [must] Buffer address alignment (must be a power of 2)
  * @data_type:     [must] Type of data in this buffer/Type of this buffer
  * @region:        [kmd] set to request a buffer in a default DDR region or a GM region
- * @asid:          [z2/z3/x1/x2 only, optional] from which region (ASID 0/1/2/3) to request the buffer
+ * @asid:          [aipu v2/v3 only, optional] from which region (ASID 0/1/2/3) to request the buffer
  * @desc:          [kmd]  Descriptor of the successfully allocated buffer
  */
 struct aipu_buf_request {
@@ -232,10 +232,10 @@ struct aipu_buf_request {
  * enum aipu_job_execution_flag - Flags for AIPU's executions
  * @AIPU_JOB_EXEC_FLAG_NONE:         No flag
  * @AIPU_JOB_EXEC_FLAG_SRAM_MUTEX:   The job uses SoC SRAM exclusively.
- * @AIPU_JOB_EXEC_FLAG_QOS_SLOW:     [x2 only] Quality of Service (QoS) slow
- * @AIPU_JOB_EXEC_FLAG_QOS_FAST:     [x2 only] QoS fast
- * @AIPU_JOB_EXEC_FLAG_SINGLE_GROUP: [x2 only] the scheduled job is a single group task
- * @AIPU_JOB_EXEC_FLAG_MULTI_GROUP:  [x2 only] the scheduled job is a multi-groups task
+ * @AIPU_JOB_EXEC_FLAG_QOS_SLOW:     [aipu v3 only] Quality of Service (QoS) slow
+ * @AIPU_JOB_EXEC_FLAG_QOS_FAST:     [aipu v3 only] QoS fast
+ * @AIPU_JOB_EXEC_FLAG_SINGLE_GROUP: [aipu v3 only] the scheduled job is a single group task
+ * @AIPU_JOB_EXEC_FLAG_MULTI_GROUP:  [aipu v3 only] the scheduled job is a multi-groups task
  */
 enum aipu_job_execution_flag {
 	AIPU_JOB_EXEC_FLAG_NONE         = 0,
@@ -248,27 +248,27 @@ enum aipu_job_execution_flag {
 
 /**
  * struct aipu_job_desc - Description of a job to be scheduled.
- * @is_defer_run:      [z1/z2/z3/x1 only, optional] Reserve an AIPU core for this job and defer the running of it
- * @version_compatible:[z1/z2/z3/x1 only, optional] Is this job compatible on AIPUs with different ISA version
- * @core_id:           [z1/z2/z3/x1 optional] ID of the core to reserve
- * @partition_id:      [x2 must] ID of the partition requested to schedule a job onto
- * @do_trigger:        [z1/z2/z3/x1 only, optional] Trigger the previously scheduled deferred job to run
+ * @is_defer_run:      [aipu v1/v2 only, optional] Reserve an AIPU core for this job and defer the running of it
+ * @version_compatible:[aipu v1/v2 only, optional] Is this job compatible on AIPUs with different ISA version
+ * @core_id:           [aipu v1/v2 optional] ID of the core to reserve
+ * @partition_id:      [aipu v3 must] ID of the partition requested to schedule a job onto
+ * @do_trigger:        [aipu v1/v2 only, optional] Trigger the previously scheduled deferred job to run
  * @aipu_arch:         [must] Target device architecture
  * @aipu_version:      [must] Target device ISA version
- * @aipu_config:       [z1/z2/z3/x1 only, must] Target device configuration
- * @start_pc_addr:     [z1/z2/z3/x1 only, must] Address of the start PC (buf_pa - asid_base)
- * @intr_handler_addr: [z1/z2/z3/x1 only, must] Address of the AIPU interrupt handler (buf_pa - asid_base)
- * @data_0_addr:       [z1/z2/z3/x1 only, must] Address of the 0th data buffer (buf_pa - asid_base)
- * @data_1_addr:       [z1/z2/z3/x1 only, must] Address of the 1th data buffer (buf_pa - asid_base)
- * @job_id:            [z1/z2/z3/x1 only, must] ID of this job
- * @enable_prof:       [z1/z2/z3/x1 only, optional] Enable performance profiling counters in SoC (if any)
- * @profile_fd:        [x2 only] Profile data file fd
- * @enable_poll_opt:   [z1/z2/z3/x1 only, optional] Enable optimizations for job status polling
+ * @aipu_config:       [aipu v1/v2 only, must] Target device configuration
+ * @start_pc_addr:     [aipu v1/v2 only, must] Address of the start PC (buf_pa - asid_base)
+ * @intr_handler_addr: [aipu v1/v2 only, must] Address of the AIPU interrupt handler (buf_pa - asid_base)
+ * @data_0_addr:       [aipu v1/v2 only, must] Address of the 0th data buffer (buf_pa - asid_base)
+ * @data_1_addr:       [aipu v1/v2 only, must] Address of the 1th data buffer (buf_pa - asid_base)
+ * @job_id:            [aipu v1/v2 only, must] ID of this job
+ * @enable_prof:       [aipu v1/v2 only, optional] Enable performance profiling counters in SoC (if any)
+ * @profile_fd:        [aipu v3 only] Profile data file fd
+ * @enable_poll_opt:   [aipu v1/v2 only, optional] Enable optimizations for job status polling
  * @exec_flag:         [optional] Combinations of execution flags
- * @dtcm_size_kb:      [x1 only, optional] DTCM size in KB
- * @head_tcb_pa:       [x2 only, must] base address of the head TCB of this job
- * @last_task_tcb_pa:  [x2 only, must] base address of the last task TCB of this job
- * @tail_tcb_pa:       [x2 only, must] base address of the tail TCB of this job
+ * @dtcm_size_kb:      [aipu v2(x1)only, optional] DTCM size in KB
+ * @head_tcb_pa:       [aipu v3 only, must] base address of the head TCB of this job
+ * @last_task_tcb_pa:  [aipu v3 only, must] base address of the last task TCB of this job
+ * @tail_tcb_pa:       [aipu v3 only, must] base address of the tail TCB of this job
  *
  * For fields is_defer_run/do_trigger/enable_prof/enable_asid/enable_poll_opt,
  * set them to be 1/0 to enable/disable the corresponding operations.
@@ -315,7 +315,7 @@ struct aipu_job_status_desc {
 #define AIPU_JOB_STATE_EXCEPTION 0x2
 	__u32 state;
 	struct aipu_ext_profiling_data {
-		__u64 tick_counter;      /* [kmd][x2 only] Value of the tick counter */
+		__u64 tick_counter;      /* [kmd][aipu v3 only] Value of the tick counter */
 		__s64 execution_time_ns; /* [kmd] Execution time */
 		__u32 rdata_tot_msb;     /* [kmd] Total read transactions (MSB) */
 		__u32 rdata_tot_lsb;     /* [kmd] Total read transactions (LSB) */
@@ -454,7 +454,7 @@ struct aipu_hw_status {
  *
  * @Description
  *
- * ioctl to kill a timeout job and clean it from kernel mode driver; works for Z1/Z2/Z2/X1 only.
+ * ioctl to kill a timeout job and clean it from kernel mode driver; works for aipu v1/v2 only.
  */
 #define AIPU_IOCTL_KILL_TIMEOUT_JOB _IOW(AIPU_IOCTL_MAGIC, 8, __u32)
 /**
@@ -462,7 +462,7 @@ struct aipu_hw_status {
  *
  * @Description
  *
- * ioctl to read/write an external register of an AIPU core; works for Z1/Z2/Z2/X1 only.
+ * ioctl to read/write an external register of an AIPU core; works for aipu v1/v2 only.
  */
 #define AIPU_IOCTL_REQ_IO _IOWR(AIPU_IOCTL_MAGIC, 9, struct aipu_io_req)
 /**
@@ -487,7 +487,7 @@ struct aipu_hw_status {
  *
  * @Description
  *
- * ioctl to disable X2 tick counter
+ * ioctl to disable aipu v3 tick counter
  *
  */
 #define AIPU_IOCTL_DISABLE_TICK_COUNTER _IO(AIPU_IOCTL_MAGIC, 12)
@@ -496,7 +496,7 @@ struct aipu_hw_status {
  *
  * @Description
  *
- * ioctl to enable X2 tick counter
+ * ioctl to enable aipu v3 tick counter
  *
  * by default, tick counter is disabled.
  */

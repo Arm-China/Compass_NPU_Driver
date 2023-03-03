@@ -1,37 +1,37 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 
 /**
- * @file  graph_legacy.cpp
- * @brief AIPU User Mode Driver (UMD) z1/2/3 legacy graph module implementation
+ * @file  graph_v1v2.cpp
+ * @brief AIPU User Mode Driver (UMD) aipu v1/v2 graph module implementation
  */
 
 #include <cstring>
 #include "context.h"
-#include "graph_legacy.h"
-#include "parser_legacy.h"
-#include "job_legacy.h"
+#include "graph_v1v2.h"
+#include "parser_v1v2.h"
+#include "job_v1v2.h"
 #include "utils/helper.h"
 #include "utils/log.h"
 
-aipudrv::GraphLegacy::GraphLegacy(void* ctx, GRAPH_ID id, DeviceBase* dev): Graph(ctx, id, dev)
+aipudrv::GraphV12::GraphV12(void* ctx, GRAPH_ID id, DeviceBase* dev): Graph(ctx, id, dev)
 {
-    m_parser = new ParserLegacy();
+    m_parser = new ParserV12();
 }
 
-aipudrv::GraphLegacy::~GraphLegacy()
+aipudrv::GraphV12::~GraphV12()
 {
     unload();
     delete m_parser;
 }
 
-aipu_status_t aipudrv::GraphLegacy::create_job(JOB_ID* id, const aipu_global_config_simulation_t* cfg,
+aipu_status_t aipudrv::GraphV12::create_job(JOB_ID* id, const aipu_global_config_simulation_t* cfg,
     aipu_global_config_hw_t *hw_cfg, aipu_create_job_cfg_t *config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    JobLegacy* job = new JobLegacy((MainContext*)m_ctx, *this, m_dev, config);
+    JobV12* job = new JobV12((MainContext*)m_ctx, *this, m_dev, config);
 
     ret = job->init(cfg, hw_cfg);
     if (AIPU_STATUS_SUCCESS != ret)
@@ -41,7 +41,7 @@ aipu_status_t aipudrv::GraphLegacy::create_job(JOB_ID* id, const aipu_global_con
     return ret;
 }
 
-aipu_status_t aipudrv::GraphLegacy::get_tensor_count(aipu_tensor_type_t type, uint32_t* cnt)
+aipu_status_t aipudrv::GraphV12::get_tensor_count(aipu_tensor_type_t type, uint32_t* cnt)
 {
     if (nullptr == cnt)
         return AIPU_STATUS_ERROR_NULL_PTR;
@@ -71,7 +71,7 @@ aipu_status_t aipudrv::GraphLegacy::get_tensor_count(aipu_tensor_type_t type, ui
     return AIPU_STATUS_SUCCESS;
 }
 
-aipu_status_t aipudrv::GraphLegacy::get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor, aipu_tensor_desc_t* desc)
+aipu_status_t aipudrv::GraphV12::get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor, aipu_tensor_desc_t* desc)
 {
     uint32_t cnt = 0;
     GraphIOTensorDesc io;
@@ -113,7 +113,7 @@ aipu_status_t aipudrv::GraphLegacy::get_tensor_descriptor(aipu_tensor_type_t typ
     return AIPU_STATUS_SUCCESS;
 }
 
-aipu_status_t aipudrv::GraphLegacy::assign_shared_tensor(aipu_tensor_type_t type,
+aipu_status_t aipudrv::GraphV12::assign_shared_tensor(aipu_tensor_type_t type,
     uint32_t tensor_idx, uint64_t shared_pa_addr)
 {
     std::vector<struct GraphIOTensorDesc> *iobuffer_vec = nullptr;

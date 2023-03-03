@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -23,17 +23,11 @@ namespace aipudrv
 #define ALIGN_ADDR(bytes) ((ALIGN_PAGE(bytes))/(4096))
 
 /**
- * Z1/2/3 legacy version: v0.5
- * X2 ELF version: v1.1
+ * aipu v1/v2 version: v0.5
+ * aipu v3 ELF version: v1.1
  */
 #define AIPU_LOADABLE_GRAPH_V0005     ((0 << 8) + 5)
 #define AIPU_LOADABLE_GRAPH_ELF_V0    ((1 << 8) + 1)
-
-#define AIPU_VERSION_ZHOUYI_V1        1
-#define AIPU_VERSION_ZHOUYI_V2        2
-#define AIPU_VERSION_ZHOUYI_V3        3
-#define AIPU_VERSION_ZHOUYI_X1        4
-#define AIPU_VERSION_ZHOUYI_X2        5
 
 struct BinHeaderTop {
     char     magic[16];

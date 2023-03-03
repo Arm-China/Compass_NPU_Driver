@@ -1,11 +1,11 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 
 /**
- * @file  parser_legacy.h
- * @brief AIPU User Mode Driver (UMD) legacy graph parser class header
+ * @file  parser_v1v2.h
+ * @brief AIPU User Mode Driver (UMD) aipu v1/v2 graph parser class header
  */
 
 #ifndef _PARSER_LEGACY_H_
@@ -19,7 +19,7 @@
 
 namespace aipudrv
 {
-struct LegacyHeaderBottom {
+struct HeaderBottomV12 {
     uint32_t entry;
     uint32_t text_offset;
     uint32_t text_size;
@@ -36,7 +36,7 @@ struct LegacyHeaderBottom {
     int8_t   extra_data[8];
 };
 
-struct LegacySectionDesc
+struct SectionDescV12
 {
     uint32_t offset;
     uint32_t size;
@@ -47,10 +47,10 @@ struct LegacySectionDesc
     }
 };
 
-class ParserLegacy: public ParserBase
+class ParserV12: public ParserBase
 {
 private:
-    std::vector<LegacySectionDesc> m_section_descs;
+    std::vector<SectionDescV12> m_section_descs;
     std::vector<BinSection> m_sections;
 
 private:
@@ -62,10 +62,10 @@ public:
     BinSection get_bin_section(SectionType type);
 
 public:
-    ParserLegacy(const ParserLegacy& parser) = delete;
-    ParserLegacy& operator=(const ParserLegacy& parser) = delete;
-    virtual ~ParserLegacy();
-    ParserLegacy();
+    ParserV12(const ParserV12& parser) = delete;
+    ParserV12& operator=(const ParserV12& parser) = delete;
+    virtual ~ParserV12();
+    ParserV12();
 };
 }
 

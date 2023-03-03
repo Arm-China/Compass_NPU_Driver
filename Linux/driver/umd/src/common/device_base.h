@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -75,17 +75,17 @@ struct JobDesc
     uint32_t aipu_revision;
     bool dump_reuse;
 
-    /* x2 only */
+    /* aipu v3 only */
     DEV_PA_64 tcb_head;
     DEV_PA_64 tcb_tail;
 
-    /* x2 simulation */
+    /* aipu v3 simulation */
     void *jobbase;
 
-    /* z1/2/3 only */
+    /* aipu v1/v2 only */
     DEV_PA_64 instruction_base_pa;
 
-    /* z1/2/3 simulation only */
+    /* aipu v1/v2 simulation only */
     uint32_t text_size;
     DEV_PA_64 weight_pa;
     uint32_t weight_size;

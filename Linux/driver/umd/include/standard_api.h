@@ -1,11 +1,11 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 
 /**
  * @file  standard_api.h
- * @brief Zhouyi AIPU User Mode Driver (UMD) Standard API header (for Z1/Z2/Z3/X1/X2)
+ * @brief Zhouyi AIPU User Mode Driver (UMD) Standard API header (for aipu v1/v2/v3)
  * @version 1.0
  */
 
@@ -116,7 +116,7 @@ typedef struct {
 
 typedef struct {
     /**
-     * data_dir is used as z1/2/3 simulation data file directory
+     * data_dir is used as aipu v1/v2 simulation data file directory
      */
     const char* data_dir;
 } aipu_job_config_simulation_t;
@@ -125,8 +125,8 @@ typedef struct {
  * @brief Simulation related configuration
  */
 typedef struct {
-    /* configure one or more simulator file name for z1/z2/z3/x1 */
-    /* set z[n]/x[n]_simulator to be NULL for x2 */
+    /* configure one or more simulator file name for aipu v1/v2 */
+    /* set z[n]/x[n]_simulator to be NULL for aipu v3 */
     /* log_level works for all simulator versions */
     const char* z1_simulator;
     const char* z2_simulator;
@@ -191,12 +191,12 @@ enum {
  * @brief config job's partition, qos(priority), feature map
  *        and weight buffer region on creating a job.
  * @note fm_mem_region
- *       if config feature buffer region for X1, just ignore partition_id & qos_level,
+ *       if config feature buffer region for aipu v1/v2, just ignore partition_id & qos_level,
  *       set them as 0 and only set fm_mem_region field.
  *       the buffer is allocated successfully only if there's enough space in
  *       region marked by `fm_mem_region`.
  * @note wt_mem_region
- *       if config weight buffer region for X1, just ignore partition_id & qos_level,
+ *       if config weight buffer region for aipu v1/v2, just ignore partition_id & qos_level,
  *       set them as 0 and only set fm_mem_region field.
  *       the buffer is allocated successfully only if there's enough space in
  *       region marked by `fm_mem_region`.
@@ -209,8 +209,8 @@ enum {
 typedef union aipu_create_job_cfg {
     uint32_t misc = 0;
     struct {
-        uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for X2 */
-        uint8_t qos_level:4;     /**< defalut 0, low priority, only for X2 */
+        uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for aipu v3 */
+        uint8_t qos_level:4;     /**< defalut 0, low priority, only for aipu v3 */
         uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
         uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
     };
@@ -449,7 +449,7 @@ aipu_status_t aipu_unload_graph(const aipu_ctx_handle_t* ctx, uint64_t graph);
  * @param[in]  graph  Graph ID returned by aipu_load_graph
  * @param[out] job    Pointer to a memory location allocated by application where UMD stores
  *                        the new created job ID
- * @param[in]  config Specify job's partition id and QoS level, only for X2.
+ * @param[in]  config Specify job's partition id and QoS level, only for aipu v3.
  *                        specify memory region for feature map and weight buffer
  *
  * @retval AIPU_STATUS_SUCCESS
@@ -680,7 +680,7 @@ aipu_status_t aipu_get_core_count(const aipu_ctx_handle_t* ctx, uint32_t partiti
  * @brief This API is used to get information of an AIPU core for debugger to use
  *
  * @param[in]  ctx     Pointer to a context handle struct returned by AIPU_init_ctx
- * @param[in]  id      core_id for Z1/Z2/Z3/X1, partition_id for X2
+ * @param[in]  id      core_id for aipu v1/v2, partition_id for aipu v3
  * @param[out] info    Pointer to a memory location allocated by application where UMD stores
  *                     the core information
  *
@@ -791,7 +791,7 @@ aipu_status_t aipu_debugger_free(const aipu_ctx_handle_t* ctx, void* va);
  * @retval AIPU_STATUS_ERROR_PRINTF_FAIL
  *
  * @note Application should get the printf log data via aipu_get_tensor before print it.
- *       Only support Z1/Z2/Z3/X1.
+ *       Only support aipu v1/v2.
  */
 aipu_status_t aipu_printf(char* printf_base, char* redirect_file);
 
@@ -815,7 +815,7 @@ aipu_status_t aipu_printf(char* printf_base, char* redirect_file);
  * @note The file descriptors should be allocated by another device driver, and indexed in
  *       tensor IDs' order in the fds array.
  * @note Applications should import all fds of the specified tensor type in one importing operation.
- * @note Zhouyi Z1/Z2/Z3 does not support this feature.
+ * @note AIPU v1/v2/v3 does not support this feature.
  * @note X86-simulation does not support this feature.
  */
 aipu_status_t aipu_import_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipu_tensor_type_t type, int* fds);
@@ -839,7 +839,7 @@ aipu_status_t aipu_import_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id,
  *
  * @note The file descriptors are allocated by NPU driver, and indexed in tensor IDs' order in the fds array.
  * @note Applications should allocate enough space for the fds pointer for all tensors of the specified type.
- * @note Zhouyi Z1/Z2/Z3 does not support this feature.
+ * @note AIPU v1/v2/v3 does not support this feature.
  * @note X86-simulation does not support this feature.
  */
 aipu_status_t aipu_export_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipu_tensor_type_t type, int* fds);
@@ -920,7 +920,7 @@ aipu_status_t aipu_clean_batch_queue(const aipu_ctx_handle_t *ctx, uint64_t grap
  * @retval AIPU_STATUS_ERROR_NO_BATCH_QUEUE
  *
  * @note
- *      For simulation on Z1/Z2/Z3/X1: has to set AIPU_CONFIG_TYPE_SIMULATION.
+ *      For simulation for aipu v1/v2: has to set AIPU_CONFIG_TYPE_SIMULATION.
  *      For dump: set dump options(AIPU_JOB_CONFIG_TYPE_DUMP_TEXT ...)
  */
 aipu_status_t aipu_config_batch_dump(const aipu_ctx_handle_t *ctx, uint64_t graph_id,

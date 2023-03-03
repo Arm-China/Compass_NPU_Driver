@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -41,12 +41,12 @@ void help(void)
 {
     std::string help_info =
         "usage: ./test -z/q/k/x sim -b aipu.bin -i input0.bin,input1.bin -c output.bin -d ./output [-l 0-3] [-v]\n"
-        "   -z/q/k/x: z1/2/3/X1 simulator path\n"
+        "   -z/q/k/x: Z1/Z2/Z3/X1 simulator path\n"
         "   -b: aipu.bin\n"
         "   -i: input bins\n"
         "   -c: output bin\n"
         "   -d: output data path\n"
-        "   -a: x2 arch (X2_1204/X2_1204MP3)\n"
+        "   -a: aipu v3 arch (X2_1204/X2_1204MP3)\n"
         "   -o: dump options for text/weight/in/out on board(hex form: ff)\n"
         "   -l: simulator log level(0-3)\n"
         "   -v: simulator verbose(0,1)\n";

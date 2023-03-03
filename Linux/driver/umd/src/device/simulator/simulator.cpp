@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -14,6 +14,7 @@
 #include "simulator.h"
 #include "parser_base.h"
 #include "utils/helper.h"
+#include "kmd/armchina_aipu.h"
 
 aipudrv::Simulator::Simulator()
 {
@@ -30,7 +31,7 @@ bool aipudrv::Simulator::has_target(uint32_t arch, uint32_t version, uint32_t co
 {
     aipu_partition_cap aipu_cap = {0};
 
-    if ((arch != 0) || (version > AIPU_VERSION_ZHOUYI_X1))
+    if ((arch != 0) || (version > AIPU_ISA_VERSION_ZHOUYI_X1))
         return false;
 
     aipu_cap.arch = arch;
@@ -168,7 +169,7 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
     /* init config file */
     if (job.aipu_revision == 0)
     {
-        bool is_x1 = (job.kdesc.aipu_version == AIPU_VERSION_ZHOUYI_X1);
+        bool is_x1 = (job.kdesc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_X1);
         if (is_x1)
             ofs << "CONFIG=X1-" << job.kdesc.aipu_config << "\n";
         else
@@ -192,10 +193,10 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
     ofs << "\n";
 
     /**
-     * for Z2/3/X1, set ASID 0/1;
+     * for aipu v2, set ASID 0/1;
      * if config UMD_ASID_ENABLE environment, set ASID 2/3 accordingly.
      */
-    if (job.kdesc.aipu_version != AIPU_VERSION_ZHOUYI_V1)
+    if (job.kdesc.aipu_version != AIPU_ISA_VERSION_ZHOUYI_Z1)
     {
         char *umd_asid_enable_env = getenv("UMD_ASID_ENABLE");
         std::map<std::string, bool> umd_asid_enable_map = {

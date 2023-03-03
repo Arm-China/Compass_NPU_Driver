@@ -1,11 +1,11 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 
 /**
- * @file  graph_legacy.h
- * @brief AIPU User Mode Driver (UMD) zhouyi v1/2/3 legacy graph module header
+ * @file  graph_v1v2.h
+ * @brief AIPU User Mode Driver (UMD) aipu v1/v2 graph module header
  */
 
 #ifndef _GRAPH_LEGACY_H_
@@ -20,7 +20,7 @@
 
 namespace aipudrv
 {
-class GraphLegacy: public Graph
+class GraphV12: public Graph
 {
 private:
     uint32_t m_entry = 0;
@@ -69,12 +69,12 @@ public:
     }
 
 public:
-    GraphLegacy(void* ctx, GRAPH_ID id, DeviceBase* dev);
-    virtual ~GraphLegacy();
-    GraphLegacy(const GraphLegacy& graph) = delete;
-    GraphLegacy& operator=(const GraphLegacy& graph) = delete;
+    GraphV12(void* ctx, GRAPH_ID id, DeviceBase* dev);
+    virtual ~GraphV12();
+    GraphV12(const GraphV12& graph) = delete;
+    GraphV12& operator=(const GraphV12& graph) = delete;
 
-    friend class JobLegacy;
+    friend class JobV12;
 };
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -44,7 +44,7 @@ private:
         /* SRAM memory region, this base is higher than DDR base default */
         { .base = 0, .size = 0 },
 
-        /* the base address for DTCM is fixed, currently only for X1 */
+        /* the base address for DTCM is fixed, currently only for aipu v2(X1) */
         { .base = 0xD0000000, .size = 8 * MB_SIZE },
 
         /* the base address for GM region0/1 are specified dynamicly */

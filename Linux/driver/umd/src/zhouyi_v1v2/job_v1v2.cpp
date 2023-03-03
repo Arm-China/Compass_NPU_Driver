@@ -1,18 +1,18 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 
 /**
- * @file  job_legacy.cpp
- * @brief AIPU User Mode Driver (UMD) legacy job module implementation
+ * @file  job_v1v2.cpp
+ * @brief AIPU User Mode Driver (UMD) aipu v1/v2 job module implementation
  */
 
 #include <cstring>
 #include <unistd.h>
-#include "job_legacy.h"
+#include "job_v1v2.h"
 
-aipudrv::JobLegacy::JobLegacy(MainContext* ctx, GraphBase& graph,
+aipudrv::JobV12::JobV12(MainContext* ctx, GraphBase& graph,
     DeviceBase* dev, aipu_create_job_cfg_t *config):
     JobBase(ctx, graph, dev)
 {
@@ -25,11 +25,11 @@ aipudrv::JobLegacy::JobLegacy(MainContext* ctx, GraphBase& graph,
     }
 }
 
-aipudrv::JobLegacy::~JobLegacy()
+aipudrv::JobV12::~JobV12()
 {
 }
 
-aipu_status_t aipudrv::JobLegacy::setup_rodata_legacy()
+aipu_status_t aipudrv::JobV12::setup_rodata_v12()
 {
     const std::vector<struct GraphParamMapLoadDesc>& param_map =
         get_graph().m_param_map;
@@ -37,7 +37,7 @@ aipu_status_t aipudrv::JobLegacy::setup_rodata_legacy()
     return setup_rodata(param_map, m_reuses, m_weights, m_rodata, m_descriptor);
 }
 
-aipu_status_t aipudrv::JobLegacy::init(const aipu_global_config_simulation_t* cfg,
+aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
     const aipu_global_config_hw_t* hw_cfg)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
@@ -49,10 +49,10 @@ aipu_status_t aipudrv::JobLegacy::init(const aipu_global_config_simulation_t* cf
     if (nullptr == cfg)
         return AIPU_STATUS_ERROR_INVALID_CONFIG;
 
-    if (((get_graph().m_hw_version == AIPU_VERSION_ZHOUYI_V1) && (cfg->z1_simulator == nullptr)) ||
-        ((get_graph().m_hw_version == AIPU_VERSION_ZHOUYI_V2) && (cfg->z2_simulator == nullptr)) ||
-        ((get_graph().m_hw_version == AIPU_VERSION_ZHOUYI_V3) && (cfg->z3_simulator == nullptr)) ||
-        ((get_graph().m_hw_version == AIPU_VERSION_ZHOUYI_X1) && (cfg->x1_simulator == nullptr)))
+    if (((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z1) && (cfg->z1_simulator == nullptr)) ||
+        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z2) && (cfg->z2_simulator == nullptr)) ||
+        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z3) && (cfg->z3_simulator == nullptr)) ||
+        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_X1) && (cfg->x1_simulator == nullptr)))
     {
         return AIPU_STATUS_ERROR_INVALID_CONFIG;
     }
@@ -136,7 +136,7 @@ aipu_status_t aipudrv::JobLegacy::init(const aipu_global_config_simulation_t* cf
     m_weights.assign(get_graph().m_weights.begin(), get_graph().m_weights.end());
 
     /* 6. update rodata & dcr */
-    ret = setup_rodata_legacy();
+    ret = setup_rodata_v12();
     if (AIPU_STATUS_SUCCESS != ret)
         goto finish;
 
@@ -167,7 +167,7 @@ finish:
     return ret;
 }
 
-aipu_status_t aipudrv::JobLegacy::free_job_buffers()
+aipu_status_t aipudrv::JobV12::free_job_buffers()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
@@ -202,7 +202,7 @@ aipu_status_t aipudrv::JobLegacy::free_job_buffers()
     return ret;
 }
 
-aipu_status_t aipudrv::JobLegacy::schedule()
+aipu_status_t aipudrv::JobV12::schedule()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     JobDesc desc;
@@ -233,7 +233,7 @@ aipu_status_t aipudrv::JobLegacy::schedule()
     /**
      * note: on simulation, it's true align_asid_pa == pa.
      */
-    if (get_graph().m_hw_version == AIPU_VERSION_ZHOUYI_V1)
+    if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z1)
     {
         desc.kdesc.start_pc_addr = m_spc;
         desc.kdesc.intr_handler_addr = m_intr_pc;
@@ -289,13 +289,13 @@ aipu_status_t aipudrv::JobLegacy::schedule()
         desc.misc_outputs[desc.output_dir + "/printf_data.bin"] = buf;
     }
 
-    if (get_graph().m_hw_version == AIPU_VERSION_ZHOUYI_V1)
+    if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z1)
         desc.simulator = m_z1_sim;
-    else if (get_graph().m_hw_version == AIPU_VERSION_ZHOUYI_V2)
+    else if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z2)
         desc.simulator = m_z2_sim;
-    else if (get_graph().m_hw_version == AIPU_VERSION_ZHOUYI_V3)
+    else if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z3)
         desc.simulator = m_z3_sim;
-    else if (get_graph().m_hw_version == AIPU_VERSION_ZHOUYI_X1)
+    else if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_X1)
         desc.simulator = m_x1_sim;
 
     if (m_log_path.length() != 0)
@@ -324,12 +324,12 @@ aipu_status_t aipudrv::JobLegacy::schedule()
     return ret;
 }
 
-aipu_status_t aipudrv::JobLegacy::destroy()
+aipu_status_t aipudrv::JobV12::destroy()
 {
     return free_job_buffers();
 }
 
-aipu_status_t aipudrv::JobLegacy::config_simulation(uint64_t types, const aipu_job_config_simulation_t* config)
+aipu_status_t aipudrv::JobV12::config_simulation(uint64_t types, const aipu_job_config_simulation_t* config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
@@ -347,7 +347,7 @@ aipu_status_t aipudrv::JobLegacy::config_simulation(uint64_t types, const aipu_j
     return ret;
 }
 
-aipu_status_t aipudrv::JobLegacy::bind_core(uint32_t core_id)
+aipu_status_t aipudrv::JobV12::bind_core(uint32_t core_id)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
@@ -365,7 +365,7 @@ aipu_status_t aipudrv::JobLegacy::bind_core(uint32_t core_id)
     return ret;
 }
 
-aipu_status_t aipudrv::JobLegacy::debugger_run()
+aipu_status_t aipudrv::JobV12::debugger_run()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     aipu_job_status_t status;

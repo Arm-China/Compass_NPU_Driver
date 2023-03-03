@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -118,7 +118,7 @@ aipu_status_t aipudrv::JobBase::get_tensor(aipu_tensor_type_t type, uint32_t ten
 {
     DEV_PA_64 pa = 0;
     uint64_t size = 0;
-    uint32_t isa = AIPU_VERSION_ZHOUYI_V1;
+    uint32_t isa = AIPU_ISA_VERSION_ZHOUYI_Z1;
     std::vector<struct JobIOBuffer> *iobuffer_vec = nullptr;
 
     if (nullptr == data)
@@ -145,7 +145,7 @@ aipu_status_t aipudrv::JobBase::get_tensor(aipu_tensor_type_t type, uint32_t ten
             break;
 
         case AIPU_TENSOR_TYPE_PRINTF:
-            if (isa == AIPU_VERSION_ZHOUYI_X2)
+            if (isa == AIPU_ISA_VERSION_ZHOUYI_X2)
             {
                 // Todo
             } else {
@@ -154,7 +154,7 @@ aipu_status_t aipudrv::JobBase::get_tensor(aipu_tensor_type_t type, uint32_t ten
             break;
 
         case AIPU_TENSOR_TYPE_PROFILER:
-            // if (isa == AIPU_VERSION_ZHOUYI_X2)
+            // if (isa == AIPU_ISA_VERSION_ZHOUYI_X2)
             // {
             //     std::string profile_file_name = m_dump_dir + "/" + m_dump_misc_prefix + "_PerfData.bin";
             //     LOG(LOG_ALERT, "check dump file: %s\n", profile_file_name.c_str());

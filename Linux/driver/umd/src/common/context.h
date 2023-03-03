@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -55,7 +55,7 @@ public:
     static const char* get_static_msg(aipu_status_t err);
 
 public:
-    /* x2 core APIs */
+    /* aipu v3 core APIs */
     aipu_status_t init();
     void force_deinit();
     aipu_status_t deinit();

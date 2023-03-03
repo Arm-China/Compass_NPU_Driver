@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -110,7 +110,7 @@ aipu_ll_status_t aipudrv::Aipu::init()
         m_partition_cnt = 0;
         m_cluster_cnt = 0;
 
-        /* indicate core count for Z1/2/3/X1 */
+        /* indicate core count for aipu v1/v2 */
         m_core_cnt = cap.partition_cnt;
     } else {
         m_partition_cnt = cap.partition_cnt;

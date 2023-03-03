@@ -1,11 +1,11 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 
 /**
  * @file  simulator_v3.h
- * @brief AIPU User Mode Driver (UMD) zhouyi x2 simulator module header
+ * @brief AIPU User Mode Driver (UMD) zhouyi aipu v3 simulator module header
  */
 
 #ifndef _SIMULATOR_V3_H_
@@ -256,7 +256,7 @@ private:
                 part_idx = 0;
         }
 
-        /* currently the X2 simulation only for one partition, one cluster in partition */
+        /* currently the aipu v3 simulation only for one partition, one cluster in partition */
         for (uint32_t part = 0; part < m_max_partition_cnt; part++)
         {
             uint32_t cluster_cnt = cluster_num_in_part[part];

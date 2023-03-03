@@ -1,11 +1,11 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 
 /**
  * @file  job_v3.cpp
- * @brief AIPU User Mode Driver (UMD) x2 job module implementation
+ * @brief AIPU User Mode Driver (UMD) aipu v3 job module implementation
  */
 
 #include <cstring>
@@ -887,7 +887,7 @@ aipu_status_t aipudrv::JobV3::schedule()
 
     memset(&desc.kdesc, 0, sizeof(desc.kdesc));
 
-    /* for X2 simulation */
+    /* for simulation */
     desc.kdesc.job_id = m_id;
     desc.kdesc.version_compatible = !get_graph().m_do_vcheck;
     desc.kdesc.aipu_config = get_graph().m_hw_config;
@@ -895,7 +895,7 @@ aipu_status_t aipudrv::JobV3::schedule()
     desc.tcb_head = m_init_tcb.pa;
     desc.tcb_tail = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa;
 
-    /* for X2 HW */
+    /* for HW */
     desc.kdesc.exec_flag = (m_qos == AIPU_JOB_QOS_HIGH)
         ? AIPU_JOB_EXEC_FLAG_QOS_FAST : AIPU_JOB_EXEC_FLAG_QOS_SLOW;
     desc.kdesc.exec_flag |= (m_sg_cnt == 1)
@@ -923,7 +923,7 @@ aipu_status_t aipudrv::JobV3::schedule()
     desc.kdesc.last_task_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa;
     desc.kdesc.tail_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa;
 
-    /* for X2 HW and Simulation if need syncing from GM to DDR */
+    /* for HW and Simulation if need syncing from GM to DDR */
     if (m_gm->gm_need_sync_out())
     {
         desc.tcb_tail = m_init_tcb.pa + sizeof(tcb_t) * (m_tot_tcb_cnt - 1);

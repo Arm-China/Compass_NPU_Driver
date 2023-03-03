@@ -1,4 +1,4 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -25,9 +25,8 @@ aipudrv::UMemory::UMemory(): MemoryBase(), sim_aipu::IMemEngine()
 
     /**
      * DTCM size: 1, 2, 4, 8, 16, 32(MB)
-     * Z1/Z2/Z3: no DTCM
-     * X1: support
-     * X2: current non-support
+     * aipu v2(X1): support
+     * other aipu version: current non-support
      */
     const char *dtcm_sz = getenv("UMD_DTCM_SZ");
     if (dtcm_sz != nullptr)
@@ -45,8 +44,8 @@ aipudrv::UMemory::UMemory(): MemoryBase(), sim_aipu::IMemEngine()
 
     /**
      * default mem region config
-     * Z1/2/3/X1: no GM
-     * X2: default 4MB
+     * aipu v3: default 4MB
+     * other aipu version: no GM
      */
     for (int i = 0; i < MME_REGION_MAX; i++)
     {

@@ -1,11 +1,11 @@
-// Copyright (C) 2022 Arm Technology (China) Co. Ltd. All rights reserved.
+// Copyright (C) 2022-2023 Arm Technology (China) Co. Ltd. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 
 /**
  * @file  graph_v3.h
- * @brief AIPU User Mode Driver (UMD) x2 graph module header
+ * @brief AIPU User Mode Driver (UMD) aipu v3 graph module header
  */
 
 #ifndef _GRAPH_V3_H_
