@@ -178,9 +178,9 @@ enum aipu_buf_region {
 
 /**
  * enum aipu_buf_region - buffer region type
- * @AIPU_BUF_DEFAULT:     [aipu v1/v2/v3] default DDR region
- * @AIPU_BUF_REGION_SRAM: [aipu v1/v2/v3] SRAM region
- * @AIPU_BUF_REGION_DTCM: [aipu v2(x1)] DTCM region
+ * @AIPU_BUF_REGION_DEFAULT:     [aipu v1/v2/v3] default DDR region
+ * @AIPU_BUF_REGION_SRAM:        [aipu v1/v2/v3] SRAM region
+ * @AIPU_BUF_REGION_DTCM:        [aipu v2(x1)] DTCM region
  * @AIPU_BUF_REGION_QOS_SLOW_GM: [aipu v3 only] GM region
  * @AIPU_BUF_REGION_QOS_FAST_GM: [aipu v3 only] GM region
  */
@@ -217,7 +217,7 @@ struct aipu_buf_desc {
  * @align_in_page: [must] Buffer address alignment (must be a power of 2)
  * @data_type:     [must] Type of data in this buffer/Type of this buffer
  * @region:        [kmd] set to request a buffer in a default DDR region or a GM region
- * @asid:          [aipu v2/v3 only, optional] from which region (ASID 0/1/2/3) to request the buffer
+ * @asid:          [aipu v2/v3 only, optional] from which region (ASID 0/1/2/3) to request
  * @desc:          [kmd]  Descriptor of the successfully allocated buffer
  */
 struct aipu_buf_request {
@@ -249,20 +249,22 @@ enum aipu_job_execution_flag {
 
 /**
  * struct aipu_job_desc - Description of a job to be scheduled.
- * @is_defer_run:      [aipu v1/v2 only, optional] Reserve an AIPU core for this job and defer the running of it
- * @version_compatible:[aipu v1/v2 only, optional] Is this job compatible on AIPUs with different ISA version
+ * @is_defer_run:      [aipu v1/v2 only, optional] Reserve a core for this job and defer to run
+ * @version_compatible:[aipu v1/v2 only, optional] Is this job compatible on different ISA versions
  * @core_id:           [aipu v1/v2 optional] ID of the core to reserve
  * @partition_id:      [aipu v3 must] ID of the partition requested to schedule a job onto
- * @do_trigger:        [aipu v1/v2 only, optional] Trigger the previously scheduled deferred job to run
+ * @do_trigger:        [aipu v1/v2 only, optional] Trigger the deferred job to run
  * @aipu_arch:         [must] Target device architecture
  * @aipu_version:      [must] Target device ISA version
  * @aipu_config:       [aipu v1/v2 only, must] Target device configuration
  * @start_pc_addr:     [aipu v1/v2 only, must] Address of the start PC (buf_pa - asid_base)
- * @intr_handler_addr: [aipu v1/v2 only, must] Address of the AIPU interrupt handler (buf_pa - asid_base)
+ * @intr_handler_addr: [aipu v1/v2 only, must] Address of the interrupt handler (pa - asid_base)
  * @data_0_addr:       [aipu v1/v2 only, must] Address of the 0th data buffer (buf_pa - asid_base)
  * @data_1_addr:       [aipu v1/v2 only, must] Address of the 1th data buffer (buf_pa - asid_base)
  * @job_id:            [aipu v1/v2 only, must] ID of this job
- * @enable_prof:       [aipu v1/v2 only, optional] Enable performance profiling counters in SoC (if any)
+ * @enable_prof:       [aipu v1/v2 only, optional] Enable performance profiling counters in SoC
+ * @profile_pa:        [optional] Physical address of the profiler buffer
+ * @profile_sz:        [optional] Size of the profiler buffer (should be 0 if no such a buffer)
  * @profile_fd:        [aipu v3 only] Profile data file fd
  * @enable_poll_opt:   [aipu v1/v2 only, optional] Enable optimizations for job status polling
  * @exec_flag:         [optional] Combinations of execution flags
@@ -391,7 +393,7 @@ struct aipu_hw_status {
  *
  * ioctl to query the capability of an AIPU partition
  *
- * User mode driver only need to call this when the partition count returned by AIPU_IOCTL_QUERYCAP > 1.
+ * UMD only need to call this when the partition count returned by AIPU_IOCTL_QUERYCAP > 1.
  */
 #define AIPU_IOCTL_QUERY_PARTITION_CAP _IOR(AIPU_IOCTL_MAGIC, 1, struct aipu_partition_cap)
 /**

@@ -48,12 +48,14 @@ static int init_aipu_partition(struct aipu_partition *partition, u32 *clusters, 
 			partition->clusters[cluster_cnt - 1].core_cnt = GET_AIPU_CORE_NUM(val);
 			partition->clusters[cluster_cnt - 1].tec_cnt = GET_TEC_NUM(val);
 
-			aipu_write32(partition->reg, DEBUG_PAGE_SELECTION_REG, SELECT_DEBUG_CORE(0, 0));
+			aipu_write32(partition->reg, DEBUG_PAGE_SELECTION_REG,
+				     SELECT_DEBUG_CORE(0, 0));
 			partition->clusters[cluster_cnt - 1].gm_bytes =
-				GET_GM_SIZE(aipu_read32(partition->reg, DEBUG_CLUSTER_GM_CONTROL));
+				get_gm_size(aipu_read32(partition->reg, DEBUG_CLUSTER_GM_CONTROL));
 			aipu_write32(partition->reg, DEBUG_PAGE_SELECTION_REG, DISABLE_DEBUG);
-			ret = aipu_mm_init_gm(&partition->priv->mm, partition->clusters[cluster_cnt - 1].gm_bytes,
-					 partition->clusters[cluster_cnt - 1].id);
+			ret = aipu_mm_init_gm(&partition->priv->mm,
+					      partition->clusters[cluster_cnt - 1].gm_bytes,
+					      partition->clusters[cluster_cnt - 1].id);
 		}
 	}
 
@@ -61,9 +63,9 @@ static int init_aipu_partition(struct aipu_partition *partition, u32 *clusters, 
 	partition->ops->initialize(partition);
 
 #ifdef CONFIG_SYSFS
-	if (IS_ERR(aipu_common_create_attr(partition->dev, &partition->reg_attr, "ext_registers", 0644,
-					 aipu_common_ext_register_sysfs_show,
-					 aipu_common_ext_register_sysfs_store)))
+	if (IS_ERR(aipu_common_create_attr(partition->dev, &partition->reg_attr, "ext_registers",
+					   0644, aipu_common_ext_register_sysfs_show,
+					   aipu_common_ext_register_sysfs_store)))
 		dev_err(partition->dev, "[init_partition] init sysfs <ext_registers> failed");
 #endif
 
@@ -94,7 +96,7 @@ static struct aipu_partition *x2_create_partitions(struct aipu_priv *aipu,
 
 	/* Get cluster count and partition count */
 	/*
-	 * Cluster-partition attribute shoule be in the following format:
+	 * Cluster-partition attribute should be in the following format:
 	 *	cluster-partition = <cluster_id0 partition_idx>, <cluster_id1 partition_idy>,
 	 *			    <cluster_id2 partition_idz>, ...;
 	 * Both ids of clusters and partitions should be u32 numbered as 0, 1, 2, 3, ...
@@ -149,13 +151,13 @@ static struct aipu_partition *x2_create_partitions(struct aipu_priv *aipu,
 	/* check if clusters are all present after reg init */
 	for (iter = 0; iter < cluster_cnt; iter++) {
 		if (!IS_CLUSTER_PRESENT(aipu_read32(&aipu->reg, CLUSTER_CONFIG_REG(iter)))) {
-			dev_err(&p_dev->dev, "AIPU cluster #%d was not found but registered in dts\n", iter);
+			dev_err(&p_dev->dev,
+				"AIPU cluster #%d was not found but registered in dts\n", iter);
 			return ERR_PTR(-EINVAL);
 		}
 	}
 
-	for (iter = 0; iter < partition_cnt; iter++)
-	{
+	for (iter = 0; iter < partition_cnt; iter++) {
 		partitions[iter].id = iter;
 		partitions[iter].priv = aipu;
 		partitions[iter].version = version;
@@ -167,7 +169,8 @@ static struct aipu_partition *x2_create_partitions(struct aipu_priv *aipu,
 	aipu->partitions = partitions;
 	aipu->partition_cnt = partition_cnt;
 	aipu->cluster_cnt = cluster_cnt;
-	aipu_job_manager_set_partitions_info(&aipu->job_manager, aipu->partition_cnt, aipu->partitions);
+	aipu_job_manager_set_partitions_info(&aipu->job_manager, aipu->partition_cnt,
+					     aipu->partitions);
 	partitions[0].ops->print_hw_id_info(&partitions[0]);
 	goto finish;
 
@@ -201,7 +204,8 @@ static void x2_destroy_partitions(struct aipu_priv *aipu)
 		aipu->reg.size = 0;
 		aipu_mm_deinit_gm(&aipu->mm);
 		for (i = 0; i < aipu->partition_cnt; i++)
-			aipu_common_destroy_attr(aipu->partitions[i].dev, &aipu->partitions[i].reg_attr);
+			aipu_common_destroy_attr(aipu->partitions[i].dev,
+						 &aipu->partitions[i].reg_attr);
 	}
 }
 

@@ -169,7 +169,7 @@ int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_m
 			  void *priv);
 void deinit_aipu_job_manager(struct aipu_job_manager *manager);
 void aipu_job_manager_set_partitions_info(struct aipu_job_manager *manager, int partition_cnt,
-				     struct aipu_partition *partitions);
+					  struct aipu_partition *partitions);
 int aipu_job_manager_scheduler(struct aipu_job_manager *manager, struct aipu_job_desc *user_job,
 			       struct file *filp);
 void aipu_job_manager_irq_upper_half(struct aipu_partition *core, int exception_flag,

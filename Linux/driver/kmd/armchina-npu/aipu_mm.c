@@ -45,7 +45,8 @@ err:
 	return NULL;
 }
 
-static unsigned long pa_to_bitmap_no(struct aipu_memory_manager *mm, struct aipu_mem_region *reg, u64 pa)
+static unsigned long pa_to_bitmap_no(struct aipu_memory_manager *mm, struct aipu_mem_region *reg,
+				     u64 pa)
 {
 	return (pa + reg->host_aipu_offset - reg->base_iova) >> PAGE_SHIFT;
 }
@@ -78,8 +79,8 @@ static struct tcb_buf *create_tcb_buf(struct aipu_memory_manager *mm)
 	return tcb;
 }
 
-static int aipu_mm_init_mem_region(struct aipu_memory_manager *mm, struct aipu_mem_region *reg, u32 idx,
-				   enum aipu_mem_region_type type, bool reserved)
+static int aipu_mm_init_mem_region(struct aipu_memory_manager *mm, struct aipu_mem_region *reg,
+				   u32 idx, enum aipu_mem_region_type type, bool reserved)
 {
 	int ret = 0;
 	void *va = NULL;
@@ -93,8 +94,7 @@ static int aipu_mm_init_mem_region(struct aipu_memory_manager *mm, struct aipu_m
 		return -EINVAL;
 	}
 
-	if (!reserved &&
-	    (type = AIPU_MEM_REGION_TYPE_SRAM || type == AIPU_MEM_REGION_TYPE_DTCM)) {
+	if (!reserved && (type == AIPU_MEM_REGION_TYPE_SRAM || type == AIPU_MEM_REGION_TYPE_DTCM)) {
 		dev_err(mm->dev, "to init a SRAM/DTCM region, you should reserve it: %d\n", type);
 		return -EINVAL;
 	}
@@ -136,7 +136,7 @@ static int aipu_mm_init_mem_region(struct aipu_memory_manager *mm, struct aipu_m
 	/* get memory from system in init stage if the flag is enabled */
 	if (AIPU_CONFIG_ENABLE_MEM_MANAGEMENT) {
 		if (!reserved && AIPU_CONFIG_USE_DEFAULT_MEM_SIZE == 1 &&
-		    AIPU_CONFIG_DEFAULT_MEM_SIZE < reg->bytes)
+		    reg->bytes > AIPU_CONFIG_DEFAULT_MEM_SIZE)
 			reg->bytes = AIPU_CONFIG_DEFAULT_MEM_SIZE;
 
 		va = dma_alloc_attrs(reg->dev, reg->bytes, &reg->base_iova, GFP_KERNEL, reg->attrs);
@@ -218,7 +218,8 @@ static void aipu_mm_deinit_mem_region(struct aipu_memory_manager *mm, struct aip
 	reg->base_va = NULL;
 }
 
-static int get_free_bitmap_no(struct aipu_memory_manager *mm, struct aipu_mem_region *reg, struct aipu_buf_request *buf_req)
+static int get_free_bitmap_no(struct aipu_memory_manager *mm, struct aipu_mem_region *reg,
+			      struct aipu_buf_request *buf_req)
 {
 	unsigned long alloc_nr = ALIGN(buf_req->bytes, PAGE_SIZE) >> PAGE_SHIFT;
 	unsigned long align_order = order_base_2(buf_req->align_in_page);
@@ -237,20 +238,23 @@ static int get_free_bitmap_no(struct aipu_memory_manager *mm, struct aipu_mem_re
 	return bitmap_find_next_zero_area_off(reg->bitmap, count, start, alloc_nr, mask, offset);
 }
 
-static u64 get_gm_base(struct aipu_memory_manager *mm, struct aipu_mem_region *gm, struct aipu_buf_request *buf_req)
+static u64 get_gm_base(struct aipu_memory_manager *mm, struct aipu_mem_region *gm,
+		       struct aipu_buf_request *buf_req)
 {
 	u64 gm_base = gm->base_iova - gm->host_aipu_offset;
 
 	if (gm->qos == AIPU_GM_QOS_NONE)
 		return 0;
 
-	if (mm->gm_policy == AIPU_GM_POLICY_HALF_DIVIDED && buf_req->region == AIPU_BUF_REGION_QOS_FAST_GM)
+	if (mm->gm_policy == AIPU_GM_POLICY_HALF_DIVIDED &&
+	    buf_req->region == AIPU_BUF_REGION_QOS_FAST_GM)
 		gm_base += (gm->bytes >> 1);
 
 	return gm_base;
 }
 
-static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_req,
+static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
+					   struct aipu_buf_request *buf_req,
 					   struct aipu_mem_region *reg, struct file *filp,
 					   struct tcb_buf **tcb_alloc)
 {
@@ -282,7 +286,8 @@ static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm, struc
 	reg->pages[bitmap_no]->locked = true;
 	reg->pages[bitmap_no]->tcb = NULL;
 
-	buf_req->desc.dev_offset = reg->base_iova + (bitmap_no << PAGE_SHIFT) - reg->host_aipu_offset;
+	buf_req->desc.dev_offset = reg->base_iova + (bitmap_no << PAGE_SHIFT) -
+		reg->host_aipu_offset;
 	buf_req->desc.pa = buf_req->desc.dev_offset;
 	buf_req->desc.bytes = alloc_nr * PAGE_SIZE;
 	buf_req->desc.asid = AIPU_BUF_ASID_0;
@@ -335,13 +340,16 @@ static int aipu_mm_free_in_region_no_lock(struct aipu_memory_manager *mm, struct
 
 	bitmap_no = pa_to_bitmap_no(mm, reg, buf->pa);
 	if (bitmap_no >= reg->count) {
-		dev_err(reg->dev, "free in region failed: no such an allocated buffer: pa 0x%llx", buf->pa);
+		dev_err(reg->dev,
+			"free in region failed: no such an allocated buffer: pa 0x%llx",
+			buf->pa);
 		return -EINVAL;
 	}
 
 	page = reg->pages[bitmap_no];
 	if (!page) {
-		dev_err(reg->dev, "free in region failed: null page at bitmap_no 0x%lu", bitmap_no);
+		dev_err(reg->dev, "free in region failed: null page at bitmap_no %lu",
+			bitmap_no);
 		return -EINVAL;
 	}
 
@@ -376,13 +384,15 @@ static int aipu_mm_free_in_region_no_lock(struct aipu_memory_manager *mm, struct
 	return 0;
 }
 
-static struct aipu_mem_region *aipu_mm_find_region(struct aipu_memory_manager *mm, u64 iova, char *log_str)
+static struct aipu_mem_region *aipu_mm_find_region(struct aipu_memory_manager *mm, u64 iova,
+						   char *log_str)
 {
 	int type;
 	struct aipu_mem_region *reg = NULL;
 
 	for (type = AIPU_MEM_REGION_TYPE_MEMORY; type < AIPU_MEM_REGION_TYPE_MAX; type++) {
 		u64 internal = iova + mm->mem[type].offset;
+
 		list_for_each_entry(reg, &mm->mem[type].reg->list, list) {
 			if (internal >= reg->base_iova && (internal < reg->base_iova + reg->bytes))
 				return reg;
@@ -446,7 +456,7 @@ static struct aipu_virt_page *aipu_mm_find_page(struct aipu_memory_manager *mm,
 }
 
 static ssize_t aipu_gm_policy_sysfs_show(struct device *dev, struct device_attribute *attr,
-					    char *buf)
+					 char *buf)
 {
 	struct platform_device *p_dev = container_of(dev, struct platform_device, dev);
 	struct aipu_partition *partition = platform_get_drvdata(p_dev);
@@ -457,7 +467,7 @@ static ssize_t aipu_gm_policy_sysfs_show(struct device *dev, struct device_attri
 				AIPU_GM_POLICY_SHARED);
 	} else if (mm->gm_policy == AIPU_GM_POLICY_HALF_DIVIDED) {
 		return snprintf(buf, 128,
-				"[%d] AIPU GM is divided half-by-half for QoS slow & fast tasks, respectively.\n",
+				"[%d] GM is divided half-by-half for QoS slow & fast tasks.\n",
 				AIPU_GM_POLICY_HALF_DIVIDED);
 	}
 
@@ -466,7 +476,7 @@ static ssize_t aipu_gm_policy_sysfs_show(struct device *dev, struct device_attri
 }
 
 static ssize_t aipu_gm_policy_sysfs_store(struct device *dev, struct device_attribute *attr,
-					     const char *buf, size_t count)
+					  const char *buf, size_t count)
 {
 	struct platform_device *p_dev = container_of(dev, struct platform_device, dev);
 	struct aipu_partition *partition = platform_get_drvdata(p_dev);
@@ -480,7 +490,7 @@ static ssize_t aipu_gm_policy_sysfs_store(struct device *dev, struct device_attr
 	else if ((strncmp(buf, "2", 1) == 0))
 		mm->gm_policy = AIPU_GM_POLICY_HALF_DIVIDED;
 	else
-		dev_err(mm->dev, "[sysfs] invalid AIPU GM policy: you should set gm_policy to be 0/1/2");
+		dev_err(mm->dev, "[sysfs] invalid GM policy: gm_policy should be 0/1/2");
 	mutex_unlock(&mm->lock);
 
 	return count;
@@ -496,11 +506,11 @@ static int aipu_mm_create_region(struct aipu_memory_manager *mm, struct aipu_mem
 		return -EINVAL;
 
 	/* for the same memory position, AIPU & host CPU may use different addresses to access:
-	        aipu_access_addr = host_access_addr - offset
-	   if offset == 0, AIPU & host CPU use the same address to access a memory position.
-	*/
+	 *     aipu_access_addr = host_access_addr - offset
+	 * if offset == 0, AIPU & host CPU use the same address to access a memory position.
+	 */
 	if (offset > addr) {
-		dev_err(mm->dev, "invalid memory base address (0x%llx) or host-aipu-offset (0x%llx)\n",
+		dev_err(mm->dev, "invalid memory base pa (0x%llx) or host-aipu-offset (0x%llx)\n",
 			addr, offset);
 		return -EINVAL;
 	}
@@ -623,7 +633,7 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	 *
 	 * where POLICY_NO should be one of the following values:
 	 * 0: no GM;
-	 * 1: GM is shared by all tasks in one cluster (by default if you do not provide this attribute)
+	 * 1: GM is shared by all tasks in 1 cluster (by default if this attribute is not provided)
 	 * 2: GM is divided half-by-half: for QoS slow & fast tasks, respectively
 	 */
 	if (version == AIPU_ISA_VERSION_ZHOUYI_X2) {
@@ -664,6 +674,7 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	 */
 	while (idx < AIPU_CONFIG_MAX_RESERVED_REGIONS) {
 		u64 size = 0;
+
 		np = of_parse_phandle(mm->dev->of_node, "memory-region", idx);
 		if (!np)
 			break;
@@ -701,7 +712,8 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 
 		size = res.end - res.start + 1;
 		if (type == AIPU_MEM_REGION_TYPE_DTCM && size > ZHOUYI_X1_DTCM_MAX_BYTES) {
-			dev_info(mm->dev, "the DTCM size will be clipped to the maximum configurable value\n");
+			dev_info(mm->dev,
+				 "the DTCM will be clipped to the maximum configurable value\n");
 			size = ZHOUYI_X1_DTCM_MAX_BYTES;
 		}
 
@@ -721,12 +733,14 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 			continue;
 		}
 
-		ret = aipu_mm_create_region(mm, &mm->mem[type], res.start, size, host_aipu_offset, idx);
+		ret = aipu_mm_create_region(mm, &mm->mem[type], res.start, size,
+					    host_aipu_offset, idx);
 		if (ret)
 			goto err;
 
 		if (type == AIPU_MEM_REGION_TYPE_MEMORY || type == AIPU_MEM_REGION_TYPE_SRAM) {
 			u64 asid_base = ((res.start - host_aipu_offset) >> 32) << 32;
+
 			if (!mm->asid_base) {
 				mm->asid_base = asid_base;
 			} else {
@@ -808,12 +822,14 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 	if (mm->soc_ops && mm->soc_ops->malloc)
 		return mm->soc_ops->malloc(mm->dev, mm->soc, buf_req);
 
-	if (buf_req->region == AIPU_BUF_REGION_QOS_SLOW_GM || buf_req->region == AIPU_BUF_REGION_QOS_FAST_GM)
+	if (buf_req->region == AIPU_BUF_REGION_QOS_SLOW_GM ||
+	    buf_req->region == AIPU_BUF_REGION_QOS_FAST_GM) {
 		type = AIPU_MEM_REGION_TYPE_GM;
-	else if (buf_req->region < AIPU_MEM_REGION_TYPE_MAX)
+	} else if (buf_req->region < AIPU_MEM_REGION_TYPE_MAX) {
 		type = buf_req->region;
-	else {
-		dev_err(mm->dev, "[malloc] invalid alloc request: region type %d", buf_req->region);
+	} else {
+		dev_err(mm->dev, "[malloc] invalid alloc request: region type %d",
+			buf_req->region);
 		return -EINVAL;
 	}
 
@@ -840,7 +856,8 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 
 	/* try to allocate from memory regions if SRAM/DTCM/GM has no free buffer */
 	if (ret && type != AIPU_MEM_REGION_TYPE_MEMORY) {
-		dev_info(mm->dev, "[malloc] mm allocate region type %d failed, fall back to memory regions\n", type);
+		dev_info(mm->dev,
+			 "mm allocate region type %d failed, fall back to memory regions\n", type);
 		list_for_each_entry(reg, &mm->mem[AIPU_MEM_REGION_TYPE_MEMORY].reg->list, list) {
 			ret = aipu_mm_alloc_in_region_no_lock(mm, buf_req, reg, filp, &tcb);
 			if (!ret)
@@ -907,7 +924,7 @@ int aipu_mm_free(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf, stru
 	return ret;
 }
 
-char* aipu_mm_get_va(struct aipu_memory_manager *mm, u64 dev_pa)
+char *aipu_mm_get_va(struct aipu_memory_manager *mm, u64 dev_pa)
 {
 	struct aipu_mem_region *reg = NULL;
 
@@ -918,7 +935,8 @@ char* aipu_mm_get_va(struct aipu_memory_manager *mm, u64 dev_pa)
 	if (!reg)
 		return NULL;
 
-	return (char*)((unsigned long)reg->base_va + dev_pa + reg->host_aipu_offset - reg->base_iova);
+	return (char *)((unsigned long)reg->base_va + dev_pa + reg->host_aipu_offset -
+		reg->base_iova);
 }
 
 /**
@@ -1101,7 +1119,8 @@ unlock:
 }
 
 static struct tcb_buf *aipu_mm_find_tcb_buf_no_lock(struct aipu_memory_manager *mm,
-					    struct aipu_mem_region **reg, u64 iova, char* log_str)
+						    struct aipu_mem_region **reg, u64 iova,
+						    char *log_str)
 {
 	struct aipu_mem_region *region = NULL;
 	struct tcb_buf *curr = NULL;
@@ -1136,7 +1155,7 @@ struct aipu_tcb *aipu_mm_get_tcb_va(struct aipu_memory_manager *mm, u64 dev_pa)
 	if (!tbuf || !reg)
 		goto unlock;
 
-	tcb = (struct aipu_tcb *)((char*)(reg->base_va) + dev_pa + reg->host_aipu_offset -
+	tcb = (struct aipu_tcb *)((char *)(reg->base_va) + dev_pa + reg->host_aipu_offset -
 	       reg->base_iova);
 
 unlock:
@@ -1159,7 +1178,7 @@ int aipu_mm_set_tcb_tail(struct aipu_memory_manager *mm, u64 tail)
 	}
 
 	tcb->tail = tail;
-	tcb->tail_tcb = (struct aipu_tcb *)((char*)(reg->base_va) + tail + reg->host_aipu_offset -
+	tcb->tail_tcb = (struct aipu_tcb *)((char *)(reg->base_va) + tail + reg->host_aipu_offset -
 			reg->base_iova);
 
 unlock:
@@ -1286,8 +1305,10 @@ void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap)
 	cap->asid3_base = mm->asid_base;
 }
 
-static void aipu_mm_get_gm_region_no_lock(struct aipu_memory_manager *mm, struct aipu_mem_region *reg,
-					  struct aipu_buf_desc *buf, struct aipu_mem_region *gm)
+static void aipu_mm_get_gm_region_no_lock(struct aipu_memory_manager *mm,
+					  struct aipu_mem_region *reg,
+					  struct aipu_buf_desc *buf,
+					  struct aipu_mem_region *gm)
 {
 	gm->base_iova = buf->pa + reg->host_aipu_offset;
 	gm->base_pa = gm->base_iova; /* should not be used */
@@ -1386,14 +1407,14 @@ void aipu_mm_get_gm(struct aipu_memory_manager *mm, struct aipu_cap *cap)
 	cap->gm1_size = 0;
 
 	if (!mm || mm->version != AIPU_ISA_VERSION_ZHOUYI_X2 ||
-	    AIPU_GM_POLICY_NONE == mm->gm_policy)
+	    mm->gm_policy == AIPU_GM_POLICY_NONE)
 		return;
 
 	cap->gm0_base = mm->mem[AIPU_MEM_REGION_TYPE_GM].base -
 		mm->mem[AIPU_MEM_REGION_TYPE_GM].offset;
 
 	mutex_lock(&mm->lock);
-	if (AIPU_GM_POLICY_SHARED == mm->gm_policy) {
+	if (mm->gm_policy == AIPU_GM_POLICY_SHARED) {
 		cap->gm0_size = mm->mem[AIPU_MEM_REGION_TYPE_GM].tot_size;
 	} else {
 		cap->gm0_size = mm->mem[AIPU_MEM_REGION_TYPE_GM].tot_size >> 1;

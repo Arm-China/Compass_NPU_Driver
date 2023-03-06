@@ -19,7 +19,6 @@ int init_aipu_ioregion(struct io_region *region, u64 phys_base, u32 size)
 	if (!region || !size)
 		return -EINVAL;
 
-
 	if (!request_mem_region(phys_base, size, "aipu"))
 		return -ENOMEM;
 
@@ -58,6 +57,7 @@ void deinit_aipu_ioregion(struct io_region *region)
 int aipu_read32(struct io_region *region, int offset)
 {
 	u32 val = 0;
+
 	if (region && region->kern && offset < region->size) {
 		val = readl((void __iomem *)((unsigned long)(region->kern) + offset));
 		pr_debug("[Read AIPU Register]: reg addr: 0x%llx + 0x%x, read back value: 0x%x\n",

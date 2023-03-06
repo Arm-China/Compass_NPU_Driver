@@ -31,7 +31,6 @@
 #define ZHOUYI_X1_REVISION_ID                 0x300
 #define ZHOUYI_X2_REVISION_ID                 0x10000
 
-
 /*
  * Soft Reset for X1/X2
  */

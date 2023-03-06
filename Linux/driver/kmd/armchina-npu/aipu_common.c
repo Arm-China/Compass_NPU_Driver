@@ -11,8 +11,8 @@
 
 #ifdef CONFIG_SYSFS
 ssize_t aipu_common_ext_register_sysfs_show(struct device *dev,
-						 struct device_attribute *attr,
-						 char *buf)
+					    struct device_attribute *attr,
+					    char *buf)
 {
 	int ret = 0;
 	char tmp[512];
@@ -47,8 +47,8 @@ ssize_t aipu_common_ext_register_sysfs_show(struct device *dev,
 }
 
 ssize_t aipu_common_ext_register_sysfs_store(struct device *dev,
-						  struct device_attribute *attr,
-						  const char *buf, size_t count)
+					     struct device_attribute *attr,
+					     const char *buf, size_t count)
 {
 	int i = 0;
 	int ret = 0;
@@ -102,8 +102,8 @@ out_free_buffer:
 }
 
 ssize_t aipu_common_clock_sysfs_show(struct device *dev,
-					  struct device_attribute *attr,
-					  char *buf)
+				     struct device_attribute *attr,
+				     char *buf)
 {
 	struct platform_device *p_dev = container_of(dev, struct platform_device, dev);
 	struct aipu_partition *partition = platform_get_drvdata(p_dev);
@@ -122,8 +122,8 @@ ssize_t aipu_common_clock_sysfs_show(struct device *dev,
 }
 
 ssize_t aipu_common_clock_sysfs_store(struct device *dev,
-					   struct device_attribute *attr,
-					   const char *buf, size_t count)
+				      struct device_attribute *attr,
+				      const char *buf, size_t count)
 {
 	int do_suspend = 0;
 	int do_resume = 0;
@@ -161,7 +161,7 @@ ssize_t aipu_common_clock_sysfs_store(struct device *dev,
 }
 
 ssize_t aipu_common_disable_sysfs_show(struct device *dev, struct device_attribute *attr,
-					    char *buf)
+				       char *buf)
 {
 	struct platform_device *p_dev = container_of(dev, struct platform_device, dev);
 	struct aipu_partition *partition = platform_get_drvdata(p_dev);
@@ -178,7 +178,7 @@ ssize_t aipu_common_disable_sysfs_show(struct device *dev, struct device_attribu
 }
 
 ssize_t aipu_common_disable_sysfs_store(struct device *dev, struct device_attribute *attr,
-					     const char *buf, size_t count)
+					const char *buf, size_t count)
 {
 	int do_disable = 0;
 	struct platform_device *p_dev = container_of(dev, struct platform_device, dev);
@@ -203,9 +203,9 @@ ssize_t aipu_common_disable_sysfs_store(struct device *dev, struct device_attrib
 }
 
 struct device_attribute *aipu_common_create_attr(struct device *dev,
-						      struct device_attribute **attr,
-						      const char *name, int mode,
-						      sysfs_show_t show, sysfs_store_t store)
+						 struct device_attribute **attr,
+						 const char *name, int mode,
+						 sysfs_show_t show, sysfs_store_t store)
 {
 	if (!dev || !attr || !name)
 		return ERR_PTR(-EINVAL);

@@ -53,7 +53,7 @@
 #define EN_NUMS(nums)                               ((nums) & 0xFFF)
 
 #define ENABLE_CLUSTER(partition, nums) \
-    (_SET_PARTITION(partition) | EN_NUMS(nums) | _ENABLE_CLUSTER)
+	(_SET_PARTITION(partition) | EN_NUMS(nums) | _ENABLE_CLUSTER)
 #define DISABLE_CLUSTER                             _DISABLE_CLUSTER
 
 #define CLUSTER_CONTROL_REG(id)                     (_GET_CLUSTER_OFFSET(id) + 0x4)
@@ -91,7 +91,8 @@
 #define TSM_DESTROY_CMD_POOL(pool)                  (_TSM_DESTROY | _TSM_POOL(pool))
 #define TSM_ABORT_CMD_POOL(pool)                    (_TSM_ABORT | _TSM_POOL(pool))
 #define TSM_DISPATCH_CMD_POOL(pool, qos)            (_TSM_DISPATCH | (qos) | _TSM_POOL(pool))
-#define TSM_DBG_DISPATCH_CMD_POOL(pool, qos, core)  (_TSM_DEBUG_DISPATCH | (qos) | _TSM_POOL(pool) | _TSM_DEBUG_CORE(core))
+#define TSM_DBG_DISPATCH_CMD_POOL(pool, qos, core)  (_TSM_DEBUG_DISPATCH | (qos) | \
+						     _TSM_POOL(pool) | _TSM_DEBUG_CORE(core))
 
 #define TSM_CMD_SCHD_CTRL_HANDLE_REG                0x0
 
@@ -171,7 +172,6 @@
  */
 #define _IS_TSM_ARCH(rev_32)                        (((rev_32) >> 16) & 0xFF)
 #define _IS_X2_ARCH(rev_32)                         (!(((rev_32) >> 8) & 0xFF))
-#define IS_ZHOUYI_X2(rev_32)                        (_IS_TSM_ARCH(rev_32) && _IS_X2_ARCH(rev_32))
 
 #define TSM_REVISION_REG                            0x50
 
@@ -183,7 +183,7 @@
  * [0] enable
  */
 #define IS_COUNTER_OVERFLOW(status_32)              (((status_32) >> 8) & 0x1)
-#define CLEAR_COUNTER                               0x2
+#define CLEAR_COUNTER                               BIT(1)
 #define ENABLE_COUNTER                              0x0
 #define DISABLE_COUNTER                             ((CLEAR_COUNTER) | 0x1)
 
@@ -202,7 +202,6 @@
  * [31:0] low of tick counter
  */
 #define TICK_COUNTER_LOW_REG                        0x60
-
 
 /**************************************************************************************
  *                             TSM Command Pool [N] Registers
@@ -245,13 +244,13 @@
 #define IS_CMD_POOL_ERROR(status_32)                (((status_32) >> 4) & 0x1)
 #define IS_CMD_POOL_FAULT(status_32)                (((status_32) >> 3) & 0x1)
 #define IS_CMD_POOL_EXCEPTION(status_32)            (((status_32) >> 2) & 0x1)
-#define IS_CMD_POOL_DONE(status_32)                 (((status_32) & 0x1)
-#define CLEAR_CMD_POOL_IDLE                         (0x1 << 6)
-#define CLEAR_CMD_POOL_SIGNAL                       (0x1 << 5)
-#define CLEAR_CMD_POOL_ERROR                        (0x1 << 4)
-#define CLEAR_CMD_POOL_FAULT                        (0x1 << 3)
-#define CLEAR_CMD_POOL_EXCEPTION                    (0x1 << 2)
-#define CLEAR_CMD_POOL_DONE                         0x1
+#define IS_CMD_POOL_DONE(status_32)                 ((status_32) & 0x1)
+#define CLEAR_CMD_POOL_IDLE                         BIT(6)
+#define CLEAR_CMD_POOL_SIGNAL                       BIT(5)
+#define CLEAR_CMD_POOL_ERROR                        BIT(4)
+#define CLEAR_CMD_POOL_FAULT                        BIT(3)
+#define CLEAR_CMD_POOL_EXCEPTION                    BIT(2)
+#define CLEAR_CMD_POOL_DONE                         BIT(0)
 
 #define CMD_POOL_STATUS_REG(id)                     (_GET_CMD_POOL_OFFSET(id) + 0x4)
 
@@ -268,15 +267,15 @@
  * [2]  exception interrupt enable
  * [0]  done interrupt enable
  */
-#define EN_CMD_POOL_INTR                            (0x1 << 11)
-#define EN_CLUSTER_INTR                             (0x1 << 10)
-#define EN_CORE_INTR                                (0x1 << 9)
-#define EN_TEC_INTR                                 (0x1 << 8)
-#define EN_SIGNAL_INTR                              (0x1 << 5)
-#define EN_ERROR_INTR                               (0x1 << 4)
-#define EN_FAULT_INTR                               (0x1 << 3)
-#define EN_EXCEPTION_INTR                           (0x1 << 2)
-#define EN_DONE_INTR                                0x1
+#define EN_CMD_POOL_INTR                            BIT(11)
+#define EN_CLUSTER_INTR                             BIT(10)
+#define EN_CORE_INTR                                BIT(9)
+#define EN_TEC_INTR                                 BIT(8)
+#define EN_SIGNAL_INTR                              BIT(5)
+#define EN_ERROR_INTR                               BIT(4)
+#define EN_FAULT_INTR                               BIT(3)
+#define EN_EXCEPTION_INTR                           BIT(2)
+#define EN_DONE_INTR                                BIT(0)
 #define EN_ALL_LEVEL_INTRS \
 	(EN_CMD_POOL_INTR | EN_CLUSTER_INTR | EN_CORE_INTR | EN_TEC_INTR)
 #define EN_ALL_TYPE_INTRS  \
@@ -315,7 +314,7 @@
 #define IS_EXCEPTION_IRQ(status_32)                 (((status_32) >> 2) & 0x1)
 #define IS_DONE_IRQ(status_32)                      ((status_32) & 0x1)
 #define IS_ABNORMAL(status_32)                      (((status_32) >> 2) & 0x7)
-#define IS_SERIOUS_ERR(status_32)                   (IS_ERROR_IRQ(status_32) || IS_FAULT_IRQ(status_32))
+#define IS_SERIOUS_ERR(status_32)                   (((status_32) >> 3) & 0x3) /* error or fault */
 #define GET_INTR_TYPE(status_32)                    ((status_32) & 0x3F)
 
 #define CMD_POOL_INTR_STATUS_REG(id)                (_GET_CMD_POOL_OFFSET(id) + 0xC)
@@ -393,10 +392,11 @@
  * [11:4] cluster selection
  * [3:0]  core selection
  */
-#define _ENABLE_DEBUG                               (1 << 12)
+#define _ENABLE_DEBUG                               BIT(12)
 #define _SET_DBG_CLUSTER(id)                        (((id) & 0xFF) << 4)
 #define _SET_DBG_CORE(id)                           ((id) & 0xF)
-#define SELECT_DEBUG_CORE(cluster, core)            (_ENABLE_DEBUG | _SET_DBG_CLUSTER(cluster) | _SET_DBG_CORE(core))
+#define SELECT_DEBUG_CORE(cluster, core)            (_ENABLE_DEBUG | _SET_DBG_CLUSTER(cluster) | \
+						     _SET_DBG_CORE(core))
 #define DISABLE_DEBUG                               0
 
 #define DEBUG_PAGE_SELECTION_REG                    0x1F00
@@ -408,14 +408,12 @@
  * [3:0] remap enable
  */
 #define _GET_GM_SIZE(val_32)                        (((val_32) >> 16) & 0xF)
-#define GET_GM_SIZE(val_32)   \
-        ((_GET_GM_SIZE(val_32) == 0) ? 512 * SZ_1K : (SZ_1M << ((_GET_GM_SIZE(val_32) - 1))))
 
 #define DEBUG_CLUSTER_GM_CONTROL                    0x2070
 
-
 #define ZHOUYI_X2_MAX_REG_OFFSET                    0x322C
 
+u64 get_gm_size(u32 val);
 struct aipu_operations *get_zhouyi_x2_ops(void);
 struct aipu_priv_operations *get_x2_priv_ops(void);
 

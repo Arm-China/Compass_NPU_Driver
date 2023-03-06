@@ -163,7 +163,7 @@ int aipu_priv_get_partition_cnt(struct aipu_priv *aipu)
 }
 
 /**
- * @aipu_priv_query_partition_capability() - query AIPU capability wrapper (per partition capability)
+ * @aipu_priv_query_partition_capability() - query AIPU capability wrapper (per partition)
  * @aipu: pointer to the aipu private struct initialized in init_aipu_priv()
  * @cap:  pointer to the capability struct
  *

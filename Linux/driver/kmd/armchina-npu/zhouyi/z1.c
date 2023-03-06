@@ -58,7 +58,8 @@ static void zhouyi_v1_trigger(struct aipu_partition *core)
 	}
 }
 
-static int zhouyi_v1_reserve(struct aipu_partition *core, struct aipu_job_desc *udesc, int do_trigger)
+static int zhouyi_v1_reserve(struct aipu_partition *core, struct aipu_job_desc *udesc,
+			     int do_trigger)
 {
 	unsigned int start_pc = 0;
 
@@ -169,7 +170,8 @@ static int zhouyi_v1_upper_half(void *data)
 	if (ret & ZHOUYI_IRQ_EXCEP) {
 		zhouyi_v1_clear_excep_interrupt(core);
 		aipu_job_manager_irq_upper_half(core, aipu_read32(core->reg,
-						ZHOUYI_INTR_CAUSE_REG_OFFSET), NULL);
+								  ZHOUYI_INTR_CAUSE_REG_OFFSET),
+								  NULL);
 		aipu_irq_schedulework(core->irq_obj);
 	}
 

@@ -30,7 +30,7 @@ struct aipu_soc {
  * @disable_clk:        disable clock/enable clock gating
  * @is_clk_enabled:     is in clock enabled or disabled
  * @is_aipu_irq:        is the shared interrupt is for an AIPU core or not
- * @init_mm:            customized mm initilization of SoC vendors
+ * @init_mm:            customized mm initialization of SoC vendors
  * @deinit_mm:          customized mm de-initilization of SoC vendors
  * @malloc:             customized mm allocation of SoC vendors
  * @free:               customized mm free of SoC vendors

@@ -64,7 +64,8 @@ static void zhouyi_x1_trigger(struct aipu_partition *core)
 	}
 }
 
-static int zhouyi_x1_reserve(struct aipu_partition *core, struct aipu_job_desc *udesc, int do_trigger)
+static int zhouyi_x1_reserve(struct aipu_partition *core, struct aipu_job_desc *udesc,
+			     int do_trigger)
 {
 	u32 start_pc = 0;
 	u32 enable_dtcm = 0;
@@ -90,7 +91,7 @@ static int zhouyi_x1_reserve(struct aipu_partition *core, struct aipu_job_desc *
 	/* Load ASE registers */
 	/* ASE 0 */
 	aipu_write32(core->reg, AIPU_ADDR_EXT0_CTRL_REG_OFFSET,
-		      ZHOUYI_X1_ASE_RW_ENABLE | enable_dtcm);
+		     ZHOUYI_X1_ASE_RW_ENABLE | enable_dtcm);
 	aipu_write32(core->reg, AIPU_ADDR_EXT0_HIGH_BASE_REG_OFFSET, cap.asid0_base >> 32);
 	aipu_write32(core->reg, AIPU_ADDR_EXT0_LOW_BASE_REG_OFFSET, (u32)cap.asid0_base);
 	dev_dbg(core->dev, "ASE 0 Ctrl 0x%x, ASE 0 PA 0x%llx",
@@ -226,7 +227,8 @@ static int zhouyi_soft_reset_no_lock(struct aipu_partition *core, bool init_regs
 
 	/* currently only x1 has soft reset */
 	if (core->version == AIPU_ISA_VERSION_ZHOUYI_X1)
-		ret = zhouyi_soft_reset(core->reg, ZHOUYI_X1_SOFT_RESET_OFFSET, core->reset_delay_us);
+		ret = zhouyi_soft_reset(core->reg, ZHOUYI_X1_SOFT_RESET_OFFSET,
+					core->reset_delay_us);
 
 	if (init_regs)
 		core->ops->initialize(core);

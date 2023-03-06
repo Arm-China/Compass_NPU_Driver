@@ -63,8 +63,7 @@ struct aipu_virt_page {
  * @node: list node
  * @pinned: is this buffer should be maintained after executions
  */
-struct tcb_buf
-{
+struct tcb_buf {
 	struct aipu_virt_page *page;
 	u64 pfn;
 	u64 head;
@@ -187,7 +186,7 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 		  struct file *filp);
 int aipu_mm_free(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf, struct file *filp);
 void aipu_mm_free_buffers(struct aipu_memory_manager *mm, struct file *filp);
-char* aipu_mm_get_va(struct aipu_memory_manager *mm, u64 dev_pa);
+char *aipu_mm_get_va(struct aipu_memory_manager *mm, u64 dev_pa);
 int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 		     struct file *filp);
 int aipu_mm_disable_sram_allocation(struct aipu_memory_manager *mm, struct file *filp);

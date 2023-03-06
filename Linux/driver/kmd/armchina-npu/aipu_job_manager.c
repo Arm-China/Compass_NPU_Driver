@@ -170,7 +170,8 @@ inline bool is_job_version_match(struct aipu_partition *core, struct aipu_job_de
 
 inline bool is_job_ok_for_core(struct aipu_partition *core, struct aipu_job_desc *user_job)
 {
-	return is_job_version_match(core, user_job) && (core->dtcm_size >> 10) >= user_job->dtcm_size_kb;
+	return is_job_version_match(core, user_job) && (core->dtcm_size >> 10) >=
+		user_job->dtcm_size_kb;
 }
 
 static bool is_user_job_valid(struct aipu_job_manager *manager, struct aipu_job_desc *user_job)
@@ -254,7 +255,9 @@ static void reserve_core_for_job_no_lock(struct aipu_job_manager *manager, struc
 static int config_exit_tcb(struct aipu_job_manager *manager, struct aipu_buf_desc *desc)
 {
 	int i = 0;
-	struct aipu_tcb *tcb = aipu_mm_get_tcb_va(manager->mm, desc->pa);
+	struct aipu_tcb *tcb = NULL;
+
+	tcb = aipu_mm_get_tcb_va(manager->mm, desc->pa);
 	if (!tcb)
 		return -EINVAL;
 
@@ -266,9 +269,9 @@ static int config_exit_tcb(struct aipu_job_manager *manager, struct aipu_buf_des
 	tcb->gm_rgnx_ctrl[0] = 0xC0000000;
 	tcb->gm_rgnx_ctrl[0] = 0xC0000000;
 	for (i = 0; i < 4; i++) {
-        	tcb->asids[i].v32.lo = (manager->asid_base | ASID_RD | ASID_WR) & U32_MAX;
-        	tcb->asids[i].v32.hi = manager->asid_base >> 32;
-    	}
+		tcb->asids[i].v32.lo = (manager->asid_base | ASID_RD | ASID_WR) & U32_MAX;
+		tcb->asids[i].v32.hi = manager->asid_base >> 32;
+	}
 	return 0;
 }
 
@@ -302,20 +305,24 @@ static int schedule_x2_job_no_lock(struct aipu_job_manager *manager, struct aipu
 	 * an exit dispatch should be done before these TCBs can be resued.
 	 */
 	if ((job->desc.tail_tcb_pa == qlist->curr_tail && !pool->aborted) ||
-	   (trigger_type == ZHOUYI_X2_TRIGGER_TYPE_CREATE && job->desc.exec_flag & AIPU_JOB_EXEC_FLAG_SINGLE_GROUP)) {
+	    (trigger_type == ZHOUYI_X2_TRIGGER_TYPE_CREATE &&
+	     (job->desc.exec_flag & AIPU_JOB_EXEC_FLAG_SINGLE_GROUP))) {
 		ret = config_exit_tcb(manager, &manager->exit_tcb);
 		if (ret)
 			return ret;
 
 		if (trigger_type != ZHOUYI_X2_TRIGGER_TYPE_CREATE) {
-			ret = aipu_mm_link_tcb(manager->mm, qlist->curr_tail, manager->exit_tcb.pa, 0);
+			ret = aipu_mm_link_tcb(manager->mm, qlist->curr_tail,
+					       manager->exit_tcb.pa, 0);
 			if (ret)
 				return ret;
 		}
 
-		ret = partition->ops->exit_dispatch(partition, job->desc.exec_flag, manager->exit_tcb.pa);
+		ret = partition->ops->exit_dispatch(partition, job->desc.exec_flag,
+						    manager->exit_tcb.pa);
 		if (ret) {
-			dev_err(partition->dev, "exit dispatch failed: job ID 0x%llx", job->desc.job_id);
+			dev_err(partition->dev, "exit dispatch failed: job ID 0x%llx",
+				job->desc.job_id);
 			return ret;
 		}
 
@@ -333,7 +340,7 @@ static int schedule_x2_job_no_lock(struct aipu_job_manager *manager, struct aipu
 		job->prev_tail_tcb = 0;
 	} else {
 		ret = aipu_mm_link_tcb(manager->mm, qlist->curr_tail,
-			job->desc.head_tcb_pa, job->desc.job_id);
+				       job->desc.head_tcb_pa, job->desc.job_id);
 		if (ret)
 			return ret;
 
@@ -565,12 +572,13 @@ void deinit_aipu_job_manager(struct aipu_job_manager *manager)
  * @partitions:    pointer to AIPU core struct array
  */
 void aipu_job_manager_set_partitions_info(struct aipu_job_manager *manager, int partition_cnt,
-				     struct aipu_partition *partitions)
+					  struct aipu_partition *partitions)
 {
 	WARN_ON(!manager || !partition_cnt || !partitions);
 	manager->partition_cnt = partition_cnt;
 	manager->partitions = partitions;
-	manager->pools = devm_kzalloc(partitions[0].dev, partition_cnt * sizeof(*manager->pools), GFP_KERNEL);
+	manager->pools = devm_kzalloc(partitions[0].dev, partition_cnt * sizeof(*manager->pools),
+				      GFP_KERNEL);
 	kfree(manager->idle_bmap);
 	manager->idle_bmap = kmalloc_array(partition_cnt, sizeof(bool), GFP_KERNEL);
 	memset(manager->idle_bmap, 1, partition_cnt);
@@ -612,7 +620,8 @@ int aipu_job_manager_scheduler(struct aipu_job_manager *manager, struct aipu_job
 }
 
 static void aipu_job_manager_real_time_printk(struct aipu_job_manager *manager,
-					      struct aipu_partition *partition, struct job_irq_info *info)
+					      struct aipu_partition *partition,
+					      struct job_irq_info *info)
 {
 	struct aipu_tcb *tcb = NULL;
 	char *buf = NULL;
@@ -621,13 +630,15 @@ static void aipu_job_manager_real_time_printk(struct aipu_job_manager *manager,
 		/* here: tail TCBP is the exact TCB sending a printf signal */
 		tcb = aipu_mm_get_tcb_va(manager->mm, info->tail_tcbp);
 		if (!tcb)
-			dev_dbg(partition->dev, "real time printk: no TCB found (0x%x)\n", info->tail_tcbp);
+			dev_dbg(partition->dev, "real time printk: no TCB found (0x%x)\n",
+				info->tail_tcbp);
 
 		buf = aipu_mm_get_va(manager->mm, manager->mm->asid_base + tcb->pprint);
 		if (buf)
 			dev_info(partition->dev, "[real-time printk 0x%x] %s", tcb->pprint, buf);
 		else
-			dev_dbg(partition->dev, "real time printk: no pbuf found (0x%x)\n", tcb->pprint);
+			dev_dbg(partition->dev, "real time printk: no pbuf found (0x%x)\n",
+				tcb->pprint);
 	}
 }
 
@@ -647,13 +658,14 @@ static bool do_abortion(int flag, struct job_irq_info *info)
 }
 
 static bool is_job_end(struct aipu_job *job, struct aipu_partition *partition,
-                            struct job_irq_info *info, u64 asid_base, int flag)
+		       struct job_irq_info *info, u64 asid_base, int flag)
 {
 	if (job->state != AIPU_JOB_STATE_RUNNING)
 		return false;
 
 	if (job->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_X2)
-		return is_x2_job_done_or_excep(job, info, asid_base, flag) || do_abortion(flag, info);
+		return is_x2_job_done_or_excep(job, info, asid_base, flag) ||
+			do_abortion(flag, info);
 	return job->core_id == partition->id;
 }
 
@@ -701,9 +713,11 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 
 			if (curr->desc.enable_prof) {
 				curr->done_time = ktime_get();
-				get_soc_ops(partition)->stop_bw_profiling(partition->dev, get_soc(partition));
+				get_soc_ops(partition)->stop_bw_profiling(partition->dev,
+									  get_soc(partition));
 				get_soc_ops(partition)->read_profiling_reg(partition->dev,
-								      get_soc(partition), &curr->pdata);
+									   get_soc(partition),
+									   &curr->pdata);
 			}
 
 			if (atomic_read(&manager->tick_counter) && info)
@@ -745,7 +759,8 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 	spin_unlock(&manager->lock);
 }
 
-static void aipu_job_manager_destroy_command_pool_no_lock(struct aipu_job_manager *manager, struct aipu_partition *partition)
+static void aipu_job_manager_destroy_command_pool_no_lock(struct aipu_job_manager *manager,
+							  struct aipu_partition *partition)
 {
 	struct command_pool *pool;
 
@@ -762,9 +777,9 @@ static void aipu_job_manager_destroy_command_pool_no_lock(struct aipu_job_manage
 static bool is_grid_end(struct aipu_job_manager *manager, u64 tail)
 {
 	struct aipu_tcb *tcb = aipu_mm_get_tcb_va(manager->mm, tail);
+
 	if (!tcb)
 		return true;
-
 	return IS_GRID_END(tcb->flag);
 }
 
@@ -794,7 +809,8 @@ void aipu_job_manager_irq_bottom_half(struct aipu_partition *core)
 				curr->pdata.execution_time_ns =
 				  (long)ktime_to_ns(ktime_sub(curr->done_time, curr->sched_time));
 
-			if (curr->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_X2 && curr->prev_tail_tcb)
+			if (curr->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_X2 &&
+			    curr->prev_tail_tcb)
 				aipu_mm_unlink_tcb(manager->mm, curr->prev_tail_tcb);
 		}
 
@@ -867,6 +883,7 @@ int aipu_job_manager_cancel_jobs(struct aipu_job_manager *manager, struct file *
 	struct aipu_job *next = NULL;
 	struct aipu_thread_wait_queue *curr_wq = NULL;
 	struct aipu_thread_wait_queue *next_wq = NULL;
+	struct aipu_partition *par = NULL;
 
 	if (!manager || !filp)
 		return -EINVAL;
@@ -875,9 +892,10 @@ int aipu_job_manager_cancel_jobs(struct aipu_job_manager *manager, struct file *
 	spin_lock_irqsave(&manager->lock, flags);
 	list_for_each_entry_safe(curr, next, &manager->scheduled_head->node, node) {
 		if (curr->filp == filp) {
-			if ((curr->desc.aipu_version < AIPU_ISA_VERSION_ZHOUYI_X2) &&
-			    (curr->state == AIPU_JOB_STATE_DEFERRED || (curr->state == AIPU_JOB_STATE_RUNNING &&
-			     manager->partitions[curr->core_id].ops->is_idle(&manager->partitions[curr->core_id]))))
+			par = &manager->partitions[curr->core_id];
+			if (curr->desc.aipu_version < AIPU_ISA_VERSION_ZHOUYI_X2 &&
+			    (curr->state == AIPU_JOB_STATE_DEFERRED ||
+			     (curr->state == AIPU_JOB_STATE_RUNNING && par->ops->is_idle(par))))
 				manager->idle_bmap[curr->core_id] = 1;
 			remove_aipu_job(manager, curr);
 		}

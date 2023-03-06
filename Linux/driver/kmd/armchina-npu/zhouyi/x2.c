@@ -13,12 +13,15 @@
 static void zhouyi_x2_set_partition(struct aipu_partition *partition, u32 cluster_id)
 {
 	u32 nums = GET_NUMS(aipu_read32(partition->reg, CLUSTER_CONFIG_REG(cluster_id)));
-	aipu_write32(partition->reg, CLUSTER_CONTROL_REG(cluster_id), ENABLE_CLUSTER(partition->id, nums));
+
+	aipu_write32(partition->reg, CLUSTER_CONTROL_REG(cluster_id),
+		     ENABLE_CLUSTER(partition->id, nums));
 }
 
 static void zhouyi_x2_enable_interrupt(struct aipu_partition *partition)
 {
 	u32 cmd_pool_id = partition->id;
+
 	aipu_write32(partition->reg, CMD_POOL_INTR_CTRL_REG(cmd_pool_id),
 		     EN_TEC_INTR | EN_CORE_INTR | EN_CLUSTER_INTR | EN_ALL_TYPE_INTRS);
 }
@@ -26,13 +29,16 @@ static void zhouyi_x2_enable_interrupt(struct aipu_partition *partition)
 static void zhouyi_x2_config_partition_cmd_pool(struct aipu_partition *partition)
 {
 	u32 cmd_pool_id = partition->id;
-	aipu_write32(partition->reg, CMD_POOL_CONFIG_REG(cmd_pool_id), CONFIG_COMMAND_POOL(partition->id));
+
+	aipu_write32(partition->reg, CMD_POOL_CONFIG_REG(cmd_pool_id),
+		     CONFIG_COMMAND_POOL(partition->id));
 	aipu_write32(partition->reg, CMD_POOL_SECURE_REG_REG(cmd_pool_id), SET_NONSECURE_MODE);
 }
 
 static void zhouyi_x2_disable_interrupt(struct aipu_partition *partition)
 {
 	u32 cmd_pool_id = partition->id;
+
 	aipu_write32(partition->reg, CMD_POOL_INTR_CTRL_REG(cmd_pool_id), DISABLE_ALL_INTRS);
 }
 
@@ -46,16 +52,17 @@ static int zhouyi_x2_create_command_pool(struct aipu_partition *partition)
 	if (IS_CMD_POOL_BUSY(aipu_read32(partition->reg, CMD_POOL_STATUS_REG(partition->id))))
 		return 0;
 
-	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG, TSM_CREATE_CMD_POOL(partition->id, TSM_MAP_ALL));
+	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
+		     TSM_CREATE_CMD_POOL(partition->id, TSM_MAP_ALL));
 
 	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
 		dev_err(partition->dev, "x2: create command pool #%d failed (cmd 0x%x)\n",
 			partition->id, TSM_CREATE_CMD_POOL(partition->id, TSM_MAP_ALL));
 		return -EFAULT;
-	} else {
-		dev_info(partition->dev, "x2: command pool #%d was created\n", partition->id);
-		return 0;
 	}
+
+	dev_info(partition->dev, "x2: command pool #%d was created\n", partition->id);
+	return 0;
 }
 
 static int zhouyi_x2_destroy_command_pool(struct aipu_partition *partition)
@@ -63,31 +70,33 @@ static int zhouyi_x2_destroy_command_pool(struct aipu_partition *partition)
 	aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_HIGH_REG, 0);
 	aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_LOW_REG, 0);
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_INFO_REG, 0);
-	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG, TSM_DESTROY_CMD_POOL(partition->id));
+	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
+		     TSM_DESTROY_CMD_POOL(partition->id));
 
 	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
 		dev_err(partition->dev, "x2: destroy command pool #%d failed (cmd 0x%x)\n",
 			partition->id, TSM_DESTROY_CMD_POOL(partition->id));
 		return -EFAULT;
-	} else {
-		dev_info(partition->dev, "x2: command pool #%d was destroyed\n", partition->id);
-		return 0;
 	}
+
+	dev_info(partition->dev, "x2: command pool #%d was destroyed\n", partition->id);
+	return 0;
 }
 
 static int zhouyi_x2_abort_command_pool(struct aipu_partition *partition)
 {
-	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG, TSM_ABORT_CMD_POOL(partition->id));
+	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
+		     TSM_ABORT_CMD_POOL(partition->id));
 
 	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
 		dev_err(partition->dev, "x2: abort command pool #%d failed (cmd 0x%x)\n",
 			partition->id, TSM_ABORT_CMD_POOL(partition->id));
 		return -EFAULT;
-	} else {
-		udelay(partition->priv->reset_delay_us);
-		dev_info(partition->dev, "x2: command pool #%d was aborted\n", partition->id);
-		return 0;
 	}
+
+	udelay(partition->priv->reset_delay_us);
+	dev_info(partition->dev, "x2: command pool #%d was aborted\n", partition->id);
+	return 0;
 }
 
 static int get_qos(u32 exec_flag)
@@ -97,7 +106,8 @@ static int get_qos(u32 exec_flag)
 	return TSM_QOS_SLOW;
 }
 
-static int zhouyi_x2_reserve(struct aipu_partition *partition, struct aipu_job_desc *udesc, int trigger_type)
+static int zhouyi_x2_reserve(struct aipu_partition *partition, struct aipu_job_desc *udesc,
+			     int trigger_type)
 {
 	int ret = 0;
 
@@ -111,7 +121,8 @@ static int zhouyi_x2_reserve(struct aipu_partition *partition, struct aipu_job_d
 	}
 
 	if (IS_CMD_POOL_IDLE(aipu_read32(partition->reg, CMD_POOL_STATUS_REG(partition->id)))) {
-		dev_err(partition->dev, "x2: create command pool #%d failed (pool idle)\n", partition->id);
+		dev_err(partition->dev, "x2: create command pool #%d failed (pool idle)\n",
+			partition->id);
 		return -EFAULT;
 	}
 
@@ -122,14 +133,15 @@ static int zhouyi_x2_reserve(struct aipu_partition *partition, struct aipu_job_d
 	}
 
 	dev_dbg(partition->dev, "[Job 0x%llx] x2 scheduler: TCB head 0x%llx\n",
-		 udesc->job_id, udesc->head_tcb_pa);
+		udesc->job_id, udesc->head_tcb_pa);
 
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_INFO_REG, (u16)udesc->job_id);
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
 		     TSM_DISPATCH_CMD_POOL(partition->id, get_qos(udesc->exec_flag)));
 
 	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
-		dev_err(partition->dev, "dispatch command failed: job tail 0x%llx\n", udesc->tail_tcb_pa);
+		dev_err(partition->dev, "dispatch command failed: job tail 0x%llx\n",
+			udesc->tail_tcb_pa);
 		return -EFAULT;
 	}
 
@@ -143,7 +155,8 @@ int zhouyi_x2_exit_dispatch(struct aipu_partition *partition, u32 job_flag, u64 
 		     TSM_DISPATCH_CMD_POOL(partition->id, get_qos(job_flag)));
 
 	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
-		dev_err(partition->dev, "dispatch command (exit) failed: job tail 0x%llx\n", tcb_pa);
+		dev_err(partition->dev, "dispatch command (exit) failed: job tail 0x%llx\n",
+			tcb_pa);
 		return -EFAULT;
 	}
 
@@ -221,7 +234,8 @@ static int partition_upper_half(struct aipu_partition *partition)
 	struct job_irq_info info;
 	u32 status = 0;
 	u32 tag_id = 0;
-	u16 sig_num = GET_IRQ_SIGNAL_NUM(aipu_read32(&aipu->reg, CMD_POOL_IRQ_SIG_REG(partition->id)));
+	u16 sig_num = GET_IRQ_SIGNAL_NUM(aipu_read32(&aipu->reg,
+		CMD_POOL_IRQ_SIG_REG(partition->id)));
 	info.tail_tcbp = aipu_read32(&aipu->reg, CMD_POOL_INTR_TCB_PTR_REG(partition->id));
 	info.sig_flag = aipu_read32(&aipu->reg, CMD_POOL_IRQ_SIGNAL_FLAG_REG(partition->id));
 	info.tick_counter = ((u64)aipu_read32(&aipu->reg, TICK_COUNTER_HIGH_REG) << 32) +
@@ -248,21 +262,26 @@ static int partition_upper_half(struct aipu_partition *partition)
 
 	/* check fault first because it comes in prior to a done intr if any */
 	if (IS_FAULT_IRQ(status)) {
-		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id), CLEAR_CMD_POOL_FAULT);
+		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
+			     CLEAR_CMD_POOL_FAULT);
 	} else if (IS_DONE_IRQ(status)) {
-		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id), CLEAR_CMD_POOL_DONE);
+		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
+			     CLEAR_CMD_POOL_DONE);
 		if (IS_TEC_IRQ(status))
 			status &= ~CLEAR_CMD_POOL_DONE;
 	} else if (IS_ERROR_IRQ(status)) {
-		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id), CLEAR_CMD_POOL_ERROR);
+		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
+			     CLEAR_CMD_POOL_ERROR);
 	} else if (IS_EXCEPTION_IRQ(status)) {
-		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id), CLEAR_CMD_POOL_EXCEPTION);
+		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
+			     CLEAR_CMD_POOL_EXCEPTION);
 	}
 
 	aipu_job_manager_irq_upper_half(partition, GET_INTR_TYPE(status), &info);
 	if (IS_SIGNAL_IRQ(status)) {
 		WARN_ON(sig_num != 1);
-		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id), CLEAR_CMD_POOL_SIGNAL);
+		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
+			     CLEAR_CMD_POOL_SIGNAL);
 	}
 
 	aipu_irq_schedulework(partition->irq_obj);
@@ -366,15 +385,22 @@ static int zhouyi_x2_sysfs_show(struct aipu_partition *partition, char *buf)
 int zhouyi_x2_soft_reset(struct aipu_partition *partition, bool init_regs)
 {
 	int ret = 0;
+	struct aipu_priv *aipu = partition->priv;
 
 	/* NOTE: this is a global soft-reset, not per-partition! */
-	struct aipu_priv *aipu = partition->priv;
 	ret = aipu->ops->global_soft_reset(aipu);
 	if (ret)
 		return ret;
 
 	partition->ops->initialize(partition);
 	return 0;
+}
+
+u64 get_gm_size(u32 val)
+{
+	u64 _val = _GET_GM_SIZE(val);
+
+	return _val ? 512 * SZ_1K : (SZ_1M << (_val - 1));
 }
 
 static struct aipu_operations zhouyi_x2_ops = {

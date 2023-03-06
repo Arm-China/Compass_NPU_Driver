@@ -112,7 +112,7 @@ int zhouyi_get_hw_version_number(struct io_region *io)
 
 	revision_id = aipu_read32(io, ZHOUYI_REVISION_ID_REG_OFFSET);
 
-	switch(revision_id) {
+	switch (revision_id) {
 	case ZHOUYI_Z1_REVISION_ID:
 		return AIPU_ISA_VERSION_ZHOUYI_Z1;
 	case ZHOUYI_Z2_REVISION_ID:

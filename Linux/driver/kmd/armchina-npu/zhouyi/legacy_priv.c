@@ -64,8 +64,8 @@ static int init_aipu_core(struct aipu_partition *core, int version, int id, stru
 
 #ifdef CONFIG_SYSFS
 	if (IS_ERR(aipu_common_create_attr(core->dev, &core->reg_attr, "ext_registers", 0644,
-					 aipu_common_ext_register_sysfs_show,
-					 aipu_common_ext_register_sysfs_store))) {
+					   aipu_common_ext_register_sysfs_show,
+					   aipu_common_ext_register_sysfs_store))) {
 		dev_err(core->dev, "[init_core] create sysfs attribute failed: ext_registers");
 		ret = -EFAULT;
 		goto init_sysfs_fail;
@@ -74,16 +74,16 @@ static int init_aipu_core(struct aipu_partition *core, int version, int id, stru
 	if (priv->soc_ops &&
 	    priv->soc_ops->enable_clk && priv->soc_ops->disable_clk &&
 	    IS_ERR(aipu_common_create_attr(core->dev, &core->clk_attr, "soc_clock", 0644,
-					 aipu_common_clock_sysfs_show,
-					 aipu_common_clock_sysfs_store))) {
+					   aipu_common_clock_sysfs_show,
+					   aipu_common_clock_sysfs_store))) {
 		dev_err(core->dev, "[init_core] create sysfs attribute failed: soc_clock");
 		ret = -EFAULT;
 		goto init_sysfs_fail;
 	}
 
 	if (IS_ERR(aipu_common_create_attr(core->dev, &core->disable_attr, "disable", 0644,
-					 aipu_common_disable_sysfs_show,
-					 aipu_common_disable_sysfs_store))) {
+					   aipu_common_disable_sysfs_show,
+					   aipu_common_disable_sysfs_store))) {
 		dev_err(core->dev, "[init_core] create sysfs attribute failed: disable");
 		ret = -EFAULT;
 		goto init_sysfs_fail;
@@ -171,7 +171,8 @@ static struct aipu_partition *legacy_create_partitions(struct aipu_priv *aipu,
 	else if (version == AIPU_ISA_VERSION_ZHOUYI_Z1 ||
 		 version == AIPU_ISA_VERSION_ZHOUYI_Z2 ||
 		 version == AIPU_ISA_VERSION_ZHOUYI_Z3)
-		dev_info(&p_dev->dev, "AIPU core #%d detected: zhouyi-z%d-%04d\n", id, version, config);
+		dev_info(&p_dev->dev, "AIPU core #%d detected: zhouyi-z%d-%04d\n",
+			 id, version, config);
 	else
 		return ERR_PTR(-EINVAL);
 
@@ -179,7 +180,8 @@ static struct aipu_partition *legacy_create_partitions(struct aipu_priv *aipu,
 	if (ret)
 		return ERR_PTR(ret);
 
-	new_partition_arr = kcalloc(aipu->partition_cnt + 1, sizeof(*new_partition_arr), GFP_KERNEL);
+	new_partition_arr = kcalloc(aipu->partition_cnt + 1, sizeof(*new_partition_arr),
+				    GFP_KERNEL);
 	if (!new_partition_arr) {
 		partition = ERR_PTR(-ENOMEM);
 		goto err_handle;
@@ -187,7 +189,8 @@ static struct aipu_partition *legacy_create_partitions(struct aipu_priv *aipu,
 
 	if (aipu->partition_cnt) {
 		WARN_ON(!aipu->partitions);
-		memcpy(new_partition_arr, aipu->partitions, aipu->partition_cnt * sizeof(*new_partition_arr));
+		memcpy(new_partition_arr, aipu->partitions,
+		       aipu->partition_cnt * sizeof(*new_partition_arr));
 		kfree(aipu->partitions);
 		aipu->partitions = NULL;
 	}
@@ -196,7 +199,8 @@ static struct aipu_partition *legacy_create_partitions(struct aipu_priv *aipu,
 	aipu->partitions = new_partition_arr;
 	aipu->partition_cnt++;
 
-	aipu_job_manager_set_partitions_info(&aipu->job_manager, aipu->partition_cnt, aipu->partitions);
+	aipu_job_manager_set_partitions_info(&aipu->job_manager, aipu->partition_cnt,
+					     aipu->partitions);
 
 	goto finish;
 

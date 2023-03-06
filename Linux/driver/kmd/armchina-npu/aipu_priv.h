@@ -22,7 +22,8 @@
  * @global_soft_reset:  soft reset to the whole partition
  */
 struct aipu_priv_operations {
-	struct aipu_partition *(*create_partitions)(struct aipu_priv *aipu, int id, struct platform_device *p_dev);
+	struct aipu_partition *(*create_partitions)(struct aipu_priv *aipu, int id,
+						    struct platform_device *p_dev);
 	void (*destroy_partitions)(struct aipu_priv *aipu);
 	int (*global_soft_reset)(struct aipu_priv *aipu);
 };
