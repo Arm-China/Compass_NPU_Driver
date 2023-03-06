@@ -140,7 +140,7 @@ TEST_CASE_FIXTURE(ContextTest, "config_simulation")
 #endif
 
     ret = p_ctx->config_simulation(AIPU_CONFIG_TYPE_SIMULATION, nullptr);
-    CHECK(ret == AIPU_STATUS_ERROR_INVALID_JOB_ID);
+    CHECK(ret == AIPU_STATUS_ERROR_NULL_PTR);
 
     ret = p_ctx->config_simulation(AIPU_CONFIG_TYPE_SIMULATION, &sim_glb_config);
     CHECK(ret == AIPU_STATUS_SUCCESS);
