@@ -24,6 +24,7 @@
 aipudrv::UKMemory::UKMemory(int fd): MemoryBase()
 {
     m_fd = fd;
+    m_memory_hook = nullptr;
 }
 
 aipudrv::UKMemory::~UKMemory()
@@ -61,19 +62,24 @@ aipu_status_t aipudrv::UKMemory::malloc(uint32_t size, uint32_t align, BufferDes
     if ((str != nullptr) && (!strncmp(str, "tcbs", 4)))
         buf_req.data_type = AIPU_MM_DATA_TYPE_TCB;
 
-    kret = ioctl(m_fd, cmd, &buf_req);
-    if (kret != 0)
+    if (m_memory_hook == nullptr)
     {
-        LOG(LOG_ERR, "alloc buffer: size 0x%x [fail]", size);
-        return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
-    }
+        kret = ioctl(m_fd, cmd, &buf_req);
+        if (kret != 0)
+        {
+            LOG(LOG_ERR, "alloc buffer: size 0x%x [fail]", size);
+            return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
+        }
 
-    ptr = (char*)mmap(NULL, buf_req.desc.bytes, PROT_READ | PROT_WRITE, MAP_SHARED,
-        m_fd, buf_req.desc.dev_offset);
-    if (ptr == MAP_FAILED)
-    {
-        ioctl(m_fd, free_cmd, &buf_req.desc);
-        return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
+        ptr = (char*)mmap(NULL, buf_req.desc.bytes, PROT_READ | PROT_WRITE, MAP_SHARED,
+            m_fd, buf_req.desc.dev_offset);
+        if (ptr == MAP_FAILED)
+        {
+            ioctl(m_fd, free_cmd, &buf_req.desc);
+            return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
+        }
+    } else {
+        ptr = m_memory_hook->malloc_hook(&buf_req);
     }
 
     /**
@@ -123,8 +129,14 @@ aipu_status_t aipudrv::UKMemory::free(const BufferDesc* desc, const char* str)
     {
         kdesc.pa = desc->pa;
         kdesc.bytes = desc->size;
-        munmap(iter->second.va, kdesc.bytes);
-        kret = ioctl(m_fd, free_cmd, &kdesc);
+        if (m_memory_hook == nullptr)
+        {
+            munmap(iter->second.va, kdesc.bytes);
+            kret = ioctl(m_fd, free_cmd, &kdesc);
+        } else {
+            kret = m_memory_hook->free_hook(&kdesc);
+        }
+
         if (kret != 0)
         {
             LOG(LOG_ERR, "free buffer 0x%lx [fail]", desc->pa);

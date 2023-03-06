@@ -333,6 +333,10 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             }
             break;
 
+        case AIPU_IOCTL_SET_MEMORY_HOOK:
+            static_cast<UKMemory *>(m_dram)->set_memory_hook((Memory_Hook_Base *)arg);
+            break;
+
         default:
             LOG(LOG_ERR, "AIPU can't support cmd: %d\n", cmd);
             ret = AIPU_LL_STATUS_ERROR_OPERATION_UNSUPPORTED;

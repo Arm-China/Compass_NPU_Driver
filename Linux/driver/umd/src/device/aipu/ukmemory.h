@@ -17,10 +17,12 @@
 
 namespace aipudrv
 {
+
 class UKMemory: public MemoryBase
 {
 private:
     int m_fd = 0;
+    Memory_Hook_Base *m_memory_hook = nullptr;
 
 public:
     virtual aipu_status_t malloc(uint32_t size, uint32_t align, BufferDesc* desc,
@@ -39,6 +41,11 @@ public:
     {
         return mem_bzero(addr, size);
     };
+
+    virtual void set_memory_hook(Memory_Hook_Base *hook)
+    {
+        m_memory_hook = hook;
+    }
 
 public:
     static UKMemory* get_memory(int fd)

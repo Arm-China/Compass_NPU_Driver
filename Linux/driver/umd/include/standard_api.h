@@ -234,11 +234,58 @@ typedef struct aipu_shared_tensor_info {
 } aipu_shared_tensor_info_t;
 
 /**
- * @brief ioctl commands to operate shared tensor buffer
+ * Memory_Hook_Base - UMD memory alloc/free hook abstract class
+ *
+ * @args:          [must] the parameter pointer for internal use of malloc_hook/free_hook
+ * @malloc_hook:   [must] memory alloc hook interface
+ * @free_hook:     [must] memry free hook interface
+ *
+ * @note
+ *       In normal case, don't suggest to implement new memory alloc/free interface based on
+ *       this base class. The best way is using the default UKMemory implemetation instead.
+ *       If you implement new alloc/free interface based on this class, you have to implement
+ *       the corresponding new alloc/free scheme in KMD or customized low level allocator.
+ */
+struct aipu_buf_request;
+struct aipu_buf_desc;
+    class Memory_Hook_Base {
+    protected:
+    void *args;
+
+    public:
+    /**
+     * @brief malloc buffer via this customized interface
+     *
+     * @param[in] buf_req Pass all fields (except buf_req->desc) filled by UKMemory::malloc to KMD;
+     *                    Parse field buf_req->desc filled by KMD or customized low level allocator.
+     *
+     * @retval virtual address of buffer or nullptr on fail
+     */
+    virtual char *malloc_hook(aipu_buf_request *buf_req) = 0;
+
+    /**
+     * @brief free the requested buffer
+     *
+     * @param[in] kdesc Pointer of request physical buffer
+     *
+     * @retval 0 on success, other value on fail
+     */
+    virtual int free_hook(aipu_buf_desc *kdesc) = 0;
+
+    public:
+    Memory_Hook_Base(void *_args) { args = _args; }
+    virtual ~Memory_Hook_Base() {}
+    Memory_Hook_Base(const Memory_Hook_Base& mem) = delete;
+    Memory_Hook_Base& operator=(const Memory_Hook_Base& mem) = delete;
+};
+
+/**
+ * @brief ioctl commands to operate shared tensor buffer and memory hook for KMD
  */
 enum {
     AIPU_IOCTL_MARK_SHARED_TENSOR = 0x255,
-    AIPU_IOCTL_SET_SHARED_TENSOR
+    AIPU_IOCTL_SET_SHARED_TENSOR,
+    AIPU_IOCTL_SET_MEMORY_HOOK
 };
 
 /**
