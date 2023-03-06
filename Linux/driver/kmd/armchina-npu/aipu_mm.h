@@ -33,12 +33,15 @@ enum aipu_mem_region_type {
 };
 
 struct tcb_buf;
+
 /**
  * struct aipu_virt_page - virtual page
  * @tid: ID of thread requested this page (and the following pages)
  * @filp: filp requested this page
  * @map_num: number of mmap to userspace
  * @contiguous_alloc_len: count of immediately following pages allocated in together
+ * @locked: is this page locked (should not be freed at this moment)
+ * @tcb: reference to a corresponding TCB descriptor
  */
 struct aipu_virt_page {
 	int tid;
@@ -49,6 +52,17 @@ struct aipu_virt_page {
 	struct tcb_buf *tcb;
 };
 
+/**
+ * struct tcb_buf - TCB buffer descriptor
+ * @page: reference to the virtual page
+ * @pfn: pfn number
+ * @head: address of the list head
+ * @tail: address of the list tail
+ * @dep_job_id: ID of the job depends on this buffer list (if any)
+ * @tail_tcb: tail of the TCB list
+ * @node: list node
+ * @pinned: is this buffer should be maintained after executions
+ */
 struct tcb_buf
 {
 	struct aipu_virt_page *page;
@@ -100,6 +114,17 @@ struct aipu_mem_region {
 	int qos;
 };
 
+/**
+ * struct aipu_mem_region_list - memory region list
+ * @reg: regions
+ * @cnt: region count
+ * @max_cnt: maximum supported region count
+ * @disable: are regions disabled
+ * @type: type of regions
+ * @base: base address of the regions
+ * @offset: offset between host CPU and NPU
+ * @tot_size: total size of the regions
+ */
 struct aipu_mem_region_list {
 	struct aipu_mem_region *reg;
 	u32 cnt;
@@ -135,6 +160,7 @@ struct aipu_sram_disable_per_fd {
  * @mem: memory regions, contains memory/SRAM/DTCM/GM
  * @sram_disable_head: sram disable list
  * @gm_policy_attr: GM policy sysfs attribute, for x2 only
+ * @slock:   TCB buffer lock
  * @soc:     SoC private data
  * @soc_ops: SoC operation pointer
  */

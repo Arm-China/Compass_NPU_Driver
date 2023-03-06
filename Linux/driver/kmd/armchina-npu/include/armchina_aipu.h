@@ -177,9 +177,9 @@ enum aipu_buf_region {
 
 /**
  * enum aipu_buf_region - buffer region type
- * @AIPU_BUF_DEFAULT:     [aipu v1/v2/v3] default DDR region
- * @AIPU_BUF_REGION_SRAM: [aipu v1/v2/v3] SRAM region
- * @AIPU_BUF_REGION_DTCM: [aipu v2(x1)] DTCM region
+ * @AIPU_BUF_REGION_DEFAULT:     [aipu v1/v2/v3] default DDR region
+ * @AIPU_BUF_REGION_SRAM:        [aipu v1/v2/v3] SRAM region
+ * @AIPU_BUF_REGION_DTCM:        [aipu v2(x1)] DTCM region
  * @AIPU_BUF_REGION_QOS_SLOW_GM: [aipu v3 only] GM region
  * @AIPU_BUF_REGION_QOS_FAST_GM: [aipu v3 only] GM region
  */
@@ -262,6 +262,8 @@ enum aipu_job_execution_flag {
  * @data_1_addr:       [aipu v1/v2 only, must] Address of the 1th data buffer (buf_pa - asid_base)
  * @job_id:            [aipu v1/v2 only, must] ID of this job
  * @enable_prof:       [aipu v1/v2 only, optional] Enable performance profiling counters in SoC (if any)
+ * @profile_pa:        [optional] Physical address of the profiler buffer
+ * @profile_sz:        [optional] Size of the profiler buffer (should be 0 if no such a buffer)
  * @profile_fd:        [aipu v3 only] Profile data file fd
  * @enable_poll_opt:   [aipu v1/v2 only, optional] Enable optimizations for job status polling
  * @exec_flag:         [optional] Combinations of execution flags

@@ -48,7 +48,7 @@ else
                     -DCONFIG_ARMCHINA_NPU_ARCH_X2
 endif
 
-INIT_OBJ := $(SRC_DIR)/default/default.o
+INIT_OBJ := $(SRC_DIR)/armchina-npu/default/default.o
 
 OBJS     := $(COMM_OBJ) $(AIPU_OBJ) $(SOC_OBJ)
 

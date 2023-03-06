@@ -513,9 +513,9 @@ aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t job);
  *                    AIPU_JOB_STATUS_DONE: job is normally done
  *                    AIPU_JOB_STATUS_EXCEPTION: exception occurring on this job
  *                    AIPU_JOB_STATUS_NO_STATUS: job is in handling
- * @param[in]  timeout timeout value to poll job's status
+ * @param[in]  timeout timeout value(ms) to poll job's status
  *                     timeout > 0: the max polling time window is 'timeout'
- *                     timeout = 0: non-blocking and reture job's status immediatelly.
+ *                     timeout = 0: non-blocking and return job's status immediatelly.
  *                     timeout = -1: blocking until job is really done or exception.
  *
  * @retval AIPU_STATUS_SUCCESS

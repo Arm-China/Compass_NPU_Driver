@@ -15,7 +15,12 @@
 #include "aipu_job_manager.h"
 #include "aipu_mm.h"
 
-
+/**
+ * struct aipu_priv_operations - AIPU partitions operation
+ * @create_partitions:  create resources related to this partition
+ * @destroy_partitions: destroy the resources related to this partition
+ * @global_soft_reset:  soft reset to the whole partition
+ */
 struct aipu_priv_operations {
 	struct aipu_partition *(*create_partitions)(struct aipu_priv *aipu, int id, struct platform_device *p_dev);
 	void (*destroy_partitions)(struct aipu_priv *aipu);

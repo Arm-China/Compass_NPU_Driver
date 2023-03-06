@@ -33,6 +33,11 @@ struct aipu_priv;
  * @sysfs_show:         show AIPU external register values
  * @soft_reset:         AIPU core/partition soft reset function
  * @initialize:         initialize AIPU core/partition after soft reset
+ * @destroy_command_pool: destroy command pools of this partition
+ * @abort_command_pool:   abort command pools of this partition
+ * @exit_dispatch:        schedule an exit TCB to TSM
+ * @disable_tick_counter: disable the tick counter
+ * @enable_tick_counter:  enable the tick counter
  */
 struct aipu_operations {
 	int (*get_config)(struct aipu_partition *aipu);
@@ -58,6 +63,13 @@ struct aipu_operations {
 	void (*enable_tick_counter)(struct aipu_partition *partition);
 };
 
+/**
+ * struct cluster_info - information related to a cluster
+ * @id:       ID of this cluster
+ * @core_cnt: core count in this cluster
+ * @tec_cnt:  TEC count in per core of this cluster
+ * @gm_bytes: GM region size in bytes of this cluster
+ */
 struct cluster_info {
 	u32 id;
 	u32 core_cnt;
@@ -87,6 +99,8 @@ struct cluster_info {
  * @reset_delay_us:  soft reset delay in us
  * @dtcm_base:       DTCM base physical address
  * @dtcm_size:       DTCM size in bytes
+ * @cluster_cnt:     cluster count
+ * @clusters:        cluster information array
  */
 struct aipu_partition {
 	u32 id;

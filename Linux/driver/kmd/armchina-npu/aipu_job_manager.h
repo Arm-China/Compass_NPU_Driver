@@ -39,6 +39,16 @@ struct aipu_thread_wait_queue {
 	struct list_head node;
 };
 
+/**
+ * struct job_irq_info - maintain data from the interrupt handler (x2)
+ * @cluster_id: ID of the cluster trigger interrupts
+ * @core_id:    ID of the core trigger interrupts
+ * @tec_id:     ID of the TEC trigger interrupts
+ * @tag_id:     tag ID of the job trigger interrupts
+ * @tail_tcbp:  TCBP of the job trigger interrupts
+ * @sig_flag:   signal flag (if any)
+ * @tick_counter: count in tick counter (if any)
+ */
 struct job_irq_info {
 	u32 cluster_id;
 	u32 core_id;
@@ -86,12 +96,25 @@ enum aipu_job_qos {
 	AIPU_JOB_QOS_MAX  = 2,
 };
 
+/**
+ * struct qos - maintain data in a QoS queue (x2)
+ * @pool_head: address of the head of this queue
+ * @curr_head: address of the head of the last enqueued TCB lists
+ * @curr_tail: address of the tail of the last enqueued TCB lists (i.e. tail of the queue)
+ */
 struct qos {
 	u64 pool_head;
 	u64 curr_head;
 	u64 curr_tail;
 };
 
+/**
+ * struct qos - maintain data in a command pool (x2)
+ * @id: command pool ID
+ * @qlist: TCB queue in different QoS lists
+ * @created: is this command pool created
+ * @aborted: is this command pool aborted
+ */
 struct command_pool {
 	u32 id;
 	struct qos qlist[AIPU_JOB_QOS_MAX];
@@ -102,17 +125,24 @@ struct command_pool {
 /**
  * struct aipu_job_manager - job manager
  *        Maintain all jobs and update their statuses
- * @partition_cnt: aipu partition count
- * @partitions: aipu partition struct pointer array
- * @idle_bmap: idle flag bitmap for every partition/core
- * @scheduled_head: scheduled job list head
- * @lock: spinlock
+ * @version:         NPU version number
+ * @partition_cnt:   aipu partition/core count
+ * @dev:             pointer to struct device
+ * @partitions:      aipu partition/core struct pointer array
+ * @pools:           x2 command pools
+ * @idle_bmap:       idle flag bitmap for every partition/core
+ * @scheduled_head:  scheduled job list head
+ * @lock:            spinlock
  * @wait_queue_head: wait queue list head
- * @wq_lock: waitqueue lock
- * @job_cache: slab cache of aipu_job
- * @is_init: init flag
- * @exec_flag: execution flags propagated to all jobs
- * @priv: pointer to aipu_priv struct
+ * @wq_lock:         waitqueue lock
+ * @job_cache:       slab cache of aipu_job
+ * @is_init:         init flag
+ * @exec_flag:       execution flags propagated to all jobs
+ * @mm:              reference to memory manager
+ * @priv:            pointer to aipu_priv struct
+ * @asid_base:       base address of ASID
+ * @exit_tcb:        buffer descriptor of the exit_TCB
+ * @tick_counter:    atomic lock for tick counter
  */
 struct aipu_job_manager {
 	int version;
@@ -131,7 +161,6 @@ struct aipu_job_manager {
 	struct aipu_memory_manager *mm;
 	void *priv;
 	u64 asid_base;
-	u16 grid_id;
 	struct aipu_buf_desc exit_tcb;
 	atomic_t tick_counter;
 };
