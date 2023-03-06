@@ -16,36 +16,28 @@ COMM_OBJ := $(SRC_DIR)/armchina-npu/aipu.o \
             $(SRC_DIR)/armchina-npu/aipu_priv.o \
             $(SRC_DIR)/armchina-npu/zhouyi/zhouyi.o
 
-ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_Z1)
-    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/z1.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/legacy_priv.o
-    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_Z1
-else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_Z2)
-    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/x1.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/legacy_priv.o
-    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_X1
-else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_Z3)
-    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/x1.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/legacy_priv.o
-    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_X1
-else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_X1)
-    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/x1.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/legacy_priv.o
-    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_X1
-else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_X2)
-    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/x2.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/x2_priv.o
-    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_X2
+ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_V1)
+    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v1.o \
+                $(SRC_DIR)/armchina-npu/zhouyi/v12_priv.o
+    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V1
+else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_V2)
+    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v2.o \
+                $(SRC_DIR)/armchina-npu/zhouyi/v12_priv.o
+    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V2
+else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_V3)
+    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v3.o \
+                $(SRC_DIR)/armchina-npu/zhouyi/v3_priv.o
+    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V3
 else
     #build all
-    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/z1.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/x1.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/x2.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/legacy_priv.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/x2_priv.o
-    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_Z1 \
-                    -DCONFIG_ARMCHINA_NPU_ARCH_X1 \
-                    -DCONFIG_ARMCHINA_NPU_ARCH_X2
+    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v1.o \
+                $(SRC_DIR)/armchina-npu/zhouyi/v2.o \
+                $(SRC_DIR)/armchina-npu/zhouyi/v3.o \
+                $(SRC_DIR)/armchina-npu/zhouyi/v12_priv.o \
+                $(SRC_DIR)/armchina-npu/zhouyi/v3_priv.o
+    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V1 \
+                    -DCONFIG_ARMCHINA_NPU_ARCH_V2 \
+                    -DCONFIG_ARMCHINA_NPU_ARCH_V3
 endif
 
 INIT_OBJ := $(SRC_DIR)/armchina-npu/default/default.o

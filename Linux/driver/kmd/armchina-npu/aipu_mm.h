@@ -158,7 +158,7 @@ struct aipu_sram_disable_per_fd {
  * @lock: lock for reg and sram_disable_head
  * @mem: memory regions, contains memory/SRAM/DTCM/GM
  * @sram_disable_head: sram disable list
- * @gm_policy_attr: GM policy sysfs attribute, for x2 only
+ * @gm_policy_attr: GM policy sysfs attribute, for v3 only
  * @slock:   TCB buffer lock
  * @soc:     SoC private data
  * @soc_ops: SoC operation pointer

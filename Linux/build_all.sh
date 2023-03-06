@@ -33,11 +33,9 @@ build_help() {
     echo "                    - [major].[minor]"
     echo "                    - [major].[minor].[patch]"
     echo "-v, --version     AIPU version (optional, by default build all):"
-    echo "                    - z1"
-    echo "                    - z2"
-    echo "                    - z3"
-    echo "                    - x1"
-    echo "                    - x2"
+    echo "                    - v1"
+    echo "                    - v2"
+    echo "                    - v3"
     echo "                    - all"
     echo "-a, --api         Build UMD API type (optional, by default standard api):"
     echo "                    - standard_api"
@@ -154,12 +152,10 @@ if [ "$BUILD_TARGET_PLATFORM"x != "sim"x ]; then
     export BUILD_TARGET_PLATFORM_KMD=BUILD_PLATFORM_$(echo $BUILD_TARGET_PLATFORM | tr '[a-z]' '[A-Z]')
 fi
 
-if [ "$BUILD_AIPU_VERSION"x == "z1"x ]  ||
-   [ "$BUILD_AIPU_VERSION"x == "z2"x ]  ||
-   [ "$BUILD_AIPU_VERSION"x == "z3"x ]  ||
-   [ "$BUILD_AIPU_VERSION"x == "x1"x ]; then
+if [ "$BUILD_AIPU_VERSION"x == "v1"x ]  ||
+   [ "$BUILD_AIPU_VERSION"x == "v2"x ]; then
     BUILD_AIPU_VERSION=z123
-elif [ "$BUILD_AIPU_VERSION"x != "x2"x ] &&
+elif [ "$BUILD_AIPU_VERSION"x != "v3"x ] &&
      [ "$BUILD_AIPU_VERSION"x != "all"x ]; then
     echo -e "$COMPASS_DRV_BRENVAR_ERROR Invalid AIPU version $BUILD_AIPU_VERSION"
     exit 2

@@ -35,21 +35,21 @@ enum aipu_arch {
 
 /**
  * emum aipu_isa_version - AIPU ISA version number
- * @AIPU_ISA_VERSION_ZHOUYI_Z1: AIPU ISA version is Zhouyi aipu v1(Z1).
- * @AIPU_ISA_VERSION_ZHOUYI_Z2: AIPU ISA version is Zhouyi aipu v2(Z2).
- * @AIPU_ISA_VERSION_ZHOUYI_Z3: AIPU ISA version is Zhouyi aipu v2(Z3).
- * @AIPU_ISA_VERSION_ZHOUYI_X1: AIPU ISA version is Zhouyi aipu v2(X1).
- * @AIPU_ISA_VERSION_ZHOUYI_X2: AIPU ISA version is Zhouyi aipu v3(X2).
+ * @AIPU_ISA_VERSION_ZHOUYI_V1:   AIPU ISA version is Zhouyi V1.
+ * @AIPU_ISA_VERSION_ZHOUYI_V2_0: AIPU ISA version is Zhouyi V2 (Z2).
+ * @AIPU_ISA_VERSION_ZHOUYI_V2_1: AIPU ISA version is Zhouyi V2 (Z3).
+ * @AIPU_ISA_VERSION_ZHOUYI_V2_2: AIPU ISA version is Zhouyi V2 (X1).
+ * @AIPU_ISA_VERSION_ZHOUYI_V3:   AIPU ISA version is Zhouyi V3.
  *
  * Zhouyi architecture has multiple ISA versions released.
  * This enum is used to indicate the ISA version of an AIPU core in the system.
  */
 enum aipu_isa_version {
-	AIPU_ISA_VERSION_ZHOUYI_Z1 = 1,
-	AIPU_ISA_VERSION_ZHOUYI_Z2 = 2,
-	AIPU_ISA_VERSION_ZHOUYI_Z3 = 3,
-	AIPU_ISA_VERSION_ZHOUYI_X1 = 4,
-	AIPU_ISA_VERSION_ZHOUYI_X2 = 5,
+	AIPU_ISA_VERSION_ZHOUYI_V1   = 1,
+	AIPU_ISA_VERSION_ZHOUYI_V2_0 = 2,
+	AIPU_ISA_VERSION_ZHOUYI_V2_1 = 3,
+	AIPU_ISA_VERSION_ZHOUYI_V2_2 = 4,
+	AIPU_ISA_VERSION_ZHOUYI_V3   = 5,
 };
 
 /**
@@ -74,14 +74,19 @@ enum aipu_isa_version {
  * @clusters:    [kmd][aipu v3 only] Cluster capacity of this partition
  *
  * For example,
- *    aipu v2(Z2-1104):
+ *    aipu z1-0901 (v1):
  *    arch == AIPU_ARCH_ZHOUYI (0)
- *    version == AIPU_ISA_VERSION_ZHOUYI_Z2 (2)
- *    config == 1104
+ *    version == AIPU_ISA_VERSION_ZHOUYI_V1 (1)
+ *    config == 901
  *
- *    aipu v3(X2):
+ *    aipu x1-1204 (v2):
  *    arch == AIPU_ARCH_ZHOUYI (0)
- *    version == AIPU_ISA_VERSION_ZHOUYI_X2 (5)
+ *    version == AIPU_ISA_VERSION_ZHOUYI_V2_2 (4)
+ *    config == 1204
+ *
+ *    aipu v3:
+ *    arch == AIPU_ARCH_ZHOUYI (0)
+ *    version == AIPU_ISA_VERSION_ZHOUYI_V3 (5)
  *    config == 0, not applicable
  */
 struct aipu_partition_cap {

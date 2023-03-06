@@ -276,7 +276,7 @@ private:
 
                 part_cap.id = part;
                 part_cap.arch = AIPU_ARCH_ZHOUYI;
-                part_cap.version = AIPU_ISA_VERSION_ZHOUYI_X2;
+                part_cap.version = AIPU_ISA_VERSION_ZHOUYI_V3;
                 part_cap.clusters[part_cap.cluster_cnt].core_cnt = (reg_val >> 8) & 0xF;
                 part_cap.clusters[part_cap.cluster_cnt].tec_cnt = reg_val & 0xF;
                 part_cap.cluster_cnt++;

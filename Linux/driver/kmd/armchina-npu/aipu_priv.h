@@ -32,13 +32,13 @@ struct aipu_priv_operations {
  * struct aipu_priv - AIPU private struct contains all AIPU info and shared resources
  * @version:       AIPU hardware version
  * @partition_cnt: AIPU partition/core count in system
- * @cluster_cnt:   total cluster count (x2 only)
- * @max_partition_cnt: maximun partition count of this arch (x2 only)
- * @max_cmd_pool_cnt: maximun command pool count of this arch (x2 only)
+ * @cluster_cnt:   total cluster count (v3 only)
+ * @max_partition_cnt: maximun partition count of this arch (v3 only)
+ * @max_cmd_pool_cnt: maximun command pool count of this arch (v3 only)
  * @partitions:    partition/core array
- * @reg:           AIPU register base (x2 only)
- * @irq_obj:       interrupt object (x2 only)
- * @dev:           device struct pointer (of core 0 for z1/z2/z3/x1)
+ * @reg:           AIPU register base (v3 only)
+ * @irq_obj:       interrupt object (v3 only)
+ * @dev:           device struct pointer (of core 0 for v1/v2)
  * @soc:           SoC private data
  * @soc_ops:       SoC operation pointer
  * @aipu_fops:     file operation struct

@@ -575,7 +575,7 @@ aipu_status_t aipudrv::MainContext::debugger_malloc(uint32_t size, void** va)
      * dreg1: magic number requested by debugger
      */
     m_dev->get_core_count(0, 0, &core_cnt);
-    if (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_X2)
+    if (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3)
     {
         m_dev->write_reg(0, 0x0c, buf.pa);
         m_dev->write_reg(0, 0x08, 0x1248FFA5);
@@ -613,7 +613,7 @@ aipu_status_t aipudrv::MainContext::debugger_free(void* va)
 aipu_status_t aipudrv::MainContext::aipu_get_target(char *target)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    uint32_t isa = AIPU_ISA_VERSION_ZHOUYI_Z1;
+    uint32_t isa = AIPU_ISA_VERSION_ZHOUYI_V1;
     uint32_t config = 904;
     std::string isa_version, arch_cfg;
     std::stringstream config_ss;
@@ -635,19 +635,19 @@ aipu_status_t aipudrv::MainContext::aipu_get_target(char *target)
 
     switch (isa)
     {
-        case AIPU_ISA_VERSION_ZHOUYI_Z1:
+        case AIPU_ISA_VERSION_ZHOUYI_V1:
             isa_version = "Z1_";
             break;
-        case AIPU_ISA_VERSION_ZHOUYI_Z2:
+        case AIPU_ISA_VERSION_ZHOUYI_V2_0:
             isa_version = "Z2_";
             break;
-        case AIPU_ISA_VERSION_ZHOUYI_Z3:
+        case AIPU_ISA_VERSION_ZHOUYI_V2_1:
             isa_version = "Z3_";
             break;
-        case AIPU_ISA_VERSION_ZHOUYI_X1:
+        case AIPU_ISA_VERSION_ZHOUYI_V2_2:
             isa_version = "X1_";
             break;
-        case AIPU_ISA_VERSION_ZHOUYI_X2:
+        case AIPU_ISA_VERSION_ZHOUYI_V3:
             isa_version = "X2_";
             config = 1204; // fix in future
             break;
@@ -677,12 +677,12 @@ aipu_status_t aipudrv::MainContext::aipu_get_device_status(device_status_t *stat
     return ret;
     #endif
 
-    if (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_X2)
+    if (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3)
         reg_addr = 0x804;
 
     ret = convert_ll_status(m_dev->read_reg(0, reg_addr, &value));
 
-    if (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_X2)
+    if (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3)
     {
         if (value & X2_CMDPOOL_IDLE)
             *status = DEV_IDLE;

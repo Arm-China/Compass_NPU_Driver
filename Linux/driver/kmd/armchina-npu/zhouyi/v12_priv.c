@@ -8,8 +8,8 @@
 #include "aipu_priv.h"
 #include "aipu_common.h"
 #include "zhouyi.h"
-#include "z1.h"
-#include "x1.h"
+#include "v1.h"
+#include "v2.h"
 
 static int init_aipu_core(struct aipu_partition *core, int version, int id, struct aipu_priv *priv,
 			  struct platform_device *p_dev)
@@ -20,10 +20,10 @@ static int init_aipu_core(struct aipu_partition *core, int version, int id, stru
 		return -EINVAL;
 
 	WARN_ON(core->is_init);
-	WARN_ON(version != AIPU_ISA_VERSION_ZHOUYI_Z1 &&
-		version != AIPU_ISA_VERSION_ZHOUYI_Z2 &&
-		version != AIPU_ISA_VERSION_ZHOUYI_Z3 &&
-		version != AIPU_ISA_VERSION_ZHOUYI_X1);
+	WARN_ON(version != AIPU_ISA_VERSION_ZHOUYI_V1 &&
+		version != AIPU_ISA_VERSION_ZHOUYI_V2_0 &&
+		version != AIPU_ISA_VERSION_ZHOUYI_V2_1 &&
+		version != AIPU_ISA_VERSION_ZHOUYI_V2_2);
 
 	core->version = version;
 	core->id = id;
@@ -36,19 +36,19 @@ static int init_aipu_core(struct aipu_partition *core, int version, int id, stru
 	/* unused fields */
 	core->cluster_cnt = 0;
 
-#ifdef CONFIG_ARMCHINA_NPU_ARCH_Z1
-	if (version == AIPU_ISA_VERSION_ZHOUYI_Z1) {
+#ifdef CONFIG_ARMCHINA_NPU_ARCH_V1
+	if (version == AIPU_ISA_VERSION_ZHOUYI_V1) {
 		core->max_sched_num = ZHOUYI_V1_MAX_SCHED_JOB_NUM;
 		core->ops = get_zhouyi_v1_ops();
 	}
 #endif
 
-#ifdef CONFIG_ARMCHINA_NPU_ARCH_X1
-	if (version == AIPU_ISA_VERSION_ZHOUYI_Z2 ||
-	    version == AIPU_ISA_VERSION_ZHOUYI_Z3 ||
-	    version == AIPU_ISA_VERSION_ZHOUYI_X1) {
-		core->max_sched_num = ZHOUYI_X1_MAX_SCHED_JOB_NUM;
-		core->ops = get_zhouyi_x1_ops();
+#ifdef CONFIG_ARMCHINA_NPU_ARCH_V2
+	if (version == AIPU_ISA_VERSION_ZHOUYI_V2_0 ||
+	    version == AIPU_ISA_VERSION_ZHOUYI_V2_1 ||
+	    version == AIPU_ISA_VERSION_ZHOUYI_V2_2) {
+		core->max_sched_num = ZHOUYI_V2_MAX_SCHED_JOB_NUM;
+		core->ops = get_zhouyi_v2_ops();
 	}
 #endif
 
@@ -147,7 +147,7 @@ static void deinit_aipu_core(struct aipu_partition *core)
 	core->is_init = 0;
 }
 
-static struct aipu_partition *legacy_create_partitions(struct aipu_priv *aipu,
+static struct aipu_partition *v12_create_partitions(struct aipu_priv *aipu,
 						       int id, struct platform_device *p_dev)
 {
 	int ret = 0;
@@ -166,13 +166,14 @@ static struct aipu_partition *legacy_create_partitions(struct aipu_priv *aipu,
 		return ERR_PTR(-ENOMEM);
 
 	zhouyi_detect_aipu_version(p_dev, &version, &config);
-	if (version == AIPU_ISA_VERSION_ZHOUYI_X1)
-		dev_info(&p_dev->dev, "AIPU core #%d detected: zhouyi-x1-%04d\n", id, config);
-	else if (version == AIPU_ISA_VERSION_ZHOUYI_Z1 ||
-		 version == AIPU_ISA_VERSION_ZHOUYI_Z2 ||
-		 version == AIPU_ISA_VERSION_ZHOUYI_Z3)
-		dev_info(&p_dev->dev, "AIPU core #%d detected: zhouyi-z%d-%04d\n",
+	if (version == AIPU_ISA_VERSION_ZHOUYI_V1)
+		dev_info(&p_dev->dev, "AIPU core #%d detected: zhouyi-v1 (z%d-%04d)\n",
 			 id, version, config);
+	else if (version == AIPU_ISA_VERSION_ZHOUYI_V2_0 || version == AIPU_ISA_VERSION_ZHOUYI_V2_1)
+		dev_info(&p_dev->dev, "AIPU core #%d detected: zhouyi-v2 (z%d-%04d)\n",
+			 id, version, config);
+	else if (version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
+		dev_info(&p_dev->dev, "AIPU core #%d detected: zhouyi-v2 (x1-%04d)\n", id, config);
 	else
 		return ERR_PTR(-EINVAL);
 
@@ -211,7 +212,7 @@ finish:
 	return partition;
 }
 
-static void legacy_destroy_partitions(struct aipu_priv *aipu)
+static void v12_destroy_partitions(struct aipu_priv *aipu)
 {
 	int par_iter = 0;
 
@@ -219,13 +220,13 @@ static void legacy_destroy_partitions(struct aipu_priv *aipu)
 		deinit_aipu_core(&aipu->partitions[par_iter]);
 }
 
-static struct aipu_priv_operations legacy_priv_ops = {
-	.create_partitions = legacy_create_partitions,
-	.destroy_partitions = legacy_destroy_partitions,
+static struct aipu_priv_operations v12_priv_ops = {
+	.create_partitions = v12_create_partitions,
+	.destroy_partitions = v12_destroy_partitions,
 	.global_soft_reset = NULL,
 };
 
-struct aipu_priv_operations *get_legacy_priv_ops(void)
+struct aipu_priv_operations *get_v12_priv_ops(void)
 {
-	return &legacy_priv_ops;
+	return &v12_priv_ops;
 }

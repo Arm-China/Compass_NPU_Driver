@@ -280,7 +280,7 @@ public:
         {
             uint32_t cnt = 0;
 
-            if (m_part_caps[0].version == AIPU_ISA_VERSION_ZHOUYI_X2)
+            if (m_part_caps[0].version == AIPU_ISA_VERSION_ZHOUYI_V3)
                 cnt = m_partition_cnt;
             else
                 cnt = m_core_cnt;

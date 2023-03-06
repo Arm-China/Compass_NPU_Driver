@@ -49,10 +49,10 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
     if (nullptr == cfg)
         return AIPU_STATUS_ERROR_INVALID_CONFIG;
 
-    if (((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z1) && (cfg->z1_simulator == nullptr)) ||
-        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z2) && (cfg->z2_simulator == nullptr)) ||
-        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z3) && (cfg->z3_simulator == nullptr)) ||
-        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_X1) && (cfg->x1_simulator == nullptr)))
+    if (((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V1) && (cfg->z1_simulator == nullptr)) ||
+        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_0) && (cfg->z2_simulator == nullptr)) ||
+        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_1) && (cfg->z3_simulator == nullptr)) ||
+        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_2) && (cfg->x1_simulator == nullptr)))
     {
         return AIPU_STATUS_ERROR_INVALID_CONFIG;
     }
@@ -233,7 +233,7 @@ aipu_status_t aipudrv::JobV12::schedule()
     /**
      * note: on simulation, it's true align_asid_pa == pa.
      */
-    if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z1)
+    if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V1)
     {
         desc.kdesc.start_pc_addr = m_spc;
         desc.kdesc.intr_handler_addr = m_intr_pc;
@@ -289,13 +289,13 @@ aipu_status_t aipudrv::JobV12::schedule()
         desc.misc_outputs[desc.output_dir + "/printf_data.bin"] = buf;
     }
 
-    if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z1)
+    if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V1)
         desc.simulator = m_z1_sim;
-    else if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z2)
+    else if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_0)
         desc.simulator = m_z2_sim;
-    else if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_Z3)
+    else if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_1)
         desc.simulator = m_z3_sim;
-    else if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_X1)
+    else if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
         desc.simulator = m_x1_sim;
 
     if (m_log_path.length() != 0)

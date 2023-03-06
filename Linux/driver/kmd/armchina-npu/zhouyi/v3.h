@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* Copyright (c) 2023 Arm Technology (China) Co. Ltd. All rights reserved. */
 
-#ifndef __X2_H__
-#define __X2_H__
+#ifndef __V3_H__
+#define __V3_H__
 
 /**************************************************************************************
  *                             Cluster [N] Registers
@@ -171,7 +171,7 @@
  * [3:0]   minor number
  */
 #define _IS_TSM_ARCH(rev_32)                        (((rev_32) >> 16) & 0xFF)
-#define _IS_X2_ARCH(rev_32)                         (!(((rev_32) >> 8) & 0xFF))
+#define _IS_V3_ARCH(rev_32)                         (!(((rev_32) >> 8) & 0xFF))
 
 #define TSM_REVISION_REG                            0x50
 
@@ -411,10 +411,10 @@
 
 #define DEBUG_CLUSTER_GM_CONTROL                    0x2070
 
-#define ZHOUYI_X2_MAX_REG_OFFSET                    0x322C
+#define ZHOUYI_V3_MAX_REG_OFFSET                    0x322C
 
 u64 get_gm_size(u32 val);
-struct aipu_operations *get_zhouyi_x2_ops(void);
-struct aipu_priv_operations *get_x2_priv_ops(void);
+struct aipu_operations *get_zhouyi_v3_ops(void);
+struct aipu_priv_operations *get_v3_priv_ops(void);
 
-#endif /* __X2_H__ */
+#endif /* __V3_H__ */

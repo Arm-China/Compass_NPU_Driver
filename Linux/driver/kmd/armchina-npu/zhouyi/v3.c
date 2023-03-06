@@ -6,11 +6,11 @@
 #include <linux/mutex.h>
 #include <linux/delay.h>
 #include "aipu_priv.h"
-#include "x2.h"
+#include "v3.h"
 #include "aipu_io.h"
 #include "config.h"
 
-static void zhouyi_x2_set_partition(struct aipu_partition *partition, u32 cluster_id)
+static void zhouyi_v3_set_partition(struct aipu_partition *partition, u32 cluster_id)
 {
 	u32 nums = GET_NUMS(aipu_read32(partition->reg, CLUSTER_CONFIG_REG(cluster_id)));
 
@@ -18,7 +18,7 @@ static void zhouyi_x2_set_partition(struct aipu_partition *partition, u32 cluste
 		     ENABLE_CLUSTER(partition->id, nums));
 }
 
-static void zhouyi_x2_enable_interrupt(struct aipu_partition *partition)
+static void zhouyi_v3_enable_interrupt(struct aipu_partition *partition)
 {
 	u32 cmd_pool_id = partition->id;
 
@@ -26,7 +26,7 @@ static void zhouyi_x2_enable_interrupt(struct aipu_partition *partition)
 		     EN_TEC_INTR | EN_CORE_INTR | EN_CLUSTER_INTR | EN_ALL_TYPE_INTRS);
 }
 
-static void zhouyi_x2_config_partition_cmd_pool(struct aipu_partition *partition)
+static void zhouyi_v3_config_partition_cmd_pool(struct aipu_partition *partition)
 {
 	u32 cmd_pool_id = partition->id;
 
@@ -35,19 +35,19 @@ static void zhouyi_x2_config_partition_cmd_pool(struct aipu_partition *partition
 	aipu_write32(partition->reg, CMD_POOL_SECURE_REG_REG(cmd_pool_id), SET_NONSECURE_MODE);
 }
 
-static void zhouyi_x2_disable_interrupt(struct aipu_partition *partition)
+static void zhouyi_v3_disable_interrupt(struct aipu_partition *partition)
 {
 	u32 cmd_pool_id = partition->id;
 
 	aipu_write32(partition->reg, CMD_POOL_INTR_CTRL_REG(cmd_pool_id), DISABLE_ALL_INTRS);
 }
 
-static void zhouyi_x2_trigger(struct aipu_partition *partition)
+static void zhouyi_v3_trigger(struct aipu_partition *partition)
 {
 	/* no operation here */
 }
 
-static int zhouyi_x2_create_command_pool(struct aipu_partition *partition)
+static int zhouyi_v3_create_command_pool(struct aipu_partition *partition)
 {
 	if (IS_CMD_POOL_BUSY(aipu_read32(partition->reg, CMD_POOL_STATUS_REG(partition->id))))
 		return 0;
@@ -56,16 +56,16 @@ static int zhouyi_x2_create_command_pool(struct aipu_partition *partition)
 		     TSM_CREATE_CMD_POOL(partition->id, TSM_MAP_ALL));
 
 	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
-		dev_err(partition->dev, "x2: create command pool #%d failed (cmd 0x%x)\n",
+		dev_err(partition->dev, "create command pool #%d failed (cmd 0x%x)\n",
 			partition->id, TSM_CREATE_CMD_POOL(partition->id, TSM_MAP_ALL));
 		return -EFAULT;
 	}
 
-	dev_info(partition->dev, "x2: command pool #%d was created\n", partition->id);
+	dev_info(partition->dev, "command pool #%d was created\n", partition->id);
 	return 0;
 }
 
-static int zhouyi_x2_destroy_command_pool(struct aipu_partition *partition)
+static int zhouyi_v3_destroy_command_pool(struct aipu_partition *partition)
 {
 	aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_HIGH_REG, 0);
 	aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_LOW_REG, 0);
@@ -74,28 +74,28 @@ static int zhouyi_x2_destroy_command_pool(struct aipu_partition *partition)
 		     TSM_DESTROY_CMD_POOL(partition->id));
 
 	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
-		dev_err(partition->dev, "x2: destroy command pool #%d failed (cmd 0x%x)\n",
+		dev_err(partition->dev, "destroy command pool #%d failed (cmd 0x%x)\n",
 			partition->id, TSM_DESTROY_CMD_POOL(partition->id));
 		return -EFAULT;
 	}
 
-	dev_info(partition->dev, "x2: command pool #%d was destroyed\n", partition->id);
+	dev_info(partition->dev, "command pool #%d was destroyed\n", partition->id);
 	return 0;
 }
 
-static int zhouyi_x2_abort_command_pool(struct aipu_partition *partition)
+static int zhouyi_v3_abort_command_pool(struct aipu_partition *partition)
 {
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
 		     TSM_ABORT_CMD_POOL(partition->id));
 
 	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
-		dev_err(partition->dev, "x2: abort command pool #%d failed (cmd 0x%x)\n",
+		dev_err(partition->dev, "abort command pool #%d failed (cmd 0x%x)\n",
 			partition->id, TSM_ABORT_CMD_POOL(partition->id));
 		return -EFAULT;
 	}
 
 	udelay(partition->priv->reset_delay_us);
-	dev_info(partition->dev, "x2: command pool #%d was aborted\n", partition->id);
+	dev_info(partition->dev, "command pool #%d was aborted\n", partition->id);
 	return 0;
 }
 
@@ -106,7 +106,7 @@ static int get_qos(u32 exec_flag)
 	return TSM_QOS_SLOW;
 }
 
-static int zhouyi_x2_reserve(struct aipu_partition *partition, struct aipu_job_desc *udesc,
+static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_desc *udesc,
 			     int trigger_type)
 {
 	int ret = 0;
@@ -114,25 +114,25 @@ static int zhouyi_x2_reserve(struct aipu_partition *partition, struct aipu_job_d
 	if (unlikely(!partition || !udesc))
 		return -EINVAL;
 
-	if (trigger_type == ZHOUYI_X2_TRIGGER_TYPE_CREATE) {
-		ret = zhouyi_x2_create_command_pool(partition);
+	if (trigger_type == ZHOUYI_V3_TRIGGER_TYPE_CREATE) {
+		ret = zhouyi_v3_create_command_pool(partition);
 		if (ret)
 			return ret;
 	}
 
 	if (IS_CMD_POOL_IDLE(aipu_read32(partition->reg, CMD_POOL_STATUS_REG(partition->id)))) {
-		dev_err(partition->dev, "x2: create command pool #%d failed (pool idle)\n",
+		dev_err(partition->dev, "create command pool #%d failed (pool idle)\n",
 			partition->id);
 		return -EFAULT;
 	}
 
-	if (trigger_type == ZHOUYI_X2_TRIGGER_TYPE_CREATE ||
-	    trigger_type == ZHOUYI_X2_TRIGGER_TYPE_UPDATE_DISPATCH) {
+	if (trigger_type == ZHOUYI_V3_TRIGGER_TYPE_CREATE ||
+	    trigger_type == ZHOUYI_V3_TRIGGER_TYPE_UPDATE_DISPATCH) {
 		aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_HIGH_REG, udesc->head_tcb_pa >> 32);
 		aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_LOW_REG, (u32)udesc->head_tcb_pa);
 	}
 
-	dev_dbg(partition->dev, "[Job 0x%llx] x2 scheduler: TCB head 0x%llx\n",
+	dev_dbg(partition->dev, "[Job 0x%llx] scheduler: TCB head 0x%llx\n",
 		udesc->job_id, udesc->head_tcb_pa);
 
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_INFO_REG, (u16)udesc->job_id);
@@ -148,7 +148,7 @@ static int zhouyi_x2_reserve(struct aipu_partition *partition, struct aipu_job_d
 	return ret;
 }
 
-int zhouyi_x2_exit_dispatch(struct aipu_partition *partition, u32 job_flag, u64 tcb_pa)
+int zhouyi_v3_exit_dispatch(struct aipu_partition *partition, u32 job_flag, u64 tcb_pa)
 {
 	/* assume command pool has been created */
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
@@ -160,21 +160,21 @@ int zhouyi_x2_exit_dispatch(struct aipu_partition *partition, u32 job_flag, u64 
 		return -EFAULT;
 	}
 
-	dev_dbg(partition->dev, "[Job 0x%x] x2 scheduler: exit TCB head 0x%llx\n", 0, tcb_pa);
+	dev_dbg(partition->dev, "[Job 0x%x] scheduler: exit TCB head 0x%llx\n", 0, tcb_pa);
 	return 0;
 }
 
-static bool zhouyi_x2_is_idle(struct aipu_partition *partition)
+static bool zhouyi_v3_is_idle(struct aipu_partition *partition)
 {
 	return !IS_CMD_POOL_FULL(aipu_read32(partition->reg, TSM_STATUS_REG));
 }
 
-static void zhouyi_x2_print_hw_id_info(struct aipu_partition *partition)
+static void zhouyi_v3_print_hw_id_info(struct aipu_partition *partition)
 {
 	struct aipu_priv *aipu = partition->priv;
 	u32 iter = 0;
 
-	dev_info(aipu->dev, "############# ZHOUYI X2 AIPU #############");
+	dev_info(aipu->dev, "############# ZHOUYI V3 AIPU #############");
 	dev_info(aipu->dev, "# Maximum Partition Count: %d", aipu->max_partition_cnt);
 	dev_info(aipu->dev, "# Maximum Command Pool Count: %d", aipu->max_cmd_pool_cnt);
 	dev_info(aipu->dev, "# Enabled Partition Count: %d", aipu->partition_cnt);
@@ -193,38 +193,38 @@ static void zhouyi_x2_print_hw_id_info(struct aipu_partition *partition)
 	dev_info(aipu->dev, "##########################################");
 }
 
-static int zhouyi_x2_io_rw(struct aipu_partition *partition, struct aipu_io_req *io_req)
+static int zhouyi_v3_io_rw(struct aipu_partition *partition, struct aipu_io_req *io_req)
 {
 	if (unlikely(!io_req))
 		return -EINVAL;
 
-	if (!partition || io_req->offset > ZHOUYI_X2_MAX_REG_OFFSET)
+	if (!partition || io_req->offset > ZHOUYI_V3_MAX_REG_OFFSET)
 		return -EINVAL;
 
 	zhouyi_io_rw(partition->reg, io_req);
 	return 0;
 }
 
-static void zhouyi_x2_disable_tick_counter(struct aipu_partition *partition)
+static void zhouyi_v3_disable_tick_counter(struct aipu_partition *partition)
 {
 	aipu_write32(partition->reg, TICK_COUNTER_CONTROL_STATUS_REG, DISABLE_COUNTER);
 }
 
-static void zhouyi_x2_enable_tick_counter(struct aipu_partition *partition)
+static void zhouyi_v3_enable_tick_counter(struct aipu_partition *partition)
 {
 	aipu_write32(partition->reg, TICK_COUNTER_CONTROL_STATUS_REG, ENABLE_COUNTER);
 }
 
-static void zhouyi_x2_initialize(struct aipu_partition *partition)
+static void zhouyi_v3_initialize(struct aipu_partition *partition)
 {
 	int iter = 0;
 
 	for (iter = 0; iter < partition->cluster_cnt; iter++)
-		zhouyi_x2_set_partition(partition, partition->clusters[iter].id);
+		zhouyi_v3_set_partition(partition, partition->clusters[iter].id);
 
-	zhouyi_x2_config_partition_cmd_pool(partition);
-	zhouyi_x2_enable_interrupt(partition);
-	zhouyi_x2_disable_tick_counter(partition);
+	zhouyi_v3_config_partition_cmd_pool(partition);
+	zhouyi_v3_enable_interrupt(partition);
+	zhouyi_v3_disable_tick_counter(partition);
 }
 
 static int partition_upper_half(struct aipu_partition *partition)
@@ -288,7 +288,7 @@ static int partition_upper_half(struct aipu_partition *partition)
 	return IRQ_HANDLED;
 }
 
-static int zhouyi_x2_upper_half(void *data)
+static int zhouyi_v3_upper_half(void *data)
 {
 	struct aipu_partition *partition = (struct aipu_partition *)data;
 	struct aipu_priv *aipu = partition->priv;
@@ -300,13 +300,13 @@ static int zhouyi_x2_upper_half(void *data)
 	return IRQ_HANDLED;
 }
 
-static void zhouyi_x2_bottom_half(void *data)
+static void zhouyi_v3_bottom_half(void *data)
 {
 	aipu_job_manager_irq_bottom_half(data);
 }
 
 #ifdef CONFIG_SYSFS
-static int zhouyi_x2_sysfs_show(struct aipu_partition *partition, char *buf)
+static int zhouyi_v3_sysfs_show(struct aipu_partition *partition, char *buf)
 {
 	int ret = 0;
 	char tmp[512];
@@ -382,7 +382,7 @@ static int zhouyi_x2_sysfs_show(struct aipu_partition *partition, char *buf)
 }
 #endif
 
-int zhouyi_x2_soft_reset(struct aipu_partition *partition, bool init_regs)
+int zhouyi_v3_soft_reset(struct aipu_partition *partition, bool init_regs)
 {
 	int ret = 0;
 	struct aipu_priv *aipu = partition->priv;
@@ -403,30 +403,30 @@ u64 get_gm_size(u32 val)
 	return _val ? 512 * SZ_1K : (SZ_1M << (_val - 1));
 }
 
-static struct aipu_operations zhouyi_x2_ops = {
+static struct aipu_operations zhouyi_v3_ops = {
 	.get_config = NULL,
-	.enable_interrupt = zhouyi_x2_enable_interrupt,
-	.disable_interrupt = zhouyi_x2_disable_interrupt,
-	.trigger = zhouyi_x2_trigger,
-	.reserve = zhouyi_x2_reserve,
-	.is_idle = zhouyi_x2_is_idle,
-	.print_hw_id_info = zhouyi_x2_print_hw_id_info,
-	.io_rw = zhouyi_x2_io_rw,
-	.upper_half = zhouyi_x2_upper_half,
-	.bottom_half = zhouyi_x2_bottom_half,
+	.enable_interrupt = zhouyi_v3_enable_interrupt,
+	.disable_interrupt = zhouyi_v3_disable_interrupt,
+	.trigger = zhouyi_v3_trigger,
+	.reserve = zhouyi_v3_reserve,
+	.is_idle = zhouyi_v3_is_idle,
+	.print_hw_id_info = zhouyi_v3_print_hw_id_info,
+	.io_rw = zhouyi_v3_io_rw,
+	.upper_half = zhouyi_v3_upper_half,
+	.bottom_half = zhouyi_v3_bottom_half,
 #ifdef CONFIG_SYSFS
-	.sysfs_show = zhouyi_x2_sysfs_show,
+	.sysfs_show = zhouyi_v3_sysfs_show,
 #endif
-	.soft_reset = zhouyi_x2_soft_reset,
-	.initialize = zhouyi_x2_initialize,
-	.destroy_command_pool = zhouyi_x2_destroy_command_pool,
-	.abort_command_pool = zhouyi_x2_abort_command_pool,
-	.exit_dispatch = zhouyi_x2_exit_dispatch,
-	.disable_tick_counter = zhouyi_x2_disable_tick_counter,
-	.enable_tick_counter = zhouyi_x2_enable_tick_counter,
+	.soft_reset = zhouyi_v3_soft_reset,
+	.initialize = zhouyi_v3_initialize,
+	.destroy_command_pool = zhouyi_v3_destroy_command_pool,
+	.abort_command_pool = zhouyi_v3_abort_command_pool,
+	.exit_dispatch = zhouyi_v3_exit_dispatch,
+	.disable_tick_counter = zhouyi_v3_disable_tick_counter,
+	.enable_tick_counter = zhouyi_v3_enable_tick_counter,
 };
 
-struct aipu_operations *get_zhouyi_x2_ops(void)
+struct aipu_operations *get_zhouyi_v3_ops(void)
 {
-	return &zhouyi_x2_ops;
+	return &zhouyi_v3_ops;
 }

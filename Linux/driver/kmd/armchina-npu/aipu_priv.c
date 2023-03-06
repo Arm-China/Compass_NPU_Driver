@@ -5,9 +5,9 @@
 #include <linux/of_address.h>
 #include "aipu_priv.h"
 #include "config.h"
-#include "z1.h"
-#include "x1.h"
-#include "x2.h"
+#include "v1.h"
+#include "v2.h"
+#include "v3.h"
 
 static int init_misc_dev(struct aipu_priv *aipu)
 {
@@ -75,14 +75,14 @@ int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,
 	dev_dbg(aipu->dev, "AIPU core0 ISA version %d, configuration %d\n", version, config);
 	aipu->version = version;
 
-#ifdef CONFIG_ARMCHINA_NPU_ARCH_X2
-	if (version == AIPU_ISA_VERSION_ZHOUYI_X2)
-		aipu->ops = get_x2_priv_ops();
+#ifdef CONFIG_ARMCHINA_NPU_ARCH_V3
+	if (version == AIPU_ISA_VERSION_ZHOUYI_V3)
+		aipu->ops = get_v3_priv_ops();
 #endif
 
-#if (defined CONFIG_ARMCHINA_NPU_ARCH_Z1) || (defined CONFIG_ARMCHINA_NPU_ARCH_X1)
-	if (version > 0 && version <= AIPU_ISA_VERSION_ZHOUYI_X1)
-		aipu->ops = get_legacy_priv_ops();
+#if (defined CONFIG_ARMCHINA_NPU_ARCH_V1) || (defined CONFIG_ARMCHINA_NPU_ARCH_V2)
+	if (version > 0 && version <= AIPU_ISA_VERSION_ZHOUYI_V2_2)
+		aipu->ops = get_v12_priv_ops();
 #endif
 
 	if (!aipu->ops) {
@@ -149,8 +149,8 @@ int aipu_priv_get_version(struct aipu_priv *aipu)
 
 /**
  * @aipu_priv_get_partition_cnt() - get AIPU partition count
- *        For Z1/Z2/Z3/X1, a *partition* represents an AIPU core
- *        For X2, a *partition* represents a group of AIPU clusters in the same power domain
+ *        For V1/V2, a *partition* represents an AIPU core
+ *        For V3, a *partition* represents a group of AIPU clusters in the same power domain
  * @aipu: pointer to the aipu private struct initialized in init_aipu_priv()
  *
  * Return AIPU partition count

@@ -7,7 +7,7 @@
 #include "aipu_partition.h"
 #include "aipu_common.h"
 #include "zhouyi.h"
-#include "x2.h"
+#include "v3.h"
 
 static int init_aipu_partition(struct aipu_partition *partition, u32 *clusters, int tot_cluster,
 			       struct platform_device *p_dev)
@@ -27,7 +27,7 @@ static int init_aipu_partition(struct aipu_partition *partition, u32 *clusters, 
 	partition->reg = &partition->priv->reg;
 	partition->irq_obj = partition->priv->irq_obj;
 	mutex_init(&partition->reset_lock);
-	partition->ops = get_zhouyi_x2_ops();
+	partition->ops = get_zhouyi_v3_ops();
 
 	/* unused fields */
 	partition->reg_attr = NULL;
@@ -73,7 +73,7 @@ static int init_aipu_partition(struct aipu_partition *partition, u32 *clusters, 
 	return ret;
 }
 
-static struct aipu_partition *x2_create_partitions(struct aipu_priv *aipu,
+static struct aipu_partition *v3_create_partitions(struct aipu_priv *aipu,
 						   int id, struct platform_device *p_dev)
 {
 	int ret = 0;
@@ -90,7 +90,7 @@ static struct aipu_partition *x2_create_partitions(struct aipu_priv *aipu,
 		return ERR_PTR(-EINVAL);
 
 	zhouyi_detect_aipu_version(p_dev, &version, &config);
-	dev_info(&p_dev->dev, "AIPU detected: zhouyi-x2\n");
+	dev_info(&p_dev->dev, "AIPU detected: zhouyi-v3\n");
 
 	WARN_ON(!aipu->is_init);
 
@@ -189,7 +189,7 @@ finish:
 	return partitions;
 }
 
-static void x2_destroy_partitions(struct aipu_priv *aipu)
+static void v3_destroy_partitions(struct aipu_priv *aipu)
 {
 	int i = 0;
 
@@ -209,18 +209,18 @@ static void x2_destroy_partitions(struct aipu_priv *aipu)
 	}
 }
 
-int x2_global_soft_reset(struct aipu_priv *aipu)
+int v3_global_soft_reset(struct aipu_priv *aipu)
 {
 	return zhouyi_soft_reset(&aipu->reg, TSM_SOFT_RESET_REG, aipu->reset_delay_us);
 }
 
-static struct aipu_priv_operations x2_priv_ops = {
-	.create_partitions = x2_create_partitions,
-	.destroy_partitions = x2_destroy_partitions,
-	.global_soft_reset = x2_global_soft_reset,
+static struct aipu_priv_operations v3_priv_ops = {
+	.create_partitions = v3_create_partitions,
+	.destroy_partitions = v3_destroy_partitions,
+	.global_soft_reset = v3_global_soft_reset,
 };
 
-struct aipu_priv_operations *get_x2_priv_ops(void)
+struct aipu_priv_operations *get_v3_priv_ops(void)
 {
-	return &x2_priv_ops;
+	return &v3_priv_ops;
 }

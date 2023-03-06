@@ -92,7 +92,7 @@ inline aipu_status_t set_target(uint32_t graph_version, DeviceBase** dev,
         } else if (nullptr == *dev) {
             SimulatorV3 *v3_sim = nullptr;
             *dev = v3_sim = SimulatorV3::get_v3_simulator(cfg);
-            v3_sim->has_target(AIPU_ARCH_ZHOUYI, AIPU_ISA_VERSION_ZHOUYI_X2, 1204, 0);
+            v3_sim->has_target(AIPU_ARCH_ZHOUYI, AIPU_ISA_VERSION_ZHOUYI_V3, 1204, 0);
         }
     }
 

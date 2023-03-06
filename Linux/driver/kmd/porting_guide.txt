@@ -30,14 +30,14 @@
 |   |-- config.h
 |   |-- zhouyi                      -> Architecture specific implementations
 |   |   |-- Makefile
-|   |   |-- x2.c                    -> Zhouyi X2 specific
-|   |   |-- x2.h
-|   |   |-- x2_priv.c
-|   |   |-- z1.c                    -> Zhouyi Z1 specific
-|   |   |-- z1.h
-|   |   |-- x1.c                    -> Zhouyi Z2/Z3/X1 specific
-|   |   |-- x1.h
-|   |   |-- legacy_priv.c           -> Common for Zhouyi Z1/Z2/Z3/X1
+|   |   |-- v1.c                    -> Zhouyi V1 specific
+|   |   |-- v1.h
+|   |   |-- v2.c                    -> Zhouyi V2 specific
+|   |   |-- v2.h
+|   |   |-- v12_priv.c              -> Common for Zhouyi V1 & V2
+|   |   |-- v3.c                    -> Zhouyi V3 specific
+|   |   |-- v3.h
+|   |   |-- v3_priv.c
 |   |   |-- zhouyi.c                -> Common for Zhouyi architectures
 |   |   `-- zhouyi.h
 |   |-- default                     -> SoC integration implementation sample (default version)
@@ -74,12 +74,10 @@ you are suggested to update the build_all.sh and build with
 The above build commands by default build all the implementations of different Zhouyi architectures.
 If you would like to build for a single/compatible Zhouyi architecture(s), try to execute like:
 
-    $./build_all.sh -p MY_SOC -v z1     #build Zhouyi Z1 only
-    $./build_all.sh -p MY_SOC -v z2     #build Zhouyi Z2/Z3/X1 compatible version
-    $./build_all.sh -p MY_SOC -v z3     #build Zhouyi Z2/Z3/X1 compatible version
-    $./build_all.sh -p MY_SOC -v x1     #build Zhouyi Z2/Z3/X1 compatible version
-    $./build_all.sh -p MY_SOC -v x2     #build Zhouyi X2 only
-    $./build_all.sh -p MY_SOC           #build Zhouyi Z1/Z2/Z3/X1/X2 compatible version
+    $./build_all.sh -p MY_SOC -v v1     #build Zhouyi V1 only
+    $./build_all.sh -p MY_SOC -v v2     #build Zhouyi V2 compatible version (including Z2/Z3/X1)
+    $./build_all.sh -p MY_SOC -v v3     #build Zhouyi V3 only
+    $./build_all.sh -p MY_SOC           #build Zhouyi V1/V2/V3 compatible version
 
 2.2 Build in kernel
 -------------------
@@ -96,25 +94,25 @@ KMD supports to be built in Linux kernel. To build NPU driver in-tree, please fo
         (add the following line into drivers/misc/Makefile)
         obj-$(CONFIG_ARMCHINA_NPU)      += armchina-npu/
     4. config NPU driver by executing "make menuconfig ARCH=arm64":
-        4.1. if you use Zhouyi Z1 NPUs, please select
+        4.1. if you use Zhouyi V1 NPUs, please select
 
-                "ArmChina NPU architecture: z1"
+                "ArmChina NPU architecture: v1"
 
-            to set CONFIG_ARMCHINA_NPU_ARCH_Z1. CONFIG_ARMCHINA_NPU will be set
+            to set CONFIG_ARMCHINA_NPU_ARCH_V1. CONFIG_ARMCHINA_NPU will be set
             if you select this config.
 
-        4.2. if you use Zhouyi Z2/Z3/X1 NPUs, please select
+        4.2. if you use Zhouyi V2 NPUs (i.e. Z2 or Z3 or X1), please select
 
-                "ArmChina NPU architecture: z2/z3/x1"
+                "ArmChina NPU architecture: v2"
 
-            to set CONFIG_ARMCHINA_NPU_ARCH_X1. CONFIG_ARMCHINA_NPU will be set
+            to set CONFIG_ARMCHINA_NPU_ARCH_V2. CONFIG_ARMCHINA_NPU will be set
             if you select this config.
 
-        4.3. if you use Zhouyi X2 NPUs, please select
+        4.3. if you use Zhouyi V3 NPUs, please select
 
-                "ArmChina NPU architecture: x2"
+                "ArmChina NPU architecture: v3"
 
-            to set CONFIG_ARMCHINA_NPU_ARCH_X2. CONFIG_ARMCHINA_NPU will be set
+            to set CONFIG_ARMCHINA_NPU_ARCH_V3. CONFIG_ARMCHINA_NPU will be set
             if you select this config.
 
         4.4. if you use the default SoC API implementations provided by ArmChina,
@@ -148,19 +146,17 @@ should be configured correctly.
 By default, based on the architecture version of the AIPU on your chip,
 the value of the compatible attribute should be one of the following strings:
 
-    "armchina,zhouyi-v1"    ->  Zhouyi Z1
-    "armchina,zhouyi-v2"    ->  Zhouyi Z2
-    "armchina,zhouyi-v3"    ->  Zhouyi Z3
-    "armchina,zhouyi-x1"    ->  Zhouyi X1
-    "armchina,zhouyi-x2"    ->  Zhouyi X2
-    "armchina,zhouyi"       ->  Zhouyi Z1/Z2/Z3/X1/X2
+    "armchina,zhouyi-v1"    ->  Zhouyi V1
+    "armchina,zhouyi-v2"    ->  Zhouyi V2
+    "armchina,zhouyi-v3"    ->  Zhouyi V3
+    "armchina,zhouyi"       ->  Zhouyi V1/V2/V3
 
-For example, you may configure for Zhouyi X1 AIPU as:
+For example, you may configure for Zhouyi V2 AIPU as:
 
     /* case 1 */
     /* assume that 0x64000000 is the base address of AIPU registers on your SoC */
     aipu@64000000 {
-        compatible = "armchina,zhouyi-x1";
+        compatible = "armchina,zhouyi-v2";
         /* other attributes */
         /* ... */
     };
@@ -178,7 +174,7 @@ This attribute is mandatory.
 
 3.1.2 Core ID
 -------------
-Zhouyi driver supports mutiple AIPU instances for Zhouyi Z1/Z2/Z3/X1. You should provide the same
+Zhouyi driver supports mutiple AIPU instances for Zhouyi V1 & V2. You should provide the same
 number of aipu nodes as AIPU core instances and specify corresponding core-id attribute in every node.
 
 For example, assume that your SoC contains 2 Zhouyi AIPU cores, you may configure as:
@@ -198,7 +194,7 @@ For example, assume that your SoC contains 2 Zhouyi AIPU cores, you may configur
         /* ... */
     };
 
-This attribute is mandatory for Z1/Z2/Z3/X1 multiple instances scenario. For a single core case or X2,
+This attribute is mandatory for V1/V2 multiple instances scenario. For a single core case or V3,
 you can omit it.
 
 3.1.3 Register base
@@ -267,7 +263,7 @@ regions to be reserved to be 32 because Linux kernel accepts 64 at maximum.
 
 For *dtcm* type, currently we only accept to reserve at maximum one region. If you would like to reserve
 an address in SRAM or memory to be used as a DTCM region, please use the *dtcm* type. *dtcm* type only works
-for X1 and X2.
+for V2 (X1) and V3.
 
 The regions can be reserved in any sequence.
 
@@ -321,13 +317,13 @@ make AIPU share the same region with other devices or monopolize it, to reserve 
 CMA way. Those memory reservation methods result in different system memory management in Linux and
 AIPU uses those addresses with no difference.
 
-As given in Zhouyi Z1/Z2/Z3/X1/X2 specification, the valid address space AIPU could use is within
+As given in Zhouyi V1 ~ V3 specification, the valid address space AIPU could use is within
 [0x0, 0x100000000). To avoid touching the reserved regions, AIPU driver furtherly restricts the memory
 region reserved/allocated for AIPU:
 
-    > For Zhouyi Z1: within [0x0, 0xC0000000);
-    > For Zhouyi Z1/Z3/X1: lower 32 bits address within [0x0, 0xC0000000); no limits for higher 32 bits;
-    > For Zhouyi X2: lower 32 bits address within [0x0, 0xE0000000); no limits for higher 32 bits;
+    > For Zhouyi V1: within [0x0, 0xC0000000);
+    > For Zhouyi V2: lower 32 bits address within [0x0, 0xC0000000); no limits for higher 32 bits;
+    > For Zhouyi V3: lower 32 bits address within [0x0, 0xE0000000); no limits for higher 32 bits;
 
 Note that how many bytes to reserve depends on your target application scenario. The following values
 to reserve are just for the purpose of usage demo. For example,
@@ -436,13 +432,13 @@ from userspace will be enabled.
 3.1.4.4 DTCM
 ------------
 AIPU Data Tightly Coupled Memory (DTCM) is an address space for high-speed accessing (like SRAM) on
-Zhouyi X1. Zhouyi X1 SoC vendor may provide a DTCM region to speedup the model inference.
+Zhouyi V2 (X1) or V3. Zhouyi V2 (X1) or V3 SoC vendor may provide a DTCM region to speedup the model inference.
 
 If DTCM is configured, the size of it should be a value within a list (spec requires):
 
     {512KB, 1MB, 2MB, 3MB, ..., 31MB, 32MB}
 
-DTCM region is optional for X1/X2. Please find the example in 3.1.4.
+DTCM region is optional for V2 (X1) or V3. Please find the example in 3.1.4.
 
 If host CPUs on your SoC have no access to a DTCM region (but your NPUs have), it is still necessary to
 reserve a DTCM region in DTS because driver should configure the reserved DTCM address in the NPU register.
@@ -539,7 +535,7 @@ This attribute is mandatory in all cases.
 
 3.1.7 Cluster-Partition Pair
 ----------------------------
-Zhouyi X2 hardware is organized in such architecture: partition > cluster > core > TEC.
+Zhouyi V3 hardware is organized in such architecture: partition > cluster > core > TEC.
 Driver should configure the partition number and cluster info. in each partition.
 
 We use the cluster-partition pair in DTS to specify their relationships:
@@ -575,11 +571,11 @@ For example, if the AIPU on your system has only one cluster, you can configure 
         /* ... */
     };
 
-This attribute is mandatory for X2. For other architectures, you can omit it.
+This attribute is mandatory for V3. For other architectures, you can omit it.
 
 3.1.8 GM-Policy
 ---------------
-In Zhouyi X2, every AIPU cluster has a General Memory (GM) region caching the address of
+In Zhouyi V3, every AIPU cluster has a General Memory (GM) region caching the address of
 frequently updated data.
 
 We allow AIPU users to configure the usage policy of this region:
@@ -591,7 +587,7 @@ You should set this attribute as:
 
     /* policy 1 */
     aipu@64000000 {
-        compatible = "armchina,zhouyi-x2";
+        compatible = "armchina,zhouyi";
         gm-policy = <1>;
         /* other attributes */
         /* ... */
@@ -599,7 +595,7 @@ You should set this attribute as:
 
     /* policy 2 */
     aipu@64000000 {
-        compatible = "armchina,zhouyi-x2";
+        compatible = "armchina,zhouyi";
         gm-policy = <2>;
         /* other attributes */
         /* ... */
@@ -619,10 +615,11 @@ armchina_aipu_probe()/armchina_aipu_remove(), respectively.
 
 5. Soft-reset Configurations
 ============================
-5.1 Zhouyi Z1/Z2/Z3
--------------------
-Zhouyi Z1/Z2/Z3 NPUs do not support soft reset function itself. SoC vendors should add this
-feature in SoC level and provide a reset related register externally for driver to use.
+5.1 Zhouyi V1 and V2 (Z2/Z3)
+----------------------------
+Zhouyi V1 and some V2 NPUs (i.e. Z2 and Z3) do not support soft reset function itself.
+SoC vendors should add this feature in SoC level and provide a reset related register externally
+for driver to use.
 
 Zhouyi driver reserve a group of interfaces for you to integrate NPU reset function. Please
 follow these steps to bring up this feature:
@@ -639,8 +636,8 @@ follow these steps to bring up this feature:
        function in your desired positions (you may refer to default/default.c); generally, you should
        reset the NPU if a runtime error/exception occurs;
 
-5.2 Zhouyi X1
--------------
+5.2 Zhouyi V2 (X1)
+------------------
 Zhouyi X1 NPUs support soft reset function. Host CPU can trigger a soft reset operation by
 configuring external register: Soft Reset Reister (0x200). You can find the speficication
 of this register in the Zhouyi X1 NPU TRM doc.
@@ -654,11 +651,11 @@ the following situations:
 
 You may also add your specific implementations about soft reset.
 
-5.3 Zhouyi X2
+5.3 Zhouyi V3
 -------------
-Zhouyi X2 NPUs support soft reset function. Host CPU can trigger a soft reset operation by
+Zhouyi V3 NPUs support soft reset function. Host CPU can trigger a soft reset operation by
 configuring external register: TSM Soft Reset Register (0x20). You can find the speficication
-of this register in the Zhouyi X2 NPU TRM doc.
+of this register in the Zhouyi V3 NPU TRM doc.
 
 Please be noted that a command pool abortion command will result in a soft reset internally
 as well. You should try to use command pool abortion first rather than to use soft reset directly.
@@ -673,12 +670,12 @@ You may also add your specific implementations about soft reset.
 
 5.4 Soft-reset Delay time
 -------------------------
-For Zhouyi X1, you may configure AIPU_CONFIG_DEFAULT_RESET_DELAY_US in ./armchina-npu/config.h
+For Zhouyi V2 (X1), you may configure AIPU_CONFIG_DEFAULT_RESET_DELAY_US in ./armchina-npu/config.h
 to set the soft-reset delay time. When a soft-reset is triggered, driver will check the hardware
 status after this time delay since the reset happens. If the status is abnormal, driver will report
 error and stop to schedule tasks. By default this delay value is 50us.
 
-This feature only works for X1/X2.
+This feature only works for V2 (X1) or V3.
 
 6. Sysfs Debug Interfaces
 =========================
@@ -781,7 +778,7 @@ To do clocking gating/resume, execute the following commands respectively:
     $echo 1 > /sys/devices/platform/64000000.aipu0/soc_clock       #suspend
     $echo 0 > /sys/devices/platform/64000000.aipu0/soc_clock       #resume
 
-This feature only works for Z1/Z2/Z3/X1.
+This feature only works for V1/V2.
 
 6.3 Disable A Core
 ------------------
@@ -801,7 +798,7 @@ To disbale/enable AIPU core #0, execute:
     $echo 1 > /sys/devices/platform/64000000.aipu0/disable      #disable
     $echo 0 > /sys/devices/platform/64000000.aipu0/disable      #enable
 
-This feature only works for Z1/Z2/Z3/X1.
+This feature only works for V1/V2.
 
 7. User Space Driver (UMD)
 ==========================

@@ -74,7 +74,7 @@ aipu_ll_status_t aipudrv::Aipu::init()
     m_dram->set_asid_base(1, cap.asid1_base);
     m_dram->set_asid_base(2, cap.asid2_base);
     m_dram->set_asid_base(3, cap.asid3_base);
-    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_Z1)
+    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V1)
     {
         cap.asid0_base = 0;
         cap.asid1_base = 0;
@@ -88,10 +88,10 @@ aipu_ll_status_t aipudrv::Aipu::init()
     LOG(LOG_DEBUG, "asid0: 0x%llx, asid1: 0x%llx, asid2: 0x%llx, asid3: 0x%llx\n",
         cap.asid0_base, cap.asid1_base, cap.asid2_base, cap.asid3_base);
 
-    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_X1)
+    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
         m_dram->set_dtcm_info(cap.dtcm_base, cap.dtcm_size);
 
-    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_X2)
+    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3)
     {
         if (cap.gm0_size == 0)
             return AIPU_LL_STATUS_ERROR_IOCTL_QUERY_STATUS_FAIL;
@@ -104,8 +104,8 @@ aipu_ll_status_t aipudrv::Aipu::init()
     }
 
     /* success */
-    if ((m_part_caps.at(0).version >= AIPU_ISA_VERSION_ZHOUYI_Z1)
-        && (m_part_caps.at(0).version <= AIPU_ISA_VERSION_ZHOUYI_X1))
+    if ((m_part_caps.at(0).version >= AIPU_ISA_VERSION_ZHOUYI_V1)
+        && (m_part_caps.at(0).version <= AIPU_ISA_VERSION_ZHOUYI_V2_2))
     {
         m_partition_cnt = 0;
         m_cluster_cnt = 0;
@@ -145,7 +145,7 @@ bool aipudrv::Aipu::has_target(uint32_t arch, uint32_t version, uint32_t config,
     {
         if ((arch == m_part_caps[i].arch) &&
             (version == m_part_caps[i].version) &&
-            ((version == AIPU_ISA_VERSION_ZHOUYI_X2) || (config == m_part_caps[i].config)))
+            ((version == AIPU_ISA_VERSION_ZHOUYI_V3) || (config == m_part_caps[i].config)))
             return true;
     }
 

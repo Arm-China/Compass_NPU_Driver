@@ -4,7 +4,7 @@
 #include <linux/irqreturn.h>
 #include <linux/bitops.h>
 #include "aipu_priv.h"
-#include "z1.h"
+#include "v1.h"
 #include "aipu_io.h"
 #include "aipu_common.h"
 #include "config.h"
@@ -20,14 +20,14 @@ static void zhouyi_v1_enable_interrupt(struct aipu_partition *core)
 {
 	if (likely(core))
 		aipu_write32(core->reg, ZHOUYI_CTRL_REG_OFFSET,
-			     ZHOUYIV1_IRQ_ENABLE_FLAG);
+			     ZHOUYI_V1_IRQ_ENABLE_FLAG);
 }
 
 static void zhouyi_v1_disable_interrupt(struct aipu_partition *core)
 {
 	if (likely(core))
 		aipu_write32(core->reg, ZHOUYI_CTRL_REG_OFFSET,
-			     ZHOUYIV1_IRQ_DISABLE_FLAG);
+			     ZHOUYI_V1_IRQ_DISABLE_FLAG);
 }
 
 static void zhouyi_v1_clear_qempty_interrupt(struct aipu_partition *core)

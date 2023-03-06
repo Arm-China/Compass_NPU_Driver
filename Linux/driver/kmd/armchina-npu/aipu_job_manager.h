@@ -12,7 +12,7 @@
 #include <armchina_aipu.h>
 #include "aipu_partition.h"
 #include "aipu_mm.h"
-#include "x2.h"
+#include "v3.h"
 
 enum aipu_state_kern {
 	AIPU_JOB_STATE_IDLE,
@@ -40,7 +40,7 @@ struct aipu_thread_wait_queue {
 };
 
 /**
- * struct job_irq_info - maintain data from the interrupt handler (x2)
+ * struct job_irq_info - maintain data from the interrupt handler (v3)
  * @cluster_id: ID of the cluster trigger interrupts
  * @core_id:    ID of the core trigger interrupts
  * @tec_id:     ID of the TEC trigger interrupts
@@ -73,7 +73,7 @@ struct job_irq_info {
  * @done_time: job termination time (enabled by profiling flag in desc)
  * @pdata: profiling data (enabled by profiling flag in desc)
  * @wake_up: wake up flag
- * @prev_tail_tcb: address of the tail TCB of the previous job linking this job (x2 only)
+ * @prev_tail_tcb: address of the tail TCB of the previous job linking this job (v3 only)
  */
 struct aipu_job {
 	int uthread_id;
@@ -97,7 +97,7 @@ enum aipu_job_qos {
 };
 
 /**
- * struct qos - maintain data in a QoS queue (x2)
+ * struct qos - maintain data in a QoS queue (v3)
  * @pool_head: address of the head of this queue
  * @curr_head: address of the head of the last enqueued TCB lists
  * @curr_tail: address of the tail of the last enqueued TCB lists (i.e. tail of the queue)
@@ -109,7 +109,7 @@ struct qos {
 };
 
 /**
- * struct qos - maintain data in a command pool (x2)
+ * struct qos - maintain data in a command pool (v3)
  * @id: command pool ID
  * @qlist: TCB queue in different QoS lists
  * @created: is this command pool created
@@ -129,7 +129,7 @@ struct command_pool {
  * @partition_cnt:   aipu partition/core count
  * @dev:             pointer to struct device
  * @partitions:      aipu partition/core struct pointer array
- * @pools:           x2 command pools
+ * @pools:           v3 command pools
  * @idle_bmap:       idle flag bitmap for every partition/core
  * @scheduled_head:  scheduled job list head
  * @lock:            spinlock

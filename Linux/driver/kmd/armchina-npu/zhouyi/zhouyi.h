@@ -23,16 +23,16 @@
 #define ZHOUYI_AIPU_IDLE_STATUS               0x70000
 
 /*
- * Revision ID for Z1/Z2/Z3/X1/X2
+ * Revision ID for V1 ~ V3
  */
-#define ZHOUYI_Z1_REVISION_ID                 0x0
-#define ZHOUYI_Z2_REVISION_ID                 0x100
-#define ZHOUYI_Z3_REVISION_ID                 0x200
-#define ZHOUYI_X1_REVISION_ID                 0x300
-#define ZHOUYI_X2_REVISION_ID                 0x10000
+#define ZHOUYI_V1_REVISION_ID                 0x0
+#define ZHOUYI_V2_0_REVISION_ID               0x100
+#define ZHOUYI_V2_1_REVISION_ID               0x200
+#define ZHOUYI_V2_2_REVISION_ID               0x300
+#define ZHOUYI_V3_REVISION_ID                 0x10000
 
 /*
- * Soft Reset for X1/X2
+ * Soft Reset
  */
 #define ZHOUYI_LAUNCH_SOFT_RESET              BIT(0)
 #define ZHOUYI_SOFT_RESET_DONE                BIT(1)
@@ -60,9 +60,9 @@
 #define ZHOUYI_INST_CACHE_FEATURE_REG_OFFSET  0x64
 #define ZHOUYI_DATA_CACHE_FEATURE_REG_OFFSET  0x68
 
-#define ZHOUYI_X2_TRIGGER_TYPE_CREATE                0
-#define ZHOUYI_X2_TRIGGER_TYPE_UPDATE_DISPATCH       1
-#define ZHOUYI_X2_TRIGGER_TYPE_DISPATCH              2
+#define ZHOUYI_V3_TRIGGER_TYPE_CREATE                0
+#define ZHOUYI_V3_TRIGGER_TYPE_UPDATE_DISPATCH       1
+#define ZHOUYI_V3_TRIGGER_TYPE_DISPATCH              2
 
 int zhouyi_read_status_reg(struct io_region *io);
 void zhouyi_clear_qempty_interrupt(struct io_region *io);

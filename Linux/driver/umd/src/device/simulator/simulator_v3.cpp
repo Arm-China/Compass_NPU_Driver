@@ -115,7 +115,7 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
     uint32_t reg_val = 0, sim_code = 0;
     bool ret = false;
 
-    if ((arch != AIPU_ARCH_ZHOUYI) || (version != AIPU_ISA_VERSION_ZHOUYI_X2) || (rev != 0))
+    if ((arch != AIPU_ARCH_ZHOUYI) || (version != AIPU_ISA_VERSION_ZHOUYI_V3) || (rev != 0))
         return false;
 
     pthread_rwlock_wrlock(&m_lock);

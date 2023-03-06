@@ -17,7 +17,7 @@
 #include "aipu_priv.h"
 #include "aipu_mm.h"
 #include "aipu_common.h"
-#include "x1.h"
+#include "v2.h"
 
 static struct device *aipu_mm_create_child_dev(struct device *dev, u32 idx)
 {
@@ -101,7 +101,7 @@ static int aipu_mm_init_mem_region(struct aipu_memory_manager *mm, struct aipu_m
 
 	reg->dev = aipu_mm_create_child_dev(mm->dev, idx);
 
-	/* only head of the list is created; for x2; */
+	/* only head of the list is created; for v3; */
 	reg->tcb_buf_head = create_tcb_buf(mm);
 	if (!reg->tcb_buf_head)
 		goto err;
@@ -519,13 +519,13 @@ static int aipu_mm_create_region(struct aipu_memory_manager *mm, struct aipu_mem
 		u64 upper = addr + size - offset;
 
 		/*
-		 * Z1 only accepts 0~3G region;
-		 * Z2/Z3/X1/X2 has ASE registers therefore accepts 0~3G for lower 32 bits;
+		 * V1 only accepts 0~3G region;
+		 * V2/V3 has ASE registers therefore accepts 0~3G for lower 32 bits;
 		 */
-		if (mm->version == AIPU_ISA_VERSION_ZHOUYI_Z2 ||
-		    mm->version == AIPU_ISA_VERSION_ZHOUYI_Z3 ||
-		    mm->version == AIPU_ISA_VERSION_ZHOUYI_X1 ||
-		    mm->version == AIPU_ISA_VERSION_ZHOUYI_X2)
+		if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V2_0 ||
+		    mm->version == AIPU_ISA_VERSION_ZHOUYI_V2_1 ||
+		    mm->version == AIPU_ISA_VERSION_ZHOUYI_V2_2 ||
+		    mm->version == AIPU_ISA_VERSION_ZHOUYI_V3)
 			upper &= U32_MAX;
 
 		if (upper > mm->limit) {
@@ -615,19 +615,19 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	}
 
 	/* we accept at maximum 2 GM regions: for QoS fast & slow */
-	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_X2)
+	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3)
 		mm->mem[AIPU_MEM_REGION_TYPE_GM].max_cnt = 2;
 	else
 		mm->mem[AIPU_MEM_REGION_TYPE_GM].max_cnt = 0;
 
-	/* currently, we only support one DTCM region in x1/x2 */
-	if (mm->version != AIPU_ISA_VERSION_ZHOUYI_X1 && mm->version != AIPU_ISA_VERSION_ZHOUYI_X2)
+	/* currently, we only support one DTCM region in v2_2/v3 */
+	if (mm->version != AIPU_ISA_VERSION_ZHOUYI_V2_2 && mm->version != AIPU_ISA_VERSION_ZHOUYI_V3)
 		mm->mem[AIPU_MEM_REGION_TYPE_DTCM].max_cnt = 0;
 	else
 		mm->mem[AIPU_MEM_REGION_TYPE_DTCM].max_cnt = 1;
 
 	/**
-	 * Device tree binding for Zhouyi X2:
+	 * Device tree binding for Zhouyi V3:
 	 *
 	 *    gm-policy = <POLICY_NO>;
 	 *
@@ -636,7 +636,7 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	 * 1: GM is shared by all tasks in 1 cluster (by default if this attribute is not provided)
 	 * 2: GM is divided half-by-half: for QoS slow & fast tasks, respectively
 	 */
-	if (version == AIPU_ISA_VERSION_ZHOUYI_X2) {
+	if (version == AIPU_ISA_VERSION_ZHOUYI_V3) {
 		ret = of_property_read_u32(mm->dev->of_node, "gm-policy", &mm->gm_policy);
 		if (ret || mm->gm_policy > AIPU_GM_POLICY_HALF_DIVIDED)
 			mm->gm_policy = AIPU_GM_POLICY_SHARED;
@@ -711,10 +711,10 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 		}
 
 		size = res.end - res.start + 1;
-		if (type == AIPU_MEM_REGION_TYPE_DTCM && size > ZHOUYI_X1_DTCM_MAX_BYTES) {
+		if (type == AIPU_MEM_REGION_TYPE_DTCM && size > ZHOUYI_V2_DTCM_MAX_BYTES) {
 			dev_info(mm->dev,
 				 "the DTCM will be clipped to the maximum configurable value\n");
-			size = ZHOUYI_X1_DTCM_MAX_BYTES;
+			size = ZHOUYI_V2_DTCM_MAX_BYTES;
 		}
 
 		if (of_property_read_u64(np, "host-aipu-offset", &host_aipu_offset))
@@ -785,7 +785,7 @@ int aipu_deinit_mm(struct aipu_memory_manager *mm)
 
 	aipu_mm_deinit_gm(mm);
 
-	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_X2 && mm->gm_policy_attr) {
+	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3 && mm->gm_policy_attr) {
 		aipu_common_destroy_attr(mm->dev, &mm->gm_policy_attr);
 		mm->gm_policy_attr = NULL;
 	}
@@ -834,10 +834,10 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 	}
 
 	/* fall back to SRAM if DTCM/GM is not applicable for certain archs */
-	if (mm->version < AIPU_ISA_VERSION_ZHOUYI_X1 && type == AIPU_MEM_REGION_TYPE_DTCM)
+	if (mm->version < AIPU_ISA_VERSION_ZHOUYI_V2_2 && type == AIPU_MEM_REGION_TYPE_DTCM)
 		type = AIPU_MEM_REGION_TYPE_SRAM;
 
-	if ((mm->version != AIPU_ISA_VERSION_ZHOUYI_X2 || mm->gm_policy == AIPU_GM_POLICY_NONE) &&
+	if ((mm->version != AIPU_ISA_VERSION_ZHOUYI_V3 || mm->gm_policy == AIPU_GM_POLICY_NONE) &&
 	    type == AIPU_MEM_REGION_TYPE_GM)
 		type = AIPU_MEM_REGION_TYPE_SRAM;
 
@@ -1384,7 +1384,7 @@ int aipu_mm_gm_policy_switch(struct aipu_memory_manager *mm, enum aipu_gm_policy
 {
 	int ret = 0;
 
-	if (!mm || mm->version != AIPU_ISA_VERSION_ZHOUYI_X2)
+	if (!mm || mm->version != AIPU_ISA_VERSION_ZHOUYI_V3)
 		return -EINVAL;
 
 	if (next == mm->gm_policy)
@@ -1406,7 +1406,7 @@ void aipu_mm_get_gm(struct aipu_memory_manager *mm, struct aipu_cap *cap)
 	cap->gm1_base = 0;
 	cap->gm1_size = 0;
 
-	if (!mm || mm->version != AIPU_ISA_VERSION_ZHOUYI_X2 ||
+	if (!mm || mm->version != AIPU_ISA_VERSION_ZHOUYI_V3 ||
 	    mm->gm_policy == AIPU_GM_POLICY_NONE)
 		return;
 
