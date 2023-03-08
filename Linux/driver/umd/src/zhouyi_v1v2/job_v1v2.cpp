@@ -249,6 +249,7 @@ aipu_status_t aipudrv::JobV12::schedule()
     desc.kdesc.enable_prof = 0;
     desc.kdesc.exec_flag = AIPU_JOB_EXEC_FLAG_NONE;
     desc.kdesc.dtcm_size_kb = get_graph().m_dtcm_size;
+    desc.kdesc.enable_poll_opt = !m_hw_cfg->poll_in_commit_thread;
     desc.text_size = get_graph().m_text.req_size;
     desc.weight_pa = get_graph().m_weight.pa;
     desc.weight_size = get_graph().m_weight.req_size;
