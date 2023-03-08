@@ -282,6 +282,9 @@ int main(int argc, char* argv[])
             pass = check_result_helper(output_data, output_desc, opt.gt, opt.gt_size);
         }
 
+        input_desc.clear();
+        output_desc.clear();
+
     clean_job:
         ret = aipu_clean_job(ctx, job_id);
         if (ret != AIPU_STATUS_SUCCESS)
