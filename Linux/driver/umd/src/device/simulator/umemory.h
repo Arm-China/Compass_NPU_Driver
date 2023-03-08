@@ -90,8 +90,10 @@ public:
 public:
     static UMemory* get_memory()
     {
-        static UMemory mem_instance;
-        return &mem_instance;
+        if (nullptr == m_mem)
+            m_mem = new UMemory();
+
+        return m_mem;
     }
 
     virtual ~UMemory();
@@ -100,6 +102,7 @@ public:
 
 private:
     UMemory();
+    static UMemory* m_mem;
 };
 }
 

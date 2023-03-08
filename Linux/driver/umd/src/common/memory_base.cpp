@@ -9,6 +9,7 @@
  */
 
 #include <cstring>
+#include <mutex>
 #include "memory_base.h"
 #include "utils/log.h"
 #include "utils/helper.h"
@@ -121,8 +122,10 @@ void aipudrv::MemoryBase::add_tracking(DEV_PA_64 pa, uint64_t size, MemOperation
 
 void aipudrv::MemoryBase::dump_tracking_log_start() const
 {
+    static std::mutex mtex;
     char log[1024];
 
+    std::lock_guard<std::mutex> lock_(mtex);
     if ((m_enable_mem_dump == 0) || (start != 0))
         return;
 
@@ -137,8 +140,10 @@ void aipudrv::MemoryBase::dump_tracking_log_start() const
 
 void aipudrv::MemoryBase::dump_tracking_log_end() const
 {
+    static std::mutex mtex;
     char log[1024];
 
+    std::lock_guard<std::mutex> lock_(mtex);
     if ((m_enable_mem_dump == 0) || (end != 0))
         return;
 

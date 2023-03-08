@@ -33,6 +33,7 @@ aipudrv::MainContext::MainContext()
     const char *umd_log_level_env = getenv("UMD_LOG_LEVEL");
 
     m_dev = nullptr;
+    m_dram = nullptr;
     pthread_rwlock_init(&m_glock, NULL);
     m_sim_cfg.z1_simulator = nullptr;
     m_sim_cfg.z2_simulator = nullptr;
@@ -166,6 +167,7 @@ uint64_t aipudrv::MainContext::create_unique_graph_id_inner() const
 aipu_status_t aipudrv::MainContext::create_graph_object(std::istream& gbin, uint32_t size,
     uint64_t id, GraphBase** gobj)
 {
+    static std::mutex mtex;
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     GraphBase* p_gobj = nullptr;
     uint32_t g_version = 0;
@@ -181,7 +183,11 @@ aipu_status_t aipudrv::MainContext::create_graph_object(std::istream& gbin, uint
     if (AIPU_STATUS_SUCCESS != ret)
         goto finish;
 
-    m_dram = m_dev->get_mem();
+    {
+        std::lock_guard<std::mutex> lock_(mtex);
+        if (m_dram == nullptr)
+            m_dram = m_dev->get_mem();
+    }
 
 #if (defined ZHOUYI_V12)
     if (AIPU_LOADABLE_GRAPH_V0005 == g_version)

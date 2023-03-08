@@ -21,6 +21,7 @@
 #include "utils/log.h"
 #include "utils/helper.h"
 
+aipudrv::UKMemory* aipudrv::UKMemory::m_mem = nullptr;
 aipudrv::UKMemory::UKMemory(int fd): MemoryBase()
 {
     m_fd = fd;

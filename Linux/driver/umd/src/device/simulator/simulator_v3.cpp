@@ -61,6 +61,7 @@ aipudrv::SimulatorV3::~SimulatorV3()
     }
 
     pthread_rwlock_destroy(&m_lock);
+    delete m_dram;
     m_dram = nullptr;
 }
 
