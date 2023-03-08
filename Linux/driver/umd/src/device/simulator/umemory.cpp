@@ -14,7 +14,6 @@
 #include "utils/log.h"
 #include "utils/helper.h"
 
-aipudrv::UMemory* aipudrv::UMemory::m_mem = nullptr;
 aipudrv::UMemory::UMemory(): MemoryBase(), sim_aipu::IMemEngine()
 {
     /**

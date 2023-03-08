@@ -50,10 +50,8 @@ public:
 public:
     static UKMemory* get_memory(int fd)
     {
-        if (nullptr == m_mem)
-            m_mem = new UKMemory(fd);
-
-        return m_mem;
+        static UKMemory mem_instance(fd);
+        return &mem_instance;
     }
 
     virtual ~UKMemory();
@@ -62,7 +60,6 @@ public:
 
 private:
     UKMemory(int fd);
-    static UKMemory* m_mem;
 };
 }
 

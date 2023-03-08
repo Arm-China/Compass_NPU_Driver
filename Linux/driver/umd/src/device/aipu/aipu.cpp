@@ -129,10 +129,7 @@ fail:
 void aipudrv::Aipu::deinit()
 {
     if (m_dram != nullptr)
-    {
-        delete m_dram;
         m_dram = nullptr;
-    }
 
     if (m_fd > 0)
     {
