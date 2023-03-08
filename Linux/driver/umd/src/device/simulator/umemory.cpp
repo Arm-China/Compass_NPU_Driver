@@ -77,7 +77,11 @@ aipudrv::UMemory::~UMemory()
     for (auto bm_iter = m_allocated.begin(); bm_iter != m_allocated.end(); bm_iter++)
         free(&bm_iter->second.desc, nullptr);
 
+    for (auto bm_iter = m_reserved.begin(); bm_iter != m_reserved.end(); bm_iter++)
+        free(&bm_iter->second.desc, "rsv");
+
     m_allocated.clear();
+    m_reserved.clear();
 }
 
 void aipudrv::UMemory:: gm_init(uint32_t gm_size)

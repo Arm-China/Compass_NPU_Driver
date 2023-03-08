@@ -55,10 +55,7 @@ aipudrv::SimulatorV3::~SimulatorV3()
     }
 
     for (auto buf : m_reserve_mem)
-    {
-        m_dram->free(buf, "rsv");
         delete buf;
-    }
 
     pthread_rwlock_destroy(&m_lock);
     m_dram = nullptr;
