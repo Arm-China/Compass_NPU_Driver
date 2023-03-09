@@ -632,7 +632,7 @@ aipu_status_t aipudrv::MainContext::aipu_get_target(char *target)
 
     #if SIMULATION
     const char *nul_ptr = "null";
-    strncpy(target, nul_ptr, 4);
+    strcpy(target, nul_ptr);
     return ret;
     #endif
 

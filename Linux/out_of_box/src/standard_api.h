@@ -5,7 +5,7 @@
 
 /**
  * @file  standard_api.h
- * @brief Zhouyi AIPU User Mode Driver (UMD) Standard API header (for Z1/Z2/Z3/X1/X2)
+ * @brief Zhouyi AIPU User Mode Driver (UMD) Standard API header (for aipu v1/v2/v3)
  * @version 1.0
  */
 
@@ -88,9 +88,11 @@ typedef enum {
     AIPU_JOB_CONFIG_TYPE_DUMP_REUSE           = 0x40,
     AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN       = 0x80,
     AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION       = 0x100,
-    AIPU_CONFIG_TYPE_SIMULATION               = 0x200,
-    AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK = 0x400,
-    AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK  = 0x800,
+    AIPU_JOB_CONFIG_TYPE_DUMP_PROFILE         = 0x200,
+    AIPU_CONFIG_TYPE_SIMULATION               = 0x400,
+    AIPU_CONFIG_TYPE_HW                       = 0x800,
+    AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK = 0x1000,
+    AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK  = 0x2000,
 } aipu_config_type_t;
 
 typedef struct {
@@ -106,18 +108,25 @@ typedef struct {
      * name prefix of output dump files
      */
     const char *output_prefix;
+    /**
+     * name prefix of profile/printf data files
+     */
+    const char *misc_prefix;
 } aipu_job_config_dump_t;
 
 typedef struct {
     /**
-     * data_dir is used as z1/2/3 simulation data file directory
+     * data_dir is used as aipu v1/v2 simulation data file directory
      */
     const char* data_dir;
 } aipu_job_config_simulation_t;
 
+/**
+ * @brief Simulation related configuration
+ */
 typedef struct {
-    /* configure one or more simulator file name for z1/z2/z3/x1 */
-    /* set z[n]/x[n]_simulator to be NULL for x2 */
+    /* configure one or more simulator file name for aipu v1/v2 */
+    /* set z[n]/x[n]_simulator to be NULL for aipu v3 */
     /* log_level works for all simulator versions */
     const char* z1_simulator;
     const char* z2_simulator;
@@ -126,11 +135,30 @@ typedef struct {
     const char* log_file_path;
     const char *x2_arch_desc;
     uint32_t log_level;
+    uint32_t gm_size;
     bool verbose;
     bool enable_avx;
     bool enable_calloc;
     bool en_eval;
 } aipu_global_config_simulation_t;
+
+/**
+ * @brief HW related configuration
+ */
+typedef struct {
+    /**  set false if job polling thread isn't commit thread;
+     *   set true if job polling thread is commit thread.
+     *
+     *   default(no config via this structure): the polling thread is identical with commit thread.
+     *
+     *   eg: poll job in non-commit thread
+     *      hw_config->poll_in_commit_thread = false;
+     *      aipu_config_global(ctx, AIPU_CONFIG_TYPE_HW, hw_config);
+     *
+     *   note: the config is effictive in only one process contex.
+     */
+    bool poll_in_commit_thread;
+} aipu_global_config_hw_t;
 
 /**
  * @brief AIPU core info struct; returned by UMD API for AIPU debugger to use
@@ -163,12 +191,12 @@ enum {
  * @brief config job's partition, qos(priority), feature map
  *        and weight buffer region on creating a job.
  * @note fm_mem_region
- *       if config feature buffer region for X1, just ignore partition_id & qos_level,
+ *       if config feature buffer region for aipu v1/v2, just ignore partition_id & qos_level,
  *       set them as 0 and only set fm_mem_region field.
  *       the buffer is allocated successfully only if there's enough space in
  *       region marked by `fm_mem_region`.
  * @note wt_mem_region
- *       if config weight buffer region for X1, just ignore partition_id & qos_level,
+ *       if config weight buffer region for aipu v1/v2, just ignore partition_id & qos_level,
  *       set them as 0 and only set fm_mem_region field.
  *       the buffer is allocated successfully only if there's enough space in
  *       region marked by `fm_mem_region`.
@@ -181,12 +209,84 @@ enum {
 typedef union aipu_create_job_cfg {
     uint32_t misc = 0;
     struct {
-        uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for X2 */
-        uint8_t qos_level:4;     /**< defalut 0, low priority, only for X2 */
+        uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for aipu v3 */
+        uint8_t qos_level:4;     /**< defalut 0, low priority, only for aipu v3 */
         uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
         uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
     };
 } aipu_create_job_cfg_t;
+
+/**
+ * @struct aipu_shared_tensor
+ *
+ * @brief mark one tensor buffer of one graph as shared with other graphs.
+ *
+ * @note the share action is based on one process contex, not among multiple processes.
+ *       1, mark a tensor buffer as shared in one graph and get its base physical address;
+ *       2, assign the shared tensor buffer to other graphs and as input or output.
+ */
+typedef struct aipu_shared_tensor_info {
+    uint64_t id;                 /**< pass job ID for marking one io buffer as shared
+                                      pass graph ID for sharing one shared buffer marked previously */
+    aipu_tensor_type_t type;     /**< the shared tensor's type: input/output */
+    uint32_t tensor_idx;         /**< the shared tensor's index */
+    uint64_t pa;                 /**< the physical address of shared tensor */
+} aipu_shared_tensor_info_t;
+
+/**
+ * Memory_Hook_Base - UMD memory alloc/free hook abstract class
+ *
+ * @args:          [must] the parameter pointer for internal use of malloc_hook/free_hook
+ * @malloc_hook:   [must] memory alloc hook interface
+ * @free_hook:     [must] memry free hook interface
+ *
+ * @note
+ *       In normal case, don't suggest to implement new memory alloc/free interface based on
+ *       this base class. The best way is using the default UKMemory implemetation instead.
+ *       If you implement new alloc/free interface based on this class, you have to implement
+ *       the corresponding new alloc/free scheme in KMD or customized low level allocator.
+ */
+struct aipu_buf_request;
+struct aipu_buf_desc;
+    class Memory_Hook_Base {
+    protected:
+    void *args;
+
+    public:
+    /**
+     * @brief malloc buffer via this customized interface
+     *
+     * @param[in] buf_req Pass all fields (except buf_req->desc) filled by UKMemory::malloc to KMD;
+     *                    Parse field buf_req->desc filled by KMD or customized low level allocator.
+     *
+     * @retval virtual address of buffer or nullptr on fail
+     */
+    virtual char *malloc_hook(aipu_buf_request *buf_req) = 0;
+
+    /**
+     * @brief free the requested buffer
+     *
+     * @param[in] kdesc Pointer of request physical buffer
+     *
+     * @retval 0 on success, other value on fail
+     */
+    virtual int free_hook(aipu_buf_desc *kdesc) = 0;
+
+    public:
+    Memory_Hook_Base(void *_args) { args = _args; }
+    virtual ~Memory_Hook_Base() {}
+    Memory_Hook_Base(const Memory_Hook_Base& mem) = delete;
+    Memory_Hook_Base& operator=(const Memory_Hook_Base& mem) = delete;
+};
+
+/**
+ * @brief ioctl commands to operate shared tensor buffer and memory hook for KMD
+ */
+enum {
+    AIPU_IOCTL_MARK_SHARED_TENSOR = 0x255,
+    AIPU_IOCTL_SET_SHARED_TENSOR,
+    AIPU_IOCTL_SET_MEMORY_HOOK
+};
 
 /**
  * @brief This aipu_status_t enumeration captures the result of any API function
@@ -233,7 +333,9 @@ typedef enum {
     AIPU_STATUS_ERROR_INVALID_TENSOR_CNT   = 0x22,
     AIPU_STATUS_ERROR_TIMEOUT              = 0x23,
     AIPU_STATUS_ERROR_NO_BATCH_QUEUE       = 0x24,
-    AIPU_STATUS_MAX                        = 0x25,
+    AIPU_STATUS_ERROR_MARK_SHARED_TENSOR   = 0x25,
+    AIPU_STATUS_ERROR_SET_SHARED_TENSOR     = 0x26,
+    AIPU_STATUS_MAX                        = 0x27,
     /* AIPU layer library runtime error code */
     AIPU_STATUS_ERROR_UNKNOWN_ERROR        = 0x200,
     AIPU_STATUS_ERROR_KEYBOARD_INTERRUPT   = 0x300,
@@ -321,6 +423,7 @@ aipu_status_t aipu_get_error_message(const aipu_ctx_handle_t* ctx, aipu_status_t
  * @note accepted types/config: AIPU_CONFIG_TYPE_SIMULATION/aipu_global_config_simulation_t
  * @note accepted types/config: AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK/none
  * @note accepted types/config: AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK/none
+ * @note accepted types/config: AIPU_CONFIG_TYPE_HW
  */
 aipu_status_t aipu_config_global(const aipu_ctx_handle_t* ctx, uint64_t types, void* config);
 
@@ -393,7 +496,7 @@ aipu_status_t aipu_unload_graph(const aipu_ctx_handle_t* ctx, uint64_t graph);
  * @param[in]  graph  Graph ID returned by aipu_load_graph
  * @param[out] job    Pointer to a memory location allocated by application where UMD stores
  *                        the new created job ID
- * @param[in]  config Specify job's partition id and QoS level, only for X2.
+ * @param[in]  config Specify job's partition id and QoS level, only for aipu v3.
  *                        specify memory region for feature map and weight buffer
  *
  * @retval AIPU_STATUS_SUCCESS
@@ -454,15 +557,24 @@ aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t job);
  * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
  * @param[in]  job    Job ID returned by aipu_create_job
  * @param[out] status Pointer to a memory location allocated by the application where UMD stores the job status
+ *                    AIPU_JOB_STATUS_DONE: job is normally done
+ *                    AIPU_JOB_STATUS_EXCEPTION: exception occurring on this job
+ *                    AIPU_JOB_STATUS_NO_STATUS: job is in handling
+ * @param[in]  timeout timeout value(ms) to poll job's status
+ *                     timeout > 0: the max polling time window is 'timeout'
+ *                     timeout = 0: non-blocking and return job's status immediatelly.
+ *                     timeout = -1: blocking until job is really done or exception.
  *
  * @retval AIPU_STATUS_SUCCESS
  * @retval AIPU_STATUS_ERROR_NULL_PTR
  * @retval AIPU_STATUS_ERROR_INVALID_CTX
  * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
+ * @retval AIPU_STATUS_ERROR_TIMEOUT
  *
  * @note This API should be used by the application after aipu_flush_job successfully returns.
  */
-aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t job, aipu_job_status_t* status);
+aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t job,
+    aipu_job_status_t* status, int32_t timeout = 0);
 
 /**
  * @brief This API is used to clean a finished job object scheduled by aipu_finish_job/aipu_flush_job
@@ -615,7 +727,7 @@ aipu_status_t aipu_get_core_count(const aipu_ctx_handle_t* ctx, uint32_t partiti
  * @brief This API is used to get information of an AIPU core for debugger to use
  *
  * @param[in]  ctx     Pointer to a context handle struct returned by AIPU_init_ctx
- * @param[in]  id      core_id for Z1/Z2/Z3/X1, partition_id for X2
+ * @param[in]  id      core_id for aipu v1/v2, partition_id for aipu v3
  * @param[out] info    Pointer to a memory location allocated by application where UMD stores
  *                     the core information
  *
@@ -726,7 +838,7 @@ aipu_status_t aipu_debugger_free(const aipu_ctx_handle_t* ctx, void* va);
  * @retval AIPU_STATUS_ERROR_PRINTF_FAIL
  *
  * @note Application should get the printf log data via aipu_get_tensor before print it.
- *       Only support Z1/Z2/Z3/X1.
+ *       Only support aipu v1/v2.
  */
 aipu_status_t aipu_printf(char* printf_base, char* redirect_file);
 
@@ -750,7 +862,7 @@ aipu_status_t aipu_printf(char* printf_base, char* redirect_file);
  * @note The file descriptors should be allocated by another device driver, and indexed in
  *       tensor IDs' order in the fds array.
  * @note Applications should import all fds of the specified tensor type in one importing operation.
- * @note Zhouyi Z1/Z2/Z3 does not support this feature.
+ * @note AIPU v1/v2/v3 does not support this feature.
  * @note X86-simulation does not support this feature.
  */
 aipu_status_t aipu_import_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipu_tensor_type_t type, int* fds);
@@ -774,7 +886,7 @@ aipu_status_t aipu_import_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id,
  *
  * @note The file descriptors are allocated by NPU driver, and indexed in tensor IDs' order in the fds array.
  * @note Applications should allocate enough space for the fds pointer for all tensors of the specified type.
- * @note Zhouyi Z1/Z2/Z3 does not support this feature.
+ * @note AIPU v1/v2/v3 does not support this feature.
  * @note X86-simulation does not support this feature.
  */
 aipu_status_t aipu_export_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipu_tensor_type_t type, int* fds);
@@ -855,7 +967,7 @@ aipu_status_t aipu_clean_batch_queue(const aipu_ctx_handle_t *ctx, uint64_t grap
  * @retval AIPU_STATUS_ERROR_NO_BATCH_QUEUE
  *
  * @note
- *      For simulation on Z1/Z2/Z3/X1: has to set AIPU_CONFIG_TYPE_SIMULATION.
+ *      For simulation for aipu v1/v2: has to set AIPU_CONFIG_TYPE_SIMULATION.
  *      For dump: set dump options(AIPU_JOB_CONFIG_TYPE_DUMP_TEXT ...)
  */
 aipu_status_t aipu_config_batch_dump(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
@@ -901,7 +1013,7 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
  *
  * @param[in] ctx Pointer to a context handle struct returned by aipu_init_context
  * @param[in] cmd cmd
- * @param[inout] arg input or output argument
+ * @param[inout] arg input or output argument according to 'cmd'
  *
  * @retval AIPU_STATUS_SUCCESS
  * @retval AIPU_STATUS_ERROR_NULL_PTR
