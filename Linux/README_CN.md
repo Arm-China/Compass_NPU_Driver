@@ -58,7 +58,7 @@ COMPASS_DRV_BTENVAR_CROSS_COMPILE_GNU=aarch64-linux-gnu-
 # source bash_env_setup.sh (for bash env)
 or
 # source env_setup.sh (for csh env)
-# ./build_all.sh -p juno -v x1 [-d]
+# ./build_all.sh -p juno [-d]
 ```
 
 - 如果以上命令成功执行，一个驱动加载模块aipu.ko和一个用户态动态链接库libaipudrv.so将产生，并且被存放在bin文件夹中。
@@ -97,7 +97,7 @@ CONFIG_DRV_RTENVAR_SIM_BASE_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_SIMULATOR
 CONFIG_DRV_BRENVAR_X86_CLPATH=/arm/tools/gnu/gcc/7.3.0/rhe7-x86_64/lib64 (可选)
 COMPASS_DRV_BTENVAR_X86_CXX=g++
 
-- 针对Z1/Z2/Z3/X1/X2模拟的时候，指定模拟器和库存放的路径
+- 针对aipu v1/v2/v3模拟的时候，指定模拟器和库存放的路径
 CONFIG_DRV_RTENVAR_SIM_PATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/bin/
 COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/lib/
 
@@ -125,7 +125,7 @@ or
 ```bash
 # cd Linux
 # source bash_env_setup.sh
-# ./build_all.sh -p juno -v x1 -t sample [-d]
+# ./build_all.sh -p juno -t sample [-d]
 ```
 
 上述命令成功执行之后，对应的样例生成的可执行文件也将被放在bin文件夹中。
@@ -139,7 +139,7 @@ or
 ```bash
 # cd Linux
 # source bash_env_setup.sh
-# ./build_all.sh -p sim -v x1 -t sample [-d]
+# ./build_all.sh -p sim -t sample [-d]
 ```
 
 上述命令成功执行之后，对应的样例生成的可执行文件也将被放在bin文件夹中。

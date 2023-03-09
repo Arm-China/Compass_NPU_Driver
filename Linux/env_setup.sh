@@ -98,13 +98,13 @@ setenv COMPASS_DRV_RTENVAR_SIM_LPATH         ${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}
 setenv PATH                                  ${CONFIG_DRV_RTENVAR_SIM_PATH}:$PATH
 setenv LD_LIBRARY_PATH                       ${COMPASS_DRV_RTENVAR_SIM_LPATH}:$LD_LIBRARY_PATH
 
-# 3.1. Z1/Z2/Z3/X1 simulators
+# 3.1. aipu v1/v2 simulators
 setenv COMPASS_DRV_RTENVAR_Z1_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu_simulator_z1
 setenv COMPASS_DRV_RTENVAR_Z2_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu_simulator_z2
 setenv COMPASS_DRV_RTENVAR_Z3_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu_simulator_z3
 setenv COMPASS_DRV_RTENVAR_X1_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu_simulator_x1
 
-# 3.2. X2 simulator
+# 3.2. aipu v3 simulator
 setenv CONFIG_DRV_BRENVAR_X2_SIM_LPATH       ${COMPASS_DRV_RTENVAR_SIM_LPATH}
 setenv COMPASS_DRV_BRENVAR_X2_SIM_LNAME      aipu_simulator_x2
 

@@ -101,7 +101,7 @@ CONFIG_DRV_RTENVAR_SIM_BASE_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_SIMULATOR
 CONFIG_DRV_BRENVAR_X86_CLPATH=/arm/tools/gnu/gcc/7.3.0/rhe7-x86_64/lib64 (optional)
 COMPASS_DRV_BTENVAR_X86_CXX=g++
 
-- specify path where store Z1/Z2/Z3/X1/X2 simulators and libraries
+- specify path where store aipu v1/v2/v3 simulators and libraries
 CONFIG_DRV_RTENVAR_SIM_PATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/bin/
 COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/lib/
 
