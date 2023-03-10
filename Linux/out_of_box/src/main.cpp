@@ -5,7 +5,7 @@
 
 /**
  * @file  main.cpp
- * @brief AIPU SDK Driver Out-of-box Example for Z1/Z2/Z3/X1/X2
+ * @brief AIPU SDK Driver Out-of-box Example for aipu v1/v2/v3
  */
 
 #include <stdio.h>
@@ -40,17 +40,17 @@ static struct option opts[] = {
 static void help()
 {
     string help_str =
-    "-s: Z1/Z2/Z3/X1 simulator path\n"
+    "-s: aipu v1/v2 simulator path\n"
     "-b: benchmark aipu.bin path\n"
     "-i: benchmark input.bin path\n"
     "-c: benchmark output.bin path\n"
     "-d: the result output dir\n"
-    "-a: ARCH args for X2, eg: X2_1204/X2_1204MP3\n"
-    "usage1 for Z1/Z2/Z3/X1:\n"
+    "-a: ARCH args for aipu v3, eg: X2_1204/X2_1204MP3\n"
+    "usage1 for aipu v1/v2:\n"
     "   test -s /demo/sim/aipu_simulator_z1 -b /demo/benchmark/aipu.bin "
     "-i /demo/benchmark/input0.bin,/demo/benchmark/input1.bin -c /demo/benchmark/output.bin "
     "-d /demo/output(create folder firstly)\n"
-    "usage2 for X2:\n"
+    "usage2 for aipu v3:\n"
     "   test -a [X2_1204 | X2_1204MP3] -b /demo/benchmark/aipu.bin "
     "-i /demo/benchmark/input0.bin,/demo/benchmark/input1.bin -c /demo/benchmark/output.bin "
     "-d /demo/output(create folder firstly)\n";
@@ -255,9 +255,6 @@ int main(int argc, char* argv[])
         goto finish;
     }
 
-    /**
-     * works for z1/z2/z3/x1 simulations
-     */
     sim_glb_config.z1_simulator = simulator;
     sim_glb_config.z2_simulator = simulator;
     sim_glb_config.z3_simulator = simulator;

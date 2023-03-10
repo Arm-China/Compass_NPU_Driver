@@ -25,8 +25,8 @@ To build & run this demo application, please follow these steps:
 
     note:
 		you can only execute the application with provided benchmark resnet_50 if run step #1 beforehand, by:
-        - for Z1/Z2/Z3/X1
+        - for aipu v1/v2
         $./run.sh -c resnet_50
 
-        - for X2
+        - for aipu v3
         $./run.sh -a [X2_1204|X2_1204MP3] -c resnet_50
