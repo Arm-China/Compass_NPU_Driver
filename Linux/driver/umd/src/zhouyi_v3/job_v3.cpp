@@ -58,6 +58,7 @@ void aipudrv::JobV3::set_job_params(uint32_t sg_cnt, uint32_t task_per_sg,
      * - if output buffer exists in GM, the last gm_to_ddr sync-tcb is needed.
      * - if using SegMMU, m_tot_tcb_cnt will be extended accordingly.
      */
+    m_segmmu_tcb_num = core_cnt;
     m_tot_tcb_cnt = m_sg_cnt * m_task_per_sg + 1 + 1;
     if (m_segmmu_num > 0)
         m_tot_tcb_cnt += (m_segmmu_tcb_num + 1) / 2;
