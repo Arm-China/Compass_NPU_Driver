@@ -184,6 +184,7 @@ int aipudrv::MemoryBase::mark_shared_buffer(uint64_t addr, uint64_t size)
     {
         ret = -1;
         LOG(LOG_ERR, "invalid pa addr 0x%lx/size 0x%lx is used: no buffer\n", addr, size);
+        dump_stack();
         goto unlock;
     }
 
@@ -192,6 +193,7 @@ int aipudrv::MemoryBase::mark_shared_buffer(uint64_t addr, uint64_t size)
     {
         ret = -2;
         LOG(LOG_ERR, "invalid pa addr 0x%lx/size 0x%lx is used: out of range\n", addr, size);
+        dump_stack();
         goto unlock;
     }
 
@@ -213,6 +215,7 @@ int aipudrv::MemoryBase::get_shared_buffer(uint64_t addr, uint64_t size, Buffer 
     {
         ret = -1;
         LOG(LOG_ERR, "invalid pa addr 0x%lx/size 0x%lx is used: no buffer\n", addr, size);
+        dump_stack();
         goto unlock;
     }
 
@@ -239,6 +242,7 @@ int aipudrv::MemoryBase::pa_to_va(uint64_t addr, uint64_t size, char** va) const
         {
             ret = -1;
             LOG(LOG_ERR, "invalid pa addr 0x%lx is used: no such a buffer\n", addr);
+            dump_stack();
             goto unlock;
         }
     }
@@ -248,6 +252,7 @@ int aipudrv::MemoryBase::pa_to_va(uint64_t addr, uint64_t size, char** va) const
     {
         ret = -2;
         LOG(LOG_ERR, "invalid pa addr 0x%lx/size 0x%lx is used: out of range\n", addr, size);
+        dump_stack();
         goto unlock;
     }
 
@@ -257,7 +262,6 @@ unlock:
     pthread_rwlock_unlock(&m_lock);
     return ret;
 }
-
 
 int aipudrv::MemoryBase::mem_read(uint64_t addr, void *dest, size_t size) const
 {

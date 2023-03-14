@@ -8,12 +8,15 @@
  * @brief UMD helper function implementation
  */
 
+#include <mutex>
+#include <cstring>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <cstring>
+#include <execinfo.h>
+#include <cxxabi.h>
 #include "standard_api.h"
 #include "log.h"
 #include "helper.h"
@@ -185,4 +188,87 @@ bool umd_is_valid_ptr(const void* lower_bound, const void* upper_bound,
 {
     return ((unsigned long)ptr >= (unsigned long)lower_bound) &&
             (((unsigned long)ptr + size) < (unsigned long)upper_bound);
+}
+
+void dump_stack(void)
+{
+    void *addrlist[30] = {0};
+    int addrlen = 0;
+    char **symbollist = nullptr;
+    size_t funcnamesize = 256;
+    char *funcname = nullptr;
+
+#ifndef __ANDROID__
+    static std::mutex mtex;
+    addrlen = backtrace(addrlist, sizeof(addrlist) / sizeof(void*));
+    fprintf(stderr, "\nStack backtrace:\n");
+    if (addrlen == 0) {
+        fprintf(stderr, "  <empty, possibly corrupt>\n");
+        return;
+    }
+
+    symbollist = backtrace_symbols(addrlist, addrlen);
+    funcname = (char*)malloc(funcnamesize);
+
+    std::lock_guard<std::mutex> _lock(mtex);
+    /**
+     * iterate over the returned symbol lines. skip the first, it is the
+     * address of this function.
+     */
+    for (int i = 1; i < addrlen; i++)
+    {
+        char *begin_name = nullptr, *begin_offset = nullptr, *end_offset = nullptr;
+
+        /**
+         * find parentheses and +address offset surrounding the mangled name:
+         * ./module(function+0x15c) [0x8048a6d]
+         */
+        for (char *p = symbollist[i]; *p; ++p)
+        {
+            if (*p == '(')
+                begin_name = p;
+            else if (*p == '+')
+                begin_offset = p;
+            else if (*p == ')' && begin_offset) {
+                end_offset = p;
+                break;
+            }
+        }
+
+        if (begin_name && begin_offset && end_offset
+            && begin_name < begin_offset)
+        {
+            *begin_name++ = '\0';
+            *begin_offset++ = '\0';
+            *end_offset = '\0';
+
+            /**
+             * mangled name is now in [begin_name, begin_offset) and caller
+             * offset in [begin_offset, end_offset). now apply
+             * __cxa_demangle():
+             */
+            int status;
+            char* ret = abi::__cxa_demangle(begin_name,
+                            funcname, &funcnamesize, &status);
+            if (status == 0) {
+                funcname = ret; // use possibly realloc()-ed string
+                fprintf(stderr, "  %s : %s+%s\n",
+                    symbollist[i], funcname, begin_offset);
+            } else {
+                /**
+                 * demangling failed. Output function name as a C function with
+                 * no arguments.
+                 */
+                fprintf(stderr, "  %s : %s()+%s\n",
+                    symbollist[i], begin_name, begin_offset);
+            }
+        } else {
+            /* couldn't parse the line? print the whole line. */
+            fprintf(stderr, "  %s\n", symbollist[i]);
+        }
+    }
+
+    free(funcname);
+    free(symbollist);
+#endif
 }

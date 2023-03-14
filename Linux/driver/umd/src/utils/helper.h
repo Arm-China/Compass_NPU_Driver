@@ -85,6 +85,13 @@ bool umd_is_valid_ptr(const void* lower_bound, const void* upper_bound,
         const void* ptr, uint32_t size = 0);
 
 /**
+ * @brief This function is used to dump back trace of calling functions
+ *
+ * @note  it's just effective based on GNU g++ compiler, not for Android clang
+ */
+void dump_stack(void);
+
+/**
  * @brief This class is for generating runtime.cfg for simulation.
  */
 class FileWrapper {

@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include "simulator_v3.h"
+#include "helper.h"
 
 aipudrv::SimulatorV3::SimulatorV3(const aipu_global_config_simulation_t* cfg)
 {

@@ -241,12 +241,12 @@ int help_create_dir(const char *path)
     char *p = nullptr;
 
     semOp_sp->semaphore_p();
-    strncpy(data, path, strlen(path));
+    strncpy(data, path, sizeof(data) - 1);
     // printf("create_dir: %s\n", path);
     if (!strncmp(data, "/", 1))
     {
         const char *split_dim = "/";
-        strncpy(new_path, split_dim, 1);
+        strncpy(new_path, split_dim, sizeof(new_path) - 1);
     }
 
     p = strtok(data, delim);

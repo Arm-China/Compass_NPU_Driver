@@ -14,7 +14,7 @@ SRC_MISC = $(SRC_ROOT)/misc/
 SRC_UTIL = $(SRC_ROOT)/utils/
 SRC_DEVICE = $(SRC_ROOT)/device/
 
-CXXFLAGS := -std=c++14 -fPIC -Wall -Werror
+CXXFLAGS := -std=c++14 -fPIC -Wall -Werror -rdynamic
 INCD := -I$(INC_DIR) -I$(SRC_ROOT) -I$(SRC_COMMON) -I$(SRC_DEVICE) -I$(SRC_MISC) -I$(SRC_UTIL) -I$(SRC_ZHOUYI_V1V2) -I$(SRC_ZHOUYI_V3)
 LDFLAGS = -shared -Wl,-soname,$(COMPASS_DRV_BTENVAR_UMD_SO_NAME)
 ANDROIDCXXFLAGS := --target=aarch64-none-linux-android21 \

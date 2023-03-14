@@ -18,6 +18,7 @@
 #include "aipu.h"
 #include "ukmemory.h"
 #include "job_base.h"
+#include "helper.h"
 
 aipudrv::Aipu* aipudrv::Aipu::m_aipu = nullptr;
 std::mutex aipudrv::Aipu::m_tex;
@@ -44,6 +45,7 @@ aipu_ll_status_t aipudrv::Aipu::init()
     {
         m_fd = 0;
         LOG(LOG_ERR, "open /dev/aipu [fail]");
+        dump_stack();
         return AIPU_LL_STATUS_ERROR_OPEN_FAIL;
     }
 
