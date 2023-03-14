@@ -768,7 +768,8 @@ static void aipu_job_manager_destroy_command_pool_no_lock(struct aipu_job_manage
 		return;
 
 	pool = manager->pools;
-	if (pool && pool->created && !partition->ops->destroy_command_pool(partition)) {
+	if (pool && pool->created) {
+		partition->ops->destroy_command_pool(partition);
 		memset(pool->qlist, 0, sizeof(*pool->qlist) * AIPU_JOB_QOS_MAX);
 		pool->created = false;
 	}

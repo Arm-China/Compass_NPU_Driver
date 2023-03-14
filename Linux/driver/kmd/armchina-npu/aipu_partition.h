@@ -56,7 +56,7 @@ struct aipu_operations {
 #endif
 	int (*soft_reset)(struct aipu_partition *aipu, bool init_regs);
 	void (*initialize)(struct aipu_partition *aipu);
-	int (*destroy_command_pool)(struct aipu_partition *partition);
+	void (*destroy_command_pool)(struct aipu_partition *partition);
 	int (*abort_command_pool)(struct aipu_partition *partition);
 	int (*exit_dispatch)(struct aipu_partition *partition, u32 job_flag, u64 tcb_pa);
 	void (*disable_tick_counter)(struct aipu_partition *partition);

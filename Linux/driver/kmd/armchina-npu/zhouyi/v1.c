@@ -218,9 +218,8 @@ static int zhouyi_v1_soft_reset(struct aipu_partition *core, bool init_regs)
 	return 0;
 }
 
-static int zhouyi_v1_destroy_command_pool(struct aipu_partition *core)
+static void zhouyi_v1_destroy_command_pool(struct aipu_partition *core)
 {
-	return 0;
 }
 
 static int zhouyi_v1_abort_command_pool(struct aipu_partition *core)

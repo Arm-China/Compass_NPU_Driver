@@ -65,24 +65,6 @@ static int zhouyi_v3_create_command_pool(struct aipu_partition *partition)
 	return 0;
 }
 
-static int zhouyi_v3_destroy_command_pool(struct aipu_partition *partition)
-{
-	aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_HIGH_REG, 0);
-	aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_LOW_REG, 0);
-	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_INFO_REG, 0);
-	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
-		     TSM_DESTROY_CMD_POOL(partition->id));
-
-	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
-		dev_err(partition->dev, "destroy command pool #%d failed (cmd 0x%x)\n",
-			partition->id, TSM_DESTROY_CMD_POOL(partition->id));
-		return -EFAULT;
-	}
-
-	dev_info(partition->dev, "command pool #%d was destroyed\n", partition->id);
-	return 0;
-}
-
 static int zhouyi_v3_abort_command_pool(struct aipu_partition *partition)
 {
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
@@ -97,6 +79,26 @@ static int zhouyi_v3_abort_command_pool(struct aipu_partition *partition)
 	udelay(partition->priv->reset_delay_us);
 	dev_info(partition->dev, "command pool #%d was aborted\n", partition->id);
 	return 0;
+}
+
+static void zhouyi_v3_destroy_command_pool_internal(struct aipu_partition *partition)
+{
+	aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_HIGH_REG, 0);
+	aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_LOW_REG, 0);
+	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_INFO_REG, 0);
+	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
+		     TSM_DESTROY_CMD_POOL(partition->id));
+}
+
+static void zhouyi_v3_destroy_command_pool(struct aipu_partition *partition)
+{
+	zhouyi_v3_destroy_command_pool_internal(partition);
+	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
+		zhouyi_v3_abort_command_pool(partition);
+		zhouyi_v3_destroy_command_pool_internal(partition);
+	}
+
+	dev_info(partition->dev, "command pool #%d was destroyed\n", partition->id);
 }
 
 static int get_qos(u32 exec_flag)
