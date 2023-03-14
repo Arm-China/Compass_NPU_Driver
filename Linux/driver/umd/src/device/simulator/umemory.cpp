@@ -71,9 +71,6 @@ aipudrv::UMemory::UMemory(): MemoryBase(), sim_aipu::IMemEngine()
 
 aipudrv::UMemory::~UMemory()
 {
-    for (int i = 0; i < MME_REGION_MAX; i++)
-        delete[] m_memblock[i].bitmap;
-
     for (auto bm_iter = m_allocated.begin(); bm_iter != m_allocated.end(); bm_iter++)
         free(&bm_iter->second.desc, nullptr);
 
@@ -82,6 +79,9 @@ aipudrv::UMemory::~UMemory()
 
     m_allocated.clear();
     m_reserved.clear();
+
+    for (int i = 0; i < MME_REGION_MAX; i++)
+        delete[] m_memblock[i].bitmap;
 }
 
 void aipudrv::UMemory:: gm_init(uint32_t gm_size)
@@ -237,6 +237,7 @@ aipu_status_t aipudrv::UMemory::free(const BufferDesc* desc, const char* str)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     uint64_t b_start, b_end;
+    bool reserve_mem_flag = false;
     auto iter = m_allocated.begin();
 
     if (nullptr == desc)
@@ -249,8 +250,13 @@ aipu_status_t aipudrv::UMemory::free(const BufferDesc* desc, const char* str)
     iter = m_allocated.find(desc->pa);
     if (iter == m_allocated.end())
     {
-        ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
-        goto unlock;
+        iter = m_reserved.find(desc->pa);
+        if (iter == m_reserved.end())
+        {
+            ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
+            goto unlock;
+        }
+        reserve_mem_flag = true;
     }
 
     iter->second.ref_put();
@@ -264,7 +270,10 @@ aipu_status_t aipudrv::UMemory::free(const BufferDesc* desc, const char* str)
         LOG(LOG_INFO, "free buffer_pa=%lx\n", iter->second.desc.pa);
         delete []iter->second.va;
         iter->second.va = nullptr;
-        m_allocated.erase(desc->pa);
+        if (!reserve_mem_flag)
+            m_allocated.erase(desc->pa);
+        else
+            m_reserved.erase(desc->pa);
     }
 
 unlock:
@@ -278,6 +287,7 @@ unlock:
 aipu_status_t aipudrv::UMemory::reserve_mem(DEV_PA_32 addr, uint32_t size, BufferDesc* desc, const char* str)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    uint64_t malloc_size, malloc_page = 0, i = 0;
     Buffer buf;
 
     if (0 == size)
@@ -287,11 +297,24 @@ aipu_status_t aipudrv::UMemory::reserve_mem(DEV_PA_32 addr, uint32_t size, Buffe
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     pthread_rwlock_wrlock(&m_lock);
-    desc->init(0, addr, size, size);
+
+    /* clear bitmap for reserved memory page */
+    malloc_page = get_page_cnt(size);
+    malloc_size = malloc_page * AIPU_PAGE_SIZE;
+    if (malloc_page > m_memblock[MEM_REGION_DDR].bit_cnt)
+        return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
+
+    desc->init(0, addr, malloc_size, size);
     buf.desc = *desc;
     buf.va = new char[size];
     memset(buf.va, 0, size);
+    buf.ref_get();
     m_reserved[desc->pa] = buf;
+
+    i = get_next_alinged_page_no((addr - m_memblock[MEM_REGION_DDR].base) >> 12, 1, MEM_REGION_DDR);
+    for (uint32_t j = 0; j < malloc_page; j++)
+        m_memblock[MEM_REGION_DDR].bitmap[i + j] = false;
+
     pthread_rwlock_unlock(&m_lock);
 
     if (ret == AIPU_STATUS_SUCCESS)

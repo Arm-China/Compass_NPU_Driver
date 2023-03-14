@@ -16,7 +16,6 @@
 
 aipudrv::SimulatorV3::SimulatorV3(const aipu_global_config_simulation_t* cfg)
 {
-    BufferDesc *desc = new BufferDesc;
     m_dev_type = DEV_TYPE_SIMULATOR_V3;
     m_dram = UMemory::get_memory();
     if (nullptr == cfg)
@@ -39,10 +38,6 @@ aipudrv::SimulatorV3::SimulatorV3(const aipu_global_config_simulation_t* cfg)
             m_arch_desc = cfg->x2_arch_desc;
     }
     pthread_rwlock_init(&m_lock, NULL);
-
-    /* reserve 1KB for debug */
-    m_dram->reserve_mem(0xC1000000, 1024, desc, "rsv");
-    m_reserve_mem.push_back(desc);
 }
 
 aipudrv::SimulatorV3::~SimulatorV3()
@@ -111,6 +106,7 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
 {
     aipu_partition_cap aipu_cap = {0};
     uint32_t reg_val = 0, sim_code = 0;
+    BufferDesc *desc = new BufferDesc;
     bool ret = false;
 
     if ((arch != AIPU_ARCH_ZHOUYI) || (version != AIPU_ISA_VERSION_ZHOUYI_V3) || (rev != 0))
@@ -140,6 +136,10 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
 
     if (sim_code == sim_aipu::config_t::X2_1204 || sim_code == sim_aipu::config_t::X2_1204MP3)
         m_dram->gm_init(m_config.gm_size);
+
+    /* reserve 4KB for debug */
+    m_dram->reserve_mem(0xC1000000, AIPU_PAGE_SIZE, desc, "rsv");
+    m_reserve_mem.push_back(desc);
 
     m_code = sim_code;
     m_aipu->read_register(TSM_BUILD_INFO, reg_val);
