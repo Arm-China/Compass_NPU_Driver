@@ -106,6 +106,7 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
 {
     aipu_partition_cap aipu_cap = {0};
     uint32_t reg_val = 0, sim_code = 0;
+    uint64_t membase = 0;
     BufferDesc *desc = new BufferDesc;
     bool ret = false;
 
@@ -140,6 +141,12 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
     /* reserve 4KB for debug */
     m_dram->reserve_mem(0xC1000000, AIPU_PAGE_SIZE, desc, "rsv");
     m_reserve_mem.push_back(desc);
+
+    membase = get_umemory()->get_memregion_base(MEM_REGION_DDR);
+    m_dram->set_asid_base(0, membase);
+    m_dram->set_asid_base(1, membase);
+    m_dram->set_asid_base(2, membase);
+    m_dram->set_asid_base(3, membase);
 
     m_code = sim_code;
     m_aipu->read_register(TSM_BUILD_INFO, reg_val);

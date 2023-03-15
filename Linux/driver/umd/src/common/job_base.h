@@ -37,13 +37,16 @@ struct JobIOBuffer
     uint32_t  size;
     JOBIOBufferType type;
     DEV_PA_64 pa; /* used when type != AIPU_JOB_BUFFER_DMABUF_IMPORTED */
+    DEV_PA_64 align_asid_pa; /* alignd buffer address relative to ASID base */
     int  fd;      /* used when type == AIPU_JOB_BUFFER_DMABUF_* */
-    void init(uint32_t _id, uint32_t _size, JOBIOBufferType _type, DEV_PA_64 _pa)
+    void init(uint32_t _id, uint32_t _size, JOBIOBufferType _type, DEV_PA_64 _pa,
+        DEV_PA_64 _align_asid_pa = 0)
     {
         id   = _id;
         size = _size;
         type = _type;
         pa   = _pa;
+        align_asid_pa = _align_asid_pa;
         fd   = 0;
     }
 };

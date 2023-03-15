@@ -197,7 +197,7 @@ aipu_status_t aipudrv::UMemory::malloc_internal(uint32_t size, uint32_t align, B
 
         if (j == i + malloc_page)
         {
-            desc->init(0, m_memblock[mem_region].base + i * AIPU_PAGE_SIZE,
+            desc->init(get_asid_base(0), m_memblock[mem_region].base + i * AIPU_PAGE_SIZE,
                 malloc_size, size, 0, mem_region, m_memblock[mem_region].base);
             buf.init(new char[malloc_size], *desc);
             memset(buf.va, 0, malloc_size);
@@ -304,7 +304,7 @@ aipu_status_t aipudrv::UMemory::reserve_mem(DEV_PA_32 addr, uint32_t size, Buffe
     if (malloc_page > m_memblock[MEM_REGION_DDR].bit_cnt)
         return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
 
-    desc->init(0, addr, malloc_size, size);
+    desc->init(get_asid_base(0), addr + m_memblock[MEM_REGION_DDR].base, malloc_size, size);
     buf.desc = *desc;
     buf.va = new char[size];
     memset(buf.va, 0, size);

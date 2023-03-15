@@ -333,6 +333,12 @@ private:
     }
 
 public:
+    UMemory *get_umemory(void)
+    {
+        return static_cast<UMemory*>(m_dram);
+    }
+
+public:
     bool has_target(uint32_t arch, uint32_t version, uint32_t config, uint32_t rev);
     aipu_status_t parse_config(uint32_t config, uint32_t &code);
     aipu_status_t schedule(const JobDesc& job);

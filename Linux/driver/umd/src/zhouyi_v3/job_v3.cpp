@@ -656,7 +656,7 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
             tcb->flag &= ~TCB_FLAG_DEP_TYPE_PRE_ALL;
     }
 
-    tcb->spc = get_low_32(graph.m_text.pa + graph.m_subgraphs[sg_id].text.offset);
+    tcb->spc = get_low_32(graph.m_text.align_asid_pa + graph.m_subgraphs[sg_id].text.offset);
     tcb->gridid = (uint16_t)grid_id;
     tcb->groupid = (uint16_t)core_id;
     tcb->taskid = (uint16_t)task_id;
@@ -673,24 +673,24 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
     tcb->task_id_y = 0;
     tcb->task_id_z = 0;
     tcb->tcbp = get_low_32(task.tcb.pa - m_tcbs.asid_base);
-    tcb->sp = get_low_32(task.stack.pa);
-    tcb->pp = get_low_32(m_rodata.pa + graph.m_subgraphs[sg_id].rodata.offset);
-    tcb->dp = get_low_32(task.private_data.pa);
+    tcb->sp = get_low_32(task.stack.align_asid_pa);
+    tcb->pp = get_low_32(m_rodata.align_asid_pa + graph.m_subgraphs[sg_id].rodata.offset);
+    tcb->dp = get_low_32(task.private_data.align_asid_pa);
 
     /* const rodata */
     if (graph.m_crodata.size > 0)
-        tcb->cp = get_low_32(graph.m_crodata.pa);
+        tcb->cp = get_low_32(graph.m_crodata.align_asid_pa);
 
     /* update profile buffer offset according to subgraph index */
     if (m_profiler.size() > 0)
     {
-        tcb->pprofiler = get_low_32(m_profiler[0].pa +  graph.m_subgraphs[sg_id].profiler_buf_size);
-        tcb->__data.noninit.rsvd2[3] = m_profiler[0].pa;
+        tcb->pprofiler = get_low_32(m_profiler[0].align_asid_pa +  graph.m_subgraphs[sg_id].profiler_buf_size);
+        tcb->__data.noninit.rsvd2[3] = m_profiler[0].align_asid_pa;
     }
 
     if (graph.m_subgraphs[sg_id].printfifo_size > 0)
     {
-        uint32_t pa = m_pprint.pa + AIPU_PAGE_SIZE * core_id + 1024 * task_id;
+        uint32_t pa = m_pprint.align_asid_pa + AIPU_PAGE_SIZE * core_id + 1024 * task_id;
         tcb->pprint = get_low_32(pa);
         tcb->interrupt |= EN_INTERRUPT_TEC;
     }

@@ -335,6 +335,7 @@ void aipudrv::JobBase::create_io_buffers(std::vector<struct JobIOBuffer>& bufs,
     {
         uint32_t sec_iter = desc[i].ref_section_iter;
         DEV_PA_64 pa = reuses[sec_iter].pa + desc[i].offset_in_section;
+        DEV_PA_64 align_asid_pa = reuses[sec_iter].align_asid_pa + desc[i].offset_in_section;
         JobIOBuffer iobuf;
 
         if (desc[i].support_dma_buf)
@@ -342,7 +343,7 @@ void aipudrv::JobBase::create_io_buffers(std::vector<struct JobIOBuffer>& bufs,
             /* I/O buffer will be allocated later */
             iobuf.init(0, 0, AIPU_JOB_BUFFER_VOID, 0);
         } else {
-            iobuf.init(desc[i].id, desc[i].size, AIPU_JOB_BUFFER_INTERNAL, pa);
+            iobuf.init(desc[i].id, desc[i].size, AIPU_JOB_BUFFER_INTERNAL, pa, align_asid_pa);
         }
         bufs.push_back(iobuf);
     }

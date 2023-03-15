@@ -58,6 +58,12 @@ private:
     uint32_t get_next_alinged_page_no(uint32_t start, uint32_t align, int mem_region = 0);
 
 public:
+    uint64_t get_memregion_base(int32_t region)
+    {
+        return m_memblock[region].base;
+    }
+
+public:
     void gm_init(uint32_t gm_size_idx);
     aipu_status_t malloc_internal(uint32_t size, uint32_t align, BufferDesc* desc,
         const char* str, uint32_t asid_mem_cfg = 0);
