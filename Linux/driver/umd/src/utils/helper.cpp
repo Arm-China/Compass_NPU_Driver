@@ -15,7 +15,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#ifndef __ANDROID__
 #include <execinfo.h>
+#endif
 #include <cxxabi.h>
 #include "standard_api.h"
 #include "log.h"
