@@ -265,31 +265,31 @@ unlock:
 
 int aipudrv::MemoryBase::mem_read(uint64_t addr, void *dest, size_t size) const
 {
-    int ret = 0;
+    int ret = -1;
     char* src = nullptr;
 
     if (pa_to_va(addr, size, &src) == 0)
     {
         memcpy(dest, src, size);
         ret = size;
+        add_tracking(addr, size, MemOperationRead, nullptr, (size == 4), *(uint32_t*)src);
     }
 
-    add_tracking(addr, size, MemOperationRead, nullptr, (size == 4), *(uint32_t*)src);
     return ret;
 }
 
 int aipudrv::MemoryBase::mem_write(uint64_t addr, const void *src, size_t size)
 {
-    int ret = 0;
+    int ret = -1;
     char* dest = nullptr;
 
     if (pa_to_va(addr, size, &dest) == 0)
     {
         memcpy(dest, src, size);
         ret = size;
+        add_tracking(addr, size, MemOperationWrite, nullptr, (size == 4), *(uint32_t*)src);
     }
 
-    add_tracking(addr, size, MemOperationWrite, nullptr, (size == 4), *(uint32_t*)src);
     return ret;
 }
 
