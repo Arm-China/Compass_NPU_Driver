@@ -162,9 +162,12 @@ void aipudrv::MemoryBase::write_line(const char* log) const
     }
 }
 
-auto aipudrv::MemoryBase::get_allocated_buffer(std::map<DEV_PA_64, Buffer> *buffer_pool, uint64_t addr) const
+std::map<aipudrv::DEV_PA_64, aipudrv::Buffer>::iterator
+aipudrv::MemoryBase::get_allocated_buffer(std::map<DEV_PA_64, Buffer> *buffer_pool, uint64_t addr) const
 {
-    for (auto iter = buffer_pool->begin(); iter != buffer_pool->end(); iter++)
+    std::map<aipudrv::DEV_PA_64, aipudrv::Buffer>::iterator iter;
+
+    for (iter = buffer_pool->begin(); iter != buffer_pool->end(); iter++)
     {
         if ((addr >= iter->second.desc.pa) &&
             (addr < (iter->second.desc.pa + iter->second.desc.size)))

@@ -322,3 +322,18 @@ aipu_status_t aipudrv::UMemory::reserve_mem(DEV_PA_32 addr, uint32_t size, Buffe
 
     return ret;
 }
+
+bool aipudrv::UMemory::invalid(uint64_t addr) const
+{
+    std::map<aipudrv::DEV_PA_64, aipudrv::Buffer>::iterator iter;
+
+    iter = get_allocated_buffer((std::map<DEV_PA_64, Buffer> *)&m_allocated, addr);
+    if (iter == m_allocated.end())
+    {
+        iter = get_allocated_buffer((std::map<DEV_PA_64, Buffer> *)&m_reserved, addr);
+        if (iter == m_reserved.end())
+            return true;
+    }
+
+    return false;
+};

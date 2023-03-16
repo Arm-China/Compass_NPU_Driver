@@ -56,7 +56,6 @@ private:
 
 private:
     uint32_t get_next_alinged_page_no(uint32_t start, uint32_t align, int mem_region = 0);
-    auto     get_allocated_buffer(uint64_t addr) const;
 
 public:
     void gm_init(uint32_t gm_size_idx);
@@ -66,6 +65,7 @@ public:
         const char* str = nullptr, uint32_t asid_mem_cfg = 0);
     virtual aipu_status_t free(const BufferDesc* desc, const char* str = nullptr);
     aipu_status_t reserve_mem(DEV_PA_32 addr, uint32_t size, BufferDesc* desc, const char* str = nullptr);
+    virtual bool invalid(uint64_t addr) const;
     virtual int read(uint64_t addr, void *dest, size_t size) const
     {
         return mem_read(addr, dest, size);
@@ -81,10 +81,6 @@ public:
     virtual size_t size() const
     {
         return m_memblock[0].size;
-    };
-    virtual bool invalid(uint64_t addr) const
-    {
-        return (addr < m_memblock[0].base) || (addr >= (m_memblock[0].base + m_memblock[0].size));
     };
 
 public:
