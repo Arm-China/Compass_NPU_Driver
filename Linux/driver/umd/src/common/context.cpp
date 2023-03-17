@@ -740,7 +740,7 @@ out:
 
 aipu_status_t aipudrv::MainContext::run_batch(GraphBase &graph, uint32_t queue_id, aipu_create_job_cfg_t *config)
 {
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    aipu_status_t ret = AIPU_STATUS_SUCCESS, oldret = AIPU_STATUS_SUCCESS;
     JOB_ID job_id;
     JobBase *job = nullptr;
     aipu_job_status_t status = AIPU_JOB_STATUS_NO_STATUS;
@@ -777,8 +777,13 @@ repeat:
 
         batch_info_t &batch = graph.get_batch_queue_item(queue_id, batch_num);
         ret = graph.create_job(&job_id, &m_sim_cfg, &m_hw_cfg, config);
-        if (ret != AIPU_STATUS_SUCCESS)
-            goto out;
+        if (ret == AIPU_STATUS_ERROR_BUF_ALLOC_FAIL)
+        {
+            break;
+        } else if (ret != AIPU_STATUS_SUCCESS) {
+            oldret = ret;
+            goto poll_job_sts;
+        }
 
         job = graph.get_job(job_id);
         #ifdef SIMULATION
@@ -789,7 +794,10 @@ repeat:
             sim_config.data_dir = graph.get_batch_dump_path(queue_id);
             ret = job->config_simulation(AIPU_CONFIG_TYPE_SIMULATION, &sim_config);
             if (ret != AIPU_STATUS_SUCCESS)
-                goto out;
+            {
+                oldret = ret;
+                goto poll_job_sts;
+            }
         }
         #endif
 
@@ -799,19 +807,28 @@ repeat:
             dump_config.dump_dir = graph.get_batch_dump_path(queue_id);
             ret = job->config_mem_dump(types, &dump_config);
             if (ret != AIPU_STATUS_SUCCESS)
-                goto out;
+            {
+                oldret = ret;
+                goto poll_job_sts;
+            }
         }
 
         for (uint32_t in_idx = 0; in_idx < batch.inputs.size(); in_idx++)
         {
             ret = job->load_tensor(in_idx, batch.inputs[in_idx]);
             if (ret != AIPU_STATUS_SUCCESS)
-                goto out;
+            {
+                oldret = ret;
+                goto poll_job_sts;
+            }
         }
 
         ret = job->schedule();
         if (ret != AIPU_STATUS_SUCCESS)
-            goto out;
+        {
+            oldret = ret;
+            goto poll_job_sts;
+        }
 
         job_info_item.job_id = job_id;
         job_info_item.job = job;
@@ -819,6 +836,7 @@ repeat:
         job_queue.push(job_info_item);
     }
 
+poll_job_sts:
     while (job_queue.size() > 0)
     {
         #ifdef SIMULATION
@@ -873,7 +891,7 @@ repeat:
             goto out;
         #endif
 
-        if (batch_num < graph.get_batch_queue_size(queue_id))
+        if ((oldret == AIPU_STATUS_SUCCESS) && (batch_num < graph.get_batch_queue_size(queue_id)) )
             goto repeat;
     }
 
@@ -885,7 +903,11 @@ out:
         graph.destroy_job(job_info_item.job_id);
     }
     graph.clean_batches(queue_id);
-    return ret;
+
+    if (oldret != AIPU_STATUS_SUCCESS)
+        return oldret;
+    else
+        return ret;
 }
 
 aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
