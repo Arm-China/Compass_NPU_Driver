@@ -34,9 +34,6 @@ aipu_status_t aipudrv::GraphV12::create_job(JOB_ID* id, const aipu_global_config
     JobV12* job = new JobV12((MainContext*)m_ctx, *this, m_dev, config);
 
     ret = job->init(cfg, hw_cfg);
-    if (AIPU_STATUS_SUCCESS != ret)
-        return ret;
-
     *id = add_job(job);
     return ret;
 }

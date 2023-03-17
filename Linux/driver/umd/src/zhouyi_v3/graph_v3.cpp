@@ -184,9 +184,6 @@ aipu_status_t aipudrv::GraphV3::create_job(JOB_ID* id, const aipu_global_config_
 
     job = new JobV3((MainContext*)m_ctx, *this, m_dev, job_config);
     ret = job->init(glb_sim_cfg, hw_cfg);
-    if (AIPU_STATUS_SUCCESS != ret)
-        return ret;
-
     *id = add_job(job);
     return ret;
 }
