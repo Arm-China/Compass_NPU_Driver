@@ -579,7 +579,10 @@ aipu_status_t aipudrv::JobV3::free_job_buffers()
     m_init_tcb.init(0);
 
     for (uint32_t i = 0; i < m_sg_job.size(); i++)
+    {
         free_sg_buffers(m_sg_job[i]);
+        m_sg_job[i].reset(i);
+    }
 
     m_sg_job.clear();
     m_inputs.clear();

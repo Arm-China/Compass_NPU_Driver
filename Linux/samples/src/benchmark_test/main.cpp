@@ -40,7 +40,7 @@ int main(int argc, char* argv[])
     vector<char*> gt;
     cmd_opt_t opt;
     uint32_t frame_cnt = 5;
-    int pass = 0;
+    int pass = -1;
     aipu_create_job_cfg create_job_cfg = {0};
 
     if(init_test_bench(argc, argv, &opt, "benchmark_test"))
@@ -64,7 +64,7 @@ int main(int argc, char* argv[])
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_load_graph_helper: %s (%s)\n",
             msg, opt.bin_file_name);
-        goto finish;
+        goto deinit_ctx;
     }
     AIPU_INFO()("aipu_load_graph_helper success: %s\n", opt.bin_file_name);
 
@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
     {
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_get_tensor_count: %s\n", msg);
-        goto finish;
+        goto unload_graph;
     }
     //AIPU_INFO()("aipu_get_tensor_count success: input cnt = %d\n", input_cnt);
 
@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
         {
             aipu_get_error_message(ctx, ret, &msg);
             AIPU_ERR()("aipu_get_tensor_descriptor: %s\n", msg);
-            goto finish;
+            goto unload_graph;
         }
         input_desc.push_back(desc);
     }
@@ -95,7 +95,7 @@ int main(int argc, char* argv[])
     {
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_get_tensor_count: %s\n", msg);
-        goto finish;
+        goto unload_graph;
     }
     //AIPU_INFO()("aipu_get_tensor_count success: output cnt = %d\n", output_cnt);
 
@@ -107,7 +107,7 @@ int main(int argc, char* argv[])
         {
             aipu_get_error_message(ctx, ret, &msg);
             AIPU_ERR()("aipu_get_tensor_descriptor: %s\n", msg);
-            goto finish;
+            goto unload_graph;
         }
         output_desc.push_back(desc);
     }
@@ -127,7 +127,7 @@ int main(int argc, char* argv[])
     {
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_create_job: %s\n", msg);
-        goto finish;
+        goto unload_graph;
     }
     AIPU_INFO()("aipu_create_job success\n");
 
@@ -154,14 +154,14 @@ int main(int argc, char* argv[])
             {
                 AIPU_ERR()("input file %s len 0x%x < input tensor %u size 0x%x\n",
                     opt.input_files[i].c_str(), opt.inputs_size[i], i, input_desc[i].size);
-                goto finish;
+                goto clean_job;
             }
             ret = aipu_load_tensor(ctx, job_id, i, opt.inputs[i]);
             if (ret != AIPU_STATUS_SUCCESS)
             {
                 aipu_get_error_message(ctx, ret, &msg);
                 AIPU_ERR()("aipu_load_tensor: %s\n", msg);
-                goto finish;
+                goto clean_job;
             }
             AIPU_INFO()("load input tensor %d from %s (%u/%u)\n",
                 i, opt.input_files[i].c_str(), i+1, input_cnt);
@@ -172,8 +172,7 @@ int main(int argc, char* argv[])
         {
             aipu_get_error_message(ctx, ret, &msg);
             AIPU_ERR()("aipu_finish_job: %s\n", msg);
-            pass = -1;
-            goto finish;
+            goto clean_job;
         }
         AIPU_INFO()("aipu_finish_job success\n");
 
@@ -184,7 +183,7 @@ int main(int argc, char* argv[])
             {
                 aipu_get_error_message(ctx, ret, &msg);
                 AIPU_ERR()("aipu_get_tensor: %s\n", msg);
-                goto finish;
+                goto clean_job;
             }
             AIPU_INFO()("get output tensor %u success (%u/%u)\n",
                 i, i+1, output_cnt);
@@ -193,24 +192,27 @@ int main(int argc, char* argv[])
         pass = check_result_helper(output_data, output_desc, opt.gt, opt.gt_size);
     }
 
+clean_job:
     ret = aipu_clean_job(ctx, job_id);
     if (ret != AIPU_STATUS_SUCCESS)
     {
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_clean_job: %s\n", msg);
-        goto finish;
+        goto unload_graph;
     }
     AIPU_INFO()("aipu_clean_job success\n");
 
+unload_graph:
     ret = aipu_unload_graph(ctx, graph_id);
     if (ret != AIPU_STATUS_SUCCESS)
     {
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_unload_graph: %s\n", msg);
-        goto finish;
+        goto deinit_ctx;
     }
     AIPU_INFO()("aipu_unload_graph success\n");
 
+deinit_ctx:
     ret = aipu_deinit_context(ctx);
     if (ret != AIPU_STATUS_SUCCESS)
     {
@@ -222,13 +224,12 @@ int main(int argc, char* argv[])
 
 finish:
     if (AIPU_STATUS_SUCCESS != ret)
-    {
         pass = -1;
-    }
+
     for (uint32_t i = 0; i < output_data.size(); i++)
-    {
         delete[] output_data[i];
-    }
+
     deinit_test_bench(&opt);
+
     return pass;
 }
