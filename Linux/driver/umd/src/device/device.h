@@ -9,7 +9,6 @@
  */
 
 #include <mutex>
-#include <assert.h>
 #include "standard_api.h"
 #include "device_base.h"
 #include "parser_base.h"
@@ -38,7 +37,8 @@ inline aipu_status_t test_get_device(uint32_t graph_version, DeviceBase** dev,
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    assert(dev != nullptr);
+    if (dev == nullptr)
+        return AIPU_STATUS_ERROR_NULL_PTR;
 
     if ((AIPU_LOADABLE_GRAPH_V0005 != graph_version) &&
         (AIPU_LOADABLE_GRAPH_ELF_V0 != graph_version))
@@ -80,7 +80,9 @@ inline aipu_status_t set_target(uint32_t graph_version, DeviceBase** dev,
     const aipu_global_config_simulation_t* cfg)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    assert(dev != nullptr);
+
+    if (dev == nullptr)
+        return AIPU_STATUS_ERROR_NULL_PTR;
 
 #if (defined SIMULATION) && (defined ZHOUYI_V3)
     std::lock_guard<std::mutex> lock_(m_tex);
@@ -108,7 +110,9 @@ inline aipu_status_t get_device(DeviceBase** dev)
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
 #ifndef SIMULATION
-    assert(dev != nullptr);
+    if (dev == nullptr)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
     ret = Aipu::get_aipu(dev);
 #endif
 

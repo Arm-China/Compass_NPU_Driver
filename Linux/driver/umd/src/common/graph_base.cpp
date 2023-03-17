@@ -7,7 +7,6 @@
  * @file  graph_base.cpp
  * @brief AIPU User Mode Driver (UMD) graph base module implementation
  */
-#include <assert.h>
 #include "graph_base.h"
 #include "job_base.h"
 
@@ -42,7 +41,6 @@ aipudrv::JOB_ID aipudrv::GraphBase::create_job_id_inner()
 
 aipudrv::JOB_ID aipudrv::GraphBase::add_job(JobBase* job)
 {
-    assert(job != nullptr);
     pthread_rwlock_wrlock(&m_lock);
     job->set_id(create_job_id_inner());
     m_jobs[job->get_id()] = job;

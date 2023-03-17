@@ -9,7 +9,6 @@
  */
 
 #include <stdlib.h>
-#include <assert.h>
 #include "standard_api.h"
 #include "graph_base.h"
 #include "job_base.h"
@@ -23,9 +22,7 @@ static aipu_status_t api_get_graph(const aipu_ctx_handle_t* ctx, uint64_t graph_
     aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
     aipudrv::MainContext* p_ctx = nullptr;
 
-    assert(graph != nullptr);
-
-    if (nullptr == ctx)
+    if ((nullptr == ctx) || (nullptr == graph))
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     p_ctx = ctx_map.get_ctx_ref(ctx->handle);
@@ -44,9 +41,7 @@ static aipu_status_t api_get_job(const aipu_ctx_handle_t* ctx, uint64_t job_id, 
     aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
     aipudrv::MainContext* p_ctx = nullptr;
 
-    assert(job != nullptr);
-
-    if (nullptr == ctx)
+    if ((nullptr == ctx) || (nullptr == job))
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     p_ctx = ctx_map.get_ctx_ref(ctx->handle);

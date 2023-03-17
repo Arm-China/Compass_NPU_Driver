@@ -14,7 +14,6 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/poll.h>
-#include <assert.h>
 #include "aipu.h"
 #include "ukmemory.h"
 #include "job_base.h"
@@ -217,8 +216,6 @@ aipu_ll_status_t aipudrv::Aipu::get_status(std::vector<aipu_job_status_desc>& jo
     int kret = 0;
     aipu_job_status_query status_query;
 
-    assert(max_cnt > 0);
-
     status_query.of_this_thread = of_this_thread;
     status_query.max_cnt = max_cnt;
     status_query.status = new aipu_job_status_desc[max_cnt];
@@ -266,7 +263,6 @@ aipu_ll_status_t aipudrv::Aipu::poll_status(std::vector<aipu_job_status_desc>& j
 
     poll_list.fd = m_fd;
     poll_list.events = POLLIN | POLLPRI;
-    assert(max_cnt > 0);
 
     do
     {

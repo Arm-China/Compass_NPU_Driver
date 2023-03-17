@@ -15,7 +15,6 @@
 #include <set>
 #include <sstream>
 #include <pthread.h>
-#include <assert.h>
 #include "standard_api.h"
 #include "device_base.h"
 #include "umemory.h"
@@ -161,7 +160,12 @@ private:
         uint32_t value = 0;
         uint32_t qos = static_cast<JobV3*>(job)->get_qos();
 
-        assert(m_cmdpools[cmdpool_id] != nullptr);
+        if (m_cmdpools[cmdpool_id] == nullptr)
+        {
+            LOG(LOG_ERR, "CMD POOL %u is null", cmdpool_id);
+            return;
+        }
+
         m_commit_jobs[cmdpool_id][job] = job_desc;
         m_cmdpools[cmdpool_id]->update_tcb(job_desc.tcb_head, job_desc.tcb_tail);
 

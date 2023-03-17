@@ -10,7 +10,6 @@
 
 #include <cstring>
 #include <unistd.h>
-#include <assert.h>
 #include "simulator_v3.h"
 #include "helper.h"
 
@@ -199,7 +198,8 @@ aipu_status_t aipudrv::SimulatorV3::schedule(const JobDesc& jobdesc)
         goto out;
     }
 
-    assert(m_aipu != nullptr);
+    if (m_aipu == nullptr)
+        return AIPU_STATUS_ERROR_NULL_PTR;
 
     pthread_rwlock_wrlock(&m_lock);
     if (job->m_bind_cmdpool_id == 0xffffffff)

@@ -15,7 +15,6 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <cstring>
-#include <assert.h>
 #include "kmd/armchina_aipu.h"
 #include "ukmemory.h"
 #include "utils/log.h"
@@ -53,7 +52,8 @@ aipu_status_t aipudrv::UKMemory::malloc(uint32_t size, uint32_t align, BufferDes
     buf_req.asid = (asid_mem_cfg & 0xff00) >> 8;
     buf_req.region = asid_mem_cfg & 0xff;
 
-    assert(desc != nullptr);
+    if (desc == nullptr)
+        return AIPU_STATUS_ERROR_NULL_PTR;
 
     if (0 == size)
         return AIPU_STATUS_ERROR_INVALID_SIZE;
@@ -114,7 +114,9 @@ aipu_status_t aipudrv::UKMemory::free(const BufferDesc* desc, const char* str)
     auto iter = m_allocated.begin();
     unsigned long free_cmd = AIPU_IOCTL_FREE_BUF;
 
-    assert(desc != nullptr);
+    if (desc == nullptr)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
     pthread_rwlock_wrlock(&m_lock);
     iter = m_allocated.find(desc->pa);
     if ((iter == m_allocated.end()) ||
