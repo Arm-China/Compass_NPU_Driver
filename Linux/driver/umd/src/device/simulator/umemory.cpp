@@ -304,7 +304,7 @@ aipu_status_t aipudrv::UMemory::reserve_mem(DEV_PA_32 addr, uint32_t size, Buffe
     if (malloc_page > m_memblock[MEM_REGION_DDR].bit_cnt)
         return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
 
-    desc->init(get_asid_base(0), addr + m_memblock[MEM_REGION_DDR].base, malloc_size, size);
+    desc->init(get_asid_base(0), addr + get_asid_base(0), malloc_size, size);
     buf.desc = *desc;
     buf.va = new char[size];
     memset(buf.va, 0, size);

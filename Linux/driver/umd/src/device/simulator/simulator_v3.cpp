@@ -105,9 +105,11 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
 {
     aipu_partition_cap aipu_cap = {0};
     uint32_t reg_val = 0, sim_code = 0;
-    uint64_t membase = 0;
     BufferDesc *desc = new BufferDesc;
     bool ret = false;
+    char *umd_asid_base = getenv("UMD_ASID_BASE");
+    uint64_t umd_asid_base_pa = 0;
+    char *ptr = nullptr;
 
     if ((arch != AIPU_ARCH_ZHOUYI) || (version != AIPU_ISA_VERSION_ZHOUYI_V3) || (rev != 0))
         return false;
@@ -137,15 +139,27 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
     if (sim_code == sim_aipu::config_t::X2_1204 || sim_code == sim_aipu::config_t::X2_1204MP3)
         m_dram->gm_init(m_config.gm_size);
 
+    if (umd_asid_base != nullptr)
+    {
+        umd_asid_base_pa = strtoul(umd_asid_base, &ptr, 10);
+        if (umd_asid_base_pa > get_umemory()->get_memregion_base(MEM_REGION_DDR))
+        {
+            umd_asid_base_pa = get_umemory()->get_memregion_base(MEM_REGION_DDR);
+            LOG(LOG_WARN, "\nreq ASID base > sim DDR base, use DDR base as ASID base: 0x%lx\n",
+                umd_asid_base_pa);
+        }
+    } else {
+        umd_asid_base_pa = get_umemory()->get_memregion_base(MEM_REGION_DDR);
+    }
+
+    m_dram->set_asid_base(0, umd_asid_base_pa);
+    m_dram->set_asid_base(1, umd_asid_base_pa);
+    m_dram->set_asid_base(2, umd_asid_base_pa);
+    m_dram->set_asid_base(3, umd_asid_base_pa);
+
     /* reserve 4KB for debug */
     m_dram->reserve_mem(0xC1000000, AIPU_PAGE_SIZE, desc, "rsv");
     m_reserve_mem.push_back(desc);
-
-    membase = get_umemory()->get_memregion_base(MEM_REGION_DDR);
-    m_dram->set_asid_base(0, membase);
-    m_dram->set_asid_base(1, membase);
-    m_dram->set_asid_base(2, membase);
-    m_dram->set_asid_base(3, membase);
 
     m_code = sim_code;
     m_aipu->read_register(TSM_BUILD_INFO, reg_val);
@@ -302,22 +316,36 @@ aipu_ll_status_t aipudrv::SimulatorV3::poll_status(std::vector<aipu_job_status_d
     uint32_t cmd_pool_status_reg = CMD_POOL0_STATUS + 0x40 * cmd_pool_id;
 
     LOG(LOG_INFO, "Enter %s...", __FUNCTION__);
+
+    /**
+     * dump a combination runtime.cfg for all jobs in one running period
+     */
+    // static bool dumpcfg_flag = false;
+    // if (!dumpcfg_flag)
+    // {
+    //     dumpcfg_flag = true;
+    //     job->dumpcfg_alljob();
+    // }
+
     if (job->get_subgraph_cnt() != 0)
     {
-        while (m_aipu->read_register(cmd_pool_status_reg, value) > 0)
+        if (cmd_pool_job_is_in(cmd_pool_id, job))
         {
-            LOG(LOG_INFO, "wait for simulation execution, cmdpool sts=%x", value);
-            if (value & CMD_POOL0_IDLE)
+            while (m_aipu->read_register(cmd_pool_status_reg, value) > 0)
             {
-                m_aipu->write_register(TSM_CMD_SCHED_CTRL, DESTROY_CMD_POOL);
-                LOG(LOG_INFO, "simulation done.");
-                break;
+                LOG(LOG_INFO, "wait for simulation execution, cmdpool sts=%x", value);
+                if (value & CMD_POOL0_IDLE)
+                {
+                    m_aipu->write_register(TSM_CMD_SCHED_CTRL, DESTROY_CMD_POOL);
+                    LOG(LOG_INFO, "simulation done.");
+                    break;
+                }
+                sleep(1);
             }
-            sleep(1);
+            pthread_rwlock_wrlock(&m_lock);
+            cmd_pool_erase_job(cmd_pool_id, job);
+            pthread_rwlock_unlock(&m_lock);
         }
-        pthread_rwlock_wrlock(&m_lock);
-        cmd_pool_erase_job(cmd_pool_id, job);
-        pthread_rwlock_unlock(&m_lock);
     }
     LOG(LOG_INFO, "Exit %s...", __FUNCTION__);
 
