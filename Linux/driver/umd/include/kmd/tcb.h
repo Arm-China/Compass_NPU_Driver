@@ -203,8 +203,8 @@ struct tcb_t
 #define GM_CTRL_TSM_IGNORE_CFG              (0xf)
 #define GM_REGION_CTRL_ONLY_UPDATE_REG    (0 << 30)
 #define GM_REGION_CTRL_SYNC_TO_GM         (1 << 30)
-#define GM_REGION_CTRL_SYNC_TO_DDR        (2 << 30)
-#define GM_REGION_CTRL_IGNORE_CFG         (3 << 30)
+#define GM_REGION_CTRL_SYNC_TO_DDR        (2UL << 30)
+#define GM_REGION_CTRL_IGNORE_CFG         (3UL << 30)
 
 #define GM_CTRL_REMAP_BOTH_REGION_DEN     (0x0)
 #define GM_CTRL_REMAP_REGION0_EN          (0x1)

@@ -1098,6 +1098,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     } else {
         for (uint32_t i = 0; i < m_sg_job[0].weights.size(); i++)
         {
+            dumpcfg_input_desc input_desc;
             std::string name;
 
             dump_pa = m_sg_job[0].weights[i].pa;
@@ -1108,7 +1109,9 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
 
             ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".weight\n";
             ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
-            m_dumpcfg_input.push_back({name.c_str(), dump_pa});
+            input_desc.file = name;
+            input_desc.base = dump_pa;
+            m_dumpcfg_input.push_back(input_desc);
         }
     }
 

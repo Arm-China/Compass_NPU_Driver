@@ -38,6 +38,7 @@ void gen_resultbin(const char *gbin_buf, uint32_t fsize)
     if (!obin.is_open())
     {
         std::cout << "open file fail" << std::endl;
+        delete g_str;
         return;
     }
 
