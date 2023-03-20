@@ -318,14 +318,10 @@ aipu_ll_status_t aipudrv::SimulatorV3::poll_status(std::vector<aipu_job_status_d
     LOG(LOG_INFO, "Enter %s...", __FUNCTION__);
 
     /**
-     * dump a combination runtime.cfg for all jobs in one running period
+     * dump a combination runtime.cfg for all jobs in one running period,
+     * it doesn't allow to be used in multiple threads scenario.
      */
-    // static bool dumpcfg_flag = false;
-    // if (!dumpcfg_flag)
-    // {
-    //     dumpcfg_flag = true;
-    //     job->dumpcfg_alljob();
-    // }
+    // job->dumpcfg_alljob();
 
     if (job->get_subgraph_cnt() != 0)
     {

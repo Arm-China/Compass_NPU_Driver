@@ -9,6 +9,7 @@
  */
 
 #include <cstring>
+#include <mutex>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -1337,6 +1338,15 @@ void aipudrv::JobV3::dumpcfg_alljob()
     GraphV3 *graph = nullptr;
     std::ostringstream oss;
     SimulatorV3 *sim = static_cast<SimulatorV3 *>(m_dev);
+    static bool dump_done = false;
+    static std::mutex mtex;
+
+    {
+        std::lock_guard<std::mutex> _lock(mtex);
+        if (dump_done)
+            return;
+        dump_done = true;
+    }
 
     if (!m_dump_emu)
         return;
