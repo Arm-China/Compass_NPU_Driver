@@ -23,7 +23,6 @@ aipudrv::GraphV3::GraphV3(void* ctx, GRAPH_ID id, DeviceBase* dev): Graph(ctx, i
 
 aipudrv::GraphV3::~GraphV3()
 {
-    unload();
     delete m_parser;
 }
 
