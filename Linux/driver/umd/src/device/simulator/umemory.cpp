@@ -271,9 +271,12 @@ aipu_status_t aipudrv::UMemory::free(const BufferDesc* desc, const char* str)
         delete []iter->second.va;
         iter->second.va = nullptr;
         if (!reserve_mem_flag)
+        {
             m_allocated.erase(desc->pa);
-        else
+        } else {
             m_reserved.erase(desc->pa);
+            reserve_mem_flag = false;
+        }
     }
 
 unlock:
