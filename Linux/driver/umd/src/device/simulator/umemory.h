@@ -71,6 +71,7 @@ public:
         const char* str = nullptr, uint32_t asid_mem_cfg = 0);
     virtual aipu_status_t free(const BufferDesc* desc, const char* str = nullptr);
     aipu_status_t reserve_mem(DEV_PA_32 addr, uint32_t size, BufferDesc* desc, const char* str = nullptr);
+    aipu_status_t free_all(void);
     virtual bool invalid(uint64_t addr) const;
     virtual int read(uint64_t addr, void *dest, size_t size) const
     {

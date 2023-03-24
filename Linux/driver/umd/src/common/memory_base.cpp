@@ -47,10 +47,6 @@ aipudrv::MemoryBase::MemoryBase()
 
 aipudrv::MemoryBase::~MemoryBase()
 {
-    auto bm_iter = m_allocated.begin();
-    for (; bm_iter != m_allocated.end(); bm_iter++)
-        delete[] bm_iter->second.va;
-
     pthread_rwlock_destroy(&m_lock);
     pthread_rwlock_destroy(&m_tlock);
 }

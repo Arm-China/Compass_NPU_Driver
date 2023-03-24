@@ -71,15 +71,7 @@ aipudrv::UMemory::UMemory(): MemoryBase(), sim_aipu::IMemEngine()
 
 aipudrv::UMemory::~UMemory()
 {
-    for (auto bm_iter = m_allocated.begin(); bm_iter != m_allocated.end(); bm_iter++)
-        free(&bm_iter->second.desc, nullptr);
-
-    for (auto bm_iter = m_reserved.begin(); bm_iter != m_reserved.end(); bm_iter++)
-        free(&bm_iter->second.desc, "rsv");
-
-    m_allocated.clear();
-    m_reserved.clear();
-
+    free_all();
     for (int i = 0; i < MME_REGION_MAX; i++)
         delete[] m_memblock[i].bitmap;
 }
@@ -339,4 +331,33 @@ bool aipudrv::UMemory::invalid(uint64_t addr) const
     }
 
     return false;
-};
+}
+
+aipu_status_t aipudrv::UMemory::free_all(void)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    uint64_t b_start = 0, b_end = 0;
+    std::map<DEV_PA_64, Buffer> *mem_map_arr[] = {&m_allocated, &m_reserved};
+
+    // pthread_rwlock_wrlock(&m_lock);
+    for (auto mem_map : mem_map_arr)
+    {
+        for (auto iter = mem_map->begin(); iter != mem_map->end(); iter++)
+        {
+            BufferDesc *desc = &iter->second.desc;
+            b_start = (desc->pa - m_memblock[desc->ram_region].base) / AIPU_PAGE_SIZE;
+            b_end = b_start + desc->size / AIPU_PAGE_SIZE;
+            for (uint64_t i = b_start; i < b_end; i++)
+                m_memblock[desc->ram_region].bitmap[i] = true;
+
+            LOG(LOG_INFO, "free buffer_pa=%lx\n", desc->pa);
+            delete []iter->second.va;
+            add_tracking(desc->pa, desc->size, MemOperationFree, nullptr, false, 0);
+        }
+
+        mem_map->clear();
+    }
+
+    // pthread_rwlock_unlock(&m_lock);
+    return ret;
+}
