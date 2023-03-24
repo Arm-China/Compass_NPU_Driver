@@ -338,8 +338,9 @@ aipu_status_t aipudrv::UMemory::free_all(void)
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     uint64_t b_start = 0, b_end = 0;
     std::map<DEV_PA_64, Buffer> *mem_map_arr[] = {&m_allocated, &m_reserved};
+    const char *promt = nullptr;
 
-    // pthread_rwlock_wrlock(&m_lock);
+    pthread_rwlock_wrlock(&m_lock);
     for (auto mem_map : mem_map_arr)
     {
         for (auto iter = mem_map->begin(); iter != mem_map->end(); iter++)
@@ -352,12 +353,15 @@ aipu_status_t aipudrv::UMemory::free_all(void)
 
             LOG(LOG_INFO, "free buffer_pa=%lx\n", desc->pa);
             delete []iter->second.va;
-            add_tracking(desc->pa, desc->size, MemOperationFree, nullptr, false, 0);
+            pthread_rwlock_unlock(&m_lock);
+            (mem_map == &m_reserved) ? promt = "rsv" : promt = "normal";
+            add_tracking(desc->pa, desc->size, MemOperationFree, promt, false, 0);
+            pthread_rwlock_wrlock(&m_lock);
         }
 
         mem_map->clear();
     }
 
-    // pthread_rwlock_unlock(&m_lock);
+    pthread_rwlock_unlock(&m_lock);
     return ret;
 }

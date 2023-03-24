@@ -186,6 +186,9 @@ aipu_status_t aipudrv::UKMemory::free_all(void)
             LOG(LOG_ERR, "free buffer 0x%lx [fail]", desc->pa);
             ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
         }
+        pthread_rwlock_unlock(&m_lock);
+        add_tracking(desc->pa, desc->size, MemOperationFree, "normal", false, 0);
+        pthread_rwlock_wrlock(&m_lock);
     }
 
     m_allocated.clear();
