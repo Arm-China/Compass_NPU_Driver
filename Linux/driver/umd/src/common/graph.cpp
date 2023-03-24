@@ -80,10 +80,11 @@ finish:
  *        for multiple jobs in order to reduce memory consumption.
  *
  * @note  if weight buffer is in DDR region, the whole weight data
- *        is put in one large buffer.
+ *        is put in one large buffer locating in ASID1.
  *        if intend to put weight buffer in SRAM or DTCM, the large
  *        weight buffer is split into more small buffers in order to
- *        put them more to specific region.
+ *        put them more to specific region. the rest of buffer that
+ *        can't be allocated from SRAM/DTCM is from ASID0 default.
  */
 aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectionDesc> &static_sections)
 {
@@ -98,7 +99,12 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
     {
         if (m_weight.size == 0 && m_bweight.size != 0)
         {
-            ret = m_mem->malloc(m_bweight.size, 0, &m_weight, "weight");
+            /**
+             * allocate weight from ASID1 region defalut.if all ASIDs are configured
+             * with the same base addr, it's also equal to allocate from ASID0.
+             */
+            ret = m_mem->malloc(m_bweight.size, 0, &m_weight, "weight",
+                (1 << 8) | AIPU_MEM_REGION_DEFAULT);
             if (AIPU_STATUS_SUCCESS != ret)
                 goto finish;
             m_mem->write(m_weight.pa, m_bweight.va, m_bweight.size);
