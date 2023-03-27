@@ -621,7 +621,8 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 		mm->mem[AIPU_MEM_REGION_TYPE_GM].max_cnt = 0;
 
 	/* currently, we only support one DTCM region in v2_2/v3 */
-	if (mm->version != AIPU_ISA_VERSION_ZHOUYI_V2_2 && mm->version != AIPU_ISA_VERSION_ZHOUYI_V3)
+	if (mm->version != AIPU_ISA_VERSION_ZHOUYI_V2_2 &&
+	    mm->version != AIPU_ISA_VERSION_ZHOUYI_V3)
 		mm->mem[AIPU_MEM_REGION_TYPE_DTCM].max_cnt = 0;
 	else
 		mm->mem[AIPU_MEM_REGION_TYPE_DTCM].max_cnt = 1;
@@ -1137,8 +1138,9 @@ static struct tcb_buf *aipu_mm_find_tcb_buf_no_lock(struct aipu_memory_manager *
 		}
 	}
 
-	dev_err(mm->dev, "[%s] no TCB buffer is found at iova 0x%llx",
-		log_str ? log_str : "find_tcb", iova);
+	if (log_str)
+		dev_dbg(mm->dev, "[%s] no TCB buffer is found at iova 0x%llx", log_str, iova);
+
 	*reg = NULL;
 	return NULL;
 }
@@ -1151,7 +1153,7 @@ struct aipu_tcb *aipu_mm_get_tcb_va(struct aipu_memory_manager *mm, u64 dev_pa)
 	struct aipu_tcb *tcb = NULL;
 
 	spin_lock_irqsave(&mm->slock, flags);
-	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, &reg, dev_pa, "get_tcb_va");
+	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, &reg, dev_pa, NULL);
 	if (!tbuf || !reg)
 		goto unlock;
 
@@ -1284,7 +1286,7 @@ void aipu_mm_pin_tcb(struct aipu_memory_manager *mm, u64 tail)
 	unsigned long flags;
 
 	spin_lock_irqsave(&mm->slock, flags);
-	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, &reg, tail, "pin_tcb");
+	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, &reg, tail, NULL);
 	if (!tbuf || !reg)
 		goto unlock;
 

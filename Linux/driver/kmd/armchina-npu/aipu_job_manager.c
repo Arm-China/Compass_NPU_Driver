@@ -258,8 +258,10 @@ static int config_exit_tcb(struct aipu_job_manager *manager, struct aipu_buf_des
 	struct aipu_tcb *tcb = NULL;
 
 	tcb = aipu_mm_get_tcb_va(manager->mm, desc->pa);
-	if (!tcb)
+	if (!tcb) {
+		dev_err(manager->dev, "buffer for exit TCB not found (0x%llx)\n", desc->pa);
 		return -EINVAL;
+	}
 
 	memset(tcb, 0, sizeof(*tcb));
 

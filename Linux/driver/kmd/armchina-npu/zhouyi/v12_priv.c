@@ -148,7 +148,7 @@ static void deinit_aipu_core(struct aipu_partition *core)
 }
 
 static struct aipu_partition *v12_create_partitions(struct aipu_priv *aipu,
-						       int id, struct platform_device *p_dev)
+						    int id, struct platform_device *p_dev)
 {
 	int ret = 0;
 	struct aipu_partition *partition = NULL;
