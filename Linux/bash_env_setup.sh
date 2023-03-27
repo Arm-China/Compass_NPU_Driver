@@ -99,7 +99,6 @@ export COMPASS_DRV_BRENVAR_X2_SIM_LNAME=aipu_simulator_x2
 export COMPASS_DRV_BTENVAR_UMD_DIR=driver/umd
 export COMPASS_DRV_BTENVAR_KMD_DIR=driver/kmd
 export COMPASS_DRV_BTENVAR_TEST_DIR=./samples
-export COMPASS_DRV_BTENVAR_DEMO_DIR=./out_of_box
 
 export COMPASS_DRV_BRENVAR_ODIR_TOP=`pwd`/bin
 export COMPASS_DRV_BTENVAR_UMD_BUILD_DIR=`pwd`/build/umd

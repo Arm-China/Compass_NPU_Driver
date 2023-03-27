@@ -151,10 +151,7 @@ After perform this command successfully, the samples are also stored in forder '
 
 - samples/READM.md: 关于所以参考样例的说明
 
-## 4. 编译和运行开箱测试例程
 
-- 请参考out-of-box中的README.md
-
-## 5. 编译和运行单元测试
+## 4. 编译和运行单元测试
 
 - 请参考unit_test中的README.md

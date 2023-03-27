@@ -45,9 +45,8 @@ build_help() {
     echo "                  format: umd_major,umd_minor,kmd_version"
     echo "                  eg: 5,2.0,3.3.0 umd: 5.2.0; kmd: 3.3.0"
     echo "-g, --get         Get UMD and KMD version number"
-    echo "-t, --test        Build samples or demo for specific platform"
+    echo "-t, --test        Build samples for specific platform"
     echo "                    - sample"
-    echo "                    - demo"
     echo "==========================================================================="
     exit 1
 }
@@ -281,25 +280,8 @@ if [ "$BUILD_TEST"x = "sample"x ]; then
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=mthread_test
     fi
     cd -
-elif [ "$BUILD_TEST"x = "demo"x ]; then
-    if [ "$BUILD_TARGET_PLATFORM"x != "sim"x ]; then
-        echo "this demo is just running on Simulator"
-        echo "but the currenct platform is: $BUILD_TARGET_PLATFORM"
-        exit 1
-    fi
-
-    cd $COMPASS_DRV_BTENVAR_DEMO_DIR
-    if [ -d ./umd ]; then
-        rm -fr ./umd
-    fi
-
-    mkdir -p umd
-    mv ../bin/sim/release/libaipudrv.so.*.*.* ./umd/libaipudrv.so
-    make
-    cd -
 fi
 
-if [ "$BUILD_TEST"x == "sample"x ]  ||
-   [ "$BUILD_TEST"x == "demo"x ]; then
+if [ "$BUILD_TEST"x == "sample"x ]; then
     echo -e "$COMPASS_DRV_BRENVAR_INFO Build $BUILD_TEST done: binaries are in $BUILD_AIPU_DRV_ODIR"
 fi

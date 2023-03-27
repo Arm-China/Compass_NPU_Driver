@@ -116,7 +116,6 @@ setenv COMPASS_DRV_BRENVAR_X2_SIM_LNAME      aipu_simulator_x2
 setenv COMPASS_DRV_BTENVAR_UMD_DIR           driver/umd
 setenv COMPASS_DRV_BTENVAR_KMD_DIR           driver/kmd
 setenv COMPASS_DRV_BTENVAR_TEST_DIR          ./samples
-setenv COMPASS_DRV_BTENVAR_DEMO_DIR          ./out_of_box
 
 setenv COMPASS_DRV_BRENVAR_ODIR_TOP          `pwd`/bin
 setenv COMPASS_DRV_BTENVAR_UMD_BUILD_DIR     `pwd`/build/umd

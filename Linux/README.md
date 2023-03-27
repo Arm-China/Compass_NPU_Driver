@@ -156,10 +156,6 @@ After perform this command successfully, the samples are also stored in forder '
 
 - samples/READM.md: some detail to run samples.
 
-## 4. Compile & run out-of-box demo
-
-- Read the detail in out-of-box README.md
-
-## 5. Compile & run unit_test
+## 4. Compile & run unit_test
 
 - Read the detail in unit_test README.md
