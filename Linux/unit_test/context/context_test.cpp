@@ -196,15 +196,4 @@ TEST_CASE_FIXTURE(ContextTest, "get_partition_count")
     ret = p_ctx->get_partition_count(&partition_cnt);
     CHECK(ret == AIPU_STATUS_SUCCESS);
 }
-
-TEST_CASE_FIXTURE(ContextTest, "aipu_get_target")
-{
-    aipu_status_t ret;
-    char target[32];
-
-    memset(target, '\0', 32);
-
-    ret = p_ctx->aipu_get_target(*target);
-    CHECK(ret == AIPU_STATUS_SUCCESS);
-}
 #endif

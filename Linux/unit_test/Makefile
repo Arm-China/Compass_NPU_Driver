@@ -15,9 +15,11 @@ TEST_UNIT += graph
 TEST_UNIT += parser
 TEST_UNIT += job
 SRC_UNIT += device/aipu
+ifeq ($(BUILD_TARGET_PLATFORM), sim)
+	SRC_UNIT += device/simulator
+endif
 SRC_UNIT += utils
 SRC_UNIT += common
-SRC_UNIT += misc
 SRC_UNIT += zhouyi_v1v2
 SRC_UNIT += zhouyi_v3
 SRC_UNIT += .
@@ -29,10 +31,6 @@ RUNTIME_HEADER_PATH   :=
 RUNTIMR_TEST_SECTION += $(foreach VAR, $(TEST_UNIT), $(wildcard $(RUNTIME_TEST_SRC_PATH)/$(VAR)/*.cpp))
 RUNTIMR_TEST_HEADER_PATH += -I.
 RUNTIMR_SRCS_SECTION += $(foreach VAR, $(SRC_UNIT), $(wildcard $(RUNTIME_SRC_PATH)/$(VAR)/*.cpp))
-#ifeq ($(BUILD_TARGET_PLATFORM), sim)
-	RUNTIMR_SRCS_SECTION += ../driver/umd/src/device/simulator/simulator.cpp
-	RUNTIMR_SRCS_SECTION += ../driver/umd/src/device/simulator/umemory.cpp
-#endif
 RUNTIME_HEADER_PATH += $(foreach VAR, $(SRC_UNIT), -I$(RUNTIME_SRC_PATH)/$(VAR))
 RUNTIME_HEADER_PATH += -I../driver/umd/src
 RUNTIME_HEADER_PATH += -I../driver/umd/include
@@ -43,12 +41,15 @@ RUNTIME_HEADER_PATH += -I../driver/umd/src/device/aipu
 RUNTIME_HEADER_PATH += -I../driver/umd/src/device/simulator
 RUNTIME_HEADER_PATH += -I../driver/umd/src/utils
 RUNTIME_HEADER_PATH += -I../driver/umd/src/common
-RUNTIME_HEADER_PATH += -I../driver/umd/src/misc
 RUNTIME_HEADER_PATH += -I../driver/umd/src/zhouyi_v1v2
 RUNTIME_HEADER_PATH += -I../driver/umd/src/zhouyi_v3
 RUNTIME_HEADER_PATH += -I../driver/umd/3rdparty
 RUNTIME_HEADER_PATH += -I../driver/umd/3rdparty/elfio
 RUNTIME_HEADER_PATH += -I../driver/umd/3rdparty/numpy
+
+ifeq ($(BUILD_TARGET_PLATFORM), sim)
+	LDFLAGS := -L$(CONFIG_DRV_BRENVAR_X2_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X2_SIM_LNAME)
+endif
 
 SRCS := $(wildcard $(RUNTIME_TEST_SRC_PATH)/*.cpp)
 SRCS += $(RUNTIMR_SRCS_SECTION)
