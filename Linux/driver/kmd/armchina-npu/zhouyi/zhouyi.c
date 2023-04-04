@@ -56,7 +56,7 @@ int zhouyi_detect_aipu_version(struct platform_device *p_dev, int *version, int 
 	}
 
 	*version = zhouyi_get_hw_version_number(&io);
-	if (*version > 0 && *version < ZHOUYI_V3_REVISION_ID)
+	if (*version > 0 && *version < AIPU_ISA_VERSION_ZHOUYI_V3)
 		*config = zhouyi_get_hw_config_number(&io);
 	else
 		*config = 0;
@@ -121,6 +121,8 @@ int zhouyi_get_hw_version_number(struct io_region *io)
 		return AIPU_ISA_VERSION_ZHOUYI_V2_1;
 	case ZHOUYI_V2_2_REVISION_ID:
 		return AIPU_ISA_VERSION_ZHOUYI_V2_2;
+	case ZHOUYI_V3_REVISION_ID_R0P2:
+		return AIPU_ISA_VERSION_ZHOUYI_V3;
 	case ZHOUYI_V3_REVISION_ID:
 		return AIPU_ISA_VERSION_ZHOUYI_V3;
 	}

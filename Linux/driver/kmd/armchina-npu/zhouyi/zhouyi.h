@@ -29,7 +29,8 @@
 #define ZHOUYI_V2_0_REVISION_ID               0x100
 #define ZHOUYI_V2_1_REVISION_ID               0x200
 #define ZHOUYI_V2_2_REVISION_ID               0x300
-#define ZHOUYI_V3_REVISION_ID                 0x10000
+#define ZHOUYI_V3_REVISION_ID_R0P2            0x10000
+#define ZHOUYI_V3_REVISION_ID                 0x10003
 
 /*
  * Soft Reset
