@@ -49,15 +49,19 @@ static void zhouyi_v3_trigger(struct aipu_partition *partition)
 
 static int zhouyi_v3_create_command_pool(struct aipu_partition *partition)
 {
+	u32 status = 0;
+
 	if (IS_CMD_POOL_BUSY(aipu_read32(partition->reg, CMD_POOL_STATUS_REG(partition->id))))
 		return 0;
 
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
 		     TSM_CREATE_CMD_POOL(partition->id, TSM_MAP_ALL));
 
-	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
+	status = aipu_read32(partition->reg, TSM_STATUS_REG);
+	if (IS_CMD_FAIL(status)) {
 		dev_err(partition->dev, "create command pool #%d failed (cmd 0x%x)\n",
 			partition->id, TSM_CREATE_CMD_POOL(partition->id, TSM_MAP_ALL));
+		aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
 		return -EFAULT;
 	}
 
@@ -67,12 +71,16 @@ static int zhouyi_v3_create_command_pool(struct aipu_partition *partition)
 
 static int zhouyi_v3_abort_command_pool(struct aipu_partition *partition)
 {
+	u32 status = 0;
+
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
 		     TSM_ABORT_CMD_POOL(partition->id));
 
-	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
+	status = aipu_read32(partition->reg, TSM_STATUS_REG);
+	if (IS_CMD_FAIL(status)) {
 		dev_err(partition->dev, "abort command pool #%d failed (cmd 0x%x)\n",
 			partition->id, TSM_ABORT_CMD_POOL(partition->id));
+		aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
 		return -EFAULT;
 	}
 
@@ -92,10 +100,16 @@ static void zhouyi_v3_destroy_command_pool_internal(struct aipu_partition *parti
 
 static void zhouyi_v3_destroy_command_pool(struct aipu_partition *partition)
 {
+	u32 status = 0;
+
 	zhouyi_v3_destroy_command_pool_internal(partition);
-	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
+	status = aipu_read32(partition->reg, TSM_STATUS_REG);
+	if (IS_CMD_FAIL(status)) {
+		aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
 		zhouyi_v3_abort_command_pool(partition);
 		zhouyi_v3_destroy_command_pool_internal(partition);
+		if (IS_CMD_FAIL(status))
+			aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
 	}
 
 	dev_info(partition->dev, "command pool #%d was destroyed\n", partition->id);

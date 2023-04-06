@@ -146,6 +146,7 @@
  */
 #define IS_CMD_FAIL(status_32)                      ((status_32) >> 31)
 #define IS_CMD_POOL_FULL(status_32)                 ((status_32) & 0xFF)
+#define CLEAR_CMD_FAIL(status_32)                   ((status_32) & 0x7FFFFFFF)
 
 #define TSM_STATUS_REG                              0x18
 
