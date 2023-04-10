@@ -45,6 +45,13 @@ enum
     GM_SUB_BUF_TYPE_MAX
 };
 
+enum
+{
+    SUBG_DEPEND_NONE = 0,
+    SUBG_DEPEND_IMMEDIATE = 1,
+    SUBG_DEPEND_PREALL = -1,
+};
+
 struct GM_info_desc {
     uint32_t gm_buf_type; // 0: ignore, 1: input, 2: output
     BssBufferIndex gm_buf_idx;

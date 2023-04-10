@@ -27,6 +27,7 @@ aipudrv::JobV3::JobV3(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_
 {
     m_tcbs.reset();
     m_init_tcb.init(0);
+    m_sgt_allocated.clear();
 
 #if defined(SIMULATION)
     /**
@@ -397,6 +398,8 @@ aipu_status_t aipudrv::JobV3::init_per_task_data()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     uint32_t segmmu_tcb_skip = 0;
+    uint32_t sg_idx = 0;
+    bool dep_all_flag = false;
 
     if (m_segmmu_num != 0)
         segmmu_tcb_skip = (m_segmmu_tcb_num + 1) / 2;
@@ -405,31 +408,61 @@ aipu_status_t aipudrv::JobV3::init_per_task_data()
     {
         SubGraphTask &sg = m_sg_job[i];
 
-        /* 1 init per-task data structs */
-        for (uint32_t j = 0; j < m_task_per_sg; j++)
+        if (i != 0)
         {
-            Task task;
-            memset((void *)&task, 0, sizeof(task));
-
-            /* 1.1. init task tcb */
-            task.tcb.init(m_tcbs.pa + (i * m_task_per_sg + j + 1 + segmmu_tcb_skip) * sizeof(tcb_t));
-
-            /* 1.2. allocate task stack */
-            ret = m_mem->malloc(get_graph().m_subgraphs[0].stack_size, get_graph().m_subgraphs[0].stack_align_in_page,
-                &task.stack, "stack");
-            if (AIPU_STATUS_SUCCESS != ret)
-                goto out;
-
-            /* 1.3. allocate and load task dp */
-            if (get_graph().m_subgraphs[i].private_data_size != 0)
+            if (get_graph().m_subgraphs[i].precursor_cnt == SUBG_DEPEND_PREALL)
             {
-                ret = m_mem->malloc(get_graph().m_subgraphs[i].private_data_size, 0, &task.private_data, "dp_data");
+                sg_idx = 0;
+                dep_all_flag = true;
+            }
+
+            if (dep_all_flag && sg_idx < m_sgt_allocated.size())
+            {
+                for (uint32_t j = 0; j < m_task_per_sg; j++)
+                {
+                    Task task;
+                    memset((void *)&task, 0, sizeof(task));
+
+                    task = m_sgt_allocated[sg_idx]->tasks[j];
+                    task.tcb.init(m_tcbs.pa + (i * m_task_per_sg + j + 1 + segmmu_tcb_skip) * sizeof(tcb_t));
+                    sg.tasks.push_back(task);
+                }
+
+                sg_idx++;
+                continue;
+            } else {
+                dep_all_flag = false;
+            }
+        }
+
+        {
+            /* 1 init per-task data structs */
+            for (uint32_t j = 0; j < m_task_per_sg; j++)
+            {
+                Task task;
+                memset((void *)&task, 0, sizeof(task));
+
+                /* 1.1. init task tcb */
+                task.tcb.init(m_tcbs.pa + (i * m_task_per_sg + j + 1 + segmmu_tcb_skip) * sizeof(tcb_t));
+
+                /* 1.2. allocate task stack */
+                ret = m_mem->malloc(get_graph().m_subgraphs[0].stack_size, get_graph().m_subgraphs[0].stack_align_in_page,
+                    &task.stack, "stack");
                 if (AIPU_STATUS_SUCCESS != ret)
                     goto out;
 
-                m_mem->mem_bzero(task.private_data.pa, task.private_data.size);
+                /* 1.3. allocate and load task dp */
+                if (get_graph().m_subgraphs[i].private_data_size != 0)
+                {
+                    ret = m_mem->malloc(get_graph().m_subgraphs[i].private_data_size, 0, &task.private_data, "dp_data");
+                    if (AIPU_STATUS_SUCCESS != ret)
+                        goto out;
+
+                    m_mem->mem_bzero(task.private_data.pa, task.private_data.size);
+                }
+                sg.tasks.push_back(task);
             }
-            sg.tasks.push_back(task);
+            m_sgt_allocated.push_back(&sg);
         }
     }
 
@@ -639,13 +672,13 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
     {
         switch (graph.m_subgraphs[sg_id].precursor_cnt)
         {
-            case 0:
+            case SUBG_DEPEND_NONE:
                 tcb->flag |= TCB_FLAG_DEP_TYPE_NONE;
                 break;
-            case 1:
+            case SUBG_DEPEND_IMMEDIATE:
                 tcb->flag |= TCB_FLAG_DEP_TYPE_IMMEDIATE;
                 break;
-            case -1:
+            case SUBG_DEPEND_PREALL:
                 tcb->flag |= TCB_FLAG_DEP_TYPE_PRE_ALL;
                 break;
             default:

@@ -106,6 +106,12 @@ private:
     std::vector<dumpcfg_output_desc> m_dumpcfg_output;
     std::string m_dumpcfg_meta;
 
+    /**
+     * record stack/dp buffers for each allocated subgraph, try to
+     * share them to subsequent subgraphs.
+     */
+    std::vector<SubGraphTask *> m_sgt_allocated;
+
 public:
     GraphV3& get_graph()
     {
