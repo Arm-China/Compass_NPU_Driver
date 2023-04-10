@@ -649,7 +649,7 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
 
     if (task_id == (m_task_per_sg - 1)) {
         tcb->flag |= TCB_FLAG_END_TYPE_GROUP_END;
-        if (!next_tcb)
+        if (!next_tcb && m_sg_cnt == 1)
             tcb->interrupt |= EN_INTERRUPT_CORE;
     }
 
