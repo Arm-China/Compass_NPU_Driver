@@ -73,6 +73,7 @@ public:
     aipu_status_t reserve_mem(DEV_PA_32 addr, uint32_t size, BufferDesc* desc, const char* str = nullptr);
     aipu_status_t free_all(void);
     virtual bool invalid(uint64_t addr) const;
+    virtual bool get_info(uint64_t addr, uint64_t &base, uint32_t &size) const;
     virtual int read(uint64_t addr, void *dest, size_t size) const
     {
         return mem_read(addr, dest, size);

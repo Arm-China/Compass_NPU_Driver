@@ -31,6 +31,8 @@ namespace sim_aipu
         virtual size_t size() const = 0;
 
         virtual bool invalid(uint64_t addr) const = 0;
+
+        virtual bool get_info(uint64_t addr, uint64_t &base, uint32_t &size) const = 0;
     };
 } // namespace sim_aipu
 #endif // !__MEM_ENGINE_BASE_H__

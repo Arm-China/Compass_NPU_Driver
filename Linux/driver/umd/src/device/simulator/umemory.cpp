@@ -333,6 +333,24 @@ bool aipudrv::UMemory::invalid(uint64_t addr) const
     return false;
 }
 
+bool aipudrv::UMemory::get_info(uint64_t addr, uint64_t &base, uint32_t &size) const
+{
+    std::map<aipudrv::DEV_PA_64, aipudrv::Buffer>::iterator iter;
+
+    iter = get_allocated_buffer((std::map<DEV_PA_64, Buffer> *)&m_allocated, addr);
+    if (iter == m_allocated.end())
+    {
+        iter = get_allocated_buffer((std::map<DEV_PA_64, Buffer> *)&m_reserved, addr);
+        if (iter == m_reserved.end())
+            return false;
+    }
+
+    base = iter->second.desc.pa;
+    size = iter->second.desc.size;
+
+    return true;
+}
+
 aipu_status_t aipudrv::UMemory::free_all(void)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
