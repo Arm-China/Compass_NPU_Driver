@@ -22,11 +22,6 @@ static struct aipu_soc_operations default_ops = {
 	.disable_clk = NULL,
 	.is_clk_enabled = NULL,
 	.is_aipu_irq = NULL,
-	.init_mm = NULL,
-	.deinit_mm = NULL,
-	.malloc = NULL,
-	.free = NULL,
-	.mmap = NULL,
 };
 
 static int default_probe(struct platform_device *p_dev)

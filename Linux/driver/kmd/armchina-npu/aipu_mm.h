@@ -160,8 +160,6 @@ struct aipu_sram_disable_per_fd {
  * @sram_disable_head: sram disable list
  * @gm_policy_attr: GM policy sysfs attribute, for v3 only
  * @slock:   TCB buffer lock
- * @soc:     SoC private data
- * @soc_ops: SoC operation pointer
  */
 struct aipu_memory_manager {
 	int version;
@@ -175,12 +173,9 @@ struct aipu_memory_manager {
 	struct aipu_sram_disable_per_fd *sram_disable_head;
 	struct device_attribute *gm_policy_attr;
 	spinlock_t slock; /* Protect tcb_buf list */
-	struct aipu_soc              *soc;
-	struct aipu_soc_operations   *soc_ops;
 };
 
-int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, int version,
-		 struct aipu_soc *soc, struct aipu_soc_operations *soc_ops);
+int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, int version);
 int aipu_deinit_mm(struct aipu_memory_manager *mm);
 int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_req,
 		  struct file *filp);

@@ -95,8 +95,7 @@ int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,
 	if (ret)
 		goto err_handle;
 
-	soc->mm = &aipu->mm;
-	ret = aipu_init_mm(&aipu->mm, p_dev, version, soc, soc_ops);
+	ret = aipu_init_mm(&aipu->mm, p_dev, version);
 	if (ret)
 		goto err_handle;
 
