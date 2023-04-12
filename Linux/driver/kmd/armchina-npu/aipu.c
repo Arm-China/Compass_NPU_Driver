@@ -44,6 +44,7 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int ret = 0;
 	struct aipu_priv *aipu = filp->private_data;
+	struct aipu_job_manager *manager = &aipu->job_manager;
 
 	u32 partition_cnt = 0;
 	struct aipu_partition_cap *partition_cap = NULL;
@@ -54,6 +55,8 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct aipu_io_req io_req;
 	struct aipu_job_status_query status;
 	struct aipu_hw_status hw;
+	struct aipu_config_clusters config_clusters;
+
 	u64 job_id;
 
 	switch (cmd) {
@@ -104,14 +107,14 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	case AIPU_IOCTL_SCHEDULE_JOB:
 		if (!copy_from_user(&user_job, (struct user_job_desc __user *)arg,
 				    sizeof(user_job)))
-			ret = aipu_job_manager_scheduler(&aipu->job_manager, &user_job, filp);
+			ret = aipu_job_manager_scheduler(manager, &user_job, filp);
 		else
 			ret = -EINVAL;
 		break;
 	case AIPU_IOCTL_QUERY_STATUS:
 		if (!copy_from_user(&status, (struct job_status_query __user *)arg,
 				    sizeof(status))) {
-			ret = aipu_job_manager_get_job_status(&aipu->job_manager, &status, filp);
+			ret = aipu_job_manager_get_job_status(manager, &status, filp);
 			if (!ret &&
 			    copy_to_user((struct job_status_query __user *)arg, &status,
 					 sizeof(status)))
@@ -120,7 +123,7 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 	case AIPU_IOCTL_KILL_TIMEOUT_JOB:
 		if (!copy_from_user(&job_id, (u64 __user *)arg, sizeof(job_id)))
-			ret = aipu_job_manager_invalidate_timeout_job(&aipu->job_manager, job_id);
+			ret = aipu_job_manager_invalidate_timeout_job(manager, job_id);
 		else
 			ret = -EINVAL;
 		break;
@@ -136,18 +139,25 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		}
 		break;
 	case AIPU_IOCTL_GET_HW_STATUS:
-		ret = aipu_job_manager_get_hw_status(&aipu->job_manager, &hw);
+		ret = aipu_job_manager_get_hw_status(manager, &hw);
 		if (!ret && copy_to_user((struct aipu_hw_status __user *)arg, &hw, sizeof(hw)))
 			ret = -EINVAL;
 		break;
 	case AIPU_IOCTL_ABORT_CMD_POOL:
-		ret = aipu_job_manager_abort_cmd_pool(&aipu->job_manager);
+		ret = aipu_job_manager_abort_cmd_pool(manager);
 		break;
 	case AIPU_IOCTL_DISABLE_TICK_COUNTER:
-		ret = aipu_job_manager_disable_tick_counter(&aipu->job_manager);
+		ret = aipu_job_manager_disable_tick_counter(manager);
 		break;
 	case AIPU_IOCTL_ENABLE_TICK_COUNTER:
-		ret = aipu_job_manager_enable_tick_counter(&aipu->job_manager);
+		ret = aipu_job_manager_enable_tick_counter(manager);
+		break;
+	case AIPU_IOCTL_CONFIG_CLUSTERS:
+		if (!copy_from_user(&config_clusters, (struct aipu_config_clusters __user *)arg,
+				    sizeof(config_clusters)))
+			ret = aipu_job_manager_config_clusters(manager, &config_clusters);
+		else
+			ret = -EINVAL;
 		break;
 	default:
 		ret = -ENOTTY;

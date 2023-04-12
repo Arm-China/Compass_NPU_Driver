@@ -38,6 +38,7 @@ struct aipu_priv;
  * @exit_dispatch:        schedule an exit TCB to TSM
  * @disable_tick_counter: disable the tick counter
  * @enable_tick_counter:  enable the tick counter
+ * @enable_core_cnt:      enable cores (the number is core_cnt) in a cluster (v3 only)
  */
 struct aipu_operations {
 	int (*get_config)(struct aipu_partition *aipu);
@@ -61,6 +62,7 @@ struct aipu_operations {
 	int (*exit_dispatch)(struct aipu_partition *partition, u32 job_flag, u64 tcb_pa);
 	void (*disable_tick_counter)(struct aipu_partition *partition);
 	void (*enable_tick_counter)(struct aipu_partition *partition);
+	void (*enable_core_cnt)(struct aipu_partition *partition, u32 cluster_id, u32 core_cnt);
 };
 
 /**

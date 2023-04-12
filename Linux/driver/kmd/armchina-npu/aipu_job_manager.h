@@ -185,5 +185,7 @@ int aipu_job_manager_get_hw_status(struct aipu_job_manager *manager, struct aipu
 int aipu_job_manager_abort_cmd_pool(struct aipu_job_manager *manager);
 int aipu_job_manager_disable_tick_counter(struct aipu_job_manager *manager);
 int aipu_job_manager_enable_tick_counter(struct aipu_job_manager *manager);
+int aipu_job_manager_config_clusters(struct aipu_job_manager *manager,
+				     struct aipu_config_clusters *cfg);
 
 #endif /* __AIPU_JOB_MANAGER_H__ */

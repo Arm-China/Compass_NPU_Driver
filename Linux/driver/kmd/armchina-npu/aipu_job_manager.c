@@ -1102,3 +1102,48 @@ int aipu_job_manager_enable_tick_counter(struct aipu_job_manager *manager)
 
 	return 0;
 }
+
+int aipu_job_manager_config_clusters(struct aipu_job_manager *manager,
+				     struct aipu_config_clusters *cfg)
+{
+	int ret = 0;
+	unsigned long flags;
+	struct aipu_job *curr = NULL;
+	struct aipu_partition *partition = NULL;
+	int idx = 0;
+
+	if (!manager || !cfg)
+		return -EINVAL;
+
+	if (manager->version != AIPU_ISA_VERSION_ZHOUYI_V3)
+		return 0;
+
+	partition = &manager->partitions[0];
+
+	spin_lock_irqsave(&manager->lock, flags);
+	list_for_each_entry(curr, &manager->scheduled_head->node, node) {
+		if (curr->state == AIPU_JOB_STATE_RUNNING ||
+		    curr->state == AIPU_JOB_STATE_DEFERRED) {
+			ret = -EBUSY;
+			dev_err(manager->dev, "config clusters failed: aipu is busy now");
+			goto unlock;
+		}
+	}
+
+	for (idx = 0; idx < partition->cluster_cnt; idx++) {
+		u32 en_count = cfg->clusters[idx].en_core_cnt;
+		u32 core_cnt = partition->clusters[idx].core_cnt;
+
+		if (en_count > core_cnt) {
+			ret = -EINVAL;
+			dev_err(manager->dev, "invalid enable core count: %u (> tot count %u)",
+				en_count, core_cnt);
+			goto unlock;
+		}
+		partition->ops->enable_core_cnt(partition, idx, en_count);
+	}
+
+unlock:
+	spin_unlock_irqrestore(&manager->lock, flags);
+	return ret;
+}

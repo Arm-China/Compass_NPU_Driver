@@ -54,6 +54,12 @@
 
 #define ENABLE_CLUSTER(partition, nums) \
 	(_SET_PARTITION(partition) | EN_NUMS(nums) | _ENABLE_CLUSTER)
+#define CONFIG_CLUSTER(partition, en_core, en_aiff, en_tec) \
+	(_SET_PARTITION(partition) | \
+	 _EN_CORE_NUM(en_core)     | \
+	 _EN_AIFF_NUM(en_aiff)     | \
+	 _EN_TEC_NUM(en_tec)       | \
+	 _ENABLE_CLUSTER)
 #define DISABLE_CLUSTER                             _DISABLE_CLUSTER
 
 #define CLUSTER_CONTROL_REG(id)                     (_GET_CLUSTER_OFFSET(id) + 0x4)

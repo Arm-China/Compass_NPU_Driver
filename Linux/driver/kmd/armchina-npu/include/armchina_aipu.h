@@ -63,6 +63,17 @@ enum aipu_isa_version {
  */
 
 /**
+ * struct aipu_config_clusters - struct used to configure the AIPU clusters (v3 only)
+ *
+ * @clusters: [kmd][aipu v3 only] Cluster config items
+ */
+struct aipu_config_clusters {
+	struct aipu_cluster_en {
+		__u32 en_core_cnt; /* the count of enabled cores in this cluster */
+	} clusters[8]; /* at maximum 8 clusters */
+};
+
+/**
  * struct aipu_partition_cap - Capability of an AIPU partition
  *
  * @id:      [kmd] AIPU partition ID
@@ -510,5 +521,15 @@ struct aipu_hw_status {
  * by default, tick counter is disabled.
  */
 #define AIPU_IOCTL_ENABLE_TICK_COUNTER _IO(AIPU_IOCTL_MAGIC, 13)
+/**
+ * DOC: AIPU_IOCTL_CONFIG_CLUSTERS
+ *
+ * @Description
+ *
+ * ioctl to config the v3 clusters
+ *
+ * please configure the clusters when they are idle.
+ */
+#define AIPU_IOCTL_CONFIG_CLUSTERS _IOW(AIPU_IOCTL_MAGIC, 14, struct aipu_config_clusters)
 
 #endif /* __UAPI_MISC_ARMCHINA_AIPU_H__ */

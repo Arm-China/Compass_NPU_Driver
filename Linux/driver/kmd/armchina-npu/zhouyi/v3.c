@@ -18,6 +18,19 @@ static void zhouyi_v3_set_partition(struct aipu_partition *partition, u32 cluste
 		     ENABLE_CLUSTER(partition->id, nums));
 }
 
+static void zhouyi_v3_enable_core_cnt(struct aipu_partition *partition, u32 cluster_id,
+				      u32 en_core_cnt)
+{
+	u32 nums = GET_NUMS(aipu_read32(partition->reg, CLUSTER_CONTROL_REG(cluster_id)));
+	u32 en_aiff_cnt = GET_AIFF_NUM(nums);
+	u32 en_tec_cnt = GET_TEC_NUM(nums);
+
+	aipu_write32(partition->reg, CLUSTER_CONTROL_REG(cluster_id),
+		     CONFIG_CLUSTER(partition->id, en_core_cnt, en_aiff_cnt, en_tec_cnt));
+	dev_info(partition->dev, "configure cluster #%u done: en_core_cnt %u\n",
+		 cluster_id, en_core_cnt);
+}
+
 static void zhouyi_v3_enable_interrupt(struct aipu_partition *partition)
 {
 	u32 cmd_pool_id = partition->id;
@@ -440,6 +453,7 @@ static struct aipu_operations zhouyi_v3_ops = {
 	.exit_dispatch = zhouyi_v3_exit_dispatch,
 	.disable_tick_counter = zhouyi_v3_disable_tick_counter,
 	.enable_tick_counter = zhouyi_v3_enable_tick_counter,
+	.enable_core_cnt = zhouyi_v3_enable_core_cnt,
 };
 
 struct aipu_operations *get_zhouyi_v3_ops(void)
