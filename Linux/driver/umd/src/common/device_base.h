@@ -29,6 +29,7 @@ typedef enum {
     AIPU_LL_STATUS_ERROR_IOCTL_QUERY_STATUS_FAIL,
     AIPU_LL_STATUS_ERROR_IOCTL_ABORT_CMDPOOL,
     AIPU_LL_STATUS_ERROR_IOCTL_TICK_COUNTER,
+    AIPU_LL_STATUS_ERROR_CONFIG_CLUSTER,
 } aipu_ll_status_t;
 
 inline aipu_status_t convert_ll_status(aipu_ll_status_t status)
@@ -57,6 +58,7 @@ inline aipu_status_t convert_ll_status(aipu_ll_status_t status)
         case AIPU_LL_STATUS_ERROR_IOCTL_QUERY_STATUS_FAIL:
         case AIPU_LL_STATUS_ERROR_IOCTL_ABORT_CMDPOOL:
         case AIPU_LL_STATUS_ERROR_IOCTL_TICK_COUNTER:
+        case AIPU_LL_STATUS_ERROR_CONFIG_CLUSTER:
             return AIPU_STATUS_ERROR_DEV_ABNORMAL;
 
         default:

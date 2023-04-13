@@ -335,6 +335,15 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             static_cast<UKMemory *>(m_dram)->set_memory_hook((Memory_Hook_Base *)arg);
             break;
 
+        case AIPU_IOCTL_CONFIG_CLUSTERS:
+            kret = ioctl(m_fd, AIPU_IOCTL_CONFIG_CLUSTERS, arg);
+            if (kret < 0)
+            {
+                LOG(LOG_ERR, "config cluster [fail]");
+                ret = AIPU_LL_STATUS_ERROR_CONFIG_CLUSTER;
+            }
+            break;
+
         default:
             LOG(LOG_ERR, "AIPU can't support cmd: %d\n", cmd);
             ret = AIPU_LL_STATUS_ERROR_OPERATION_UNSUPPORTED;

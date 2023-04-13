@@ -1009,7 +1009,7 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
     uint32_t queue_id, aipu_create_job_cfg_t *create_cfg);
 
 /**
- * @brief This API is used to send specific command to driver.
+ * @brief This API is used to send specific command to NPU driver.
  *
  * @param[in] ctx Pointer to a context handle struct returned by aipu_init_context
  * @param[in] cmd cmd
@@ -1019,6 +1019,22 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
  * @retval AIPU_STATUS_ERROR_NULL_PTR
  * @retval AIPU_STATUS_ERROR_INVALID_CTX
  * @retval AIPU_STATUS_ERROR_DEV_ABNORMAL
+ *
+ * @note support commands currently
+ *       AIPU_IOCTL_MARK_SHARED_TENSOR:
+ *           mark a shared buffer from belonged job, arg {aipu_shared_tensor_info_t}
+ *           the marked buffer isn't freed on destroying job and directly used by new job.
+ *       AIPU_IOCTL_SET_SHARED_TENSOR:
+ *           specify a marked shared buffer to new job, arg {aipu_shared_tensor_info_t}
+ *           marking shared buffer and setting shared buffer to new job must be performed
+ *           in same one process context.
+ *       AIPU_IOCTL_ENABLE_TICK_COUNTER:
+ *           enable performance counter, no arg
+ *       AIPU_IOCTL_DISABLE_TICK_COUNTER:
+ *           disable performance counter, no arg
+ *       AIPU_IOCTL_CONFIG_CLUSTERS:
+ *           config number of enabled cores in a cluster, arg {struct aipu_config_clusters}
+ *           it is used to disable some core's clock to reduce power consumption.
  */
 aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd, void *arg = nullptr);
 
