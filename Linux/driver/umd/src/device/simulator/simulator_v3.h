@@ -100,6 +100,8 @@ private:
     bool m_enable_avx;
     bool m_en_eval;
     uint32_t m_gm_size = 0;
+    std::string m_plugin_filename;
+    std::string m_json_filename;
     std::string m_arch_desc;
     std::vector<uint32_t> m_cluster_in_part[MAX_PART_CNT];
     uint32_t m_max_partition_cnt = 0;
@@ -416,7 +418,8 @@ private:
 
 inline sim_aipu::config_t sim_create_config(int code, uint32_t log_level = 0,
     std::string log_path = "./sim.log", bool verbose = false,
-    bool enable_avx = false, bool en_eval = 0, uint32_t gm_size = 4 * MB_SIZE)
+    bool enable_avx = false, bool en_eval = 0, uint32_t gm_size = 4 * MB_SIZE,
+    std::string plugin_filename = "", std::string json_filename = "")
 {
     sim_aipu::config_t config = {0};
 
@@ -429,6 +432,8 @@ inline sim_aipu::config_t sim_create_config(int code, uint32_t log_level = 0,
     config.log.level = log_level;
     config.log.verbose = verbose;
     config.gm_size = gm_size;
+    config.plugin_filename = plugin_filename;
+    config.json_filename = json_filename;
 
     LOG(LOG_DEBUG, "\nconfig.code = %d\n"
         "config.enable_calloc = %d\n"
@@ -438,10 +443,12 @@ inline sim_aipu::config_t sim_create_config(int code, uint32_t log_level = 0,
         "config.log.filepath = %s\n"
         "config.log.level = %d\n"
         "config.log.verbose = %d\n"
-        "config.gm_size = 0x%x\n",
+        "config.gm_size = 0x%x\n"
+        "config.plugin_filename = %s\n"
+        "config.json_filename = %s\n",
         config.code, config.enable_calloc, config.max_pkg_num, config.enable_avx,
         config.en_eval, config.log.filepath.c_str(), config.log.level,
-        config.log.verbose, config.gm_size);
+        config.log.verbose, config.gm_size, config.plugin_filename.c_str(), config.json_filename.c_str());
 
     return config;
 }

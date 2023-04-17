@@ -22,6 +22,7 @@
 
 namespace aipudrv
 {
+#define BUF_LEN 1204
 typedef std::map<GRAPH_ID, GraphBase*> GraphTable;
 
 class MainContext

@@ -1080,6 +1080,18 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     ofs << "#GM support: 512KiB,1MiB,2MiB,4MiB,8MiB,16MiB,32MiB,64MiB.\n";
     ofs << "GM_SIZE=" << gm_info[m_cfg->gm_size] << "\n";
 
+    if (m_cfg->plugin_name != nullptr)
+    {
+        ofs << "#PLUGIN_FILENAME\n";
+        ofs << "PLUGIN_FILENAME=" << m_cfg->plugin_name << "\n";
+    }
+
+    if (m_cfg->json_filename != nullptr)
+    {
+        ofs << "#JSON_FILENAME\n";
+        ofs << "JSON_FILENAME=" << m_cfg->json_filename << "\n";
+    }
+
     /* runtime.cfg: en_eval */
     ofs << "\n[PROFILE]\n";
     if (m_cfg->en_eval)
@@ -1089,7 +1101,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
 
     if(m_profiler.size() == 1)
     {
-        ofs << "\nPROFILE_BUF_ADDR=0x" << std::hex << m_profiler[0].pa << "\n";
+        ofs << "PROFILE_BUF_ADDR=0x" << std::hex << m_profiler[0].pa << "\n";
         ofs << "PROFILE_BUF_SIZE=0x" << std::hex << m_profiler[0].size << "\n";
     }
     ofs << "\n";

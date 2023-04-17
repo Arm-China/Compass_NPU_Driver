@@ -134,6 +134,8 @@ typedef struct {
     const char* x1_simulator;
     const char* log_file_path;
     const char *x2_arch_desc;
+    const char *plugin_name;
+    const char *json_filename;
     uint32_t log_level;
     uint32_t gm_size;
     bool verbose;

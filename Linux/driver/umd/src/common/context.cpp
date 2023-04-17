@@ -40,7 +40,9 @@ aipudrv::MainContext::MainContext()
     m_sim_cfg.z3_simulator = nullptr;
     m_sim_cfg.x1_simulator = nullptr;
     m_sim_cfg.x2_arch_desc = nullptr;
-    m_sim_cfg.log_file_path = new char[1024];
+    m_sim_cfg.plugin_name = nullptr;
+    m_sim_cfg.json_filename = nullptr;
+    m_sim_cfg.log_file_path = new char[BUF_LEN];
     strcpy((char*)m_sim_cfg.log_file_path, "./");
     m_sim_cfg.log_level = 0;
     m_sim_cfg.verbose = false;
@@ -76,6 +78,12 @@ aipudrv::MainContext::~MainContext()
 
     if (m_sim_cfg.x2_arch_desc != nullptr)
         delete[] m_sim_cfg.x2_arch_desc;
+
+    if (m_sim_cfg.plugin_name != nullptr)
+        delete[] m_sim_cfg.plugin_name;
+
+    if (m_sim_cfg.json_filename != nullptr)
+        delete[] m_sim_cfg.json_filename;
 
     delete[] m_sim_cfg.log_file_path;
 }
@@ -486,30 +494,44 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
     if (config->z1_simulator != nullptr)
     {
         if (m_sim_cfg.z1_simulator == nullptr)
-            m_sim_cfg.z1_simulator = new char[1024];
+            m_sim_cfg.z1_simulator = new char[BUF_LEN];
 
         strcpy((char*)m_sim_cfg.z1_simulator, config->z1_simulator);
     }
     if (config->z2_simulator != nullptr)
     {
         if (m_sim_cfg.z2_simulator == nullptr)
-            m_sim_cfg.z2_simulator = new char[1024];
+            m_sim_cfg.z2_simulator = new char[BUF_LEN];
 
         strcpy((char*)m_sim_cfg.z2_simulator, config->z2_simulator);
     }
     if (config->z3_simulator != nullptr)
     {
         if (m_sim_cfg.z3_simulator == nullptr)
-            m_sim_cfg.z3_simulator = new char[1024];
+            m_sim_cfg.z3_simulator = new char[BUF_LEN];
 
         strcpy((char*)m_sim_cfg.z3_simulator, config->z3_simulator);
     }
     if (config->x1_simulator != nullptr)
     {
         if (m_sim_cfg.x1_simulator == nullptr)
-            m_sim_cfg.x1_simulator = new char[1024];
+            m_sim_cfg.x1_simulator = new char[BUF_LEN];
 
         strcpy((char*)m_sim_cfg.x1_simulator, config->x1_simulator);
+    }
+    if (config->plugin_name != nullptr)
+    {
+        if (m_sim_cfg.plugin_name == nullptr)
+            m_sim_cfg.plugin_name = new char[BUF_LEN];
+
+        strcpy((char*)m_sim_cfg.plugin_name, config->plugin_name);
+    }
+    if (config->json_filename != nullptr)
+    {
+        if (m_sim_cfg.json_filename == nullptr)
+            m_sim_cfg.json_filename = new char[BUF_LEN];
+
+        strcpy((char*)m_sim_cfg.json_filename, config->json_filename);
     }
     if (config->log_file_path != nullptr)
     {
