@@ -26,6 +26,7 @@
 |   |-- aipu_partition.h
 |   |-- aipu_priv.c
 |   |-- aipu_priv.h
+|   |-- aipu_tcb.c
 |   |-- aipu_tcb.h
 |   |-- config.h
 |   |-- zhouyi                      -> Architecture specific implementations

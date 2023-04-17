@@ -47,8 +47,8 @@
 #define _SET_PARTITION(partition)                   ((partition) << 16)
 #define _ENABLE_CLUSTER                             (0x1 << 12)
 #define _DISABLE_CLUSTER                            (0x0 << 12)
-#define _EN_CORE_NUM(num)                           (((num) << 8) & 0xF)
-#define _EN_AIFF_NUM(num)                           (((num) << 4) & 0xF)
+#define _EN_CORE_NUM(num)                           (((num) & 0xF) << 8)
+#define _EN_AIFF_NUM(num)                           (((num) & 0xF) << 4)
 #define _EN_TEC_NUM(num)                            ((num) & 0xF)
 #define EN_NUMS(nums)                               ((nums) & 0xFFF)
 

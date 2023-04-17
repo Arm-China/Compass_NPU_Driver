@@ -42,6 +42,9 @@ int main(int argc, char* argv[])
     uint32_t frame_cnt = 5;
     int pass = -1;
     aipu_create_job_cfg create_job_cfg = {0};
+    struct aipu_config_clusters config_cluster;
+    config_cluster.clusters[0].en_core_cnt = 2;
+    bool en_config = false;
 
     if(init_test_bench(argc, argv, &opt, "benchmark_test"))
     {
@@ -141,6 +144,17 @@ int main(int argc, char* argv[])
     {
         char* output = new char[output_desc[i].size];
         output_data.push_back(output);
+    }
+
+    if (en_config)
+    {
+        ret = aipu_ioctl(ctx, AIPU_IOCTL_CONFIG_CLUSTERS, &config_cluster);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(ctx, ret, &msg);
+            AIPU_ERR()("aipu_ioctl (config clusters): %s\n", msg);
+            goto unload_graph;
+        }
     }
 
     /* run with with multiple frames */

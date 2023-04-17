@@ -4,6 +4,8 @@
 #ifndef __AIPU_TCB_H__
 #define __AIPU_TCB_H__
 
+#include <linux/types.h>
+
 /**
  * #reserved[8:11], dtcm_en[7], rd_en[6], wr_en[5], size[0:4]
  */
@@ -117,11 +119,12 @@ struct aipu_tcb {
 #define IS_GRID_END(flag)               ((flag) & TCB_FLAG_END_TYPE_GRID_END)
 
 #define gridid       __data.noninit.gridid
-#define groupid       __data.noninit.groupid
+#define groupid      __data.noninit.groupid
 #define taskid       __data.noninit.taskid
 #define grid_dim_x   __data.noninit.grid_dim_x
 #define group_dim_x  __data.noninit.group_dim_x
 #define pprint       __data.noninit.pprint
+#define _coreid      __data.noninit.coreid
 
 #define gm_ctrl      __data.init.clst.gm_ctrl
 #define gm_rgnx_ctrl __data.init.clst.gm_rgnx_ctrl
