@@ -257,7 +257,7 @@ static int config_exit_tcb(struct aipu_job_manager *manager, struct aipu_buf_des
 	int i = 0;
 	struct aipu_tcb *tcb = NULL;
 
-	tcb = aipu_get_tcb_va(manager->mm, desc->pa);
+	tcb = aipu_mm_get_tcb_va(manager->mm, desc->pa);
 	if (!tcb) {
 		dev_err(manager->dev, "buffer for exit TCB not found (0x%llx)\n", desc->pa);
 		return -EINVAL;
@@ -286,7 +286,7 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 	struct command_pool *pool = &manager->pools[partition_id];
 	struct qos *qlist = NULL;
 
-	ret = aipu_set_tcb_tail(manager->mm, job->desc.tail_tcb_pa);
+	ret = aipu_mm_set_tcb_tail(manager->mm, job->desc.tail_tcb_pa);
 	if (ret)
 		return ret;
 
@@ -314,8 +314,8 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 			return ret;
 
 		if (trigger_type != ZHOUYI_V3_TRIGGER_TYPE_CREATE) {
-			ret = aipu_link_tcb(manager->mm, qlist->curr_tail,
-					    manager->exit_tcb.pa, 0);
+			ret = aipu_mm_link_tcb(manager->mm, qlist->curr_tail,
+					       manager->exit_tcb.pa, 0);
 			if (ret)
 				return ret;
 		}
@@ -331,7 +331,7 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 		qlist->curr_tail = manager->exit_tcb.pa;
 
 		if (trigger_type != ZHOUYI_V3_TRIGGER_TYPE_CREATE) {
-			ret = aipu_unlink_tcb(manager->mm, job->desc.tail_tcb_pa);
+			ret = aipu_mm_unlink_tcb(manager->mm, job->desc.tail_tcb_pa);
 			if (ret)
 				return ret;
 		}
@@ -341,8 +341,8 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 		qlist->pool_head = job->desc.head_tcb_pa;
 		job->prev_tail_tcb = 0;
 	} else {
-		ret = aipu_link_tcb(manager->mm, qlist->curr_tail,
-				    job->desc.head_tcb_pa, job->desc.job_id);
+		ret = aipu_mm_link_tcb(manager->mm, qlist->curr_tail,
+				       job->desc.head_tcb_pa, job->desc.job_id);
 		if (ret)
 			return ret;
 
@@ -534,7 +534,7 @@ int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_m
 			dev_err(manager->dev, "init job manager failed: config exit TCB failed");
 			return ret;
 		}
-		ret = aipu_set_tcb_tail(manager->mm, manager->exit_tcb.pa);
+		ret = aipu_mm_set_tcb_tail(manager->mm, manager->exit_tcb.pa);
 		if (ret) {
 			dev_err(manager->dev, "init job manager failed: set TCB tail failed");
 			return ret;
@@ -630,7 +630,7 @@ static void aipu_job_manager_real_time_printk(struct aipu_job_manager *manager,
 
 	if (GET_PRINF_SIZE(info->sig_flag)) {
 		/* here: tail TCBP is the exact TCB sending a printf signal */
-		tcb = aipu_get_tcb_va(manager->mm, info->tail_tcbp);
+		tcb = aipu_mm_get_tcb_va(manager->mm, info->tail_tcbp);
 		if (!tcb)
 			dev_dbg(partition->dev, "real time printk: no TCB found (0x%x)\n",
 				info->tail_tcbp);
@@ -805,7 +805,7 @@ void aipu_job_manager_irq_bottom_half(struct aipu_partition *core)
 
 			if (curr->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3 &&
 			    curr->prev_tail_tcb)
-				aipu_unlink_tcb(manager->mm, curr->prev_tail_tcb);
+				aipu_mm_unlink_tcb(manager->mm, curr->prev_tail_tcb);
 		}
 
 		/* destroy the v3 command pool if all jobs are done */
@@ -820,8 +820,8 @@ void aipu_job_manager_irq_bottom_half(struct aipu_partition *core)
 	if (do_destroy) {
 		aipu_job_manager_destroy_command_pool_no_lock(manager, core);
 	} else {
-		aipu_pin_tcb(manager->mm, manager->pools->qlist[AIPU_JOB_QOS_SLOW].curr_tail);
-		aipu_pin_tcb(manager->mm, manager->pools->qlist[AIPU_JOB_QOS_FAST].curr_tail);
+		aipu_mm_pin_tcb(manager->mm, manager->pools->qlist[AIPU_JOB_QOS_SLOW].curr_tail);
+		aipu_mm_pin_tcb(manager->mm, manager->pools->qlist[AIPU_JOB_QOS_FAST].curr_tail);
 	}
 
 	list_for_each_entry_safe(curr, next, &manager->scheduled_head->node, node) {

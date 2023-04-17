@@ -45,6 +45,42 @@ err:
 	return NULL;
 }
 
+struct tcb_buf *create_tcb_buf(struct aipu_memory_manager *mm)
+{
+	struct tcb_buf *tcb = NULL;
+
+	tcb = devm_kzalloc(mm->dev, sizeof(*tcb), GFP_KERNEL);
+	if (tcb)
+		INIT_LIST_HEAD(&tcb->node);
+	return tcb;
+}
+
+static struct tcb_buf *aipu_mm_find_tcb_buf_no_lock(struct aipu_memory_manager *mm,
+						    struct aipu_mem_region **reg, u64 iova,
+						    char *log_str)
+{
+	struct aipu_mem_region *region = NULL;
+	struct tcb_buf *curr = NULL;
+
+	if (!mm || !reg)
+		return NULL;
+
+	list_for_each_entry(region, &mm->mem[AIPU_MEM_REGION_TYPE_MEMORY].reg->list, list) {
+		list_for_each_entry(curr, &region->tcb_buf_head->node, node) {
+			if (iova >= curr->head && iova <= curr->tail) {
+				*reg = region;
+				return curr;
+			}
+		}
+	}
+
+	if (log_str)
+		dev_dbg(mm->dev, "[%s] no TCB buffer is found at iova 0x%llx", log_str, iova);
+
+	*reg = NULL;
+	return NULL;
+}
+
 static unsigned long pa_to_bitmap_no(struct aipu_memory_manager *mm, struct aipu_mem_region *reg,
 				     u64 pa)
 {
@@ -898,21 +934,6 @@ int aipu_mm_free(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf, stru
 	return ret;
 }
 
-char *aipu_mm_get_va(struct aipu_memory_manager *mm, u64 dev_pa)
-{
-	struct aipu_mem_region *reg = NULL;
-
-	if (!mm)
-		return NULL;
-
-	reg = aipu_mm_find_region(mm, dev_pa, "get_va");
-	if (!reg)
-		return NULL;
-
-	return (char *)((unsigned long)reg->base_va + dev_pa + reg->host_aipu_offset -
-		reg->base_iova);
-}
-
 /**
  * @aipu_mm_free_buffers() - free all the buffers allocated from one fd
  * @mm:   pointer to memory manager struct initialized in aipu_init_mm()
@@ -1087,6 +1108,215 @@ int aipu_mm_enable_sram_allocation(struct aipu_memory_manager *mm, struct file *
 unlock:
 	mutex_unlock(&mm->lock);
 	return ret;
+}
+
+/**
+ * @aipu_mm_get_va() - get the kernel virtual address of an allocated buffer.
+ *                     currently do not support non-tcb va from importers.
+ * @mm:     pointer to memory manager struct initialized in aipu_init_mm()
+ * @dev_pa: device physical address returned by aipu_mm_alloc()
+ *
+ * Return: 0 on success and error code otherwise.
+ */
+char *aipu_mm_get_va(struct aipu_memory_manager *mm, u64 dev_pa)
+{
+	struct aipu_mem_region *reg = NULL;
+
+	if (!mm)
+		return NULL;
+
+	reg = aipu_mm_find_region(mm, dev_pa, "get_va");
+	if (!reg)
+		return NULL;
+
+	return (char *)((unsigned long)reg->base_va + dev_pa + reg->host_aipu_offset -
+		reg->base_iova);
+}
+
+/**
+ * @aipu_mm_get_tcb_va() - get the kernel virtual address of a TCB buffer.
+ * @mm:     pointer to memory manager struct initialized in aipu_init_mm()
+ * @dev_pa: device physical address returned by aipu_mm_alloc()
+ *
+ * Return: pointer of a TCB on success and NULL otherwise.
+ */
+struct aipu_tcb *aipu_mm_get_tcb_va(struct aipu_memory_manager *mm, u64 dev_pa)
+{
+	struct aipu_mem_region *reg = NULL;
+	struct tcb_buf *tbuf = NULL;
+	unsigned long flags;
+	struct aipu_tcb *tcb = NULL;
+
+	spin_lock_irqsave(&mm->slock, flags);
+	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, &reg, dev_pa, NULL);
+	if (!tbuf || !reg)
+		goto unlock;
+
+	tcb = (struct aipu_tcb *)((char *)(reg->base_va) + dev_pa + reg->host_aipu_offset -
+	       reg->base_iova);
+
+unlock:
+	spin_unlock_irqrestore(&mm->slock, flags);
+	return tcb;
+}
+
+/**
+ * @aipu_mm_set_tcb_tail() - set the pointer to the tail TCB of a TCB list.
+ * @mm:   pointer to memory manager struct initialized in aipu_init_mm()
+ * @tail: address of the tail TCB of a TCB list
+ *
+ * Return: 0 on success and error code otherwise.
+ */
+int aipu_mm_set_tcb_tail(struct aipu_memory_manager *mm, u64 tail)
+{
+	struct aipu_mem_region *reg = NULL;
+	struct tcb_buf *tcb = NULL;
+	unsigned long flags;
+	int ret = 0;
+
+	spin_lock_irqsave(&mm->slock, flags);
+	tcb = aipu_mm_find_tcb_buf_no_lock(mm, &reg, tail, "set_tail");
+	if (!tcb || !reg) {
+		ret = -EFAULT;
+		goto unlock;
+	}
+
+	tcb->tail = tail;
+	tcb->tail_tcb = (struct aipu_tcb *)((char *)(reg->base_va) + tail + reg->host_aipu_offset -
+			reg->base_iova);
+
+unlock:
+	spin_unlock_irqrestore(&mm->slock, flags);
+	return ret;
+}
+
+/**
+ * @aipu_mm_link_tcb() - link a TCB list to the tail of an existing TCB list.
+ * @mm:           pointer to memory manager struct initialized in aipu_init_mm()
+ * @prev_tail:    address of the tail TCB of a previous TCB list to be linked
+ * @next_head_32: head address of the next TCB list
+ * @next_job_id:  Job ID of the next TCB list
+ *
+ * Return: 0 on success and error code otherwise.
+ */
+int aipu_mm_link_tcb(struct aipu_memory_manager *mm, u64 prev_tail, u32 next_head_32,
+		     int next_job_id)
+{
+	struct aipu_mem_region *reg = NULL;
+	struct tcb_buf *tbuf = NULL;
+	unsigned long flags;
+	int ret = 0;
+
+	spin_lock_irqsave(&mm->slock, flags);
+
+	/**
+	 * if no prev TCB is found, job manager should destroy the pool,
+	 * and re-create & re-dispatch with the new head.
+	 */
+	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, &reg, prev_tail, "link_tcb");
+	if (!tbuf) {
+		ret = -EFAULT;
+		goto unlock;
+	}
+
+	/* tail TCB should be set first */
+	if (!tbuf->tail_tcb) {
+		dev_err(mm->dev, "tail TCB was not set before linking it");
+		ret = -EINVAL;
+		goto unlock;
+	}
+
+	tbuf->tail_tcb->next = next_head_32;
+	tbuf->dep_job_id = next_job_id;
+
+unlock:
+	spin_unlock_irqrestore(&mm->slock, flags);
+	return ret;
+}
+
+/**
+ * @aipu_mm_unlink_tcb() - unlink a TCB list from an existing TCB list.
+ * @mm:           pointer to memory manager struct initialized in aipu_init_mm()
+ * @prev_tail:    address of the tail TCB of a previous TCB list to be unlinked
+ *
+ * Return: 0 on success and error code otherwise.
+ */
+int aipu_mm_unlink_tcb(struct aipu_memory_manager *mm, u64 prev_tail)
+{
+	struct aipu_mem_region *reg = NULL;
+	struct tcb_buf *tbuf = NULL;
+	struct aipu_buf_desc buf;
+	struct aipu_virt_page *page = NULL;
+	unsigned long flags;
+	struct tcb_buf *tcb = NULL;
+	int ret = 0;
+
+	spin_lock_irqsave(&mm->slock, flags);
+	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, &reg, prev_tail, "unlink_tcb");
+	if (!tbuf || !reg) {
+		ret = -EFAULT;
+		goto unlock;
+	}
+
+	/* tail TCB should be set first */
+	if (!tbuf->tail_tcb) {
+		dev_err(mm->dev, "tail TCB was not set before unlinking it");
+		ret = -EINVAL;
+		goto unlock;
+	}
+
+	tbuf->tail_tcb->next = 0;
+	tbuf->dep_job_id = 0;
+	tbuf->pinned = false;
+
+	page = tbuf->page;
+	if (!page) {
+		dev_err(mm->dev, "page of this TCB buffer is null");
+		ret = -EFAULT;
+		goto unlock;
+	}
+
+	if (!page->locked) {
+		buf.pa = tbuf->head;
+		buf.bytes = page->contiguous_alloc_len << PAGE_SHIFT;
+		ret = aipu_mm_free_in_region_no_lock(mm, &buf, reg, &tcb);
+		if (ret)
+			goto unlock;
+
+		/* tbuf has been deleted already */
+		tbuf = NULL;
+
+		WARN_ON(!tcb);
+		list_del(&tcb->node);
+		devm_kfree(mm->dev, tcb);
+		tcb = NULL;
+	}
+
+unlock:
+	spin_unlock_irqrestore(&mm->slock, flags);
+	return ret;
+}
+
+/**
+ * @aipu_mm_pin_tcb() - pin a TCB list until it is ready to be freed in a future moment
+ * @mm:   pointer to memory manager struct initialized in aipu_init_mm()
+ * @tail: address of the tail TCB of a TCB list
+ */
+void aipu_mm_pin_tcb(struct aipu_memory_manager *mm, u64 tail)
+{
+	struct aipu_mem_region *reg = NULL;
+	struct tcb_buf *tbuf = NULL;
+	unsigned long flags;
+
+	spin_lock_irqsave(&mm->slock, flags);
+	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, &reg, tail, NULL);
+	if (!tbuf || !reg)
+		goto unlock;
+
+	tbuf->pinned = true;
+
+unlock:
+	spin_unlock_irqrestore(&mm->slock, flags);
 }
 
 void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap)

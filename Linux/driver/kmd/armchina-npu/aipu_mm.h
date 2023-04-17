@@ -193,16 +193,13 @@ int aipu_mm_gm_policy_switch(struct aipu_memory_manager *mm, enum aipu_gm_policy
 void aipu_mm_get_gm(struct aipu_memory_manager *mm, struct aipu_cap *cap);
 void get_dtcm(struct aipu_memory_manager *mm, u64 *base, u32 *size);
 
-int aipu_mm_free_in_region_no_lock(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf,
-				   struct aipu_mem_region *reg, struct tcb_buf **tcb);
-struct tcb_buf *create_tcb_buf(struct aipu_memory_manager *mm);
 bool is_grid_end(struct aipu_memory_manager *mm, u64 tail);
 int print_core_id(struct aipu_memory_manager *mm, u64 head, u64 tail);
-int aipu_set_tcb_tail(struct aipu_memory_manager *mm, u64 tail);
-struct aipu_tcb *aipu_get_tcb_va(struct aipu_memory_manager *mm, u64 dev_pa);
-int aipu_link_tcb(struct aipu_memory_manager *mm, u64 prev_tail, u32 next_head_32,
-		  int next_job_id);
-int aipu_unlink_tcb(struct aipu_memory_manager *mm, u64 prev_tail);
-void aipu_pin_tcb(struct aipu_memory_manager *mm, u64 tail);
+int aipu_mm_set_tcb_tail(struct aipu_memory_manager *mm, u64 tail);
+struct aipu_tcb *aipu_mm_get_tcb_va(struct aipu_memory_manager *mm, u64 dev_pa);
+int aipu_mm_link_tcb(struct aipu_memory_manager *mm, u64 prev_tail, u32 next_head_32,
+		     int next_job_id);
+int aipu_mm_unlink_tcb(struct aipu_memory_manager *mm, u64 prev_tail);
+void aipu_mm_pin_tcb(struct aipu_memory_manager *mm, u64 tail);
 
 #endif /* __AIPU_MM_H__ */
