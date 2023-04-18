@@ -270,9 +270,14 @@ static int config_exit_tcb(struct aipu_job_manager *manager, struct aipu_buf_des
 	tcb->gm_ctrl = 0xF;
 	tcb->gm_rgnx_ctrl[0] = 0xC0000000;
 	tcb->gm_rgnx_ctrl[0] = 0xC0000000;
-	for (i = 0; i < 4; i++) {
-		tcb->asids[i].v32.lo = (manager->asid_base | ASID_RD | ASID_WR) & U32_MAX;
-		tcb->asids[i].v32.hi = manager->asid_base >> 32;
+	for (i = AIPU_BUF_ASID_0; i < ZHOUYI_ASID_COUNT; i++) {
+		u64 base = aipu_mm_get_asid_base(manager->mm, i);
+		u64 size = aipu_mm_get_asid_size(manager->mm, i);
+
+		if (size) {
+			tcb->asids[i].v32.lo = (base | ASID_RD | ASID_WR) & U32_MAX;
+			tcb->asids[i].v32.hi = base >> 32;
+		}
 	}
 	return 0;
 }
@@ -511,7 +516,7 @@ int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_m
 	manager->mm = mm;
 	manager->priv = priv;
 	aipu_mm_get_asid(mm, &cap);
-	manager->asid_base = cap.asid0_base;
+	manager->asid0_base = cap.asid0_base;
 	atomic_set(&manager->tick_counter, 0);
 	atomic_set(&manager->is_suspend, 0);
 
@@ -641,7 +646,7 @@ static void aipu_job_manager_real_time_printk(struct aipu_job_manager *manager,
 			dev_dbg(partition->dev, "real time printk: no TCB found (0x%x)\n",
 				info->tail_tcbp);
 
-		buf = aipu_mm_get_va(manager->mm, manager->mm->asid_base + tcb->pprint);
+		buf = aipu_mm_get_va(manager->mm, manager->asid0_base + tcb->pprint);
 		if (buf)
 			dev_info(partition->dev, "[real-time printk 0x%x] %s", tcb->pprint, buf);
 		else
@@ -713,7 +718,7 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 	}
 
 	list_for_each_entry(curr, &manager->scheduled_head->node, node) {
-		if (is_job_end(curr, partition, info, manager->asid_base, flag)) {
+		if (is_job_end(curr, partition, info, manager->asid0_base, flag)) {
 			if (unlikely(is_job_abnormal(curr, flag, info)))
 				curr->state = AIPU_JOB_STATE_EXCEP;
 			else

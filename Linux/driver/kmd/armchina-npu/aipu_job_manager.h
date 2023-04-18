@@ -140,7 +140,7 @@ struct command_pool {
  * @exec_flag:       execution flags propagated to all jobs
  * @mm:              reference to memory manager
  * @priv:            pointer to aipu_priv struct
- * @asid_base:       base address of ASID
+ * @asid_base:       base address of ASID 0
  * @exit_tcb:        buffer descriptor of the exit_TCB
  * @tick_counter:    atomic lock for tick counter
  */
@@ -160,7 +160,7 @@ struct aipu_job_manager {
 	int exec_flag;
 	struct aipu_memory_manager *mm;
 	void *priv;
-	u64 asid_base;
+	u64 asid0_base;
 	struct aipu_buf_desc exit_tcb;
 	atomic_t tick_counter;
 	atomic_t is_suspend;

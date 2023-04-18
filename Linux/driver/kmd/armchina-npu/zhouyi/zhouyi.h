@@ -22,6 +22,8 @@
 
 #define ZHOUYI_AIPU_IDLE_STATUS               0x70000
 
+#define ZHOUYI_ASID_COUNT                     4
+
 /*
  * Revision ID for V1 ~ V3
  */

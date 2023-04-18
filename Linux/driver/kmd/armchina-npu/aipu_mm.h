@@ -10,6 +10,7 @@
 #include <linux/spinlock.h>
 #include <armchina_aipu.h>
 #include "aipu_tcb.h"
+#include "zhouyi.h"
 
 enum aipu_gm_policy {
 	AIPU_GM_POLICY_NONE         = 0,
@@ -151,12 +152,12 @@ struct aipu_sram_disable_per_fd {
  * struct aipu_memory_manager - AIPU memory management struct (MM)
  * @version: AIPU ISA version number
  * @limit: AIPU device address space upper bound
- * @asid_base: base address of ASID
  * @has_iommu: system has an IOMMU for AIPU to use or not
  * @gm_policy: GM policy determined by customer (AIPU_GM_POLICY_SHARED/AIPU_GM_POLICY_HALF_DIVIDED)
  * @dev: device struct pointer (AIPU core 0)
  * @lock: lock for reg and sram_disable_head
  * @mem: memory regions, contains memory/SRAM/DTCM/GM
+ * @ase: four address space extension regions
  * @sram_disable_head: sram disable list
  * @gm_policy_attr: GM policy sysfs attribute, for v3 only
  * @slock:   TCB buffer lock
@@ -164,12 +165,12 @@ struct aipu_sram_disable_per_fd {
 struct aipu_memory_manager {
 	int version;
 	u64 limit;
-	u64 asid_base;
 	bool has_iommu;
 	u32 gm_policy;
 	struct device *dev;
 	struct mutex lock; /* Protect sram disabled head struct */
 	struct aipu_mem_region_list mem[AIPU_MEM_REGION_TYPE_MAX];
+	struct aipu_mem_region *ase[ZHOUYI_ASID_COUNT];
 	struct aipu_sram_disable_per_fd *sram_disable_head;
 	struct device_attribute *gm_policy_attr;
 	spinlock_t slock; /* Protect tcb_buf list */
@@ -187,6 +188,8 @@ int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 int aipu_mm_disable_sram_allocation(struct aipu_memory_manager *mm, struct file *filp);
 int aipu_mm_enable_sram_allocation(struct aipu_memory_manager *mm, struct file *filp);
 void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap);
+u64 aipu_mm_get_asid_base(struct aipu_memory_manager *mm, u32 asid);
+u64 aipu_mm_get_asid_size(struct aipu_memory_manager *mm, u32 asid);
 int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes, int cluster_id);
 void aipu_mm_deinit_gm(struct aipu_memory_manager *mm);
 int aipu_mm_gm_policy_switch(struct aipu_memory_manager *mm, enum aipu_gm_policy next);

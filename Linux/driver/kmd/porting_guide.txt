@@ -198,7 +198,7 @@ For example, assume that your SoC contains 2 Zhouyi AIPU cores, you may configur
 This attribute is mandatory for V1/V2 multiple instances scenario. For a single core case or V3,
 you can omit it.
 
-3.1.3 Register base
+3.1.3 Register Base
 -------------------
 Zhouyi driver supports at most two register base addresses:
 
@@ -417,9 +417,6 @@ feature map reuse buffers.
 
 Please find the example in 3.1.4.
 
-Note that the higher 32 bits of the base address of SoC SRAM should be equal to that of the reserved
-DRAM. This ensures all the reuse buffers to share the same ASID parameters.
-
 If host CPUs on your SoC have no access to a SRAM region (but your NPUs have), it is unnecessary to
 reserve a SRAM region in DTS. If you still do this, please ensure that the following macro is set to
 be 0:
@@ -451,8 +448,8 @@ By default, this macro is 0. You should set 1 if your CPUs also have access to D
 the dtcm management by driver. If set, driver will map the address to virtual space and dtcm allocations
 from userspace will be enabled.
 
-3.1.5 Host-AIPU-Offset
-----------------------
+3.1.4.5 Host-AIPU-Offset
+------------------------
 Sometimes to access the main memory, the physical addresses (cpu_pa) issued from host CPU and the
 addresses used by a device (dma_addr) do not equal. For this scenario, we use the host-aipu-offset
 attribute to describe the gap between them.
@@ -507,6 +504,116 @@ followed:
     };
 
 This attribute is optional and by default this value in driver is 0 if not activated in DTS.
+
+3.1.5 ASID Region Base & Size
+-----------------------------
+Zhouyi V2 & V3 NPUs support 4 groups of ASID regions, which are used to direct different types
+of data to different address spaces. The base addresses and size of the 4 ASID regions should be
+configured in NPU device tree.
+
+For the n^th ASE region, the addresses used to access the system memory are calculated as:
+
+        ASID_n: PA_64 = ASE_n_64 + VA_32
+
+    where:
+        PA_64 is a 64 bits physical address used to access the system memory finally
+        n is the id of ASE, i.e. ASID, 0 <= n <= 3
+        ASE_n_64 is a 64 bits base address configured in the ASE register #n and used to
+            extend the address space of NPU
+        VA_32 is a 32 bits virtual address configured in external registers or rodata sections
+            and used in NPU
+
+NPU driver will link the ASID regions to the corresponding reserved memory regions (if any).
+
+This attribute is optional. If not set, the NPU driver will choose a shared base address for
+all the ASID regions.
+
+If you have reserved memory region(s), please configure the ASID in the reserved memory node as:
+
+    asid = <id_0 id_1 id_2 id_3>; /* variable array contains the id(s) this mem region supports */
+
+For example,
+
+    /* case 1 */
+    /* all ASID regions share one base address & size */
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+
+        aipu_res_0: memory@A0000000 {
+            compatible = "shared-dma-pool";
+            reusable;
+            reg = <0x0 0xA0000000 0x0 0x10000000>;
+            asid = <0 1 2 3>;
+        };
+    };
+
+    aipu0@64000000 {
+        /* other attributes */
+        memory-region = <&aipu_res_0>;
+    };
+
+    /* case 2 */
+    /* 4 ASID regions have different addresses, respectively */
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+
+        aipu_res_0: memory@A0000000 {
+            compatible = "shared-dma-pool";
+            reusable;
+            reg = <0x0 0xA0000000 0x0 0x20000000>;
+            asid = <0>;
+        };
+
+        aipu_res_1: memory@1A0000000 {
+            compatible = "shared-dma-pool";
+            reusable;
+            reg = <0x1 0xA0000000 0x0 0x20000000>;
+            asid = <1>;
+        };
+
+        aipu_res_2: memory@2A0000000 {
+            compatible = "shared-dma-pool";
+            reusable;
+            reg = <0x2 0xA0000000 0x0 0x20000000>;
+            asid = <2>;
+        };
+
+        aipu_res_3: memory@3A0000000 {
+            compatible = "shared-dma-pool";
+            reusable;
+            reg = <0x3 0xA0000000 0x0 0x20000000>;
+            asid = <3>;
+        };
+    };
+
+    aipu0@64000000 {
+        /* other attributes */
+        memory-region = <&aipu_res_0 &aipu_res_1 &aipu_res_2 &aipu_res_3 &aipu_res_4>;
+    };
+
+    /* case 4 */
+    /* no asid attributes specified, default asid is choosed */
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+
+        aipu_res_0: memory@A0000000 {
+            compatible = "shared-dma-pool";
+            reusable;
+            reg = <0x0 0xA0000000 0x0 0x8000000>;
+            /* by default support all ASIDs */
+        };
+    };
+
+    aipu0@64000000 {
+        /* other attributes */
+        memory-region = <&aipu_res_0>;
+    };
 
 3.1.6 Interrupts
 ----------------

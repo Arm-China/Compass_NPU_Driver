@@ -522,14 +522,15 @@ static ssize_t aipu_gm_policy_sysfs_store(struct device *dev, struct device_attr
 	return count;
 }
 
-static int aipu_mm_create_region(struct aipu_memory_manager *mm, struct aipu_mem_region_list *head,
-				 u64 addr, u64 size, u64 offset, u32 idx)
+static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager *mm,
+						     struct aipu_mem_region_list *head,
+						     u64 addr, u64 size, u64 offset, u32 idx)
 {
 	int ret = 0;
 	struct aipu_mem_region *reg = NULL;
 
 	if (!mm || !head || !size)
-		return -EINVAL;
+		return ERR_PTR(-EINVAL);
 
 	/* for the same memory position, AIPU & host CPU may use different addresses to access:
 	 *     aipu_access_addr = host_access_addr - offset
@@ -538,7 +539,7 @@ static int aipu_mm_create_region(struct aipu_memory_manager *mm, struct aipu_mem
 	if (offset > addr) {
 		dev_err(mm->dev, "invalid memory base pa (0x%llx) or host-aipu-offset (0x%llx)\n",
 			addr, offset);
-		return -EINVAL;
+		return ERR_PTR(-EINVAL);
 	}
 
 	if (!mm->has_iommu) {
@@ -558,24 +559,24 @@ static int aipu_mm_create_region(struct aipu_memory_manager *mm, struct aipu_mem
 			dev_err(mm->dev,
 				"region is beyond valid region used by AIPU (0x%llx > 0x%llx)\n",
 				upper, mm->limit);
-			return -EINVAL;
+			return ERR_PTR(-EINVAL);
 		}
 	}
 
 	reg = devm_kzalloc(mm->dev, sizeof(*reg), GFP_KERNEL);
 	if (!reg)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
 	reg->base_pa = addr;
 	reg->bytes = size;
 	reg->host_aipu_offset = offset;
 	ret = aipu_mm_init_mem_region(mm, reg, idx, head->type, true);
 	if (ret)
-		return ret;
+		return ERR_PTR(ret);
 
 	list_add(&reg->list, &head->reg->list);
 	head->cnt++;
-	return ret;
+	return reg;
 }
 
 /**
@@ -589,13 +590,15 @@ static int aipu_mm_create_region(struct aipu_memory_manager *mm, struct aipu_mem
 int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, int version)
 {
 	int ret = 0;
-	enum aipu_mem_region_type type;
-	struct iommu_group *group = NULL;
-	struct device_node *np = NULL;
-	struct resource res;
-	struct aipu_mem_region *reg = NULL;
-	u64 host_aipu_offset = 0;
 	int idx = 0;
+	int asid_idx = 0;
+	struct device_node *np = NULL;
+	enum aipu_mem_region_type type;
+	struct resource res;
+	u64 host_aipu_offset = 0;
+	struct iommu_group *group = NULL;
+	struct aipu_mem_region *reg = NULL;
+	bool asid_set = false;
 
 	if (!mm || !p_dev)
 		return -EINVAL;
@@ -752,27 +755,51 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 			continue;
 		}
 
-		ret = aipu_mm_create_region(mm, &mm->mem[type], res.start, size,
+		reg = aipu_mm_create_region(mm, &mm->mem[type], res.start, size,
 					    host_aipu_offset, idx);
-		if (ret)
+		if (IS_ERR(reg)) {
+			ret = PTR_ERR(reg);
 			goto err;
+		}
 
-		if (type == AIPU_MEM_REGION_TYPE_MEMORY || type == AIPU_MEM_REGION_TYPE_SRAM) {
-			u64 asid_base = ((res.start - host_aipu_offset) >> 32) << 32;
+		for (asid_idx = 0; asid_idx < ZHOUYI_ASID_COUNT; asid_idx++) {
+			u32 asid = AIPU_BUF_ASID_0;
 
-			if (!mm->asid_base) {
-				mm->asid_base = asid_base;
-			} else {
-				/* all the memory/sram regions should be within the same 4G space */
-				if (mm->asid_base != asid_base) {
-					dev_err(mm->dev, "invalid asid base: 0x%llx\n", asid_base);
-					goto err;
+			if (!of_property_read_u32_index(np, "asid", asid_idx, &asid)) {
+				if (asid >= ZHOUYI_ASID_COUNT) {
+					dev_err(mm->dev, "dts: invalid asid: %u\n", asid);
+					continue;
 				}
+
+				mm->ase[asid] = reg;
+				asid_set = true;
+			} else {
+				break;
 			}
 		}
 
 		of_node_put(np);
 		idx++;
+	}
+
+	for (asid_idx = 0; asid_idx < ZHOUYI_ASID_COUNT; asid_idx++) {
+		/* if any asid region is not set in dts, memory allocation at runtime may fail */
+		if (!mm->ase[asid_idx]) {
+			dev_err(mm->dev, "dts: region of asid #%u is not set\n", asid_idx);
+		} else {
+			dev_info(mm->dev, "dts: asid #%u base: 0x%llx, size 0x%llx\n", asid_idx,
+				 mm->ase[asid_idx]->base_iova, mm->ase[asid_idx]->bytes);
+		}
+	}
+
+	if (!asid_set) {
+		dev_info(mm->dev, "the default asid regions will be applied\n");
+
+		/* the last created region is registered to all ASEs */
+		mm->ase[AIPU_BUF_ASID_0] = reg;
+		mm->ase[AIPU_BUF_ASID_1] = reg;
+		mm->ase[AIPU_BUF_ASID_2] = reg;
+		mm->ase[AIPU_BUF_ASID_3] = reg;
 	}
 
 	goto finish;
@@ -829,9 +856,10 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 	if (!mm || !buf_req)
 		return -EINVAL;
 
-	if (!buf_req->bytes || !is_power_of_2(buf_req->align_in_page)) {
-		dev_err(mm->dev, "[malloc] invalid alloc request: bytes 0x%llx, align %u",
-			buf_req->bytes, buf_req->align_in_page);
+	if (!buf_req->bytes || !is_power_of_2(buf_req->align_in_page) ||
+	    buf_req->asid >= ZHOUYI_ASID_COUNT) {
+		dev_err(mm->dev, "[malloc] invalid alloc request: bytes 0x%llx, align %u, asid %u",
+			buf_req->bytes, buf_req->align_in_page, buf_req->asid);
 		return -EINVAL;
 	}
 
@@ -860,7 +888,19 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 
 	mutex_lock(&mm->lock);
 
-	/* allocate from the specified regions first */
+	/* try to allocate from the matched ASID region first */
+	reg = mm->ase[buf_req->asid];
+	if (reg) {
+		ret = aipu_mm_alloc_in_region_no_lock(mm, buf_req, reg, filp, &tcb);
+		if (!ret) {
+			buf_req->desc.asid = buf_req->asid;
+			goto unlock;
+		}
+		dev_info(mm->dev, "allocation failed: size 0x%llx, asid %u, fall back to others\n",
+			 buf_req->bytes, buf_req->asid);
+	}
+
+	/* allocate from the specified regions */
 	list_for_each_entry(reg, &mm->mem[type].reg->list, list) {
 		ret = aipu_mm_alloc_in_region_no_lock(mm, buf_req, reg, filp, &tcb);
 		if (!ret)
@@ -885,9 +925,8 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 		goto unlock;
 	}
 
-	WARN_ON(buf_req->desc.pa % (buf_req->align_in_page << PAGE_SHIFT));
-
 unlock:
+	WARN_ON(buf_req->desc.pa % (buf_req->align_in_page << PAGE_SHIFT));
 	mutex_unlock(&mm->lock);
 	if (reg && tcb) {
 		spin_lock_irqsave(&mm->slock, flags);
@@ -1319,15 +1358,35 @@ unlock:
 	spin_unlock_irqrestore(&mm->slock, flags);
 }
 
+u64 aipu_mm_get_asid_base(struct aipu_memory_manager *mm, u32 asid)
+{
+	if (!mm || asid >= ZHOUYI_ASID_COUNT)
+		return 0;
+
+	if (mm->ase[asid])
+		return mm->ase[asid]->base_iova - mm->ase[asid]->host_aipu_offset;
+	return 0;
+}
+
+u64 aipu_mm_get_asid_size(struct aipu_memory_manager *mm, u32 asid)
+{
+	if (!mm || asid >= ZHOUYI_ASID_COUNT)
+		return 0;
+
+	if (mm->ase[asid])
+		return mm->ase[asid]->bytes;
+	return 0;
+}
+
 void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap)
 {
 	if (!mm || !cap)
 		return;
 
-	cap->asid0_base = mm->asid_base;
-	cap->asid1_base = mm->asid_base;
-	cap->asid2_base = mm->asid_base;
-	cap->asid3_base = mm->asid_base;
+	cap->asid0_base = aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_0);
+	cap->asid1_base = aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_1);
+	cap->asid2_base = aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_2);
+	cap->asid3_base = aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_3);
 }
 
 static void aipu_mm_get_gm_region_no_lock(struct aipu_memory_manager *mm,
@@ -1371,6 +1430,7 @@ int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes, int cluster_id)
 			break;
 	}
 
+	ret = aipu_mm_alloc(mm, &buf_req, NULL);
 	if (ret) {
 		dev_err(mm->dev, "GM allocation failed: bytes 0x%x", bytes);
 		return ret;
