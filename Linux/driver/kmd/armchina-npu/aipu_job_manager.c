@@ -1160,7 +1160,12 @@ int aipu_job_manager_suspend(struct aipu_job_manager *manager)
 		return -EINVAL;
 
 	memset(&cfg, 0, sizeof(cfg));
-	return aipu_job_manager_config_clusters(manager, &cfg);
+
+	if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V3)
+		return aipu_job_manager_config_clusters(manager, &cfg);
+
+	atomic_set(&manager->is_suspend, 1);
+	return 0;
 }
 
 int aipu_job_manager_resume(struct aipu_job_manager *manager)
@@ -1171,5 +1176,10 @@ int aipu_job_manager_resume(struct aipu_job_manager *manager)
 		return -EINVAL;
 
 	cfg.clusters[0].en_core_cnt = manager->partitions[0].clusters[0].core_cnt;
-	return aipu_job_manager_config_clusters(manager, &cfg);
+
+	if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V3)
+		return aipu_job_manager_config_clusters(manager, &cfg);
+
+	atomic_set(&manager->is_suspend, 0);
+	return 0;
 }
