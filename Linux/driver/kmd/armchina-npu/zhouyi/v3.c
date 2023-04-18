@@ -25,8 +25,14 @@ static void zhouyi_v3_enable_core_cnt(struct aipu_partition *partition, u32 clus
 	u32 en_aiff_cnt = GET_AIFF_NUM(nums);
 	u32 en_tec_cnt = GET_TEC_NUM(nums);
 	u32 config = CONFIG_CLUSTER(partition->id, en_core_cnt, en_aiff_cnt, en_tec_cnt);
+	u32 status = 0;
 
 	aipu_write32(partition->reg, CLUSTER_CONTROL_REG(cluster_id), config);
+
+	status = aipu_read32(partition->reg, TSM_STATUS_REG);
+	if (!en_core_cnt && IS_CMD_FAIL(status))
+		aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
+
 	dev_info(partition->dev, "configure cluster #%u done: en_core_cnt %u (0x%x)\n",
 		 cluster_id, en_core_cnt, config);
 }
@@ -60,26 +66,67 @@ static void zhouyi_v3_trigger(struct aipu_partition *partition)
 	/* no operation here */
 }
 
-static int zhouyi_v3_create_command_pool(struct aipu_partition *partition)
+static void zhouyi_v3_destroy_command_pool_internal(struct aipu_partition *partition)
+{
+	aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_HIGH_REG, 0);
+	aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_LOW_REG, 0);
+	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_INFO_REG, 0);
+	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
+		     TSM_DESTROY_CMD_POOL(partition->id));
+}
+
+static int zhouyi_v3_destroy_create_command_pool(struct aipu_partition *partition)
 {
 	u32 status = 0;
 
-	if (IS_CMD_POOL_BUSY(aipu_read32(partition->reg, CMD_POOL_STATUS_REG(partition->id))))
-		return 0;
+	zhouyi_v3_destroy_command_pool_internal(partition);
+
+	status = aipu_read32(partition->reg, TSM_STATUS_REG);
+	if (IS_CMD_FAIL(status)) {
+		aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
+		dev_err(partition->dev, "destroy-create command pool #%d failed: destroy\n",
+			partition->id);
+		return -EFAULT;
+	}
 
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
 		     TSM_CREATE_CMD_POOL(partition->id, TSM_MAP_ALL));
 
 	status = aipu_read32(partition->reg, TSM_STATUS_REG);
 	if (IS_CMD_FAIL(status)) {
-		dev_err(partition->dev, "create command pool #%d failed (cmd 0x%x)\n",
-			partition->id, TSM_CREATE_CMD_POOL(partition->id, TSM_MAP_ALL));
+		dev_err(partition->dev, "destroy-create command pool #%d failed: create\n",
+			partition->id);
 		aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
 		return -EFAULT;
 	}
 
-	dev_info(partition->dev, "command pool #%d was created\n", partition->id);
+	dev_dbg(partition->dev, "destroy-create command pool #%d successfully\n", partition->id);
 	return 0;
+}
+
+static int zhouyi_v3_create_command_pool(struct aipu_partition *partition)
+{
+	u32 status = 0;
+	int ret = 0;
+
+	if (IS_CMD_POOL_BUSY(aipu_read32(partition->reg, CMD_POOL_STATUS_REG(partition->id))))
+		return ret;
+
+	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
+		     TSM_CREATE_CMD_POOL(partition->id, TSM_MAP_ALL));
+
+	status = aipu_read32(partition->reg, TSM_STATUS_REG);
+	if (IS_CMD_FAIL(status)) {
+		dev_dbg(partition->dev, "create command pool #%d failed, try to destroy-create\n",
+			partition->id);
+		aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
+		ret = zhouyi_v3_destroy_create_command_pool(partition);
+		if (ret)
+			return ret;
+	}
+
+	dev_info(partition->dev, "command pool #%d was created\n", partition->id);
+	return ret;
 }
 
 static int zhouyi_v3_abort_command_pool(struct aipu_partition *partition)
@@ -100,15 +147,6 @@ static int zhouyi_v3_abort_command_pool(struct aipu_partition *partition)
 	udelay(partition->priv->reset_delay_us);
 	dev_info(partition->dev, "command pool #%d was aborted\n", partition->id);
 	return 0;
-}
-
-static void zhouyi_v3_destroy_command_pool_internal(struct aipu_partition *partition)
-{
-	aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_HIGH_REG, 0);
-	aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_LOW_REG, 0);
-	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_INFO_REG, 0);
-	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
-		     TSM_DESTROY_CMD_POOL(partition->id));
 }
 
 static void zhouyi_v3_destroy_command_pool(struct aipu_partition *partition)
@@ -143,11 +181,9 @@ static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_d
 	if (unlikely(!partition || !udesc))
 		return -EINVAL;
 
-	if (trigger_type == ZHOUYI_V3_TRIGGER_TYPE_CREATE) {
-		ret = zhouyi_v3_create_command_pool(partition);
-		if (ret)
-			return ret;
-	}
+	ret = zhouyi_v3_create_command_pool(partition);
+	if (ret)
+		return ret;
 
 	if (IS_CMD_POOL_IDLE(aipu_read32(partition->reg, CMD_POOL_STATUS_REG(partition->id)))) {
 		dev_err(partition->dev, "create command pool #%d failed (pool idle)\n",
@@ -179,7 +215,6 @@ static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_d
 
 int zhouyi_v3_exit_dispatch(struct aipu_partition *partition, u32 job_flag, u64 tcb_pa)
 {
-	/* assume command pool has been created */
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
 		     TSM_DISPATCH_CMD_POOL(partition->id, get_qos(job_flag)));
 

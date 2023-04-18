@@ -513,6 +513,7 @@ int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_m
 	aipu_mm_get_asid(mm, &cap);
 	manager->asid_base = cap.asid0_base;
 	atomic_set(&manager->tick_counter, 0);
+	atomic_set(&manager->is_suspend, 0);
 
 	WARN_ON(IS_ERR(manager->scheduled_head));
 	WARN_ON(IS_ERR(manager->wait_queue_head));
@@ -605,6 +606,11 @@ int aipu_job_manager_scheduler(struct aipu_job_manager *manager, struct aipu_job
 	if (unlikely(!is_user_job_valid(manager, user_job))) {
 		dev_err(manager->dev, "[scheduler] invalid user job (0x%llx)", user_job->job_id);
 		return -EINVAL;
+	}
+
+	if (atomic_read(&manager->is_suspend)) {
+		dev_err(manager->dev, "[scheduler] the NPU hw is not available now");
+		return -ENODEV;
 	}
 
 	if (!user_job->is_defer_run)
@@ -1106,6 +1112,7 @@ int aipu_job_manager_config_clusters(struct aipu_job_manager *manager,
 	struct aipu_job *curr = NULL;
 	struct aipu_partition *partition = NULL;
 	int idx = 0;
+	u32 en_count, core_cnt;
 
 	if (!manager || !cfg)
 		return -EINVAL;
@@ -1126,8 +1133,8 @@ int aipu_job_manager_config_clusters(struct aipu_job_manager *manager,
 	}
 
 	for (idx = 0; idx < partition->cluster_cnt; idx++) {
-		u32 en_count = cfg->clusters[idx].en_core_cnt;
-		u32 core_cnt = partition->clusters[idx].core_cnt;
+		en_count = cfg->clusters[idx].en_core_cnt;
+		core_cnt = partition->clusters[idx].core_cnt;
 
 		if (en_count > core_cnt) {
 			ret = -EINVAL;
@@ -1138,7 +1145,31 @@ int aipu_job_manager_config_clusters(struct aipu_job_manager *manager,
 		partition->ops->enable_core_cnt(partition, idx, en_count);
 	}
 
+	atomic_set(&manager->is_suspend, !en_count);
+
 unlock:
 	spin_unlock_irqrestore(&manager->lock, flags);
 	return ret;
+}
+
+int aipu_job_manager_suspend(struct aipu_job_manager *manager)
+{
+	struct aipu_config_clusters cfg;
+
+	if (!manager)
+		return -EINVAL;
+
+	memset(&cfg, 0, sizeof(cfg));
+	return aipu_job_manager_config_clusters(manager, &cfg);
+}
+
+int aipu_job_manager_resume(struct aipu_job_manager *manager)
+{
+	struct aipu_config_clusters cfg;
+
+	if (!manager)
+		return -EINVAL;
+
+	cfg.clusters[0].en_core_cnt = manager->partitions[0].clusters[0].core_cnt;
+	return aipu_job_manager_config_clusters(manager, &cfg);
 }

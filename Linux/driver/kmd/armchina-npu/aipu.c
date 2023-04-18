@@ -290,7 +290,7 @@ int armchina_aipu_suspend(struct platform_device *p_dev, pm_message_t state)
 {
 	struct aipu_partition *partition = platform_get_drvdata(p_dev);
 
-	partition->ops->soft_reset(partition, false);
+	aipu_job_manager_suspend(get_job_manager(partition));
 
 	if (aipu && aipu->soc_ops && aipu->soc_ops->disable_clk)
 		aipu->soc_ops->disable_clk(partition->dev, aipu->soc);
@@ -311,10 +311,11 @@ int armchina_aipu_resume(struct platform_device *p_dev)
 {
 	struct aipu_partition *partition = platform_get_drvdata(p_dev);
 
+	aipu_job_manager_resume(get_job_manager(partition));
+
 	if (aipu && aipu->soc_ops && aipu->soc_ops->enable_clk)
 		aipu->soc_ops->enable_clk(partition->dev, aipu->soc);
 
-	partition->ops->soft_reset(partition, true);
 	return 0;
 }
 EXPORT_SYMBOL(armchina_aipu_resume);

@@ -163,6 +163,7 @@ struct aipu_job_manager {
 	u64 asid_base;
 	struct aipu_buf_desc exit_tcb;
 	atomic_t tick_counter;
+	atomic_t is_suspend;
 };
 
 int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_manager *mm,
@@ -187,5 +188,7 @@ int aipu_job_manager_disable_tick_counter(struct aipu_job_manager *manager);
 int aipu_job_manager_enable_tick_counter(struct aipu_job_manager *manager);
 int aipu_job_manager_config_clusters(struct aipu_job_manager *manager,
 				     struct aipu_config_clusters *cfg);
+int aipu_job_manager_suspend(struct aipu_job_manager *manager);
+int aipu_job_manager_resume(struct aipu_job_manager *manager);
 
 #endif /* __AIPU_JOB_MANAGER_H__ */
