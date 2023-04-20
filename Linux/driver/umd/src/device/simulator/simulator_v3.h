@@ -393,6 +393,12 @@ public:
     }
 
 public:
+    virtual void enable_profiling(bool en)
+    {
+        m_aipu->enable_profiling(en);
+    }
+
+public:
     static SimulatorV3* get_v3_simulator(const aipu_global_config_simulation_t* cfg)
     {
         static SimulatorV3 sim_instance(cfg);

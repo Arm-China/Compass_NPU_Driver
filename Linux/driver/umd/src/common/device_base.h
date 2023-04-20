@@ -313,6 +313,12 @@ public:
         return m_part_caps[0].config;
     }
 
+/**
+ * indirectly call simulator's internal interface via this wrapper
+ */
+public:
+    virtual void enable_profiling(bool en) {}
+
 public:
     DeviceBase(){};
     virtual ~DeviceBase(){};

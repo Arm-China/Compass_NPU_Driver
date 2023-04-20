@@ -287,6 +287,7 @@ struct aipu_buf_desc;
 enum {
     AIPU_IOCTL_MARK_SHARED_TENSOR = 0x255,
     AIPU_IOCTL_SET_SHARED_TENSOR,
+    AIPU_IOCTL_SET_PROFILE,
     AIPU_IOCTL_SET_MEMORY_HOOK
 };
 
@@ -1037,6 +1038,10 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
  *       AIPU_IOCTL_CONFIG_CLUSTERS:
  *           config number of enabled cores in a cluster, arg {struct aipu_config_clusters}
  *           it is used to disable some core's clock to reduce power consumption.
+ *       AIPU_IOCTL_SET_PROFILE:
+ *           dynamically enable/disable profiling feature of aipu v3 simulation. arg {1/0}
+ *           1: enable profiling
+ *           0: disable profiling
  */
 aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd, void *arg = nullptr);
 

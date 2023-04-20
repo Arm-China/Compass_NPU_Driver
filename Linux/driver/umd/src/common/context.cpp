@@ -938,7 +938,7 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
     aipudrv::JobBase* job = nullptr;
     GraphBase* p_gobj = nullptr;
 
-    if (cmd >= AIPU_IOCTL_MARK_SHARED_TENSOR && cmd <= AIPU_IOCTL_SET_SHARED_TENSOR)
+    if (cmd >= AIPU_IOCTL_MARK_SHARED_TENSOR && cmd <= AIPU_IOCTL_SET_PROFILE)
     {
         aipu_shared_tensor_info_t *shared_tensor_info;
 
@@ -976,6 +976,10 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
                 if (ret != AIPU_STATUS_SUCCESS)
                     return ret;
 
+                break;
+
+            case AIPU_IOCTL_SET_PROFILE:
+                m_dev->enable_profiling((*(int *)arg) != 0);
                 break;
         }
     } else {

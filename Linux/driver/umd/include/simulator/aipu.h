@@ -42,6 +42,8 @@ namespace sim_aipu
 
         void set_dbg_lite(const std::shared_ptr<IDbgLite> &);
 
+        void enable_profiling(bool en);
+
     private:
         std::unique_ptr<struct AipuImpl> impl_;
     };
