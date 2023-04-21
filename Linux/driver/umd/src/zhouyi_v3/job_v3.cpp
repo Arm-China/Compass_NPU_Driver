@@ -1495,8 +1495,8 @@ void aipudrv::JobV3::dumpcfg_alljob()
             for (uint32_t i = 0; i < job->m_dumpcfg_output.size(); i++)
             {
                 oss << "FILE" << std::dec << count << "=" << job->m_dumpcfg_output.at(i).file << "\n";
-                oss << "BASE" << count << "=0x" << std::hex << job->m_dumpcfg_output.at(i).base << "\n";
-                oss << "SIZE" << count << "=0x" << std::hex << job->m_dumpcfg_output.at(i).size << "\n";
+                oss << "BASE" << std::dec << count << "=0x" << std::hex << job->m_dumpcfg_output.at(i).base << "\n";
+                oss << "SIZE" << std::dec << count << "=0x" << std::hex << job->m_dumpcfg_output.at(i).size << "\n";
                 count++;
             }
         }
