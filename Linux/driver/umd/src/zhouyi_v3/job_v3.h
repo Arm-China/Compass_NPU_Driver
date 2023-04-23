@@ -12,6 +12,7 @@
 #define _JOB_V3_H_
 
 #include <vector>
+#include <set>
 #include <memory>
 #include <pthread.h>
 #include "graph_v3.h"
@@ -44,6 +45,12 @@ struct SubGraphTask
     std::vector<BufferDesc> reuse_priv_buffers;
     std::vector<BufferDesc> weights;
     std::vector<Task>       tasks;
+
+    /**
+     * record buffer index, will not free these special buffer as it is
+     * allocated externally.
+     */
+    std::set<uint32_t>   dma_buf_idx;
     void reset(uint32_t _id)
     {
         id = _id;
@@ -51,6 +58,7 @@ struct SubGraphTask
         weights.clear();
         reuse_priv_buffers.clear();
         tasks.clear();
+        dma_buf_idx.clear();
     }
 };
 
@@ -130,7 +138,8 @@ public:
 
 private:
     aipu_status_t setup_rodata_sg(uint32_t sg_id, const std::vector<struct GraphParamMapLoadDesc>& param_map,
-        std::vector<BufferDesc>& reuse_buf, std::vector<BufferDesc>& static_buf);
+        std::vector<BufferDesc>& reuse_buf, std::vector<BufferDesc>& static_buf,
+        std::set<uint32_t> *dma_buf_idx = nullptr);
     aipu_status_t setup_tcb_task(uint32_t sg_id, uint32_t grid_id, uint32_t core_id, uint32_t task_id);
     aipu_status_t setup_tcb_sg(uint32_t sg_id, uint32_t grid_id, uint32_t core_id);
     void          set_job_params(uint32_t sg_cnt, uint32_t task_per_sg, uint32_t remap, uint32_t core_cnt);
@@ -144,6 +153,8 @@ private:
     aipu_status_t setup_segmmu(SubGraphTask &sg);
     void free_sg_buffers(const SubGraphTask& sg);
     aipu_status_t dump_for_emulation();
+    aipu_status_t specify_io_buffer(uint32_t in_type, uint32_t index,
+        uint64_t offset, int fd = -1, bool update_ro = true);
 
 public:
     aipu_status_t init(const aipu_global_config_simulation_t* cfg,

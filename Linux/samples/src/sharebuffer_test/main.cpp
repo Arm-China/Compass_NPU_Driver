@@ -57,8 +57,8 @@ int main(int argc, char* argv[])
     int pass = 0, loop = 0, total_loop = 2;
     uint64_t cfg_types = 0;
     aipu_create_job_cfg create_job_cfg = {0};
-    aipu_shared_tensor_info_t mark_shared_tensor_info = {0},
-        set_shared_tensor_info = {0};
+    aipu_shared_tensor_info_t mark_shared_tensor_info,
+        set_shared_tensor_info;
     int run_on_platform = ON_SIMULATOR;
 
     AIPU_CRIT() << "usage: ./aipu_sharebuffer_test -b aipu.bin -i input0.bin -c output.bin -d ./\n";
@@ -220,13 +220,10 @@ int main(int argc, char* argv[])
          */
         if (loop == 1)
         {
-            set_shared_tensor_info = {
-                .id = graph_id, /* use graph id for assigning shared buffer */
-                .type = AIPU_TENSOR_TYPE_INPUT,
-                .tensor_idx = 0,
-                .pa = mark_shared_tensor_info.pa, /* pass shared buffer physical address to new graph */
-            };
-
+            set_shared_tensor_info.id = graph_id; /* use graph id for assigning shared buffer */
+            set_shared_tensor_info.type = AIPU_TENSOR_TYPE_INPUT;
+            set_shared_tensor_info.tensor_idx = 0;
+            set_shared_tensor_info.pa = mark_shared_tensor_info.pa; /* pass shared buffer physical address to new graph */
             ret = aipu_ioctl(ctx, AIPU_IOCTL_SET_SHARED_TENSOR, &set_shared_tensor_info);
             if (ret != AIPU_STATUS_SUCCESS)
             {
@@ -253,12 +250,11 @@ int main(int argc, char* argv[])
          */
         if (loop == 0)
         {
-            mark_shared_tensor_info = {
-                .id = job_id,
-                .type = AIPU_TENSOR_TYPE_INPUT,
-                .tensor_idx = 0,
-                .pa = 0,
-            };
+
+            mark_shared_tensor_info.id = job_id;
+            mark_shared_tensor_info.type = AIPU_TENSOR_TYPE_INPUT;
+            mark_shared_tensor_info.tensor_idx = 0;
+            mark_shared_tensor_info.pa = 0;
 
             ret = aipu_ioctl(ctx, AIPU_IOCTL_MARK_SHARED_TENSOR, &mark_shared_tensor_info);
             if (ret != AIPU_STATUS_SUCCESS)

@@ -633,6 +633,27 @@ aipu_status_t aipu_config_job(const aipu_ctx_handle_t* ctx, uint64_t job_id, uin
     return ret;
 }
 
+aipu_status_t aipu_specify_iobuf(const aipu_ctx_handle_t* ctx, uint64_t job_id,
+    aipu_shared_tensor_info_t *tensor_info)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    aipudrv::JobBase* job = nullptr;
+
+    if (nullptr == ctx)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
+    if (!aipudrv::valid_job_id(job_id))
+        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+
+    ret = api_get_job(ctx, job_id, &job);
+    if (AIPU_STATUS_SUCCESS != ret)
+        return ret;
+
+    ret = job->specify_io_buffer(tensor_info->type, tensor_info->tensor_idx,
+        tensor_info->offset_in_dmabuf, tensor_info->dmabuf_fd);
+    return ret;
+}
+
 aipu_status_t aipu_config_global(const aipu_ctx_handle_t* ctx, uint64_t types, void* config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;

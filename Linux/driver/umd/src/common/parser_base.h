@@ -183,6 +183,21 @@ struct GraphIOTensorDesc {
     float    zero_point;
     aipu_data_type_t data_type;
     bool support_dma_buf;
+
+    /**
+     * for dumping data from dma_buf, it needs below
+     * information to handle.
+     */
+    mutable int dmabuf_fd;
+    mutable uint32_t dmabuf_size; // total size of dma_buf which specified by fd
+    mutable int offset_in_dmabuf; // the offset from which this IO buffer starts
+
+    const void set_dmabuf_info(int _fd, uint32_t _dmabuf_size, int _offset_in_dmabuf) const
+    {
+        dmabuf_fd = _fd;
+        dmabuf_size = _dmabuf_size;
+        offset_in_dmabuf = _offset_in_dmabuf;
+    }
 };
 
 class Graph;

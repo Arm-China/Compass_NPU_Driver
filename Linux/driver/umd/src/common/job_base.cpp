@@ -10,6 +10,7 @@
 
 #include <cstring>
 #include <unistd.h>
+#include <sys/mman.h>
 #include "job_base.h"
 #include "utils/helper.h"
 
@@ -224,9 +225,8 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
     const std::vector<struct GraphParamMapLoadDesc>& param_map,
     const std::vector<BufferDesc>& reuse_buf,
     const std::vector<BufferDesc>& static_buf,
-    BufferDesc rodata,
-    BufferDesc dcr
-)
+    BufferDesc rodata, BufferDesc dcr,
+    std::set<uint32_t> *dma_buf_idx)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     char* ro_va = nullptr;
@@ -245,6 +245,13 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
         uint32_t sec_offset = param_map[i].sub_section_offset;
         uint32_t sub_sec_pa_32 = 0;
         uint32_t offset_in_map = param_map[i].offset_in_map;
+
+        /**
+         * if io buffers is allocated through dma_buf,only need handling for them.
+         */
+        if (dma_buf_idx && ((dma_buf_idx->count(ref_iter) == 0) ||
+                (param_map[i].load_type != PARAM_MAP_LOAD_TYPE_REUSE)))
+            continue;
 
         LOG(LOG_INFO, "%3u: type=%d: <%lx, %lx>, < %x, 0x%x>", i, param_map[i].load_type,
             rodata.req_size, dcr.req_size, offset_in_map,
@@ -343,7 +350,8 @@ void aipudrv::JobBase::create_io_buffers(std::vector<struct JobIOBuffer>& bufs,
             /* I/O buffer will be allocated later */
             iobuf.init(0, 0, AIPU_JOB_BUFFER_VOID, 0);
         } else {
-            iobuf.init(desc[i].id, desc[i].size, AIPU_JOB_BUFFER_INTERNAL, pa, align_asid_pa);
+            iobuf.init(desc[i].id, desc[i].size, AIPU_JOB_BUFFER_INTERNAL, pa, align_asid_pa,
+                desc[i].dmabuf_fd, desc[i].dmabuf_size, desc[i].offset_in_dmabuf);
         }
         bufs.push_back(iobuf);
     }
@@ -360,6 +368,15 @@ void aipudrv::JobBase::create_io_buffers(const struct GraphIOTensors& io,
     create_io_buffers(m_layer_counter, io.layer_counter, reuses);
     create_io_buffers(m_err_code, io.err_code, reuses);
     create_io_buffers(m_segmmus, io.segmmus, reuses);
+}
+
+void aipudrv::JobBase::update_io_buffers(const struct GraphIOTensors& io,
+    const std::vector<BufferDesc>& reuses)
+{
+    m_inputs.clear();
+    m_outputs.clear();
+    create_io_buffers(m_inputs, io.inputs, reuses);
+    create_io_buffers(m_outputs, io.outputs, reuses);
 }
 
 void aipudrv::JobBase::dump_buffer(DEV_PA_64 pa, const char* bin_va, uint32_t size, const char* name)
@@ -385,6 +402,19 @@ void aipudrv::JobBase::dump_single_buffer(DEV_PA_64 pa, uint32_t size, const cha
     snprintf(file_name, 2048, "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_DRAM_PA_0x%lx_Size_0x%x.bin",
         m_dump_dir.c_str(), get_graph().m_id, m_id, name, pa, size);
     m_mem->dump_file(pa, file_name, size);
+}
+
+void aipudrv::JobBase::dump_share_buffer(JobIOBuffer &iobuf, const char* name)
+{
+    char file_name[2048] = {0};
+    char *va = nullptr;
+
+    snprintf(file_name, 2048, "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_DRAM_PA_0x%lx_Size_0x%x.bin",
+        m_dump_dir.c_str(), get_graph().m_id, m_id, name, iobuf.pa, iobuf.size);
+
+    va = (char *)mmap(NULL, iobuf.dmabuf_size, PROT_READ, MAP_SHARED, iobuf.dmabuf_fd, 0);
+    umd_dump_file_helper(file_name, va + iobuf.offset_in_dmabuf, iobuf.size);
+    munmap(va, iobuf.dmabuf_size);
 }
 
 aipu_status_t aipudrv::JobBase::config_mem_dump(uint64_t types, const aipu_job_config_dump_t* config)
@@ -483,7 +513,12 @@ void aipudrv::JobBase::dump_job_private_buffers(BufferDesc& rodata, BufferDesc& 
             dump_size = m_inputs[i].size;
             snprintf(name, 32, "Input%u", m_inputs[i].id);
             if (dump_size != 0)
-                dump_buffer(dump_pa, nullptr, dump_size, name);
+            {
+                if (m_inputs[i].dmabuf_fd < 0)
+                    dump_buffer(dump_pa, nullptr, dump_size, name);
+                else
+                    dump_share_buffer(m_inputs[i], name);
+            }
         }
     }
 }
@@ -522,7 +557,15 @@ void aipudrv::JobBase::dump_job_private_buffers_after_run(BufferDesc& rodata, Bu
 
             dump_pa   = m_outputs[i].pa;
             dump_size = m_outputs[i].size;
-            m_mem->dump_file(dump_pa, dump_name.c_str(), dump_size);
+
+            if (m_outputs[i].dmabuf_fd < 0)
+                m_mem->dump_file(dump_pa, dump_name.c_str(), dump_size);
+            else
+            {
+                char name[32];
+                snprintf(name, 32, "Output%u", m_outputs[i].id);
+                dump_share_buffer(m_outputs[i], name);
+            }
         }
     }
 
@@ -534,8 +577,10 @@ void aipudrv::JobBase::dump_job_private_buffers_after_run(BufferDesc& rodata, Bu
             dump_pa   = m_outputs[i].pa;
             dump_size = m_outputs[i].size;
             snprintf(name, 32, "Output%u", m_outputs[i].id);
-            if (dump_size != 0)
+            if (m_outputs[i].dmabuf_fd < 0)
                 dump_buffer(dump_pa, nullptr, dump_size, name);
+            else
+                dump_share_buffer(m_outputs[i], name);
         }
     }
 

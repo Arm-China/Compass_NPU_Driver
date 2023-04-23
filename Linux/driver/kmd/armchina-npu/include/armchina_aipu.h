@@ -252,7 +252,7 @@ struct aipu_buf_request {
  * @bytes: [must] Buffer size to request (in bytes):
  */
 struct aipu_dma_buf_request {
-	__u64 fd;
+	int fd;
 	__u64 bytes;
 };
 
@@ -263,7 +263,7 @@ struct aipu_dma_buf_request {
  * @bytes: [kmd] Buffer size allocated (in bytes)
  */
 struct aipu_dma_buf {
-	__u64 fd;
+	int fd;
 	__u64 pa;
 	__u64 bytes;
 };

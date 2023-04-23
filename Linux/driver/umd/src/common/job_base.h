@@ -38,16 +38,26 @@ struct JobIOBuffer
     JOBIOBufferType type;
     DEV_PA_64 pa; /* used when type != AIPU_JOB_BUFFER_DMABUF_IMPORTED */
     DEV_PA_64 align_asid_pa; /* alignd buffer address relative to ASID base */
-    int  fd;      /* used when type == AIPU_JOB_BUFFER_DMABUF_* */
+
+    /**
+     * if this iobuffer comes from dma_buf, needs below information
+     */
+    int  dmabuf_fd;
+    uint32_t dmabuf_size;
+    uint32_t offset_in_dmabuf;
+
     void init(uint32_t _id, uint32_t _size, JOBIOBufferType _type, DEV_PA_64 _pa,
-        DEV_PA_64 _align_asid_pa = 0)
+        DEV_PA_64 _align_asid_pa = 0, int _dmabuf_fd = -1, uint32_t _dmabuf_size = 0,
+        uint32_t _offset_in_dmabuf = 0)
     {
         id   = _id;
         size = _size;
         type = _type;
         pa   = _pa;
         align_asid_pa = _align_asid_pa;
-        fd   = 0;
+        dmabuf_fd   = _dmabuf_fd;
+        dmabuf_size = _dmabuf_size;
+        offset_in_dmabuf = _offset_in_dmabuf;
     }
 };
 
@@ -122,7 +132,8 @@ protected:
         const std::vector<struct GraphParamMapLoadDesc>& param_map,
         const std::vector<BufferDesc>& reuse_buf,
         const std::vector<BufferDesc>& static_buf,
-        BufferDesc rodata, BufferDesc dcr);
+        BufferDesc rodata, BufferDesc dcr,
+        std::set<uint32_t> *dma_buf_idx = nullptr);
     virtual Graph& get_graph()
     {
         return static_cast<Graph&>(m_graph);
@@ -133,8 +144,11 @@ protected:
     void setup_remap(BufferDesc& rodata, BufferDesc& descriptor);
     void create_io_buffers(const struct GraphIOTensors& io,
         const std::vector<BufferDesc>& reuses);
+    void update_io_buffers(const struct GraphIOTensors& io,
+        const std::vector<BufferDesc>& reuses);
     void dump_buffer(DEV_PA_64 pa, const char* bin_va, uint32_t size, const char* name);
     void dump_single_buffer(DEV_PA_64 pa, uint32_t size, const char* name);
+    void dump_share_buffer(struct JobIOBuffer &iobuf, const char* name);
     void dump_job_shared_buffers();
     void dump_job_private_buffers(BufferDesc& rodata, BufferDesc& descriptor);
     void dump_job_shared_buffers_after_run();
@@ -154,6 +168,12 @@ public:
     virtual aipu_status_t get_status_blocking(aipu_job_status_t* status, int32_t time_out);
     aipu_status_t config_mem_dump(uint64_t types, const aipu_job_config_dump_t* config);
     virtual void dumpcfg_alljob() {}
+    virtual aipu_status_t specify_io_buffer(uint32_t type, uint32_t index,
+        uint64_t offset, int fd = -1, bool update_ro = true)
+    {
+        return AIPU_STATUS_SUCCESS;
+    }
+
     virtual aipu_status_t config_simulation(uint64_t types, const aipu_job_config_simulation_t* config)
     {
         return AIPU_STATUS_SUCCESS;

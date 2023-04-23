@@ -238,7 +238,8 @@ out:
 
 aipu_status_t aipudrv::JobV3::setup_rodata_sg(uint32_t sg_id,
     const std::vector<struct GraphParamMapLoadDesc>& param_map,
-    std::vector<BufferDesc>& reuse_buf, std::vector<BufferDesc>& static_buf)
+    std::vector<BufferDesc>& reuse_buf, std::vector<BufferDesc>& static_buf,
+    std::set<uint32_t> *dma_buf_idx)
 {
     BufferDesc rodata, dcr;
     // const std::vector<struct GraphParamMapLoadDesc>& param_map =
@@ -248,7 +249,7 @@ aipu_status_t aipudrv::JobV3::setup_rodata_sg(uint32_t sg_id,
 
     rodata.init(0, m_rodata.pa, m_rodata.size, m_rodata.req_size);
     dcr.init(0, m_descriptor.pa, m_descriptor.size, m_descriptor.req_size);
-    return setup_rodata(param_map, reuse_buf, static_buf, rodata, dcr);
+    return setup_rodata(param_map, reuse_buf, static_buf, rodata, dcr, dma_buf_idx);
 }
 
 aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
@@ -554,6 +555,70 @@ finish:
     return ret;
 }
 
+aipu_status_t aipudrv::JobV3::specify_io_buffer(uint32_t type, uint32_t index,
+    uint64_t offset, int fd, bool update_ro)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    const std::vector<struct GraphIOTensorDesc> *iobuffer_vec = nullptr;
+    BufferDesc *bufferDesc = nullptr;
+    const char *str = "free_input";
+    uint32_t reuse_index = 0;
+    uint64_t buffer_pa = 0;
+    struct aipu_dma_buf dma_buf{fd, 0, 0};
+
+    switch (type)
+    {
+        case AIPU_TENSOR_TYPE_INPUT:
+            iobuffer_vec = &get_graph().get_subgraph(0).io.inputs;
+            break;
+
+        case AIPU_TENSOR_TYPE_OUTPUT:
+            iobuffer_vec = &get_graph().get_subgraph(0).io.outputs;
+            str = "free_output";
+            break;
+
+        default:
+            ret = AIPU_STATUS_ERROR_INVALID_TENSOR_ID;
+            LOG(LOG_ERR, "tensor type: %d, index: %d [not exist]\n",
+                type, index);
+            goto out;
+    }
+
+    if (index > iobuffer_vec->size())
+    {
+        ret = AIPU_STATUS_ERROR_INVALID_TENSOR_ID;
+        goto out;
+    }
+
+    /* free io buffer allocated internally,replace it with new buffer */
+    reuse_index = (*iobuffer_vec)[index].ref_section_iter;
+    bufferDesc = &m_sg_job[0].reuses[reuse_index];
+    m_sg_job[0].dma_buf_idx.insert(reuse_index);
+    ret = m_mem->free(bufferDesc, str);
+    if (ret != AIPU_STATUS_SUCCESS)
+        goto out;
+
+    ret = convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_GET_DMA_BUF_INFO, &dma_buf));
+    if (ret != AIPU_STATUS_SUCCESS)
+        goto out;
+
+    buffer_pa = dma_buf.pa + offset;
+    bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
+    (*iobuffer_vec)[index].set_dmabuf_info(fd, dma_buf.bytes, offset);
+
+    if (update_ro)
+    {
+        update_io_buffers(get_graph().m_subgraphs[0].io, m_sg_job[0].reuses);
+        ret = setup_rodata_sg(0, get_graph().m_subgraphs[0].param_map,
+            m_sg_job[0].reuses, m_sg_job[0].weights, &m_sg_job[0].dma_buf_idx);
+        if (AIPU_STATUS_SUCCESS != ret)
+            goto out;
+    }
+
+out:
+    return ret;
+}
+
 void aipudrv::JobV3::free_sg_buffers(const SubGraphTask& sg)
 {
     for (uint32_t i = 0; i < sg.reuse_priv_buffers.size(); i++)
@@ -567,6 +632,10 @@ void aipudrv::JobV3::free_sg_buffers(const SubGraphTask& sg)
     {
         for (uint32_t i = 0; i < sg.reuses.size(); i++)
         {
+            /* free dma_buf externelly through dma_buf system */
+            if (sg.dma_buf_idx.count(i) == 1)
+                continue;
+
             if (sg.reuses[i].size != 0)
                 m_mem->free(&sg.reuses[i]);
         }
@@ -1204,7 +1273,11 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
         dump_pa   = m_inputs[i].pa;
         dump_size = m_inputs[i].size;
         snprintf(dump_name, 128, "%s/%s.input%d", m_dump_dir.c_str(), m_dump_prefix.c_str(), i);
-        m_mem->dump_file(dump_pa, dump_name, dump_size);
+
+        if (m_inputs[i].dmabuf_fd < 0)
+            m_mem->dump_file(dump_pa, dump_name, dump_size);
+        else
+            dump_share_buffer(m_inputs[i], dump_name);
 
         ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".input" << i << "\n";
         ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";

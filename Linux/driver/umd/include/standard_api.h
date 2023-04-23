@@ -221,18 +221,33 @@ typedef union aipu_create_job_cfg {
 /**
  * @struct aipu_shared_tensor
  *
- * @brief mark one tensor buffer of one graph as shared with other graphs.
+ * @brief case1: mark one tensor buffer of one graph as shared with other graphs.(in one process context)
  *
- * @note the share action is based on one process contex, not among multiple processes.
+ * @brief case2: describe a shared buffer based on dma_buf mechanism.(among multiple processes)
+ *
+ * @note for case1:
+ *       the share action is based on one process contex, not among multiple processes.
  *       1, mark a tensor buffer as shared in one graph and get its base physical address;
  *       2, assign the shared tensor buffer to other graphs and as input or output.
+ *       need parameters: {id (job/graph id), type, tensor_idx, pa}
+ *
+ * @note for case2:
+ *       share a common buffer via dma_buf framework among multiple modules/processes
+ *       need paramsters: {id (job id), type, tensor_idx, fd, offset}
  */
 typedef struct aipu_shared_tensor_info {
-    uint64_t id;                 /**< pass job ID for marking one io buffer as shared
-                                      pass graph ID for sharing one shared buffer marked previously */
     aipu_tensor_type_t type;     /**< the shared tensor's type: input/output */
     uint32_t tensor_idx;         /**< the shared tensor's index */
-    uint64_t pa;                 /**< the physical address of shared tensor */
+
+    /* the below fields only for original buf sharing in one process,not recommended */
+    uint64_t id;                 /**< pass job ID for marking one io buffer as shared
+                                      pass graph ID for sharing one shared buffer marked previously,
+                                      ignored for dma_buf share */
+    uint64_t pa;                 /**< the physical address of shared tensor, ignored for dma_buf share */
+
+    /* the below fields only for dma_buf share, recommended */
+    int dmabuf_fd;               /**< the fd corresponding to shared buffer from dma_buf allocator */
+    uint32_t offset_in_dmabuf;   /**< the shared address offset in dma_buf which is specified by 'fd' */
 } aipu_shared_tensor_info_t;
 
 /**
@@ -250,7 +265,7 @@ typedef struct aipu_shared_tensor_info {
  */
 struct aipu_buf_request;
 struct aipu_buf_desc;
-    class Memory_Hook_Base {
+class Memory_Hook_Base {
     protected:
     void *args;
 
@@ -680,6 +695,23 @@ aipu_status_t aipu_get_tensor(const aipu_ctx_handle_t* ctx, uint64_t job,
  * @note accepted types/config: AIPU_CONFIG_TYPE_SIMULATION/aipu_job_config_simulation_t
  */
 aipu_status_t aipu_config_job(const aipu_ctx_handle_t* ctx, uint64_t job, uint64_t types, void* config);
+
+/**
+ * @brief This API is used to specify a shared buffer as job's io buffer.
+ *
+ * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
+ * @param[in]  job    Job ID returned by aipu_create_job
+ * @param[in]  shared_buf Pointer to shared buffer allcated through dma_buf system
+ *
+ * @retval AIPU_STATUS_SUCCESS
+ * @retval AIPU_STATUS_ERROR_NULL_PTR
+ * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
+ *
+ * @note this API is just used on HW
+ */
+aipu_status_t aipu_specify_iobuf(const aipu_ctx_handle_t* ctx, uint64_t job_id,
+    aipu_shared_tensor_info_t *shared_buf);
 
 /**
  * @brief This API is used to get AIPU cluster count.

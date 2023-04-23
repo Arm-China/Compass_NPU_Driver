@@ -91,6 +91,9 @@ aipu_status_t aipudrv::ParserBase::fill_io_tensor_desc_inner(uint32_t reuse_sec_
     io_desc.zero_point = sub_section_load.zero_point;
     io_desc.data_type = (aipu_data_type_t)sub_section_load.data_type;
     io_desc.support_dma_buf = support_dma_buf;
+    io_desc.dmabuf_fd = -1;
+    io_desc.dmabuf_size = 0;
+    io_desc.offset_in_dmabuf = 0;
 
     switch (sub_section_load.type)
     {
@@ -225,9 +228,9 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
                 goto overflow;
 
             /* FIX ME: type = ? */
-            if (((SECTION_TYPE_INPUT == sub_desc_load.type) || (SECTION_TYPE_OUTPUT == sub_desc_load.type)) &&
-                (reuse_desc_load.type != 0))
-                support_dma_buf = true;
+            // if (((SECTION_TYPE_INPUT == sub_desc_load.type) || (SECTION_TYPE_OUTPUT == sub_desc_load.type)) &&
+            //     (reuse_desc_load.type != 0))
+            //     support_dma_buf = true;
 
             /* get io tensor info if this sub-section represents io */
             if ((SECTION_TYPE_INPUT == sub_desc_load.type) ||
