@@ -1412,11 +1412,15 @@ void aipudrv::JobV3::dumpcfg_alljob()
 
     /* runtime.cfg: [INPUT] */
     count = 0;
+    auto graph_iter = graphs.begin();
     for (auto g : graphs)
     {
+        graph_iter++;
         graph = static_cast<GraphV3 *>(g.second);
+        auto job_iter = graph->m_jobs.begin();
         for (auto item: graph->m_jobs)
         {
+            job_iter++;
             job = static_cast<JobV3 *>(item.second);
             for (uint32_t i = 0; i < job->m_dumpcfg_input.size(); i++)
             {
@@ -1428,11 +1432,33 @@ void aipudrv::JobV3::dumpcfg_alljob()
             /* dump finally updated init/task tcb for each job */
             for (int i = 0; i < 2; i++)
             {
-                m_mem->dump_file(std::get<1>(job->m_dump_tcb_info[i]), std::get<0>(job->m_dump_tcb_info[i]).c_str(),
-                    std::get<2>(job->m_dump_tcb_info[i]));
+                if (i == 0)
+                {
+                    m_mem->dump_file(std::get<1>(job->m_dump_tcb_info[i]),
+                        std::get<0>(job->m_dump_tcb_info[i]).c_str(),
+                        std::get<2>(job->m_dump_tcb_info[i]));
+                } else {
+                    if ((graph_iter != graphs.end()) ||
+                        (graph_iter == graphs.end() && job_iter != graph->m_jobs.end()))
+                    {
+                        void *addr = nullptr;
+                        uint32_t size = 0;
+                        uint32_t offset = (m_tot_tcb_cnt - 2) * sizeof(tcb_t) + 4;
+
+                        /**
+                         * copy the 'next' field from job's last task tcb to task.tcb file's
+                         * corresponding location.this will connect current job's tcb chain
+                         * to next job's tcb chain.
+                         */
+                        umd_mmap_file_helper(std::get<0>(job->m_dump_tcb_info[i]).c_str(), &addr, &size);
+                        m_mem->read(job->get_tcb_head_pa() + offset,
+                            (char *)addr + size - 2 * sizeof(tcb_t) + 4, 4);
+                    }
+                }
                 oss << "FILE" << std::dec << count << "=" << std::get<0>(job->m_dump_tcb_info[i]) << "\n";
                 oss << "BASE" << count << "=0x" << std::hex << std::get<1>(job->m_dump_tcb_info[i]) << "\n";
                 count++;
+
             }
         }
     }

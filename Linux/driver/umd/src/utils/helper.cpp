@@ -129,7 +129,7 @@ aipu_status_t umd_mmap_file_helper(const char* fname, void** data, unsigned int*
         goto finish;
     }
 
-    fd = open(fname, O_RDONLY);
+    fd = open(fname, O_RDWR);
     if (fd <= 0)
     {
         LOG(LOG_ERR, "open file failed: %s! (errno = %d)\n", fname, errno);
@@ -137,7 +137,7 @@ aipu_status_t umd_mmap_file_helper(const char* fname, void** data, unsigned int*
         goto finish;
     }
 
-    p_file = mmap(nullptr, finfo.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    p_file = mmap(nullptr, finfo.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
     if (MAP_FAILED == p_file)
     {
         ret = AIPU_STATUS_ERROR_MAP_FILE_FAIL;

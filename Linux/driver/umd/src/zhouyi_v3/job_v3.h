@@ -183,6 +183,11 @@ public:
         return m_qos;
     }
 
+    DEV_PA_64 get_tcb_head_pa()
+    {
+        return m_init_tcb.pa;
+    }
+
 public:
     JobV3(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_create_job_cfg_t *config = nullptr);
     ~JobV3();
