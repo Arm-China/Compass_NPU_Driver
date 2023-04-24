@@ -247,6 +247,28 @@ struct aipu_buf_request {
 };
 
 /**
+ * struct aipu_dma_buf_request - Dma-buf request structure.
+ * @fd:    [kmd] A dma-buf file descriptor
+ * @bytes: [must] Buffer size to request (in bytes):
+ */
+struct aipu_dma_buf_request {
+	__u64 fd;
+	__u64 bytes;
+};
+
+/**
+ * struct aipu_dma_buf - Dma-buf descriptor structure.
+ * @fd:    [must] A dma-buf file descriptor
+ * @pa:    [kmd] Buffer address
+ * @bytes: [kmd] Buffer size allocated (in bytes)
+ */
+struct aipu_dma_buf {
+	__u64 fd;
+	__u64 pa;
+	__u64 bytes;
+};
+
+/**
  * enum aipu_job_execution_flag - Flags for AIPU's executions
  * @AIPU_JOB_EXEC_FLAG_NONE:         No flag
  * @AIPU_JOB_EXEC_FLAG_SRAM_MUTEX:   The job uses SoC SRAM exclusively.
@@ -531,5 +553,35 @@ struct aipu_hw_status {
  * please configure the clusters when they are idle.
  */
 #define AIPU_IOCTL_CONFIG_CLUSTERS _IOW(AIPU_IOCTL_MAGIC, 14, struct aipu_config_clusters)
+/**
+ * DOC: AIPU_IOCTL_ALLOC_DMA_BUF
+ *
+ * @Description
+ *
+ * ioctl to allocate a buffer and return the corresponding dma-buf fd
+ *   aipu_dma_buf_request->bytes: filled by UMD
+ *   aipu_dma_buf_request->fd:    filled by KMD
+ *
+ */
+#define AIPU_IOCTL_ALLOC_DMA_BUF _IOR(AIPU_IOCTL_MAGIC, 15, struct aipu_dma_buf_request)
+/**
+ * DOC: AIPU_IOCTL_FREE_DMA_BUF
+ *
+ * @Description
+ *
+ * ioctl to free a buffer related to a dma-buf fd
+ */
+#define AIPU_IOCTL_FREE_DMA_BUF _IOW(AIPU_IOCTL_MAGIC, 16, __u64)
+/**
+ * DOC: AIPU_IOCTL_GET_DMA_BUF_INFO
+ *
+ * @Description
+ *
+ * ioctl to get the buffer addr and size from a dma-buf fd
+ *   aipu_dma_buf->fd:    filled by UMD
+ *   aipu_dma_buf->pa:    filled by KMD
+ *   aipu_dma_buf->bytes: filled by KMD
+ */
+#define AIPU_IOCTL_GET_DMA_BUF_INFO _IOWR(AIPU_IOCTL_MAGIC, 17, struct aipu_dma_buf)
 
 #endif /* __UAPI_MISC_ARMCHINA_AIPU_H__ */
