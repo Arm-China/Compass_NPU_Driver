@@ -13,6 +13,7 @@ COMM_OBJ := $(SRC_DIR)/armchina-npu/aipu.o \
             $(SRC_DIR)/armchina-npu/aipu_irq.o \
             $(SRC_DIR)/armchina-npu/aipu_job_manager.o \
             $(SRC_DIR)/armchina-npu/aipu_mm.o \
+            $(SRC_DIR)/armchina-npu/aipu_dma_buf.o \
             $(SRC_DIR)/armchina-npu/aipu_priv.o \
             $(SRC_DIR)/armchina-npu/aipu_tcb.o \
             $(SRC_DIR)/armchina-npu/zhouyi/zhouyi.o

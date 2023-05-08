@@ -1117,7 +1117,8 @@ int aipu_job_manager_config_clusters(struct aipu_job_manager *manager,
 	struct aipu_job *curr = NULL;
 	struct aipu_partition *partition = NULL;
 	int idx = 0;
-	u32 en_count, core_cnt;
+	u32 en_count = 0;
+	u32 core_cnt = 0;
 
 	if (!manager || !cfg)
 		return -EINVAL;

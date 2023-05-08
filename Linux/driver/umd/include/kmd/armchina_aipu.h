@@ -229,7 +229,6 @@ struct aipu_buf_desc {
 
 /**
  * struct aipu_buf_request - Buffer allocation request structure.
- * @fd:            [optional] a file descriptor used in dma-buf
  * @bytes:         [must] Buffer size to allocate (in bytes)
  * @align_in_page: [must] Buffer address alignment (must be a power of 2)
  * @data_type:     [must] Type of data in this buffer/Type of this buffer
@@ -238,7 +237,6 @@ struct aipu_buf_desc {
  * @desc:          [kmd]  Descriptor of the successfully allocated buffer
  */
 struct aipu_buf_request {
-	__u64 fd;
 	__u64 bytes;
 	__u32 align_in_page;
 	__u32 data_type;

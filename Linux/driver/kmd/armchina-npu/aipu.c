@@ -14,6 +14,7 @@
 #include <armchina_aipu.h>
 #include "armchina_aipu_soc.h"
 #include "aipu_mm.h"
+#include "aipu_dma_buf.h"
 #include "aipu_job_manager.h"
 #include "aipu_priv.h"
 #include "zhouyi.h"
@@ -56,6 +57,9 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct aipu_job_status_query status;
 	struct aipu_hw_status hw;
 	struct aipu_config_clusters config_clusters;
+	struct aipu_dma_buf_request dmabuf_req;
+	struct aipu_dma_buf dmabuf_info;
+	int fd = 0;
 
 	u64 job_id;
 
@@ -158,6 +162,34 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			ret = aipu_job_manager_config_clusters(manager, &config_clusters);
 		else
 			ret = -EINVAL;
+		break;
+	case AIPU_IOCTL_ALLOC_DMA_BUF:
+		if (!copy_from_user(&dmabuf_req, (struct aipu_dma_buf_request __user *)arg,
+				    sizeof(dmabuf_req))) {
+			ret = aipu_alloc_dma_buf(&aipu->mm, &dmabuf_req);
+			if (!ret && copy_to_user((struct aipu_dma_buf_request __user *)arg,
+						 &dmabuf_req, sizeof(dmabuf_req)))
+				ret = -EINVAL;
+		} else {
+			ret = -EINVAL;
+		}
+		break;
+	case AIPU_IOCTL_FREE_DMA_BUF:
+		if (!copy_from_user(&fd, (int __user *)arg, sizeof(fd)))
+			ret = aipu_free_dma_buf(&aipu->mm, fd);
+		else
+			ret = -EINVAL;
+		break;
+	case AIPU_IOCTL_GET_DMA_BUF_INFO:
+		if (!copy_from_user(&dmabuf_info, (struct aipu_dma_buf __user *)arg,
+				    sizeof(dmabuf_info))) {
+			ret = aipu_get_dma_buf_info(&dmabuf_info);
+			if (!ret && copy_to_user((struct aipu_dma_buf __user *)arg,
+						 &dmabuf_info, sizeof(dmabuf_info)))
+				ret = -EINVAL;
+		} else {
+			ret = -EINVAL;
+		}
 		break;
 	default:
 		ret = -ENOTTY;
@@ -319,3 +351,25 @@ int armchina_aipu_resume(struct platform_device *p_dev)
 	return 0;
 }
 EXPORT_SYMBOL(armchina_aipu_resume);
+
+/**
+ * @armchina_aipu_alloc_dma_buf() - allocate a dma-buf buffer for other importers
+ * @request: buffer allocation request struct.
+ *
+ */
+int armchina_aipu_alloc_dma_buf(struct aipu_dma_buf_request *request)
+{
+	return aipu_alloc_dma_buf(&aipu->mm, request);
+}
+EXPORT_SYMBOL(armchina_aipu_alloc_dma_buf);
+
+/**
+ * @armchina_aipu_free_dma_buf() - free a dma-buf buffer
+ * @fd: file descriptor related to a buffer allocated by armchina_aipu_alloc_dma_buf.
+ *
+ */
+int armchina_aipu_free_dma_buf(int fd)
+{
+	return aipu_free_dma_buf(&aipu->mm, fd);
+}
+EXPORT_SYMBOL(armchina_aipu_free_dma_buf);

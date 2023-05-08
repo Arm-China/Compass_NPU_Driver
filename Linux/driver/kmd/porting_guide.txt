@@ -23,6 +23,8 @@
 |   |-- aipu_job_manager.h
 |   |-- aipu_mm.c
 |   |-- aipu_mm.h
+|   |-- aipu_dma_buf.c
+|   |-- aipu_dma_buf.h
 |   |-- aipu_partition.h
 |   |-- aipu_priv.c
 |   |-- aipu_priv.h

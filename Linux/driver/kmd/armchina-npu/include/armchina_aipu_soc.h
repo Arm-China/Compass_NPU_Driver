@@ -48,5 +48,7 @@ int armchina_aipu_probe(struct platform_device *p_dev, struct aipu_soc *soc,
 int armchina_aipu_remove(struct platform_device *p_dev);
 int armchina_aipu_suspend(struct platform_device *p_dev, pm_message_t state);
 int armchina_aipu_resume(struct platform_device *p_dev);
+int armchina_aipu_alloc_dma_buf(struct aipu_dma_buf_request *request);
+int armchina_aipu_free_dma_buf(int fd);
 
 #endif /* __AIPU_SOC_H__ */
