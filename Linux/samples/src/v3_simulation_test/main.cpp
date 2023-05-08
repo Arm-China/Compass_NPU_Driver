@@ -81,12 +81,9 @@ int main(int argc, char* argv[])
     if (!opt.x2_arch_desc.empty())
         sim_glb_config.x2_arch_desc = opt.x2_arch_desc.c_str();
 
-    sim_glb_config.z1_simulator = opt.z1_simulator;
-    sim_glb_config.z2_simulator = opt.z2_simulator;
-    sim_glb_config.z3_simulator = opt.z3_simulator;
-    sim_glb_config.x1_simulator = opt.x1_simulator;
+    sim_glb_config.simulator = opt.simulator;
     sim_glb_config.enable_calloc = true;
-    sim_job_config.data_dir     = opt.dump_dir;
+    sim_job_config.data_dir = opt.dump_dir;
 
     for (loop = 0; loop < total_loop; loop++)
     {

@@ -26,10 +26,7 @@ static struct option opts[] = {
     { "idata", required_argument, NULL, 'i' },
     { "check", required_argument, NULL, 'c' },
     { "dump_dir", required_argument, NULL, 'd' },
-    { "z1_sim", optional_argument, NULL, 'z' },
-    { "z2_sim", optional_argument, NULL, 'q' },
-    { "z3_sim", optional_argument, NULL, 'k' },
-    { "x1_sim", optional_argument, NULL, 'x' },
+    { "sim", optional_argument, NULL, 's' },
     { "x2_arch", required_argument, NULL, 'a' },
     { "log_level", optional_argument, NULL, 'l' },
     { "dump_opt", optional_argument, NULL, 'o' },
@@ -40,8 +37,8 @@ static struct option opts[] = {
 void help(void)
 {
     std::string help_info =
-        "usage: ./test -z/q/k/x sim -b aipu.bin -i input0.bin,input1.bin -c output.bin -d ./output [-l 0-3] [-v]\n"
-        "   -z/q/k/x: Z1/Z2/Z3/X1 simulator path\n"
+        "usage: ./test -s sim -b aipu.bin -i input0.bin,input1.bin -c output.bin -d ./output [-l 0-3] [-v]\n"
+        "   -s: aipu v1/v2 simulator path\n"
         "   -b: aipu.bin\n"
         "   -i: input bins\n"
         "   -c: output bin\n"
@@ -115,20 +112,8 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
             opt->x2_arch_desc = optarg;
             break;
 
-        case 'z':
-            strcpy(opt->z1_simulator, optarg);
-            break;
-
-        case 'q':
-            strcpy(opt->z2_simulator, optarg);
-            break;
-
-        case 'k':
-            strcpy(opt->z3_simulator, optarg);
-            break;
-
-        case 'x':
-            strcpy(opt->x1_simulator, optarg);
+        case 's':
+            strcpy(opt->simulator, optarg);
             break;
 
         case 'o':

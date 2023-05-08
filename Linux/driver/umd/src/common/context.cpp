@@ -35,10 +35,7 @@ aipudrv::MainContext::MainContext()
     m_dev = nullptr;
     m_dram = nullptr;
     pthread_rwlock_init(&m_glock, NULL);
-    m_sim_cfg.z1_simulator = nullptr;
-    m_sim_cfg.z2_simulator = nullptr;
-    m_sim_cfg.z3_simulator = nullptr;
-    m_sim_cfg.x1_simulator = nullptr;
+    m_sim_cfg.simulator = nullptr;
     m_sim_cfg.x2_arch_desc = nullptr;
     m_sim_cfg.plugin_name = nullptr;
     m_sim_cfg.json_filename = nullptr;
@@ -64,17 +61,8 @@ aipudrv::MainContext::MainContext()
 aipudrv::MainContext::~MainContext()
 {
     pthread_rwlock_destroy(&m_glock);
-    if (m_sim_cfg.z1_simulator != nullptr)
-        delete[] m_sim_cfg.z1_simulator;
-
-    if (m_sim_cfg.z2_simulator != nullptr)
-        delete[] m_sim_cfg.z2_simulator;
-
-    if (m_sim_cfg.z3_simulator != nullptr)
-        delete[] m_sim_cfg.z3_simulator;
-
-    if (m_sim_cfg.x1_simulator != nullptr)
-        delete[] m_sim_cfg.x1_simulator;
+    if (m_sim_cfg.simulator != nullptr)
+        delete[] m_sim_cfg.simulator;
 
     if (m_sim_cfg.x2_arch_desc != nullptr)
         delete[] m_sim_cfg.x2_arch_desc;
@@ -491,34 +479,14 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
     if (nullptr == config)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
-    if (config->z1_simulator != nullptr)
+    if (config->simulator != nullptr)
     {
-        if (m_sim_cfg.z1_simulator == nullptr)
-            m_sim_cfg.z1_simulator = new char[BUF_LEN];
+        if (m_sim_cfg.simulator == nullptr)
+            m_sim_cfg.simulator = new char[BUF_LEN];
 
-        strcpy((char*)m_sim_cfg.z1_simulator, config->z1_simulator);
+        strcpy((char*)m_sim_cfg.simulator, config->simulator);
     }
-    if (config->z2_simulator != nullptr)
-    {
-        if (m_sim_cfg.z2_simulator == nullptr)
-            m_sim_cfg.z2_simulator = new char[BUF_LEN];
 
-        strcpy((char*)m_sim_cfg.z2_simulator, config->z2_simulator);
-    }
-    if (config->z3_simulator != nullptr)
-    {
-        if (m_sim_cfg.z3_simulator == nullptr)
-            m_sim_cfg.z3_simulator = new char[BUF_LEN];
-
-        strcpy((char*)m_sim_cfg.z3_simulator, config->z3_simulator);
-    }
-    if (config->x1_simulator != nullptr)
-    {
-        if (m_sim_cfg.x1_simulator == nullptr)
-            m_sim_cfg.x1_simulator = new char[BUF_LEN];
-
-        strcpy((char*)m_sim_cfg.x1_simulator, config->x1_simulator);
-    }
     if (config->plugin_name != nullptr)
     {
         if (m_sim_cfg.plugin_name == nullptr)

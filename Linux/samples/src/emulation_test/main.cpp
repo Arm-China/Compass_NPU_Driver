@@ -74,10 +74,7 @@ int main(int argc, char* argv[])
 
     if (access("/dev/aipu", F_OK) != 0)
     {
-        sim_glb_config.z1_simulator = opt.z1_simulator;
-        sim_glb_config.z2_simulator = opt.z2_simulator;
-        sim_glb_config.z3_simulator = opt.z3_simulator;
-        sim_glb_config.x1_simulator = opt.x1_simulator;
+        sim_glb_config.simulator = opt.simulator;
         simulation_flag = true;
    }
 

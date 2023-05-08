@@ -49,22 +49,16 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
     if (nullptr == cfg)
         return AIPU_STATUS_ERROR_INVALID_CONFIG;
 
-    if (((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V1) && (cfg->z1_simulator == nullptr)) ||
-        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_0) && (cfg->z2_simulator == nullptr)) ||
-        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_1) && (cfg->z3_simulator == nullptr)) ||
-        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_2) && (cfg->x1_simulator == nullptr)))
+    if (((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V1) && (cfg->simulator == nullptr)) ||
+        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_0) && (cfg->simulator == nullptr)) ||
+        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_1) && (cfg->simulator == nullptr)) ||
+        ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_2) && (cfg->simulator == nullptr)))
     {
         return AIPU_STATUS_ERROR_INVALID_CONFIG;
     }
 
-    if (cfg->z1_simulator != nullptr)
-        m_z1_sim = cfg->z1_simulator;
-    if (cfg->z2_simulator != nullptr)
-        m_z2_sim = cfg->z2_simulator;
-    if (cfg->z3_simulator != nullptr)
-        m_z3_sim = cfg->z3_simulator;
-    if (cfg->x1_simulator != nullptr)
-        m_x1_sim = cfg->x1_simulator;
+    if (cfg->simulator != nullptr)
+        m_sim = cfg->simulator;
 
     m_log_level = cfg->log_level;
     m_en_eval = cfg->en_eval;
@@ -290,14 +284,7 @@ aipu_status_t aipudrv::JobV12::schedule()
         desc.misc_outputs[desc.output_dir + "/printf_data.bin"] = buf;
     }
 
-    if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V1)
-        desc.simulator = m_z1_sim;
-    else if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_0)
-        desc.simulator = m_z2_sim;
-    else if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_1)
-        desc.simulator = m_z3_sim;
-    else if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
-        desc.simulator = m_x1_sim;
+    desc.simulator = m_sim;
 
     if (m_log_path.length() != 0)
         desc.log_path = m_log_path;

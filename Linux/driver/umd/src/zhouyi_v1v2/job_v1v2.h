@@ -28,10 +28,7 @@ private:
     BufferDesc m_stack;
     std::vector<BufferDesc> m_reuses;
     std::vector<BufferDesc> m_weights; /* Do NOT free me in this class */
-    std::string m_z1_sim;
-    std::string m_z2_sim;
-    std::string m_z3_sim;
-    std::string m_x1_sim;
+    std::string m_sim;
     uint32_t m_log_level = 0;
     bool m_en_eval = false;
     std::string m_data_dir;

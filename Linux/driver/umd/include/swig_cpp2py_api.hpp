@@ -369,61 +369,16 @@ class Aipu
 public:
     /**
      * @brief This API is exposed as a SWIG-Python API.
-     *        It is used to provide z1 simulator path.
+     *        It is used to provide aipu v1/v2 simulator path.
      *
-     * @param[in] z1_sim  Name of the simulator
+     * @param[in] sim  Name of the simulator with path
      */
-    void SetZ1Simulator(const char* z1_sim)
+    void SetSimulator(const char* sim)
     {
-        if (z1_sim != nullptr)
+        if (sim != nullptr)
         {
-            strcpy(m_z1_sim, z1_sim);
-            m_enable_z1 = true;
-        }
-    }
-
-    /**
-     * @brief This API is exposed as a SWIG-Python API.
-     *        It is used to provide z2 simulator path.
-     *
-     * @param[in] z2_sim  Name of the simulator
-     */
-    void SetZ2Simulator(const char* z2_sim)
-    {
-        if (z2_sim != nullptr)
-        {
-            strcpy(m_z2_sim, z2_sim);
-            m_enable_z2 = true;
-        }
-    }
-
-    /**
-     * @brief This API is exposed as a SWIG-Python API.
-     *        It is used to provide z3 simulator path.
-     *
-     * @param[in] z3_sim  Name of the simulator
-     */
-    void SetZ3Simulator(const char* z3_sim)
-    {
-        if (z3_sim != nullptr)
-        {
-            strcpy(m_z3_sim, z3_sim);
-            m_enable_z3 = true;
-        }
-    }
-
-    /**
-     * @brief This API is exposed as a SWIG-Python API.
-     *        It is used to provide x1 simulator path.
-     *
-     * @param[in] x1_sim  Name of the simulator
-     */
-    void SetX1Simulator(const char* x1_sim)
-    {
-        if (x1_sim != nullptr)
-        {
-            strcpy(m_x1_sim, x1_sim);
-            m_enable_x1 = true;
+            strcpy(m_sim, sim);
+            m_enable_v1v2 = true;
         }
     }
 
@@ -470,45 +425,18 @@ public:
 
 #if (defined SIMULATION)
         aipu_global_config_simulation_t sim_glb_config;
-        if (m_enable_z1)
+
+        if (m_enable_v1v2)
         {
-            sim_glb_config.z1_simulator = m_z1_sim;
-        }
-        else
-        {
-            sim_glb_config.z1_simulator = nullptr;
-        }
-        if (m_enable_z2)
-        {
-            sim_glb_config.z2_simulator = m_z2_sim;
-        }
-        else
-        {
-            sim_glb_config.z2_simulator = nullptr;
-        }
-        if (m_enable_z3)
-        {
-            sim_glb_config.z3_simulator = m_z1_sim;
-        }
-        else
-        {
-            sim_glb_config.z3_simulator = nullptr;
-        }
-        if (m_enable_x1)
-        {
-            sim_glb_config.x1_simulator = m_x1_sim;
-        }
-        else
-        {
-            sim_glb_config.x1_simulator = nullptr;
+            sim_glb_config.simulator = m_sim;
+        } else {
+            sim_glb_config.simulator = nullptr;
         }
 
         if (m_enable_x2)
         {
             sim_glb_config.x2_arch_desc = m_x1_sim;
-        }
-        else
-        {
+        } else {
             sim_glb_config.x2_arch_desc = nullptr;
         }
 
@@ -597,14 +525,8 @@ private:
 private:
     aipu_ctx_handle_t* m_ctx = nullptr;
     const char* m_status_msg;
-    char        m_z1_sim[1024];
-    bool        m_enable_z1 = false;
-    char        m_z2_sim[1024];
-    bool        m_enable_z2 = false;
-    char        m_z3_sim[1024];
-    bool        m_enable_z3 = false;
-    char        m_x1_sim[1024];
-    bool        m_enable_x1 = false;
+    char        m_sim[1024];
+    bool        m_enable_v1v2 = false;
     char        m_x2_arch_desc[1024];
     bool        m_enable_x2 = false;
     aipu_create_job_cfg_t m_x2_create_job_config = {0};

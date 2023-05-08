@@ -71,9 +71,7 @@ int main(int argc, char* argv[])
 #endif
     }
     sim_glb_config.verbose = opt.verbose;
-    sim_glb_config.z1_simulator = opt.z1_simulator;
-    sim_glb_config.z2_simulator = opt.z2_simulator;
-    sim_glb_config.z3_simulator = opt.z3_simulator;
+    sim_glb_config.simulator = opt.simulator;
 
     ret = aipu_init_context(&ctx);
     if (ret != AIPU_STATUS_SUCCESS)

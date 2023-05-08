@@ -13,15 +13,14 @@
 #include <vector>
 #include <string>
 
+#define BUF_LEN 512
+
 typedef struct cmd_opt {
-    char bin_file_name[255];
+    char bin_file_name[BUF_LEN];
     char inputs_file_name[1000];
-    char gt_file_name[255];
-    char dump_dir[255];
-    char z1_simulator[255];
-    char z2_simulator[255];
-    char z3_simulator[255];
-    char x1_simulator[255];
+    char gt_file_name[BUF_LEN];
+    char dump_dir[BUF_LEN];
+    char simulator[BUF_LEN];
     std::vector<std::string> input_files;
     std::vector<uint32_t> inputs_size;
     std::vector<char*> inputs;
