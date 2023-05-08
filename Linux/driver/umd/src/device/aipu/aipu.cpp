@@ -331,10 +331,6 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             }
             break;
 
-        case AIPU_IOCTL_SET_MEMORY_HOOK:
-            static_cast<UKMemory *>(m_dram)->set_memory_hook((Memory_Hook_Base *)arg);
-            break;
-
         case AIPU_IOCTL_CONFIG_CLUSTERS:
             kret = ioctl(m_fd, AIPU_IOCTL_CONFIG_CLUSTERS, arg);
             if (kret < 0)
