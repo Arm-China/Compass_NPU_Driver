@@ -32,11 +32,11 @@ else
     CXXFLAGS += -O2 -DRTDEBUG=0
 endif
 
-ifeq ($(BUILD_AIPU_VERSION), z123)
+ifeq ($(BUILD_AIPU_VERSION), aipu_v1v2)
     CXXFLAGS += -DZHOUYI_V12
 endif
 
-ifeq ($(BUILD_AIPU_VERSION), x2)
+ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
     CXXFLAGS += -DZHOUYI_V3
 endif
 
@@ -71,7 +71,7 @@ else
             $(SRC_DEVICE)/aipu/ukmemory.cpp
 endif
 
-ifneq ($(BUILD_AIPU_VERSION), z123)
+ifneq ($(BUILD_AIPU_VERSION), aipu_v1v2)
     INCD += -I./3rdparty
     SRCS += $(SRC_ZHOUYI_V3)/graph_v3.cpp   \
             $(SRC_ZHOUYI_V3)/job_v3.cpp     \
@@ -83,7 +83,7 @@ ifneq ($(BUILD_AIPU_VERSION), z123)
     endif
 endif
 
-ifneq ($(BUILD_AIPU_VERSION), x2)
+ifneq ($(BUILD_AIPU_VERSION), aipu_v3)
     SRCS += $(SRC_ZHOUYI_V1V2)/graph_v1v2.cpp \
             $(SRC_ZHOUYI_V1V2)/job_v1v2.cpp   \
             $(SRC_ZHOUYI_V1V2)/parser_v1v2.cpp

@@ -153,7 +153,9 @@ fi
 
 if [ "$BUILD_AIPU_VERSION"x == "v1"x ]  ||
    [ "$BUILD_AIPU_VERSION"x == "v2"x ]; then
-    BUILD_AIPU_VERSION=z123
+    BUILD_AIPU_VERSION=aipu_v1v2
+elif [ "$BUILD_AIPU_VERSION"x == "v3"x ]; then
+    BUILD_AIPU_VERSION=aipu_v3
 elif [ "$BUILD_AIPU_VERSION"x != "v3"x ] &&
      [ "$BUILD_AIPU_VERSION"x != "all"x ]; then
     echo -e "$COMPASS_DRV_BRENVAR_ERROR Invalid AIPU version $BUILD_AIPU_VERSION"

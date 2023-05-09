@@ -20,7 +20,7 @@ ANDROIDLDFLAGS := -Wl,-O3 -Wl,--gc-sections \
                   -static-libstdc++ -Wl,--build-id -Wl,--warn-shared-textrel -Wl,--fatal-warnings -Qunused-arguments -Wl,-z,noexecstack  -Wl,-z,defs
 
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
-    ifneq ($(BUILD_AIPU_VERSION), z123)
+    ifneq ($(BUILD_AIPU_VERSION), aipu_v1v2)
         LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X2_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X2_SIM_LNAME)
     endif
 endif
@@ -35,11 +35,11 @@ else
     CXXFLAGS += -O2 -DRTDEBUG=0
 endif
 
-ifeq ($(BUILD_AIPU_VERSION), z123)
+ifeq ($(BUILD_AIPU_VERSION), aipu_v1v2)
     CXXFLAGS += -DZHOUYI_V12
 endif
 
-ifeq ($(BUILD_AIPU_VERSION), x2)
+ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
     CXXFLAGS += -DZHOUYI_V3
 endif
 
