@@ -256,6 +256,8 @@ enum {
     AIPU_IOCTL_MARK_SHARED_TENSOR = 0x255,
     AIPU_IOCTL_SET_SHARED_TENSOR,
     AIPU_IOCTL_SET_PROFILE,
+    AIPU_IOCTL_ALLOC_DMABUF,
+    AIPU_IOCTL_FREE_DMABUF,
 };
 
 /**
@@ -1026,6 +1028,12 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
  *           dynamically enable/disable profiling feature of aipu v3 simulation. arg {1/0}
  *           1: enable profiling
  *           0: disable profiling
+ *      AIPU_IOCTL_ALLOC_DMABUF
+ *           request dma_buf from KMD. arg {struct aipu_dma_buf_request}
+ *           aipu_dma_buf_request->bytes: request size (filled by UMD)
+ *           aipu_dma_buf_request->fd: fd corresponding to dma_buf (filled by KMD)
+ *      AIPU_IOCTL_FREE_DMABUF
+ *           free a dma_buf with its fd. arg { fd }
  */
 aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd, void *arg = nullptr);
 

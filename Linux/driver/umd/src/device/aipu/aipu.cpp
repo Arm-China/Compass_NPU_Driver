@@ -340,6 +340,24 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             }
             break;
 
+        case AIPU_IOCTL_ALLOC_DMABUF:
+            kret = ioctl(m_fd, AIPU_IOCTL_ALLOC_DMA_BUF, arg);
+            if (kret < 0)
+            {
+                LOG(LOG_ERR, "alloc dma_buf [fail]");
+                ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+            }
+            break;
+
+        case AIPU_IOCTL_FREE_DMABUF:
+            kret = ioctl(m_fd, AIPU_IOCTL_FREE_DMA_BUF, *(uint64_t *)arg);
+            if (kret < 0)
+            {
+                LOG(LOG_ERR, "free dma_buf [fail]");
+                ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+            }
+            break;
+
         case AIPU_IOCTL_GET_DMA_BUF_INFO:
             kret = ioctl(m_fd, AIPU_IOCTL_GET_DMA_BUF_INFO, arg);
             if (kret < 0)
