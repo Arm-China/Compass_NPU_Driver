@@ -78,6 +78,7 @@ aipu_status_t aipudrv::GraphV3::extract_gm_info(int sg_id)
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     GMConfig *gmconfig = nullptr;
     GM_info_desc gm_info_desc = {0};
+    uint32_t gm_buffer_cnt = 0;
 
     if (m_gmconfig.size() == 0)
         goto out;
@@ -92,11 +93,18 @@ aipu_status_t aipudrv::GraphV3::extract_gm_info(int sg_id)
         goto out;
     }
 
-    for (uint32_t i = 0; i < 2; i++)
+    gm_buffer_cnt = gmconfig->GM_control & 0xf;
+    if (gm_buffer_cnt < 1 && gm_buffer_cnt > 2)
     {
-        if (gmconfig->GM_region_ctrl[i] == 0)
-            continue;
+        LOG(LOG_WARN, "no need config GM\n");
+        ret = AIPU_STATUS_ERROR_INVALID_GM;
+        goto out;
+    } else if (gm_buffer_cnt == 2) {
+        gm_buffer_cnt = 1;
+    }
 
+    for (uint32_t i = 0; i < gm_buffer_cnt; i++)
+    {
         gm_info_desc.gm_buf_idx = gmconfig->GM_buf_idx[i];
         gm_info_desc.gm_buf_type = GM_SUB_BUF_TYPE_IGNORE; // change it according to the condition
         if (gmconfig->GM_buf_idx[i].buf_type == GM_BUF_TYPE_REUSE)
