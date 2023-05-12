@@ -193,6 +193,8 @@ public:
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         aipu_job_config_dump_t mem_dump_config;
+
+        memset(&mem_dump_config, 0, sizeof(mem_dump_config));
         mem_dump_config.prefix = nullptr;
         mem_dump_config.dump_dir = "./";
 
@@ -200,9 +202,22 @@ public:
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(m_ctx, ret, &m_status_msg);
-            fprintf(stderr, "[PY UMD ERROR] aipu_config_job: %s\n", m_status_msg);
+            fprintf(stderr, "[PY UMD ERROR] aipu_config_job(type dump output): %s\n", m_status_msg);
             return ret;
         }
+
+#if defined(SIMULATION)
+        aipu_job_config_simulation_t sim_job_config;
+        memset(&sim_job_config, 0, sizeof(sim_job_config));
+        sim_job_config.data_dir= "./";
+        ret = aipu_config_job(m_ctx, m_job_id, AIPU_CONFIG_TYPE_SIMULATION, &sim_job_config);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(m_ctx, ret, &m_status_msg);
+            fprintf(stderr, "[PY UMD ERROR] aipu_config_job(type simulation): %s\n", m_status_msg);
+            return ret;
+        }
+#endif
 
         ret = aipu_finish_job(m_ctx, m_job_id, -1);
         if (ret != AIPU_STATUS_SUCCESS)
@@ -225,7 +240,7 @@ public:
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         std::vector<int> output;
-        char* out_data;
+        unsigned char* out_data;
         aipu_tensor_desc_t desc;
 
         ret = aipu_get_tensor_descriptor(m_ctx, m_job_id, AIPU_TENSOR_TYPE_OUTPUT, id, &desc);
@@ -236,7 +251,7 @@ public:
             return output;
         }
 
-        out_data = new char[desc.size];
+        out_data = new unsigned char[desc.size];
         ret = aipu_get_tensor(m_ctx, m_job_id, AIPU_TENSOR_TYPE_OUTPUT, id, out_data);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -247,7 +262,7 @@ public:
 
         for (uint32_t i = 0; i < desc.size; i++)
         {
-            output.push_back(out_data[i]);
+            output.push_back((int)out_data[i]);
         }
 
     finish:
@@ -265,7 +280,7 @@ public:
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         std::vector<int> output;
-        char* out_data;
+        unsigned char* out_data;
         aipu_tensor_desc_t desc;
 
         ret = aipu_get_tensor_descriptor(m_ctx, m_job_id, AIPU_TENSOR_TYPE_INTER_DUMP, id, &desc);
@@ -276,7 +291,7 @@ public:
             return output;
         }
 
-        out_data = new char[desc.size];
+        out_data = new unsigned char[desc.size];
         ret = aipu_get_tensor(m_ctx, m_job_id, AIPU_TENSOR_TYPE_INTER_DUMP, id, out_data);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -287,7 +302,7 @@ public:
 
         for (uint32_t i = 0; i < desc.size; i++)
         {
-            output.push_back(out_data[i]);
+            output.push_back((int)out_data[i]);
         }
 
     finish:
@@ -305,7 +320,7 @@ public:
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         std::vector<int> output;
-        char* out_data;
+        unsigned char* out_data;
         aipu_tensor_desc_t desc;
 
         ret = aipu_get_tensor_descriptor(m_ctx, m_job_id, AIPU_TENSOR_TYPE_PROFILER, id, &desc);
@@ -316,7 +331,7 @@ public:
             return output;
         }
 
-        out_data = new char[desc.size];
+        out_data = new unsigned char[desc.size];
         ret = aipu_get_tensor(m_ctx, m_job_id, AIPU_TENSOR_TYPE_PROFILER, id, out_data);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -327,7 +342,7 @@ public:
 
         for (uint32_t i = 0; i < desc.size; i++)
         {
-            output.push_back(out_data[i]);
+            output.push_back((int)out_data[i]);
         }
 
     finish:
@@ -426,6 +441,7 @@ public:
 #if (defined SIMULATION)
         aipu_global_config_simulation_t sim_glb_config;
 
+        memset(&sim_glb_config, 0, sizeof(sim_glb_config));
         if (m_enable_v1v2)
         {
             sim_glb_config.simulator = m_sim;
@@ -435,7 +451,7 @@ public:
 
         if (m_enable_x2)
         {
-            sim_glb_config.x2_arch_desc = m_x1_sim;
+            sim_glb_config.x2_arch_desc = m_x2_arch_desc;
         } else {
             sim_glb_config.x2_arch_desc = nullptr;
         }
@@ -527,7 +543,7 @@ private:
     const char* m_status_msg;
     char        m_sim[1024];
     bool        m_enable_v1v2 = false;
-    char        m_x2_arch_desc[1024];
+    char        m_x2_arch_desc[16];
     bool        m_enable_x2 = false;
     aipu_create_job_cfg_t m_x2_create_job_config = {0};
     uint64_t    m_graph_id;

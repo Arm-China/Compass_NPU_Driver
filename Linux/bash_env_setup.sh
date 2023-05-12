@@ -16,37 +16,42 @@
 #
 # files depending hierarchies:
 #
-# example:
 # /project/ai/scrach01
 # |
 # |-- AIPU_BSP
 # |   |-- kernel
 # |   |   |-- linux-5.11.18
 # |   |
-# |   `-- toolchain
-# |       |-- gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu
-# |
-# |-- AIPU_SIMULATOR
-#     |
-#     |-- bin
-#     |   |-- aipu_simulator_x1
-#     |   |-- aipu_simulator_x2
-#     |   |-- aipu_simulator_z1
-#     |   |-- aipu_simulator_z2
-#     |   |-- aipu_simulator_z3
-#     |
-#     `-- lib
-#         |-- libaipu_simulator_x1.so
-#         |-- libaipu_simulator_x2.so
-#         |-- libaipu_simulator_z1.so
-#         |-- libaipu_simulator_z2.so
-#         |-- libaipu_simulator_z3.so
+# |   |-- toolchain
+# |   |   |-- gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu
+# |   |
+# |   `-- simulator
+#         |
+#         |-- bin
+#         |   |-- aipu_simulator_x1
+#         |   |-- aipu_simulator_x2
+#         |   |-- aipu_simulator_z1
+#         |   |-- aipu_simulator_z2
+#         |   |-- aipu_simulator_z3
+#         |
+#         `-- lib
+#             |-- libaipu_simulator_x1.so
+#             |-- libaipu_simulator_x2.so
+#             |-- libaipu_simulator_z1.so
+#             |-- libaipu_simulator_z2.so
+#             |-- libaipu_simulator_z3.so
+
+# note:
+# set the below environment variables according to real files hierarchies
+#     CONFIG_DRV_BTENVAR_BASE_DIR
+#     CONFIG_DRV_BTENVAR_BSP_BASE_DIR
+#     CONFIG_DRV_RTENVAR_SIM_BASE_PATH
 
 ### configure kernel path for target platform:
 ###    CONFIG_DRV_BTENVAR_[platform]_[kernel major]_[kernel minor]_KPATH
 export CONFIG_DRV_BTENVAR_BASE_DIR=/project/ai/scratch01
 export CONFIG_DRV_BTENVAR_BSP_BASE_DIR=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_BSP
-export CONFIG_DRV_RTENVAR_SIM_BASE_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_SIMULATOR
+export CONFIG_DRV_RTENVAR_SIM_BASE_PATH=${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/simulator
 
 export CONFIG_DRV_BRENVAR_X86_CLPATH=/arm/tools/gnu/gcc/7.3.0/rhe7-x86_64/lib64
 export CONFIG_DRV_BTENVAR_CROSS_CXX_PATH=${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/toolchain/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu/bin

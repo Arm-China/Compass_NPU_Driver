@@ -22,24 +22,30 @@
 # |   |-- kernel
 # |   |   |-- linux-5.11.18
 # |   |
-# |   `-- toolchain
-# |       |-- gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu
-# |
-# |-- AIPU_SIMULATOR
-#     |
-#     |-- bin
-#     |   |-- aipu_simulator_x1
-#     |   |-- aipu_simulator_x2
-#     |   |-- aipu_simulator_z1
-#     |   |-- aipu_simulator_z2
-#     |   |-- aipu_simulator_z3
-#     |
-#     `-- lib
-#         |-- libaipu_simulator_x1.so
-#         |-- libaipu_simulator_x2.so
-#         |-- libaipu_simulator_z1.so
-#         |-- libaipu_simulator_z2.so
-#         |-- libaipu_simulator_z3.so
+# |   |-- toolchain
+# |   |   |-- gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu
+# |   |
+# |   `-- simulator
+#         |
+#         |-- bin
+#         |   |-- aipu_simulator_x1
+#         |   |-- aipu_simulator_x2
+#         |   |-- aipu_simulator_z1
+#         |   |-- aipu_simulator_z2
+#         |   |-- aipu_simulator_z3
+#         |
+#         `-- lib
+#             |-- libaipu_simulator_x1.so
+#             |-- libaipu_simulator_x2.so
+#             |-- libaipu_simulator_z1.so
+#             |-- libaipu_simulator_z2.so
+#             |-- libaipu_simulator_z3.so
+
+# note:
+# set the below environment variables according to real files hierarchies
+#     CONFIG_DRV_BTENVAR_BASE_DIR
+#     CONFIG_DRV_BTENVAR_BSP_BASE_DIR
+#     CONFIG_DRV_RTENVAR_SIM_BASE_PATH
 
 ##############################################
 #          1. Kernel/C Lib Paths             #
@@ -47,7 +53,7 @@
 # 1.1. Kernel source paths
 setenv CONFIG_DRV_BTENVAR_BASE_DIR           /project/ai/scratch01
 setenv CONFIG_DRV_BTENVAR_BSP_BASE_DIR       ${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_BSP
-setenv CONFIG_DRV_RTENVAR_SIM_BASE_PATH      ${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_SIMULATOR
+setenv CONFIG_DRV_RTENVAR_SIM_BASE_PATH      ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/simulator
 
 setenv CONFIG_DRV_BTENVAR_JUNO_4_9_KPATH     ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/kernel/linux-4.9.168
 setenv CONFIG_DRV_BTENVAR_JUNO_KPATH         ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/kernel/linux-5.11.18
