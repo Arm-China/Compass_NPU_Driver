@@ -303,7 +303,7 @@ aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t id)
 }
 
 aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t id,
-    aipu_job_status_t* status, int32_t time_out)
+    aipu_job_status_t* status, int32_t time_out, callback_wrapper_t *cb_wrap)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     aipudrv::JobBase* job = nullptr;
@@ -318,7 +318,14 @@ aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t id,
     if (AIPU_STATUS_SUCCESS != ret)
         return ret;
 
-    return job->get_status_blocking(status, time_out);
+    if (cb_wrap != nullptr && (cb_wrap->cb_func == nullptr
+        || cb_wrap->cb_args == nullptr))
+    {
+        LOG(LOG_ERR, "job callback func with invalid arguments\n");
+        return AIPU_STATUS_ERROR_NULL_PTR;
+    }
+
+    return job->get_status_blocking(status, time_out, cb_wrap);
 }
 
 aipu_status_t aipu_clean_job(const aipu_ctx_handle_t* ctx, uint64_t id)

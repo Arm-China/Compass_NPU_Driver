@@ -312,7 +312,8 @@ aipu_ll_status_t aipudrv::SimulatorV3::get_status(std::vector<aipu_job_status_de
 }
 
 aipu_ll_status_t aipudrv::SimulatorV3::poll_status(std::vector<aipu_job_status_desc>& jobs_status,
-    uint32_t max_cnt, int32_t time_out, bool of_this_thread, void *jobbase)
+    uint32_t max_cnt, int32_t time_out, bool of_this_thread, void *jobbase,
+    callback_wrapper_t *cb_wrap)
 {
     uint32_t value = 0;
     aipu_job_status_desc desc;

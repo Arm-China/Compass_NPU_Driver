@@ -165,7 +165,8 @@ public:
     aipu_status_t mark_shared_tensor(aipu_tensor_type_t type, uint32_t tensor, uint64_t &pa_addr);
     aipu_status_t assign_shared_tensor(aipu_tensor_type_t type, uint32_t tensor, uint64_t share_pa_addr);
     virtual aipu_status_t get_status(aipu_job_status_t* status);
-    virtual aipu_status_t get_status_blocking(aipu_job_status_t* status, int32_t time_out);
+    virtual aipu_status_t get_status_blocking(aipu_job_status_t* status, int32_t time_out,
+        callback_wrapper_t *cb_wrap = nullptr);
     aipu_status_t config_mem_dump(uint64_t types, const aipu_job_config_dump_t* config);
     virtual void dumpcfg_alljob() {}
     virtual aipu_status_t specify_io_buffer(uint32_t type, uint32_t index,
