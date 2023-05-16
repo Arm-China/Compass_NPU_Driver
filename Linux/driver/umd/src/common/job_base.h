@@ -148,7 +148,7 @@ protected:
         const std::vector<BufferDesc>& reuses);
     void dump_buffer(DEV_PA_64 pa, const char* bin_va, uint32_t size, const char* name);
     void dump_single_buffer(DEV_PA_64 pa, uint32_t size, const char* name);
-    void dump_share_buffer(struct JobIOBuffer &iobuf, const char* name);
+    void dump_share_buffer(struct JobIOBuffer &iobuf, const char* name, bool keep_name = false);
     void dump_job_shared_buffers();
     void dump_job_private_buffers(BufferDesc& rodata, BufferDesc& descriptor);
     void dump_job_shared_buffers_after_run();

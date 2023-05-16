@@ -6,14 +6,10 @@ The samples can quickly verify the functionality of the whole UMD and KMD logic.
 - simulation_test: this case is for aipu v1/v2.
 
 ```bash
-# ./aipu_simulation_test -[x|z|q|k] aipu_simulator_[x1|z1|z2|z3] -b aipu.bin -i input0.bin -c output.bin -d ./
+# ./aipu_simulation_test -s aipu_simulator_[x1|z1|z2|z3] -b aipu.bin -i input0.bin -c output.bin -d ./
 
 eg:
--x aipu_simulator_x1
--z aipu_simulator_z1
--q aipu_simulator_z2
--k aipu_simulator_z3
-
+-s aipu_simulator_x1
 ```
 
 - v3_simulation_test: this case is only for aipu v3.
@@ -56,6 +52,22 @@ note:
 - batch_test: load multiple input frames for one model, try to parallel frames on cores. only for aipu v3.
 ```bash
 # ./aipu_batch_test -b aipu.bin -i input0.bin -c output.bin -d ./
+```
+
+- sharebuffer_test: share some input/output buffers between graphs in one process.
+```bash
+# ./aipu_sharebuffer_test -b aipu.bin -i input0.bin -c output.bin -d ./
+```
+
+- dmabuf_mmap_test: asscess dma_buf via mmap in user mode
+```bash
+# ./aipu_dmabuf_mmap_test -b aipu.bin -i input0.bin -c output.bin -d ./
+```
+
+- dmabuf_vmap_test: access dma_buf via vmap in kernel mode and mmap in user mode
+```bash
+# insmod importer.ko
+# ./aipu_dmabuf_vmap_test
 ```
 
 

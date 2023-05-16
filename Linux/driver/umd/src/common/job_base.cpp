@@ -405,13 +405,16 @@ void aipudrv::JobBase::dump_single_buffer(DEV_PA_64 pa, uint32_t size, const cha
     m_mem->dump_file(pa, file_name, size);
 }
 
-void aipudrv::JobBase::dump_share_buffer(JobIOBuffer &iobuf, const char* name)
+void aipudrv::JobBase::dump_share_buffer(JobIOBuffer &iobuf, const char* name, bool keep_name)
 {
     char file_name[2048] = {0};
     char *va = nullptr;
 
-    snprintf(file_name, 2048, "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_DRAM_PA_0x%lx_Size_0x%x.bin",
-        m_dump_dir.c_str(), get_graph().m_id, m_id, name, iobuf.pa, iobuf.size);
+    if (!keep_name)
+        snprintf(file_name, 2048, "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_DRAM_PA_0x%lx_Size_0x%x.bin",
+            m_dump_dir.c_str(), get_graph().m_id, m_id, name, iobuf.pa, iobuf.size);
+    else
+        snprintf(file_name, 2048, "%s", name);
 
     va = (char *)mmap(NULL, iobuf.dmabuf_size, PROT_READ, MAP_SHARED, iobuf.dmabuf_fd, 0);
     umd_dump_file_helper(file_name, va + iobuf.offset_in_dmabuf, iobuf.size);

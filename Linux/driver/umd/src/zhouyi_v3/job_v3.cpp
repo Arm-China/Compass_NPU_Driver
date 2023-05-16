@@ -1277,7 +1277,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
         if (m_inputs[i].dmabuf_fd < 0)
             m_mem->dump_file(dump_pa, dump_name, dump_size);
         else
-            dump_share_buffer(m_inputs[i], dump_name);
+            dump_share_buffer(m_inputs[i], dump_name, true);
 
         ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".input" << i << "\n";
         ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
