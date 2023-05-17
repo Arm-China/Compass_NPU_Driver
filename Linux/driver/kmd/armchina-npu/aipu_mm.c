@@ -475,7 +475,10 @@ static struct aipu_virt_page *aipu_mm_find_page(struct aipu_memory_manager *mm,
 		return NULL;
 
 	page = reg->pages[page_no];
-	if (!page || page->map_num || page->filp != filp)
+	if (!page || page->filp != filp)
+		return NULL;
+
+	if (page->map_num && page->filp)
 		return NULL;
 
 	return page;
