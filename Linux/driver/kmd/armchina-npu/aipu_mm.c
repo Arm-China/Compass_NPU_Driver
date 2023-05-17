@@ -467,7 +467,7 @@ static struct aipu_virt_page *aipu_mm_find_page(struct aipu_memory_manager *mm,
 	unsigned long page_no = 0;
 	struct aipu_virt_page *page = NULL;
 
-	if (!mm || !reg || !filp || (iova % PAGE_SIZE))
+	if (!mm || !reg || (iova % PAGE_SIZE))
 		return NULL;
 
 	page_no = (iova - reg->base_iova) >> PAGE_SHIFT;
@@ -951,7 +951,7 @@ int aipu_mm_free(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf, stru
 	unsigned long flags;
 	struct tcb_buf *tcb = NULL;
 
-	if (!mm || !buf || !filp)
+	if (!mm || !buf)
 		return -EINVAL;
 
 	reg = aipu_mm_find_region(mm, buf->pa, "free");

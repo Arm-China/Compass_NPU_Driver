@@ -570,7 +570,7 @@ struct aipu_hw_status {
  *
  * ioctl to free a buffer related to a dma-buf fd
  */
-#define AIPU_IOCTL_FREE_DMA_BUF _IOW(AIPU_IOCTL_MAGIC, 16, __u64)
+#define AIPU_IOCTL_FREE_DMA_BUF _IOW(AIPU_IOCTL_MAGIC, 16, int)
 /**
  * DOC: AIPU_IOCTL_GET_DMA_BUF_INFO
  *

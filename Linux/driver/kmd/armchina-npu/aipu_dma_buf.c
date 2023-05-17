@@ -52,9 +52,15 @@ static void aipu_unmap_dma_buf(struct dma_buf_attachment *attach, struct sg_tabl
 
 static int aipu_dma_buf_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 {
+	int ret = 0;
+	unsigned long vm_pgoff = 0;
 	struct aipu_dma_buf_priv *priv = (struct aipu_dma_buf_priv *)dmabuf->priv;
 
-	return aipu_mm_mmap_buf(priv->mm, vma, NULL);
+	vm_pgoff = vma->vm_pgoff;
+	vma->vm_pgoff = priv->dev_pa >> PAGE_SHIFT;
+	ret = aipu_mm_mmap_buf(priv->mm, vma, NULL);
+	vma->vm_pgoff = vm_pgoff;
+	return ret;
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
@@ -85,6 +91,10 @@ static void aipu_dma_vunmap(struct dma_buf *dmabuf, struct iosys_map *map)
 {
 }
 
+static void aipu_dma_release(struct dma_buf *dmabuf)
+{
+}
+
 static struct dma_buf_ops aipu_dma_buf_ops = {
 	.attach = aipu_dma_buf_attach,
 	.detach = aipu_dma_buf_detach,
@@ -93,6 +103,7 @@ static struct dma_buf_ops aipu_dma_buf_ops = {
 	.mmap   = aipu_dma_buf_mmap,
 	.vmap   = aipu_dma_vmap,
 	.vunmap = aipu_dma_vunmap,
+	.release = aipu_dma_release,
 };
 
 int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_request *request)
@@ -138,7 +149,7 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 
 	exp.ops = &aipu_dma_buf_ops;
 	exp.size = inter_req.desc.bytes;
-	exp.flags = O_CLOEXEC;
+	exp.flags = O_RDWR | O_CLOEXEC;
 	exp.priv = priv;
 
 	dmabuf = dma_buf_export(&exp);
@@ -147,7 +158,7 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 		goto fail;
 	}
 
-	request->fd = dma_buf_fd(dmabuf, 0);
+	request->fd = dma_buf_fd(dmabuf, exp.flags);
 	return 0;
 
 fail:
