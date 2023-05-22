@@ -12,21 +12,32 @@ PWD := $(shell pwd)
 MODULE_NAME := importer
 obj-m := importer.o
 
-all: build_env modules
+all: modules
 
 modules:
+	@$(call check_env)
 	$(MAKE) ARCH=$(ARCH) -C $(KERNEL_DIR) M=$(PWD) modules
-	@rm -fr *.o *.symvers *.order *.mod.c *.mod .*.cmd .tmp_versions
+	@echo "clean temp files"; rm -fr *.o *.symvers *.order *.mod.c *.mod .*.cmd .tmp_versions
 clean:
 	$(MAKE) ARCH=$(ARCH) -C $(KERNEL_DIR) M=$(PWD) clean
 
-build_env:
-	@$(call check_env)
-
 .PHONY: all clean
 
+SHELL:=/bin/bash
+.ONESHELL:
+
 define check_env
-	echo "Set KERNEL_DIR and CROSS_COMPILE firstly, then make"
-	echo "KERNEL_DIR: " $(KERNEL_DIR)
-	echo "CC: " $(CC)
+	if [ ! -e $(CC) ]; then
+		echo "CC: $(CC) not exist"
+		exit 1
+	else
+		echo "CC: $(CC)"
+	fi
+
+	if [ ! -e $(KERNEL_DIR) ]; then
+		echo "KERNEL_DIR: $(KERNEL_DIR) not exist"
+		exit 1
+	else
+		echo "KERNEL_DIR: $(KERNEL_DIR)"
+	fi
 endef

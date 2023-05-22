@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
     vector<char*> output_data;
     vector<char*> gt;
     cmd_opt_t opt;
-    uint32_t frame_cnt = 5;
+    uint32_t frame_cnt = 2;
     int pass = -1;
     aipu_create_job_cfg create_job_cfg = {0};
     struct aipu_config_clusters config_cluster;
@@ -124,7 +124,7 @@ int main(int argc, char* argv[])
      * DTCM->SRAM->DDR, until fail to allocate.
      */
     create_job_cfg.fm_mem_region = AIPU_MEM_REGION_SRAM;
-    create_job_cfg.wt_mem_region = AIPU_MEM_REGION_SRAM;
+    create_job_cfg.wt_mem_region = AIPU_MEM_REGION_DEFAULT;
     ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
     if (ret != AIPU_STATUS_SUCCESS)
     {
