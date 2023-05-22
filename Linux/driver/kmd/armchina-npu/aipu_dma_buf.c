@@ -37,12 +37,25 @@ static struct sg_table *aipu_map_dma_buf(struct dma_buf_attachment *attach,
 				    priv->bytes, priv->mm->ase[AIPU_BUF_ASID_0]->attrs);
 	if (ret < 0) {
 		dev_err(npu, "failed to get scatterlist from DMA API\n");
-		devm_kfree(npu, sgt);
-		sgt = NULL;
+		goto fail;
+	}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 8, 0)
+	ret = dma_map_sg(attach->dev, sgt->sgl, sgt->nents, dir);
+#else
+	ret = dma_map_sgtable(attach->dev, sgt, dir, priv->mm->ase[AIPU_BUF_ASID_0]->attrs);
+#endif
+	if (ret) {
+		dev_err(npu, "failed to map sgtable for the attached dev\n");
+		goto fail;
 	}
 
 	priv->sgt = sgt;
 	return sgt;
+
+fail:
+	devm_kfree(npu, sgt);
+	return NULL;
 }
 
 static void aipu_unmap_dma_buf(struct dma_buf_attachment *attach, struct sg_table *st,
