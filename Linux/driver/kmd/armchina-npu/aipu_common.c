@@ -29,18 +29,18 @@ ssize_t aipu_common_ext_register_sysfs_show(struct device *dev,
 		    "AIPU is suspended and external registers cannot be read!\n");
 	}
 
-	ret += snprintf(tmp, 1024, "----------------------------------------------\n");
+	ret += snprintf(tmp, 512, "----------------------------------------------\n");
 	strcat(buf, tmp);
-	ret += snprintf(tmp, 1024, "   AIPU External Register Values\n");
+	ret += snprintf(tmp, 512, "   AIPU External Register Values\n");
 	strcat(buf, tmp);
-	ret += snprintf(tmp, 1024, "----------------------------------------------\n");
+	ret += snprintf(tmp, 512, "----------------------------------------------\n");
 	strcat(buf, tmp);
-	ret += snprintf(tmp, 1024, "%-*s%-*s%-*s\n", 8, "Offset", 28, "Name", 10, "Value");
+	ret += snprintf(tmp, 512, "%-*s%-*s%-*s\n", 8, "Offset", 28, "Name", 10, "Value");
 	strcat(buf, tmp);
-	ret += snprintf(tmp, 1024, "----------------------------------------------\n");
+	ret += snprintf(tmp, 512, "----------------------------------------------\n");
 	strcat(buf, tmp);
 	ret += partition->ops->sysfs_show(partition, buf);
-	ret += snprintf(tmp, 1024, "----------------------------------------------\n");
+	ret += snprintf(tmp, 512, "----------------------------------------------\n");
 	strcat(buf, tmp);
 
 	return ret;
