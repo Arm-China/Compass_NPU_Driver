@@ -570,7 +570,8 @@ void deinit_aipu_job_manager(struct aipu_job_manager *manager)
 	kmem_cache_destroy(manager->job_cache);
 	manager->job_cache = NULL;
 	manager->is_init = 0;
-	aipu_mm_free(manager->mm, &manager->exit_tcb, NULL);
+	if (manager->exit_tcb.bytes)
+		aipu_mm_free(manager->mm, &manager->exit_tcb, NULL);
 }
 
 /**

@@ -125,8 +125,8 @@ int deinit_aipu_priv(struct aipu_priv *aipu)
 		return 0;
 
 	aipu->ops->destroy_partitions(aipu);
-	aipu_deinit_mm(&aipu->mm);
 	deinit_aipu_job_manager(&aipu->job_manager);
+	aipu_deinit_mm(&aipu->mm);
 	deinit_misc_dev(aipu);
 	aipu->is_init = 0;
 
