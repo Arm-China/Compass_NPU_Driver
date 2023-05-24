@@ -158,7 +158,7 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
     }
 
     m_dram->set_asid_base(0, umd_asid_base_pa);
-    m_dram->set_asid_base(1, umd_asid_base_pa);
+    m_dram->set_asid_base(1, get_umemory()->get_memregion_base(MEM_REGION_SRAM));
     m_dram->set_asid_base(2, umd_asid_base_pa);
     m_dram->set_asid_base(3, umd_asid_base_pa);
 

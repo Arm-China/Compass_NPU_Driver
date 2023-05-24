@@ -99,8 +99,8 @@ aipu_ll_status_t aipudrv::Aipu::init()
 
         if (m_dram->is_gm_enable())
         {
-            m_dram->set_gm_base(0, 0, cap.gm0_size);
-            m_dram->set_gm_base(1, 0, cap.gm1_size);
+            m_dram->set_gm_size(0, cap.gm0_size);
+            m_dram->set_gm_size(1, cap.gm1_size);
         }
     }
 

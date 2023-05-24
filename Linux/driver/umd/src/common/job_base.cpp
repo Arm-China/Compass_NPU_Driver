@@ -263,9 +263,16 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
                 (param_map[i].load_type != PARAM_MAP_LOAD_TYPE_REUSE)))
             continue;
 
-        LOG(LOG_INFO, "%3u: type=%d: <%lx, %lx>, < %x, 0x%x>", i, param_map[i].load_type,
-            rodata.req_size, dcr.req_size, offset_in_map,
-            get_low_32(reuse_buf[ref_iter].align_asid_pa) + sec_offset);
+        if (param_map[i].load_type == PARAM_MAP_LOAD_TYPE_REUSE)
+        {
+            LOG(LOG_INFO, "%3u: type=%d: <%lx, %lx>, < %x, 0x%x>", i, param_map[i].load_type,
+                rodata.req_size, dcr.req_size, offset_in_map,
+                get_low_32(reuse_buf[ref_iter].align_asid_pa) + sec_offset);
+        } else {
+            LOG(LOG_INFO, "%3u: type=%d: <%lx, %lx>, < %x, 0x%x>", i, param_map[i].load_type,
+                rodata.req_size, dcr.req_size, offset_in_map,
+                get_low_32(static_buf[ref_iter].align_asid_pa) + sec_offset);
+        }
 
         if (offset_in_map < rodata.req_size)
             entry = ro_va + offset_in_map;
@@ -513,9 +520,18 @@ void aipudrv::JobBase::dump_job_shared_buffers()
     {
         dump_pa = get_graph().m_weight.pa;
         bin_va = get_graph().m_bweight.va;
-        dump_size = get_graph().m_bweight.size;
+        dump_size = get_graph().m_weight.size;
         if (dump_size != 0)
-            dump_buffer(dump_pa, bin_va, dump_size, "Weight_BeforeRun");
+            dump_buffer(dump_pa, nullptr, dump_size, "Weight_BeforeRun");
+    }
+
+    if (m_dump_weight && get_graph().m_zerocpy_const.size > 0)
+    {
+        dump_pa = get_graph().m_zerocpy_const.pa;
+        bin_va = get_graph().m_bweight.va;
+        dump_size = get_graph().m_zerocpy_const.size;
+        if (dump_size != 0)
+            dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_BeforeRun");
     }
 }
 
@@ -577,9 +593,17 @@ void aipudrv::JobBase::dump_job_shared_buffers_after_run()
     if (m_dump_weight && get_graph().m_weight.size > 0)
     {
         dump_pa = get_graph().m_weight.pa;
-        dump_size = get_graph().m_bweight.size;
+        dump_size = get_graph().m_weight.size;
         if (dump_size != 0)
             dump_single_buffer(dump_pa, dump_size, "Weight_AfterRun");
+    }
+
+    if (m_dump_weight && get_graph().m_zerocpy_const.size > 0)
+    {
+        dump_pa = get_graph().m_zerocpy_const.pa;
+        dump_size = get_graph().m_zerocpy_const.size;
+        if (dump_size != 0)
+            dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_AfterRun");
     }
 }
 

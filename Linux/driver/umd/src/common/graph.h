@@ -35,7 +35,10 @@ struct GraphSectionDesc {
     void* load_src;               /**< section data load source (if applicable) */
     uint32_t size;                /**< section data size */
     uint32_t align_in_page;       /**< section assress alignment requirement (in page) */
-    uint32_t offset;
+    uint32_t offset_in_file;
+    uint32_t relative_addr;
+    uint32_t type;                /**< weight const or zerocpy_const(15) */
+    uint32_t slot_index;
     bool support_dma_buf;
     std::vector<GraphSubSectionDesc> sub_sections; /**< sub-section(s) in this section */
     void init()                   /**< section initializer */
@@ -43,7 +46,10 @@ struct GraphSectionDesc {
         load_src = nullptr;
         size = 0;
         align_in_page = 1;
-        offset = 0;
+        offset_in_file = 0;
+        relative_addr = 0;
+        type = 0;
+        slot_index = 0;
         support_dma_buf = false;
         sub_sections.clear();
     }
@@ -85,6 +91,10 @@ class ParserBase;
 
 class Graph: public GraphBase
 {
+private:
+    uint32_t zerocpy_const_size = 0;
+    uint32_t const_size = 0;
+
 protected:
     ParserBase* m_parser = nullptr;
     /* section descriptions in the graph binary */
@@ -103,6 +113,7 @@ protected:
 
     /* weight in a whole buffer case */
     BufferDesc m_weight;
+    BufferDesc m_zerocpy_const;
 
     /* weight in split buffer case */
     std::vector<BufferDesc> m_weights;
@@ -136,6 +147,8 @@ public:
         uint32_t tensor, aipu_tensor_desc_t* desc) = 0;
     virtual aipu_status_t assign_shared_tensor(aipu_tensor_type_t type,
         uint32_t tensor_idx, uint64_t shared_pa_addr) = 0;
+    virtual void add_const_section(uint32_t sg_id, struct GraphSectionDesc section) {};
+    virtual void add_zerocpy_const_section(uint32_t sg_id, struct GraphSectionDesc section) {};
     aipu_status_t alloc_weight_buffer(std::vector<struct GraphSectionDesc> &static_sections);
 
 public:
@@ -190,6 +203,22 @@ public:
     virtual DEV_PA_64 debugger_get_instr_base()
     {
         return m_text.pa;
+    }
+
+    uint32_t get_zerocpy_const_size()
+    {
+        return zerocpy_const_size;
+    }
+
+    uint32_t get_const_size()
+    {
+        return const_size;
+    }
+
+    void set_const_size(uint32_t _const_size, uint32_t _zerocpy_const_size)
+    {
+        const_size = _const_size;
+        zerocpy_const_size = _zerocpy_const_size;
     }
 
 public:

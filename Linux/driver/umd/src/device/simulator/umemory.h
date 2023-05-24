@@ -18,14 +18,30 @@ namespace aipudrv
 {
 
 #define TOTAL_SIM_MEM_SZ (14UL << 28)
+#define SIM_SRAM_SZ      (0)
+#define SIM_DTCM_SZ      (8 << 20) /* 8 MB */
 
 enum {
-    MEM_REGION_DDR = 0,
+    MEM_REGION_DDR  = 0,
     MEM_REGION_SRAM = 1,
     MEM_REGION_DTCM = 2,
-    MEM_REGION_GM0 = 3,
-    MEM_REGION_GM1 = 4,
-    MME_REGION_MAX = 5
+    MME_REGION_MAX  = 4
+};
+
+enum {
+    MEM_REGION_GM0  = 0,
+    MEM_REGION_GM1  = 1
+};
+
+enum {
+    /* map MEM_REGION_DDR as ASID-0 */
+    ASID_REGION_0 = 0,
+
+    /**
+     * map MEM_REGION_SRAM as ASID-1 if sram's size is non-zero,
+     * otherwise, map MEM_REGION_DDR as ASID-1
+     */
+    ASID_REGION_1 = 1
 };
 
 struct MemBlock {
@@ -39,17 +55,13 @@ class UMemory: public MemoryBase, public sim_aipu::IMemEngine
 {
 private:
     MemBlock m_memblock[MME_REGION_MAX] = {
-        { .base = 0, .size = TOTAL_SIM_MEM_SZ },
+        { .base = 0, .size = (TOTAL_SIM_MEM_SZ - SIM_SRAM_SZ) },
 
         /* SRAM memory region, this base is higher than DDR base default */
-        { .base = 0, .size = 0 },
+        { .base = (TOTAL_SIM_MEM_SZ - SIM_SRAM_SZ), .size = SIM_SRAM_SZ },
 
         /* the base address for DTCM is fixed, currently only for aipu v2(X1) */
-        { .base = 0xD0000000, .size = 8 * MB_SIZE },
-
-        /* the base address for GM region0/1 are specified dynamicly */
-        { .base = 0, .size = 0 },
-        { .base = 0, .size = 0 }
+        { .base = 0xD0000000, .size = SIM_DTCM_SZ },
     };
     BufferDesc *desc;
     bool m_gm_mean = true;
@@ -60,7 +72,10 @@ private:
 public:
     uint64_t get_memregion_base(int32_t region)
     {
-        return m_memblock[region].base;
+        if ((region == MEM_REGION_SRAM) && (m_memblock[MEM_REGION_SRAM].size != 0))
+            return m_memblock[MEM_REGION_SRAM].base;
+        else
+            return m_memblock[MEM_REGION_DDR].base;
     }
 
 public:

@@ -141,6 +141,7 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
     GraphSectionDesc      section_ir;
     GraphParamMapLoadDesc param;
     GraphIOTensors        io;
+    uint32_t cst_start_addr = 0, zerocpy_cst_start_addr = 0;
 
     void* load_lb = bss;
     void* load_ub = (void*)((unsigned long)bss + sizeof(BSSHeader) + size);
@@ -193,6 +194,13 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
                 else
                     goto overflow;
 
+                if (sub_desc_load.type == SECTION_TYPE_ZEROCPY_CONSTANT)
+                    LOG(LOG_DEBUG,
+                        "s %d: static_desc_load.sub_section_cnt = %d, sub_desc_load.offset_in_ro_cnt=%d, "
+                        "sub_desc_load.offset_in_section_exec=%d, offset_in_ro=%x\n",
+                        static_sec_iter, static_desc_load.sub_section_cnt, sub_desc_load.offset_in_ro_cnt,
+                        sub_desc_load.offset_in_section_exec, offset_in_ro);
+
                 param.init(offset_in_ro, PARAM_MAP_LOAD_TYPE_STATIC, 0, static_sec_iter, sub_sec_iter,
                     sub_desc_load.offset_in_section_exec, sub_desc_load.addr_mask);
                 gobj.add_param(id, param);
@@ -203,10 +211,30 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
         /* update section descriptor */
         section_ir.size = static_desc_load.size;
         section_ir.align_in_page = ALIGN_ADDR(static_desc_load.align_bytes);
-        section_ir.offset = static_desc_load.offset_in_file;
+        section_ir.offset_in_file = static_desc_load.offset_in_file;
+        section_ir.type = sub_desc_load.type;
+        section_ir.slot_index = static_sec_iter;
         section_ir.load_src = (char*)((unsigned long)gobj.get_bweight_base() + static_desc_load.offset_in_file);
+
+        if (section_ir.type == SECTION_TYPE_ZEROCPY_CONSTANT)
+        {
+            section_ir.relative_addr = aligned(zerocpy_cst_start_addr, static_desc_load.align_bytes);
+            LOG(LOG_INFO, "%d, s_addr=%x, size=%x, align_bytes=%d, r_addr=%x\n",
+                static_sec_iter, zerocpy_cst_start_addr, section_ir.size,
+                static_desc_load.align_bytes, section_ir.relative_addr);
+            gobj.add_zerocpy_const_section(id, section_ir);
+            zerocpy_cst_start_addr = section_ir.relative_addr + section_ir.size;
+        } else {
+            section_ir.relative_addr = aligned(cst_start_addr, static_desc_load.align_bytes);
+            gobj.add_const_section(id, section_ir);
+            cst_start_addr = section_ir.relative_addr + section_ir.size;
+        }
+
         gobj.add_static_section(id, section_ir);
     }
+
+    gobj.set_const_size(cst_start_addr, zerocpy_cst_start_addr);
+    LOG(LOG_INFO, "zerocpy_const_size: %d, const_size: %d\n", zerocpy_cst_start_addr, cst_start_addr);
 
     /* reuse sections (input/output/intermediate) in bss */
     for (uint32_t reuse_sec_iter = 0; reuse_sec_iter < bss_header.reuse_section_desc_cnt; reuse_sec_iter++)

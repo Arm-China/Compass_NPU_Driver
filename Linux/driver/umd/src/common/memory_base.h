@@ -31,7 +31,6 @@ namespace aipudrv
 
 struct GMRegion
 {
-    DEV_PA_64 base;
     uint32_t size;
 };
 
@@ -252,15 +251,9 @@ public:
         return m_dtcm_size;
     }
 
-    void set_gm_base(int i, DEV_PA_64 base, uint32_t size)
+    void set_gm_size(int i, uint32_t size)
     {
-        m_gm_region[i].base = base;
         m_gm_region[i].size = size;
-    }
-
-    DEV_PA_64 get_gm_base(int i)
-    {
-        return m_gm_region[i].base;
     }
 
     uint32_t get_gm_size(int i)

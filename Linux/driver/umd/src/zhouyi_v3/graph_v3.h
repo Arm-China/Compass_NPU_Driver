@@ -116,6 +116,8 @@ struct Subgraph {
     uint32_t stack_size;
     uint32_t stack_align_in_page;
     std::vector<struct GraphParamMapLoadDesc> param_map;
+    std::map<uint32_t, struct GraphSectionDesc> const_sections;
+    std::map<uint32_t, struct GraphSectionDesc> zerocpy_const_sections;
     std::vector<struct GraphSectionDesc> static_sections;
     std::vector<struct GraphSectionDesc> reuse_sections;
     std::vector<struct GraphParamMapLoadDesc> private_buffers_map;
@@ -200,11 +202,22 @@ public:
             m_subgraphs[sg_id].param_map.push_back(param);
         }
     }
+    void add_const_section(uint32_t sg_id, struct GraphSectionDesc section)
+    {
+        if (sg_id < (uint32_t)m_subgraphs.size())
+            m_subgraphs[sg_id].const_sections[section.slot_index] = section;
+    }
+    void add_zerocpy_const_section(uint32_t sg_id, struct GraphSectionDesc section)
+    {
+        if (sg_id < (uint32_t)m_subgraphs.size())
+            m_subgraphs[sg_id].zerocpy_const_sections[section.slot_index] = section;
+    }
     void add_static_section(uint32_t sg_id, struct GraphSectionDesc section)
     {
         if (sg_id < (uint32_t)m_subgraphs.size())
             m_subgraphs[sg_id].static_sections.push_back(section);
     }
+
     void add_reuse_section(uint32_t sg_id, struct GraphSectionDesc section)
     {
         if (sg_id < (uint32_t)m_subgraphs.size())

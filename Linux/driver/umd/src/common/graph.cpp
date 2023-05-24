@@ -25,6 +25,7 @@ aipudrv::Graph::Graph(void* ctx, GRAPH_ID id, DeviceBase* dev): GraphBase(ctx, i
     m_text.reset();
     m_crodata.reset();
     m_weight.reset();
+    m_zerocpy_const.reset();
 }
 
 aipudrv::Graph::~Graph()
@@ -103,11 +104,24 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
              * allocate weight from ASID1 region defalut.if all ASIDs are configured
              * with the same base addr, it's also equal to allocate from ASID0.
              */
-            ret = m_mem->malloc(m_bweight.size, 0, &m_weight, "weight",
+            ret = m_mem->malloc(get_const_size(), 0, &m_weight, "weight",
                 (1 << 8) | AIPU_MEM_REGION_DEFAULT);
             if (AIPU_STATUS_SUCCESS != ret)
+            {
+                LOG(LOG_ERR, "alloc weight buffer [fail]");
                 goto finish;
-            m_mem->write(m_weight.pa, m_bweight.va, m_bweight.size);
+            }
+
+            if (get_zerocpy_const_size() > 0)
+            {
+                ret = m_mem->malloc(get_zerocpy_const_size(), 0, &m_zerocpy_const, "zerocpy_const",
+                    AIPU_MEM_REGION_DEFAULT);
+                if (AIPU_STATUS_SUCCESS != ret)
+                {
+                    LOG(LOG_ERR, "alloc zerocpy_const buffer [fail]");
+                    goto finish;
+                }
+            }
         }
 
         for (uint32_t i = 0; i < static_sections.size(); i++)
@@ -115,8 +129,21 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
             BufferDesc buf;
             static_section = &static_sections[i];
 
-            buf.init(m_weight.asid_base, m_weight.pa + static_section->offset,
-                static_section->size, static_section->size);
+            if (static_section->type == SECTION_TYPE_ZEROCPY_CONSTANT)
+            {
+                m_mem->write(m_zerocpy_const.pa + static_section->relative_addr,
+                    m_bweight.va + static_section->offset_in_file, static_section->size);
+                buf.init(m_zerocpy_const.asid_base, m_zerocpy_const.pa + static_section->relative_addr,
+                    static_section->size, static_section->size);
+                LOG(LOG_INFO, "zerocpy %d, pa=%lx, a_b=%lx, asid_pa=%lx, relative_addr=%x\n", i,
+                    buf.pa, buf.asid_base, buf.align_asid_pa, static_section->relative_addr);
+            } else {
+                m_mem->write(m_weight.pa + static_section->relative_addr,
+                    m_bweight.va + static_section->offset_in_file, static_section->size);
+                buf.init(m_weight.asid_base, m_weight.pa + static_section->relative_addr,
+                    static_section->size, static_section->size);
+            }
+
             m_weights.push_back(buf);
         }
     } else {
@@ -174,6 +201,12 @@ aipu_status_t aipudrv::Graph::unload()
         {
             m_mem->free(&m_weight);
             m_weight.reset();
+        }
+
+        if (m_zerocpy_const.size != 0)
+        {
+            m_mem->free(&m_zerocpy_const);
+            m_zerocpy_const.reset();
         }
 
         m_weights.clear();

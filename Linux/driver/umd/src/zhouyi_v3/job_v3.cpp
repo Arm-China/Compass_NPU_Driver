@@ -1179,8 +1179,11 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
 
     /* runtime.cfg: [INPUT] */
     if (get_graph().m_weight.size != 0)
+    {
         emu_input_cnt += 1;
-    else
+        if (get_graph().m_zerocpy_const.size != 0)
+            emu_input_cnt += 1;
+    } else
         emu_input_cnt += m_sg_job[0].weights.size();
 
     ofs << "[INPUT]\n";
@@ -1201,7 +1204,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
 
     /* dump temp.weight */
     dump_pa = get_graph().m_weight.pa;
-    dump_size = get_graph().m_weight.size;
+    dump_size = get_graph().m_weight.req_size;
     if (dump_size != 0)
     {
         snprintf(dump_name, 128, "%s/%s.weight", m_dump_dir.c_str(), m_dump_prefix.c_str());
@@ -1210,6 +1213,18 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
         ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".weight\n";
         ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
         m_dumpcfg_input.push_back({dump_name, dump_pa});
+
+        if (get_graph().m_zerocpy_const.size != 0)
+        {
+            dump_pa = get_graph().m_zerocpy_const.pa;
+            dump_size = get_graph().m_zerocpy_const.req_size;
+            snprintf(dump_name, 128, "%s/%s.zerocpy_const", m_dump_dir.c_str(), m_dump_prefix.c_str());
+            m_mem->dump_file(dump_pa, dump_name, dump_size);
+
+            ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".zerocpy_const\n";
+            ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
+            m_dumpcfg_input.push_back({dump_name, dump_pa});
+        }
     } else {
         for (uint32_t i = 0; i < m_sg_job[0].weights.size(); i++)
         {

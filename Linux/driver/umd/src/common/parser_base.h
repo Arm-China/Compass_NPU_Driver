@@ -22,6 +22,11 @@ namespace aipudrv
 #define ALIGN_PAGE(bytes) (((bytes)+(4096)-1)&(~((4096)-1)))
 #define ALIGN_ADDR(bytes) ((ALIGN_PAGE(bytes))/(4096))
 
+inline size_t aligned(size_t s, size_t align = 256)
+{
+    return (s + align - 1) & ~(align - 1);
+}
+
 /**
  * aipu v1/v2 version: v0.5
  * aipu v3 ELF version: v1.1
