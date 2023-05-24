@@ -112,7 +112,11 @@ aipu_status_t aipudrv::JobBase::load_tensor(uint32_t tensor, const void* data)
         (m_status != AIPU_JOB_STATUS_BIND))
         return AIPU_STATUS_ERROR_INVALID_OP;
 
-    m_mem->write(m_inputs[tensor].pa, (const char*)data, m_inputs[tensor].size);
+    if (m_inputs[tensor].dmabuf_fd < 0)
+        m_mem->write(m_inputs[tensor].pa, (const char*)data, m_inputs[tensor].size);
+    else
+        readwrite_dma_buf(m_inputs[tensor], (char *)data, false); // write dma_buf
+
     return AIPU_STATUS_SUCCESS;
 }
 
@@ -183,7 +187,12 @@ aipu_status_t aipudrv::JobBase::get_tensor(aipu_tensor_type_t type, uint32_t ten
 
     pa = iobuffer_vec->at(tensor).pa;
     size = iobuffer_vec->at(tensor).size;
-    m_mem->read(pa, (char*)data, size);
+    if (iobuffer_vec->at(tensor).dmabuf_fd < 0)
+    {
+        m_mem->read(pa, (char*)data, size);
+    } else {
+       readwrite_dma_buf(iobuffer_vec->at(tensor), data, true); // read dma_buf
+    }
 
     return AIPU_STATUS_SUCCESS;
 }
@@ -417,8 +426,34 @@ void aipudrv::JobBase::dump_share_buffer(JobIOBuffer &iobuf, const char* name, b
         snprintf(file_name, 2048, "%s", name);
 
     va = (char *)mmap(NULL, iobuf.dmabuf_size, PROT_READ, MAP_SHARED, iobuf.dmabuf_fd, 0);
+    if (MAP_FAILED == va)
+        LOG(LOG_ERR, "%s: mmap dma_buf fail\n", __FUNCTION__);
+
     umd_dump_file_helper(file_name, va + iobuf.offset_in_dmabuf, iobuf.size);
     munmap(va, iobuf.dmabuf_size);
+}
+
+int aipudrv::JobBase::readwrite_dma_buf(struct JobIOBuffer &iobuf, void *data, bool read)
+{
+    char *va = nullptr;
+    int ret = 0;
+
+    va = (char *)mmap(NULL, iobuf.dmabuf_size, PROT_READ | PROT_WRITE, MAP_SHARED, iobuf.dmabuf_fd, 0);
+    if (MAP_FAILED == va)
+    {
+        ret = -1;
+        LOG(LOG_ERR, "%s: mmap dma_buf fail\n", __FUNCTION__);
+        goto out;
+    }
+
+    if (read)
+        memcpy(data, va, iobuf.size);
+    else
+        memcpy(va, data, iobuf.size);
+
+    munmap(va, iobuf.dmabuf_size);
+out:
+    return ret;
 }
 
 aipu_status_t aipudrv::JobBase::config_mem_dump(uint64_t types, const aipu_job_config_dump_t* config)
