@@ -38,6 +38,12 @@ static struct device *aipu_mm_create_child_dev(struct device *dev, u32 idx)
 	if (!child->dma_parms)
 		goto err;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+	child->dma_pfn_offset = dev->dma_pfn_offset;
+#else
+	child->dma_range_map = dev->dma_range_map;
+#endif
+
 	return child;
 
 err:
@@ -84,7 +90,7 @@ static struct tcb_buf *aipu_mm_find_tcb_buf_no_lock(struct aipu_memory_manager *
 static unsigned long pa_to_bitmap_no(struct aipu_memory_manager *mm, struct aipu_mem_region *reg,
 				     u64 pa)
 {
-	return (pa + reg->host_aipu_offset - reg->base_iova) >> PAGE_SHIFT;
+	return (pa - reg->base_iova) >> PAGE_SHIFT;
 }
 
 static int aipu_mm_init_pages(struct aipu_memory_manager *mm, struct aipu_mem_region *reg)
@@ -152,6 +158,8 @@ static int aipu_mm_init_mem_region(struct aipu_memory_manager *mm, struct aipu_m
 			goto err;
 		}
 		enable_iommu = true;
+	} else {
+		dma_set_coherent_mask(reg->dev, DMA_BIT_MASK(32));
 	}
 
 	if (mm->has_iommu)
@@ -267,7 +275,7 @@ static int get_free_bitmap_no(struct aipu_memory_manager *mm, struct aipu_mem_re
 static u64 get_gm_base(struct aipu_memory_manager *mm, struct aipu_mem_region *gm,
 		       struct aipu_buf_request *buf_req)
 {
-	u64 gm_base = gm->base_iova - gm->host_aipu_offset;
+	u64 gm_base = gm->base_iova;
 
 	if (gm->qos == AIPU_GM_QOS_NONE)
 		return 0;
@@ -312,8 +320,7 @@ static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
 	reg->pages[bitmap_no]->locked = true;
 	reg->pages[bitmap_no]->tcb = NULL;
 
-	buf_req->desc.dev_offset = reg->base_iova + (bitmap_no << PAGE_SHIFT) -
-		reg->host_aipu_offset;
+	buf_req->desc.dev_offset = reg->base_iova + (bitmap_no << PAGE_SHIFT);
 	buf_req->desc.pa = buf_req->desc.dev_offset;
 	buf_req->desc.bytes = alloc_nr * PAGE_SIZE;
 	buf_req->desc.asid = AIPU_BUF_ASID_0;
@@ -417,10 +424,8 @@ static struct aipu_mem_region *aipu_mm_find_region(struct aipu_memory_manager *m
 	struct aipu_mem_region *reg = NULL;
 
 	for (type = AIPU_MEM_REGION_TYPE_MEMORY; type < AIPU_MEM_REGION_TYPE_MAX; type++) {
-		u64 internal = iova + mm->mem[type].offset;
-
 		list_for_each_entry(reg, &mm->mem[type].reg->list, list) {
-			if (internal >= reg->base_iova && (internal < reg->base_iova + reg->bytes))
+			if (iova >= reg->base_iova && (iova < reg->base_iova + reg->bytes))
 				return reg;
 		}
 	}
@@ -527,7 +532,7 @@ static ssize_t aipu_gm_policy_sysfs_store(struct device *dev, struct device_attr
 
 static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager *mm,
 						     struct aipu_mem_region_list *head,
-						     u64 addr, u64 size, u64 offset, u32 idx)
+						     u64 addr, u64 size, u32 idx)
 {
 	int ret = 0;
 	struct aipu_mem_region *reg = NULL;
@@ -535,44 +540,12 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 	if (!mm || !head || !size)
 		return ERR_PTR(-EINVAL);
 
-	/* for the same memory position, AIPU & host CPU may use different addresses to access:
-	 *     aipu_access_addr = host_access_addr - offset
-	 * if offset == 0, AIPU & host CPU use the same address to access a memory position.
-	 */
-	if (offset > addr) {
-		dev_err(mm->dev, "invalid memory base pa (0x%llx) or host-aipu-offset (0x%llx)\n",
-			addr, offset);
-		return ERR_PTR(-EINVAL);
-	}
-
-	if (!mm->has_iommu) {
-		u64 upper = addr + size - offset;
-
-		/*
-		 * V1 only accepts 0~3G region;
-		 * V2/V3 has ASE registers therefore accepts 0~3G for lower 32 bits;
-		 */
-		if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V2_0 ||
-		    mm->version == AIPU_ISA_VERSION_ZHOUYI_V2_1 ||
-		    mm->version == AIPU_ISA_VERSION_ZHOUYI_V2_2 ||
-		    mm->version == AIPU_ISA_VERSION_ZHOUYI_V3)
-			upper &= U32_MAX;
-
-		if (upper > mm->limit) {
-			dev_err(mm->dev,
-				"region is beyond valid region used by AIPU (0x%llx > 0x%llx)\n",
-				upper, mm->limit);
-			return ERR_PTR(-EINVAL);
-		}
-	}
-
 	reg = devm_kzalloc(mm->dev, sizeof(*reg), GFP_KERNEL);
 	if (!reg)
 		return ERR_PTR(-ENOMEM);
 
 	reg->base_pa = addr;
 	reg->bytes = size;
-	reg->host_aipu_offset = offset;
 	ret = aipu_mm_init_mem_region(mm, reg, idx, head->type, true);
 	if (ret)
 		return ERR_PTR(ret);
@@ -598,7 +571,6 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	struct device_node *np = NULL;
 	enum aipu_mem_region_type type;
 	struct resource res;
-	u64 host_aipu_offset = 0;
 	struct iommu_group *group = NULL;
 	struct aipu_mem_region *reg = NULL;
 	bool asid_set = false;
@@ -631,7 +603,6 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 		mm->mem[type].disable = 0;
 		mm->mem[type].type = type;
 		mm->mem[type].base = U64_MAX;
-		mm->mem[type].offset = 0;
 		mm->mem[type].tot_size = 0;
 
 		/* we do not limit the count of memory/SRAM regions in DTS */
@@ -742,12 +713,7 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 			size = ZHOUYI_V2_DTCM_MAX_BYTES;
 		}
 
-		if (of_property_read_u64(np, "host-aipu-offset", &host_aipu_offset))
-			host_aipu_offset = 0;
-
 		/* dtcm register is configured based on these info */
-		if (!mm->mem[type].offset)
-			mm->mem[type].offset = host_aipu_offset;
 		if (mm->mem[type].base > res.start)
 			mm->mem[type].base = res.start;
 		mm->mem[type].tot_size += size;
@@ -758,8 +724,7 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 			continue;
 		}
 
-		reg = aipu_mm_create_region(mm, &mm->mem[type], res.start, size,
-					    host_aipu_offset, idx);
+		reg = aipu_mm_create_region(mm, &mm->mem[type], res.start, size, idx);
 		if (IS_ERR(reg)) {
 			ret = PTR_ERR(reg);
 			goto err;
@@ -1022,7 +987,6 @@ int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 	if (!reg)
 		return -EINVAL;
 
-	offset += reg->host_aipu_offset;
 	first_page = aipu_mm_find_page(mm, reg, filp, offset);
 	if (!first_page) {
 		dev_err(mm->dev, "[mmap] page not found at offset 0x%llx", offset);
@@ -1171,8 +1135,7 @@ char *aipu_mm_get_va(struct aipu_memory_manager *mm, u64 dev_pa)
 	if (!reg)
 		return NULL;
 
-	return (char *)((unsigned long)reg->base_va + dev_pa + reg->host_aipu_offset -
-		reg->base_iova);
+	return (char *)((unsigned long)reg->base_va + dev_pa - reg->base_iova);
 }
 
 /**
@@ -1194,8 +1157,7 @@ struct aipu_tcb *aipu_mm_get_tcb_va(struct aipu_memory_manager *mm, u64 dev_pa)
 	if (!tbuf || !reg)
 		goto unlock;
 
-	tcb = (struct aipu_tcb *)((char *)(reg->base_va) + dev_pa + reg->host_aipu_offset -
-	       reg->base_iova);
+	tcb = (struct aipu_tcb *)((char *)(reg->base_va) + dev_pa - reg->base_iova);
 
 unlock:
 	spin_unlock_irqrestore(&mm->slock, flags);
@@ -1224,8 +1186,7 @@ int aipu_mm_set_tcb_tail(struct aipu_memory_manager *mm, u64 tail)
 	}
 
 	tcb->tail = tail;
-	tcb->tail_tcb = (struct aipu_tcb *)((char *)(reg->base_va) + tail + reg->host_aipu_offset -
-			reg->base_iova);
+	tcb->tail_tcb = (struct aipu_tcb *)((char *)(reg->base_va) + tail - reg->base_iova);
 
 unlock:
 	spin_unlock_irqrestore(&mm->slock, flags);
@@ -1367,7 +1328,7 @@ u64 aipu_mm_get_asid_base(struct aipu_memory_manager *mm, u32 asid)
 		return 0;
 
 	if (mm->ase[asid])
-		return mm->ase[asid]->base_iova - mm->ase[asid]->host_aipu_offset;
+		return mm->ase[asid]->base_iova;
 	return 0;
 }
 
@@ -1397,7 +1358,7 @@ static void aipu_mm_get_gm_region_no_lock(struct aipu_memory_manager *mm,
 					  struct aipu_buf_desc *buf,
 					  struct aipu_mem_region *gm)
 {
-	gm->base_iova = buf->pa + reg->host_aipu_offset;
+	gm->base_iova = buf->pa;
 	gm->base_pa = gm->base_iova; /* should not be used */
 	gm->base_va = (void *)((unsigned long *)reg->base_va + gm->base_iova - reg->base_iova);
 	gm->bytes = buf->bytes;
@@ -1498,8 +1459,7 @@ void aipu_mm_get_gm(struct aipu_memory_manager *mm, struct aipu_cap *cap)
 	    mm->gm_policy == AIPU_GM_POLICY_NONE)
 		return;
 
-	cap->gm0_base = mm->mem[AIPU_MEM_REGION_TYPE_GM].base -
-		mm->mem[AIPU_MEM_REGION_TYPE_GM].offset;
+	cap->gm0_base = mm->mem[AIPU_MEM_REGION_TYPE_GM].base;
 
 	mutex_lock(&mm->lock);
 	if (mm->gm_policy == AIPU_GM_POLICY_SHARED) {
@@ -1520,6 +1480,6 @@ void get_dtcm(struct aipu_memory_manager *mm, u64 *base, u32 *size)
 		return;
 
 	region = &mm->mem[AIPU_MEM_REGION_TYPE_DTCM];
-	*base = region->base - region->offset;
+	*base = region->base;
 	*size = region->tot_size;
 }

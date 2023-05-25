@@ -450,19 +450,22 @@ By default, this macro is 0. You should set 1 if your CPUs also have access to D
 the dtcm management by driver. If set, driver will map the address to virtual space and dtcm allocations
 from userspace will be enabled.
 
-3.1.4.5 Host-AIPU-Offset
-------------------------
+3.1.4.5 dma-ranges
+------------------
 Sometimes to access the main memory, the physical addresses (cpu_pa) issued from host CPU and the
-addresses used by a device (dma_addr) do not equal. For this scenario, we use the host-aipu-offset
+addresses used by a device (dma_addr) do not equal. For this scenario, we use the dma-ranges
 attribute to describe the gap between them.
 
 You must specify this attribute in a reserved memory region node if this offset != 0.
+
+The host-aipu-offset attribute we used before will not be used in this version KMD driver.
 
 For example, if for the same memory space, dma_addr = cpu_pa - 0x80000000, you may configure as
 followed:
 
     /* case 1 */
     /* cpu_pa space = dma_addr space = [0xA0000000, 0xB0000000) */
+    /* do not need to specify dma-ranges */
     reserved-memory {
         #address-cells = <2>;
         #size-cells = <2>;
@@ -476,7 +479,8 @@ followed:
     };
 
     /* case 2 */
-    /* cpu_pa space = dma_addr space = [0xA0000000, 0xB0000000) */
+    /* cpu_pa space = [0xA0000000, 0xB0000000), dma_addr space = [0x20000000, 0x30000000) */
+    /* you shall specify dma-ranges */
     reserved-memory {
         #address-cells = <2>;
         #size-cells = <2>;
@@ -486,23 +490,18 @@ followed:
             compatible = "shared-dma-pool";
             no-map;
             reg = <0x0 0xA0000000 0x0 0x10000000>;
-            host-aipu-offset = <0x0 0x0>;
         };
     };
 
-    /* case 3 */
-    /* cpu_pa space = [0xA0000000, 0xB0000000), dma_addr space = [0x20000000, 0x30000000) */
-    reserved-memory {
+    aipu0@64000000 {
         #address-cells = <2>;
-        #size-cells = <2>;
-        ranges;
+        #size-cells = <1>;
 
-        aipu_res_0: memory@A0000000 {
-            compatible = "shared-dma-pool";
-            no-map;
-            reg = <0x0 0xA0000000 0x0 0x10000000>;
-            host-aipu-offset = <0x0 0x80000000>;
-        };
+        compatible = "armchina,zhouyi";
+        memory-region=<&aipu_res_0>;
+        dma-ranges=<0x0 0x20000000 0x0 0xA0000000 0x10000000>;
+
+        /* other attributes... */
     };
 
 This attribute is optional and by default this value in driver is 0 if not activated in DTS.

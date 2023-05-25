@@ -847,44 +847,37 @@
 			compatible = "shared-dma-pool";
 			reusable;
 			reg = <0x0 0xA0000000 0x0 0x10000000>;
-			host-aipu-offset = <0x0 0x80000000>;
 		};
 
-		aipu_reserved_1: dtcm@C0000000 {
+		aipu_reserved_1: memory@B0000000 {
+			compatible = "shared-dma-pool";
+			reusable;
+			reg = <0x0 0xB0000000 0x0 0x10000000>;
+		};
+
+		aipu_reserved_2: dtcm@C0000000 {
 			compatible = "shared-dma-pool";
 			reusable;
 			reg = <0x0 0xC0000000 0x0 0x800000>;
-			host-aipu-offset = <0x0 0x80000000>;
-		};
-
-		aipu_reserved_2: sram@C0800000 {
-			compatible = "shared-dma-pool";
-			reusable;
-			reg = <0x0 0xC0800000 0x0 0x400000>;
-			host-aipu-offset = <0x0 0x80000000>;
 		};
 
 		aipu_reserved_3: sram@C1000000 {
 			compatible = "shared-dma-pool";
 			reusable;
 			reg = <0x0 0xC1000000 0x0 0x800000>;
-			host-aipu-offset = <0x0 0x80000000>;
-		};
-
-		aipu_reserved_4: memory@B0000000 {
-			compatible = "shared-dma-pool";
-			reusable;
-			reg = <0x0 0xB0000000 0x0 0x10000000>;
-			host-aipu-offset = <0x0 0x80000000>;
 		};
 	};
 
 	aipu0@64000000 {
+		#address-cells = <2>;
+		#size-cells = <1>;
+
 		compatible = "armchina,zhouyi";
 		core-id = <0>;                        /* z1 ~x1 only */
 		cluster-partition = <0 0>;            /* x2 only: cluster #0 -> partition #0 */
 		reg = <0x0 0x64000000 0x0 0x3230>;
-		memory-region=<&aipu_reserved_0 &aipu_reserved_1 &aipu_reserved_2 &aipu_reserved_3 &aipu_reserved_4>;
+		memory-region=<&aipu_reserved_0 &aipu_reserved_1 &aipu_reserved_2 &aipu_reserved_3>;
+		dma-ranges=<0x0 0x20000000 0x0 0xA0000000 0x30000000>;
 		gm-policy = <1>;                      /* x2 only: shared by tasks of all QoS level */
 		interrupts = <0 168 IRQ_TYPE_EDGE_RISING>;
 	};

@@ -80,7 +80,6 @@ struct tcb_buf {
  * @type: region type: memory/sram/dtcm/gm
  * @base_iova: region base iova (bus address)
  * @base_pa: region base physical address
- * @host_aipu_offset: address space offset between host CPU and AIPU
  * @base_va: region base virtual address
  * @bytes: total bytes of this region
  * @base_pfn: region base page frame number
@@ -98,7 +97,6 @@ struct aipu_mem_region {
 	enum aipu_mem_region_type type;
 	dma_addr_t base_iova;
 	dma_addr_t base_pa;
-	u64 host_aipu_offset;
 	void *base_va;
 	u64 bytes;
 	unsigned long base_pfn;
@@ -122,7 +120,6 @@ struct aipu_mem_region {
  * @disable: are regions disabled
  * @type: type of regions
  * @base: base address of the regions
- * @offset: offset between host CPU and NPU
  * @tot_size: total size of the regions
  */
 struct aipu_mem_region_list {
@@ -132,7 +129,6 @@ struct aipu_mem_region_list {
 	int disable;
 	enum aipu_mem_region_type type;
 	u64 base;
-	u64 offset;
 	u64 tot_size;
 };
 

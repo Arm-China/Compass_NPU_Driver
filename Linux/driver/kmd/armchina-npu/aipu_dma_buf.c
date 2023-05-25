@@ -126,6 +126,7 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 	struct aipu_dma_buf_priv *priv = NULL;
 	char *va = NULL;
 	struct dma_buf *dmabuf = NULL;
+	struct aipu_mem_region *reg = mm->ase[AIPU_BUF_ASID_0];
 
 	DEFINE_DMA_BUF_EXPORT_INFO(exp);
 
@@ -156,7 +157,7 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 
 	priv->mm = mm;
 	priv->dev_pa = inter_req.desc.pa;
-	priv->dma_pa = inter_req.desc.pa + mm->ase[AIPU_BUF_ASID_0]->host_aipu_offset;
+	priv->dma_pa = inter_req.desc.pa + reg->base_pa - reg->base_iova;
 	priv->bytes = inter_req.desc.bytes;
 	priv->va = va;
 
