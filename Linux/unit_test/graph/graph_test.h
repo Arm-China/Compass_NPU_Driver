@@ -160,11 +160,7 @@ public:
         p_ctx = new aipudrv::MainContext();
         p_ctx->init();
 
-        m_sim_cfg.z1_simulator = nullptr;
-        m_sim_cfg.z2_simulator = nullptr;
-        m_sim_cfg.z3_simulator = nullptr;
-        m_sim_cfg.x1_simulator = nullptr;
-        m_sim_cfg.x2_arch_desc = nullptr;
+        m_sim_cfg.simulator = nullptr;
         m_sim_cfg.log_file_path = new char[1024];
         strcpy((char*)m_sim_cfg.log_file_path, "./");
         m_sim_cfg.log_level = 0;
@@ -174,7 +170,7 @@ public:
 
 #if (defined SIMULATION)
 #if (defined ZHOUYI_V12)
-        m_sim_cfg.x1_simulator = "./simulator/aipu_simulator_x1";
+        m_sim_cfg.simulator = "./simulator/aipu_simulator_x1";
         m_sim_cfg.log_level = 3;
 #endif
 #endif

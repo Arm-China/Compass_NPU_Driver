@@ -198,7 +198,7 @@ public:
 
 #if (defined SIMULATION)
 #if (defined ZHOUYI_V12)
-        m_sim_cfg.x1_simulator = "./simulator/aipu_simulator_x1";
+        m_sim_cfg.simulator = "./simulator/aipu_simulator_x1";
         m_sim_cfg.log_level = 3;
 #endif
 #if (defined ZHOUYI_V3)

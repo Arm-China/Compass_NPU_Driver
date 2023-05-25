@@ -108,7 +108,7 @@ TEST_CASE_FIXTURE(ContextTest, "create_job")
     aipu_global_config_simulation_t sim_glb_config;
     memset(&sim_glb_config, 0, sizeof(sim_glb_config));
 #if (defined ZHOUYI_V12)
-    sim_glb_config.x1_simulator = "./simulator/aipu_simulator_x1";
+    sim_glb_config.simulator = "./simulator/aipu_simulator_x1";
     sim_glb_config.log_level = 3;
     ret = p_ctx->config_simulation(AIPU_CONFIG_TYPE_SIMULATION, &sim_glb_config);
 #endif
@@ -131,7 +131,7 @@ TEST_CASE_FIXTURE(ContextTest, "config_simulation")
 
     p_ctx->init();
 #if (defined ZHOUYI_V12)
-    sim_glb_config.x1_simulator = "./simulator/aipu_simulator_x1";
+    sim_glb_config.simulator = "./simulator/aipu_simulator_x1";
     sim_glb_config.log_level = 3;
 #endif
 #if (defined ZHOUYI_V3)
