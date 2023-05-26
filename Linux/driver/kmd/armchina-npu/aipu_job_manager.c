@@ -54,7 +54,6 @@ static struct aipu_thread_wait_queue *create_thread_wait_queue(struct aipu_threa
 			return queue;
 	}
 
-	queue->ref_cnt++;
 	return queue;
 }
 
@@ -111,7 +110,8 @@ static void destroy_aipu_job(struct aipu_job_manager *manager, struct aipu_job *
 	if (likely(job->thread_queue)) {
 		job_aipu_wait_queue =
 			container_of(job->thread_queue, struct aipu_thread_wait_queue, p_wait);
-		job_aipu_wait_queue->ref_cnt--;
+		if (job_aipu_wait_queue->ref_cnt)
+			job_aipu_wait_queue->ref_cnt--;
 	}
 	kmem_cache_free(manager->job_cache, job);
 }
@@ -134,6 +134,8 @@ static struct aipu_job *create_aipu_job(struct aipu_job_manager *manager,
 		return ERR_PTR(ret);
 	}
 
+	if (queue)
+		queue->ref_cnt++;
 	return new_aipu_job;
 }
 
@@ -1038,7 +1040,8 @@ bool aipu_job_manager_has_end_job(struct aipu_job_manager *manager, struct file 
 
 	mutex_lock(&manager->wq_lock);
 	list_for_each_entry(wq, &manager->wait_queue_head->node, node) {
-		if (wq->uthread_id == uthread_id || wq->filp == filp) {
+		if (wq->ref_cnt &&
+		    (wq->uthread_id == uthread_id || wq->filp == filp)) {
 			poll_wait(filp, &wq->p_wait, wait);
 			break;
 		}
