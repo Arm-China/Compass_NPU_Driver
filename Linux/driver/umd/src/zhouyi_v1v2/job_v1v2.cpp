@@ -247,6 +247,8 @@ aipu_status_t aipudrv::JobV12::schedule()
     desc.text_size = get_graph().m_text.req_size;
     desc.weight_pa = get_graph().m_weight.pa;
     desc.weight_size = get_graph().m_weight.req_size;
+    desc.zerocpy_const_pa = get_graph().m_zerocpy_const.pa;
+    desc.zerocpy_const_size = get_graph().m_zerocpy_const.req_size;
     desc.rodata_size = m_rodata.req_size;
     desc.dcr_pa = m_descriptor.pa;
     desc.dcr_size = m_descriptor.req_size;

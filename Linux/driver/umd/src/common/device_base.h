@@ -93,6 +93,8 @@ struct JobDesc
     uint32_t text_size;
     DEV_PA_64 weight_pa;
     uint32_t weight_size;
+    DEV_PA_64 zerocpy_const_pa;
+    uint32_t zerocpy_const_size;
     uint32_t rodata_size;
     DEV_PA_64 dcr_pa;
     uint32_t dcr_size;

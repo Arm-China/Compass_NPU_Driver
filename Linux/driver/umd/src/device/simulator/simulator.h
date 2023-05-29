@@ -37,6 +37,7 @@ struct SimulationJobCtx
 {
     std::string text;
     std::string weight;
+    std::string zerocpy_const;
     std::string rodata;
     std::string dcr;
     std::string stack;

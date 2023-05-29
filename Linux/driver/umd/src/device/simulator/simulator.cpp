@@ -56,7 +56,7 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
     char fname[FNAME_LEN];
     std::string cfg_fname = job.output_dir + "/runtime.cfg";
     uint32_t input_data_cnt;
-    uint32_t weight_cnt = 0, dcr_cnt = 0;
+    uint32_t weight_cnt = 0, zerocpy_const_cnt = 0, dcr_cnt = 0;
     uint32_t input_file_idx = 0;
     uint32_t output_idx = 0;
     std::vector<std::string> reuse_outputs;
@@ -94,6 +94,18 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
         }
         weight_cnt = job.weights.size();
     }
+
+    if (job.zerocpy_const_size != 0)
+    {
+        ret = create_simulation_input_file(fname, "Zerocpy_const", job.kdesc.job_id,
+            job.zerocpy_const_pa, job.zerocpy_const_size, job);
+        if (ret != AIPU_STATUS_SUCCESS)
+            goto finish;
+
+        ctx.zerocpy_const = fname;
+        zerocpy_const_cnt = 1;
+    }
+
 
     /* rodata */
     ret = create_simulation_input_file(fname, "Rodata", job.kdesc.job_id,
@@ -232,7 +244,7 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
     ofs << "INPUT_INST_STARTPC0=0x" << std::hex << job.kdesc.start_pc_addr << "\n";
     ofs << "INT_PC=0x" << std::hex << job.kdesc.intr_handler_addr << "\n";
 
-    input_data_cnt = 2 + dcr_cnt + weight_cnt + job.reuses.size();
+    input_data_cnt = 2 + dcr_cnt + weight_cnt + zerocpy_const_cnt + job.reuses.size();
 
     ofs << "\n";
     ofs << "INPUT_DATA_CNT=" << std::dec <<  input_data_cnt << "\n";
@@ -262,6 +274,13 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
             ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx + i <<  "=0x" << std::hex << job.weights[i].pa << "\n";
         }
         input_file_idx += job.weights.size();
+    }
+
+    if (zerocpy_const_cnt == 1)
+    {
+        ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx <<  "=" << ctx.zerocpy_const << "\n";
+        ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx <<  "=0x" << std::hex << job.zerocpy_const_pa << "\n";
+        input_file_idx++;
     }
 
     for(uint32_t i = 0; i < job.reuses.size(); i++)
