@@ -217,6 +217,13 @@ public:
 
     void set_const_size(uint32_t _const_size, uint32_t _zerocpy_const_size)
     {
+        /**
+         * if one graph doesn't need weight, it just reserves
+         * 4KB as default placehold for whole flow.
+         */
+        if (_const_size == 0)
+            _const_size = 4096;
+
         const_size = _const_size;
         zerocpy_const_size = _zerocpy_const_size;
     }
