@@ -1081,10 +1081,17 @@ void aipudrv::JobV3::dump_specific_buffers()
 
 aipu_status_t aipudrv::JobV3::dump_for_emulation()
 {
+    #define SINGLE_TCB_BIN
+    #ifdef SINGLE_TCB_BIN
+    #define INIT_NUM 3
+    #else
+    #define INIT_NUM 4
+    #endif
+
     DEV_PA_64 dump_pa;
     uint32_t dump_size;
     char dump_name[4096];
-    int emu_input_cnt = 3 + m_inputs.size() + (m_descriptor.size != 0 ? 1 : 0);
+    int emu_input_cnt = INIT_NUM + m_inputs.size() + (m_descriptor.size != 0 ? 1 : 0);
     int emu_output_cnt = m_outputs.size();
     int file_id = -1;
     tcb_t tcb;
@@ -1271,17 +1278,26 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     dump_pa = m_tcbs.pa;
     dump_size = m_tot_tcb_cnt * sizeof(tcb_t);
     snprintf(dump_name, 128, "%s/%s.tcb", m_dump_dir.c_str(), m_dump_prefix.c_str());
-    m_dump_tcb_info[0] = std::make_tuple(m_dump_dir + "/init.tcb", dump_pa, sizeof(tcb_t));
-    m_dump_tcb_info[1] = std::make_tuple(m_dump_dir + "/task.tcb", dump_pa + sizeof(tcb_t), dump_size - sizeof(tcb_t));
+    m_dump_tcb_info[0] = std::make_tuple(m_dump_dir + "/init.tcb", dump_pa,
+        (m_segmmu_tcb_num + 1) / 2 * sizeof(tcb_t));
+    m_dump_tcb_info[1] = std::make_tuple(m_dump_dir + "/task.tcb",
+        dump_pa + std::get<2>(m_dump_tcb_info[0]), dump_size - sizeof(tcb_t));
     m_mem->dump_file(std::get<1>(m_dump_tcb_info[0]), std::get<0>(m_dump_tcb_info[0]).c_str(),
         std::get<2>(m_dump_tcb_info[0]));
     m_mem->dump_file(std::get<1>(m_dump_tcb_info[1]), std::get<0>(m_dump_tcb_info[1]).c_str(),
         std::get<2>(m_dump_tcb_info[1]));
     m_mem->dump_file(dump_pa, dump_name, dump_size);
 
+#ifdef SINGLE_TCB_BIN
     ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".tcb\n";
     ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
+#else
+    ofs << "FILE" << std::dec << ++file_id << "=" << "init.tcb\n";
+    ofs << "BASE" << file_id << "=0x" << std::hex << std::get<1>(m_dump_tcb_info[0]) << "\n";
 
+    ofs << "FILE" << std::dec << ++file_id << "=" << "task.tcb\n";
+    ofs << "BASE" << file_id << "=0x" << std::hex << std::get<1>(m_dump_tcb_info[1]) << "\n";
+#endif
     /* dump temp.input[n] */
     for (uint32_t i = 0; i < m_inputs.size(); i++)
     {
