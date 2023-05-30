@@ -271,7 +271,7 @@ static int config_exit_tcb(struct aipu_job_manager *manager, struct aipu_buf_des
 	tcb->next = 0;
 	tcb->gm_ctrl = 0xF;
 	tcb->gm_rgnx_ctrl[0] = 0xC0000000;
-	tcb->gm_rgnx_ctrl[0] = 0xC0000000;
+	tcb->gm_rgnx_ctrl[1] = 0xC0000000;
 	for (i = AIPU_BUF_ASID_0; i < ZHOUYI_ASID_COUNT; i++) {
 		u64 base = aipu_mm_get_asid_base(manager->mm, i);
 		u64 size = aipu_mm_get_asid_size(manager->mm, i);
