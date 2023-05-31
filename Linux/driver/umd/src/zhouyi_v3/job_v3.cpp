@@ -278,7 +278,7 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                 if (AIPU_STATUS_SUCCESS != ret)
                 {
                     LOG(LOG_ERR, "alloc private buffer %d [fail]", k);
-                    goto out;
+                    goto add_sg;
                 }
             }
 
@@ -302,7 +302,7 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                     if(m_mem->get_shared_buffer(get_graph().m_shared_tensor_map[k], section_desc.size, buffer) != 0)
                     {
                         ret = AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
-                        goto out;
+                        goto add_sg;
                     }
                     bufferDesc = buffer.desc;
                 } else {
@@ -325,7 +325,7 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                         if (AIPU_STATUS_SUCCESS != ret)
                         {
                             LOG(LOG_ERR, "alloc reuse buffer %d [fail]", k);
-                            goto out;
+                            goto add_sg;
                         }
                     }
                 }
@@ -348,7 +348,7 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                     std::string buf_name = "weight_" + std::to_string(w);
                     ret = m_gm->gm_malloc(sg_idx, w, GM_BUF_TYPE_WEIGHT, buf_name, buf);
                     if (AIPU_STATUS_SUCCESS != ret)
-                        goto out;
+                        goto add_sg;
 
                     if (buf.ram_region == AIPU_BUF_REGION_DEFAULT)
                     {
@@ -373,13 +373,16 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
             #else
             ret = get_graph().alloc_weight_buffer(get_graph().m_subgraphs[0].static_sections);
             if (ret != AIPU_STATUS_SUCCESS)
-                goto out;
+                goto add_sg;
 
             sg.weights.assign(get_graph().m_weights.begin(), get_graph().m_weights.end());
             #endif
         }
 
+add_sg:
         m_sg_job.push_back(sg);
+        if (ret != AIPU_STATUS_SUCCESS)
+            goto out;
     }
 
     if ( get_subgraph_cnt() > 0 && get_graph().m_subgraphs[0].printfifo_size > 0)
