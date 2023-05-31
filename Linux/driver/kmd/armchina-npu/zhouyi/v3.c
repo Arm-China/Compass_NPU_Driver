@@ -125,7 +125,7 @@ static int zhouyi_v3_create_command_pool(struct aipu_partition *partition)
 			return ret;
 	}
 
-	dev_info(partition->dev, "command pool #%d was created\n", partition->id);
+	dev_dbg(partition->dev, "command pool #%d was created\n", partition->id);
 	return ret;
 }
 
@@ -163,7 +163,7 @@ static void zhouyi_v3_destroy_command_pool(struct aipu_partition *partition)
 			aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
 	}
 
-	dev_info(partition->dev, "command pool #%d was destroyed\n", partition->id);
+	dev_dbg(partition->dev, "command pool #%d was destroyed\n", partition->id);
 }
 
 static int get_qos(u32 exec_flag)
@@ -191,8 +191,9 @@ static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_d
 		return -EFAULT;
 	}
 
-	if (trigger_type == ZHOUYI_V3_TRIGGER_TYPE_CREATE ||
-	    trigger_type == ZHOUYI_V3_TRIGGER_TYPE_UPDATE_DISPATCH) {
+	if (trigger_type == ZHOUYI_V3_TRIGGER_TYPE_CREATE          ||
+	    trigger_type == ZHOUYI_V3_TRIGGER_TYPE_UPDATE_DISPATCH ||
+	    trigger_type == ZHOUYI_V3_TRIGGER_TYPE_DEBUG_DISPATCH) {
 		aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_HIGH_REG, udesc->head_tcb_pa >> 32);
 		aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_LOW_REG, (u32)udesc->head_tcb_pa);
 	}
@@ -201,8 +202,16 @@ static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_d
 		udesc->job_id, udesc->head_tcb_pa);
 
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_INFO_REG, (u16)udesc->job_id);
-	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
-		     TSM_DISPATCH_CMD_POOL(partition->id, get_qos(udesc->exec_flag)));
+
+	if (trigger_type == ZHOUYI_V3_TRIGGER_TYPE_DEBUG_DISPATCH) {
+		dev_info(partition->dev, "debug-dispatch user job 0x%llx", udesc->job_id);
+		aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
+			     TSM_DBG_DISPATCH_CMD_POOL(partition->id, get_qos(udesc->exec_flag),
+						       udesc->core_id));
+	} else {
+		aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
+			     TSM_DISPATCH_CMD_POOL(partition->id, get_qos(udesc->exec_flag)));
+	}
 
 	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
 		dev_err(partition->dev, "dispatch command failed: job tail 0x%llx\n",

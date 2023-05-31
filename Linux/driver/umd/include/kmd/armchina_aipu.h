@@ -275,6 +275,7 @@ struct aipu_dma_buf {
  * @AIPU_JOB_EXEC_FLAG_QOS_FAST:     [aipu v3 only] QoS fast
  * @AIPU_JOB_EXEC_FLAG_SINGLE_GROUP: [aipu v3 only] the scheduled job is a single group task
  * @AIPU_JOB_EXEC_FLAG_MULTI_GROUP:  [aipu v3 only] the scheduled job is a multi-groups task
+ * @AIPU_JOB_EXEC_FLAG_DBG_DISPATCH: [aipu v3 only] the job should be scheduled with debug-dispatch
  */
 enum aipu_job_execution_flag {
 	AIPU_JOB_EXEC_FLAG_NONE         = 0,
@@ -283,13 +284,14 @@ enum aipu_job_execution_flag {
 	AIPU_JOB_EXEC_FLAG_QOS_FAST     = 1 << 2,
 	AIPU_JOB_EXEC_FLAG_SINGLE_GROUP = 1 << 3,
 	AIPU_JOB_EXEC_FLAG_MULTI_GROUP  = 1 << 4,
+	AIPU_JOB_EXEC_FLAG_DBG_DISPATCH  = 1 << 5,
 };
 
 /**
  * struct aipu_job_desc - Description of a job to be scheduled.
  * @is_defer_run:      [aipu v1/v2 only, optional] Reserve a core for this job and defer to run
  * @version_compatible:[aipu v1/v2 only, optional] Is this job compatible on different ISA versions
- * @core_id:           [aipu v1/v2 optional] ID of the core to reserve
+ * @core_id:           [aipu v1/v2/v3 optional] ID of the core to reserve (v1/v2) or debug dispatch (v3)
  * @partition_id:      [aipu v3 must] ID of the partition requested to schedule a job onto
  * @do_trigger:        [aipu v1/v2 only, optional] Trigger the deferred job to run
  * @aipu_arch:         [must] Target device architecture
@@ -317,10 +319,8 @@ enum aipu_job_execution_flag {
 struct aipu_job_desc {
 	__u32 is_defer_run;
 	__u32 version_compatible;
-	union {
-		__u32 core_id;
-		__u32 partition_id;
-	};
+	__u32 core_id;
+	__u32 partition_id;
 	__u32 do_trigger;
 	__u32 aipu_arch;
 	__u32 aipu_version;

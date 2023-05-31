@@ -66,6 +66,7 @@
 #define ZHOUYI_V3_TRIGGER_TYPE_CREATE                0
 #define ZHOUYI_V3_TRIGGER_TYPE_UPDATE_DISPATCH       1
 #define ZHOUYI_V3_TRIGGER_TYPE_DISPATCH              2
+#define ZHOUYI_V3_TRIGGER_TYPE_DEBUG_DISPATCH        3
 
 int zhouyi_read_status_reg(struct io_region *io);
 void zhouyi_clear_qempty_interrupt(struct io_region *io);

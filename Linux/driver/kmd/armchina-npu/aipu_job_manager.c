@@ -178,33 +178,58 @@ inline bool is_job_ok_for_core(struct aipu_partition *core, struct aipu_job_desc
 
 static bool is_user_job_valid(struct aipu_job_manager *manager, struct aipu_job_desc *user_job)
 {
-	int id = 0;
+	int partition_id = user_job->partition_id;
+	int core_id = user_job->core_id;
+	int core_cnt = 0;
+	struct aipu_partition *partition = NULL;
 	struct aipu_partition *core = NULL;
-	struct aipu_priv *priv = NULL;
 
-	if (unlikely(!manager || !user_job))
-		return false;
+	/* for v3: partition->clusters->cores arch */
+	if (user_job->aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+		if (manager->version != AIPU_ISA_VERSION_ZHOUYI_V3 ||
+		    partition_id >= manager->partition_cnt) {
+			dev_err(partition->dev, "invalid version number (%d) or partition ID (%d)",
+				user_job->aipu_version, partition_id);
+			return false;
+		}
 
-	priv = (struct aipu_priv *)manager->priv;
+		if (user_job->exec_flag & AIPU_JOB_EXEC_FLAG_DBG_DISPATCH) {
+			partition = &manager->partitions[partition_id];
+			core_cnt = partition->clusters[0].core_cnt;
+			if (core_id >= core_cnt) {
+				dev_err(partition->dev, "invalid core ID (%d) >= core count (%d)",
+					core_id, core_cnt);
+				return false;
+			}
+		}
 
-	if (user_job->aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3 &&
-	    priv->version == AIPU_ISA_VERSION_ZHOUYI_V3 &&
-	    user_job->partition_id < manager->partition_cnt)
 		return true;
-
-	if (user_job->is_defer_run) {
-		id = user_job->partition_id;
-		if (id < manager->partition_cnt)
-			return is_job_ok_for_core(&manager->partitions[id], user_job);
-		return false;
 	}
 
-	for (id = 0; id < manager->partition_cnt; id++) {
-		core = &manager->partitions[id];
+	/* for non-v3 archs, a partition just means an AIPU core */
+	core_cnt = manager->partition_cnt;
+
+	/* debugger deferred execution: reserve the specified core ID */
+	if (user_job->is_defer_run) {
+		if (core_id >= core_cnt) {
+			dev_err(partition->dev, "invalid core ID (%d) >= core count (%d)",
+				core_id, core_cnt);
+			return false;
+		}
+
+		core = &manager->partitions[core_id];
+		return is_job_ok_for_core(core, user_job);
+	}
+
+	/* for non-v3 normal execution: find an available core ID */
+	for (core_id = 0; core_id < core_cnt; core_id++) {
+		core = &manager->partitions[core_id];
 		if (is_job_ok_for_core(core, user_job))
 			return true;
 	}
 
+	dev_err(partition->dev, "no matching core found to execute user job 0x%llx",
+		user_job->job_id);
 	return false;
 }
 
@@ -309,6 +334,19 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 	else
 		trigger_type = ZHOUYI_V3_TRIGGER_TYPE_DISPATCH;
 
+	/**
+	 * 1. debug-dispatch tasks cannot be linked to any existing command pool.
+	 * 2. command pool containing debug-dispatch tasks cannot be linked by any task TCB;
+	 * 3. we must create a new command pool to enable debug-dispatch.
+	 */
+	if (pool->debug) {
+		dev_err(partition->dev, "debug-dispatch command pool cannot be linked");
+		return -EINVAL;
+	}
+
+	if (job->desc.exec_flag & AIPU_JOB_EXEC_FLAG_DBG_DISPATCH)
+		trigger_type = ZHOUYI_V3_TRIGGER_TYPE_DEBUG_DISPATCH;
+
 	/* Driver will clean related TCBs in the list as soon as the job is done.
 	 * If userspace schedules a TCB chain already in the list end, it means that
 	 * an exit dispatch should be done before these TCBs can be resued.
@@ -360,11 +398,17 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 	qlist->curr_tail = job->desc.tail_tcb_pa;
 
 	ret = partition->ops->reserve(partition, &job->desc, trigger_type);
-	if (!ret && trigger_type == ZHOUYI_V3_TRIGGER_TYPE_CREATE)
-		pool->created = true;
+	if (!ret) {
+		if (trigger_type == ZHOUYI_V3_TRIGGER_TYPE_CREATE ||
+		    trigger_type == ZHOUYI_V3_TRIGGER_TYPE_DEBUG_DISPATCH)
+			pool->created = true;
 
-	if (!ret && pool->aborted)
-		pool->aborted = false;
+		if (trigger_type == ZHOUYI_V3_TRIGGER_TYPE_DEBUG_DISPATCH)
+			pool->debug = true;
+
+		if (pool->aborted)
+			pool->aborted = false;
+	}
 
 	return ret;
 }
@@ -423,16 +467,16 @@ static int schedule_new_job(struct aipu_job_manager *manager, struct aipu_job_de
 		}
 	} else {
 		if (user_job->aipu_version < AIPU_ISA_VERSION_ZHOUYI_V3 &&
-		    (user_job->partition_id >= manager->partition_cnt ||
-		     !manager->idle_bmap[user_job->partition_id])) {
+		    (user_job->core_id >= manager->partition_cnt ||
+		     !manager->idle_bmap[user_job->core_id])) {
 			dev_err(manager->dev, "schedule new job (0x%llx) failed: invalid core ID %u",
-				kern_job->desc.job_id, user_job->partition_id);
+				kern_job->desc.job_id, user_job->core_id);
 			ret = -EINVAL;
 			goto unlock;
 		}
 
 		kern_job->state = AIPU_JOB_STATE_DEFERRED;
-		kern_job->core_id = user_job->partition_id; /* only valid for v1 & v2 */
+		kern_job->core_id = user_job->core_id;
 		list_add_tail(&kern_job->node, &manager->scheduled_head->node);
 
 		if (user_job->aipu_version < AIPU_ISA_VERSION_ZHOUYI_V3)
@@ -788,6 +832,7 @@ static void aipu_job_manager_destroy_command_pool_no_lock(struct aipu_job_manage
 		partition->ops->destroy_command_pool(partition);
 		memset(pool->qlist, 0, sizeof(*pool->qlist) * AIPU_JOB_QOS_MAX);
 		pool->created = false;
+		pool->debug = false;
 	}
 }
 
@@ -830,6 +875,9 @@ void aipu_job_manager_irq_bottom_half(struct aipu_partition *core)
 	if (!is_grid_end(manager->mm, manager->pools->qlist[AIPU_JOB_QOS_SLOW].curr_tail) ||
 	    !is_grid_end(manager->mm, manager->pools->qlist[AIPU_JOB_QOS_FAST].curr_tail))
 		do_destroy = false;
+
+	if (manager->pools->debug)
+		do_destroy = true;
 
 	if (do_destroy) {
 		aipu_job_manager_destroy_command_pool_no_lock(manager, core);
@@ -896,6 +944,8 @@ int aipu_job_manager_cancel_jobs(struct aipu_job_manager *manager, struct file *
 	struct aipu_thread_wait_queue *curr_wq = NULL;
 	struct aipu_thread_wait_queue *next_wq = NULL;
 	struct aipu_partition *par = NULL;
+	bool multi_process = false;
+	int id = 0;
 
 	if (!manager || !filp)
 		return -EINVAL;
@@ -910,8 +960,16 @@ int aipu_job_manager_cancel_jobs(struct aipu_job_manager *manager, struct file *
 			     (curr->state == AIPU_JOB_STATE_RUNNING && par->ops->is_idle(par))))
 				manager->idle_bmap[curr->core_id] = 1;
 			remove_aipu_job(manager, curr);
+		} else {
+			multi_process = true;
 		}
 	}
+
+	if (!multi_process && manager->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+		for (id = 0; id < manager->partition_cnt; id++)
+			aipu_job_manager_destroy_command_pool_no_lock(manager, &manager->partitions[id]);
+	}
+
 	spin_unlock_irqrestore(&manager->lock, flags);
 
 	mutex_lock(&manager->wq_lock);

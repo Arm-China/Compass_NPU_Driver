@@ -114,12 +114,14 @@ struct qos {
  * @qlist: TCB queue in different QoS lists
  * @created: is this command pool created
  * @aborted: is this command pool aborted
+ * @debug:   is this command pool for debug dispatch
  */
 struct command_pool {
 	u32 id;
 	struct qos qlist[AIPU_JOB_QOS_MAX];
 	bool created;
 	bool aborted;
+	bool debug;
 };
 
 /**
