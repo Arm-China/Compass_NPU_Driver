@@ -107,6 +107,7 @@ private:
     uint32_t m_segmmu_tcb_num = 3;
     std::vector<SegMMUConfig> m_segmmu_sec;
     GM_V3 *m_gm = nullptr;
+    bool m_same_asid = true;
 
     std::string m_dumpcfg_header;
     dumpcfg_host_desc m_dumpcfg_host;
@@ -148,6 +149,7 @@ private:
     aipu_status_t alloc_subgraph_buffers();
     aipu_status_t init_per_task_data();
     aipu_status_t setup_tcbs();
+    aipu_status_t config_smmu_tcb();
     void setup_gm_sync_from_ddr(tcb_t *tcb);
     void setup_gm_sync_to_ddr(tcb_t *tcb);
     aipu_status_t setup_segmmu(SubGraphTask &sg);

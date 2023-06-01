@@ -39,6 +39,10 @@ aipudrv::JobV3::JobV3(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_
     graph.set_weight_region(config->wt_mem_region);
     m_segmmu_num = get_graph().m_segmmu_num;
     m_gm = new GM_V3(*this);
+
+    if (m_mem->get_asid_base(0) != m_mem->get_asid_base(1))
+        m_same_asid = false;
+
 }
 
 aipudrv::JobV3::~JobV3()
@@ -61,7 +65,7 @@ void aipudrv::JobV3::set_job_params(uint32_t sg_cnt, uint32_t task_per_sg,
      */
     m_segmmu_tcb_num = core_cnt;
     m_tot_tcb_cnt = m_sg_cnt * m_task_per_sg + 1 + 1;
-    if (m_segmmu_num > 0)
+    if (m_segmmu_num > 0 || !m_same_asid)
         m_tot_tcb_cnt += (m_segmmu_tcb_num + 1) / 2;
 
     m_backup_tcb.reset(new char[m_tot_tcb_cnt * sizeof(tcb_t)]);
@@ -405,7 +409,7 @@ aipu_status_t aipudrv::JobV3::init_per_task_data()
     uint32_t sg_idx = 0;
     bool dep_all_flag = false;
 
-    if (m_segmmu_num != 0)
+    if ((m_segmmu_num != 0) || !m_same_asid)
         segmmu_tcb_skip = (m_segmmu_tcb_num + 1) / 2;
 
     for (uint32_t i = 0; i < m_sg_cnt; i++)
@@ -825,42 +829,17 @@ aipu_status_t aipudrv::JobV3::setup_tcb_sg(uint32_t sg_id, uint32_t grid_id, uin
     return ret;
 }
 
-aipu_status_t aipudrv::JobV3::setup_tcbs()
+aipu_status_t aipudrv::JobV3::config_smmu_tcb()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    tcb_t* tcb = new tcb_t;
-    uint32_t core_id = 0;
+    tcb_t *tcb = new tcb_t;
 
-    /* 1. setup init TCB 0 */
-    memset(tcb, 0, sizeof(tcb_t));
-
-    if (m_segmmu_num == 0)
-        tcb->flag = TCB_FLAG_TASK_TYPE_INIT;
-    else
-        tcb->flag = (m_segmmu_tcb_num << 16) | TCB_FLAG_TASK_TYPE_INIT;
-
-    tcb->next = get_low_32(m_sg_job[0].tasks[0].tcb.pa);
-    tcb->igrid_id = m_grid_id;
-
-    /* 1.1 config GM if need */
-    setup_gm_sync_from_ddr(tcb);
-
-    /**
-     * 1.2 config ASID
-     * #reserved[8:11], dtcm_en[7], rd_en[6], wr_en[5], size[0:4]
-     * the ASID ctrl bits locate at low 12 bits in lo address
-     */
-    for (uint32_t i = 0; i < 4; i++)
-    {
-        tcb->asids[i].v32.lo = get_low_32(m_mem->get_asid_base(i) | ASID_RD | ASID_WR);
-        tcb->asids[i].v32.hi = get_high_32(m_mem->get_asid_base(i));
-    }
-
-    m_mem->write(m_init_tcb.pa, (const char*)tcb, sizeof(*tcb));
-
-    /* 1.3 config SegMMU if need */
     if (m_segmmu_num > 0)
     {
+        m_mem->read(m_init_tcb.pa, tcb, sizeof(tcb_t));
+        tcb->flag = (m_segmmu_tcb_num << 16) | TCB_FLAG_TASK_TYPE_INIT;
+        m_mem->write(m_init_tcb.pa, (const char *)tcb, sizeof(tcb_t));
+
         for (uint32_t i = 0; i < m_segmmu_tcb_num; i++)
         {
             SegMMUConfig &segmmu = m_segmmu_sec[i];
@@ -898,7 +877,66 @@ aipu_status_t aipudrv::JobV3::setup_tcbs()
                     (const char*)tcb, sizeof(*tcb));
             }
         }
+    } else if ((m_segmmu_num == 0) && !m_same_asid) {
+        m_mem->read(m_init_tcb.pa, tcb, sizeof(tcb_t));
+        tcb->flag = (m_segmmu_tcb_num << 16) | TCB_FLAG_TASK_TYPE_INIT;
+        m_mem->write(m_init_tcb.pa, (const char *)tcb, sizeof(tcb_t));
+
+        for (uint32_t i = 0; i < m_segmmu_tcb_num; i++)
+        {
+            if (i % 2 == 0)
+            {
+                memset(tcb, 0, sizeof(tcb_t));
+                tcb->smmu.ctrl = SEGMMU_REMAP_SHARE_EN | SEGMMU_REMAP_EN | SEGMMU_MEM_CTRL_EN;
+
+                /* handle the last one segmmu config */
+                if (i == m_segmmu_tcb_num - 1)
+                {
+                    m_mem->write(m_init_tcb.pa + (1 + i/2) * sizeof(tcb_t),
+                        (const char*)tcb, sizeof(*tcb));
+                    break;
+                }
+            } else {
+                tcb->next_core_smmu.ctrl = SEGMMU_REMAP_SHARE_EN | SEGMMU_REMAP_EN | SEGMMU_MEM_CTRL_EN;
+                m_mem->write(m_init_tcb.pa + (1 + i/2) * sizeof(tcb_t),
+                    (const char*)tcb, sizeof(*tcb));
+            }
+        }
     }
+
+    delete tcb;
+    return ret;
+}
+
+aipu_status_t aipudrv::JobV3::setup_tcbs()
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    tcb_t* tcb = new tcb_t;
+    uint32_t core_id = 0;
+
+    /* 1. setup init TCB 0 */
+    memset(tcb, 0, sizeof(tcb_t));
+    tcb->flag = TCB_FLAG_TASK_TYPE_INIT;
+    tcb->next = get_low_32(m_sg_job[0].tasks[0].tcb.pa);
+    tcb->igrid_id = m_grid_id;
+
+    /* 1.1 config GM if need */
+    setup_gm_sync_from_ddr(tcb);
+
+    /**
+     * 1.2 config ASID
+     * #reserved[8:11], dtcm_en[7], rd_en[6], wr_en[5], size[0:4]
+     * the ASID ctrl bits locate at low 12 bits in lo address
+     */
+    for (uint32_t i = 0; i < 4; i++)
+    {
+        tcb->asids[i].v32.lo = get_low_32(m_mem->get_asid_base(i) | ASID_RD | ASID_WR);
+        tcb->asids[i].v32.hi = get_high_32(m_mem->get_asid_base(i));
+    }
+    m_mem->write(m_init_tcb.pa, (const char*)tcb, sizeof(*tcb));
+
+    /* 1.3 config SegMMU if need */
+    config_smmu_tcb();
 
     /* 2. setup task TCBs */
     for (uint32_t i = 0; i < get_graph().m_subgraphs.size(); i++)
@@ -1282,9 +1320,9 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     dump_size = m_tot_tcb_cnt * sizeof(tcb_t);
     snprintf(dump_name, 128, "%s/%s.tcb", m_dump_dir.c_str(), m_dump_prefix.c_str());
     m_dump_tcb_info[0] = std::make_tuple(m_dump_dir + "/init.tcb", dump_pa,
-        (m_segmmu_tcb_num + 1) / 2 * sizeof(tcb_t));
+        (1 + (m_segmmu_tcb_num + 1) / 2) * sizeof(tcb_t));
     m_dump_tcb_info[1] = std::make_tuple(m_dump_dir + "/task.tcb",
-        dump_pa + std::get<2>(m_dump_tcb_info[0]), dump_size - sizeof(tcb_t));
+        dump_pa + std::get<2>(m_dump_tcb_info[0]), dump_size - std::get<2>(m_dump_tcb_info[0]));
     m_mem->dump_file(std::get<1>(m_dump_tcb_info[0]), std::get<0>(m_dump_tcb_info[0]).c_str(),
         std::get<2>(m_dump_tcb_info[0]));
     m_mem->dump_file(std::get<1>(m_dump_tcb_info[1]), std::get<0>(m_dump_tcb_info[1]).c_str(),
