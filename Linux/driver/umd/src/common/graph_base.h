@@ -74,6 +74,7 @@ protected:
     uint32_t m_remap_flag = 0;
     uint32_t m_sram_flag = 0;
     uint32_t m_wt_mem_region = AIPU_MEM_REGION_DEFAULT;
+    std::set<uint32_t> m_wt_idxes;
 
 protected:
     DeviceBase* m_dev;
@@ -192,6 +193,11 @@ public:
     void set_weight_region(uint32_t mem_region)
     {
         m_wt_mem_region = mem_region;
+    }
+
+    void set_weight_idx(std::set<uint32_t> &_weight_idx)
+    {
+        m_wt_idxes = _weight_idx;
     }
 
     uint32_t get_weight_region()

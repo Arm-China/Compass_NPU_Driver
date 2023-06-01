@@ -247,15 +247,30 @@ enum {
  *       free space is enough large, you can set `wt_mem_region` to try to allocate
  *       buffer from it. if it fail to allocate buffer from marked region, it will try
  *       according to region order: DTCM->SRAM->DDR.
+ *
+ * @note fm_idxes
+ *       the indexes of feature map tensors, those tensor buffers will firstly try to be allocated from
+ *       region specified in 'fm_mem_region'.
+ *
+ * @note wt_idxes
+ *       the indexes of weight tensors, those tensor buffers firstly try to be allocated from
+ *       region specified in 'wt_mem_region'.
  */
-typedef union aipu_create_job_cfg {
-    uint32_t misc = 0;
-    struct {
-        uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for aipu v3 */
-        uint8_t qos_level:4;     /**< defalut 0, low priority, only for aipu v3 */
-        uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
-        uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
+typedef struct aipu_create_job_cfg {
+    union {
+        uint32_t misc = 0;
+        struct {
+            uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for aipu v3 */
+            uint8_t qos_level:4;     /**< defalut 0, low priority, only for aipu v3 */
+            uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
+            uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
+        };
     };
+
+    int32_t *fm_idxes;      /**< specify feature maps allocated from 'fm_mem_region' */
+    int32_t fm_idxes_cnt;   /**< the emement number in fm_idx_array */
+    int32_t *wt_idxes;      /**< specify weights allocated from 'wt_mem_region' */
+    int32_t wt_idxes_cnt;   /**< the emement number in wt_idx_array */
 } aipu_create_job_cfg_t;
 
 /**

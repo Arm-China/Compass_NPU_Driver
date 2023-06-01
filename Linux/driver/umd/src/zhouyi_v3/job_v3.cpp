@@ -36,13 +36,28 @@ aipudrv::JobV3::JobV3(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_
     m_bind_cmdpool_id = 0xffffffff;
 #endif
 
-    graph.set_weight_region(config->wt_mem_region);
     m_segmmu_num = get_graph().m_segmmu_num;
     m_gm = new GM_V3(*this);
 
     if (m_mem->get_asid_base(0) != m_mem->get_asid_base(1))
         m_same_asid = false;
 
+    graph.set_weight_region(config->wt_mem_region);
+
+    if (config->fm_idxes)
+    {
+        for (int i = 0; config->fm_idxes_cnt; i++)
+            m_fm_idxes.insert(config->fm_idxes[i]);
+    }
+
+    if (config->wt_idxes)
+    {
+        for (int i = 0; config->wt_idxes_cnt; i++)
+            m_wt_idxes.insert(config->wt_idxes[i]);
+
+        if (m_wt_idxes.size() > 0)
+            graph.set_weight_idx(m_wt_idxes);
+    }
 }
 
 aipudrv::JobV3::~JobV3()
@@ -322,8 +337,12 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                         {
                             ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, bufferDesc);
                         } else {
-                            ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
-                                buf_name.c_str(), m_fm_mem_region);
+                            if (m_fm_idxes.count(k) == 1)
+                                ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
+                                    buf_name.c_str(), m_fm_mem_region);
+                            else
+                                ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
+                                    buf_name.c_str(), AIPU_MEM_REGION_DEFAULT);
                         }
 
                         if (AIPU_STATUS_SUCCESS != ret)

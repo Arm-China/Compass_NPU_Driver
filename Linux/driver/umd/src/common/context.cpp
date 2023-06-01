@@ -728,7 +728,8 @@ out:
     return ret;
 }
 
-aipu_status_t aipudrv::MainContext::run_batch(GraphBase &graph, uint32_t queue_id, aipu_create_job_cfg_t *config)
+aipu_status_t aipudrv::MainContext::run_batch(GraphBase &graph, uint32_t queue_id,
+    aipu_create_job_cfg_t *config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS, oldret = AIPU_STATUS_SUCCESS;
     JOB_ID job_id;

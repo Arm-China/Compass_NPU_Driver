@@ -121,6 +121,9 @@ private:
      */
     std::vector<SubGraphTask *> m_sgt_allocated;
 
+    std::set<uint32_t> m_fm_idxes;
+    std::set<uint32_t> m_wt_idxes;
+
 public:
     GraphV3& get_graph()
     {

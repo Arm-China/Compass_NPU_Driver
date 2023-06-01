@@ -23,6 +23,7 @@ aipudrv::GraphBase::GraphBase(void* ctx, GRAPH_ID id, DeviceBase* dev):
 
 aipudrv::GraphBase::~GraphBase()
 {
+    m_wt_idxes.clear();
     pthread_rwlock_destroy(&m_lock);
     pthread_rwlock_destroy(&m_alloc_wt_lock);
     pthread_rwlock_destroy(&m_batch_queue_lock);
