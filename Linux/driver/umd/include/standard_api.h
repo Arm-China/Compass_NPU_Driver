@@ -248,6 +248,9 @@ enum {
  *       buffer from it. if it fail to allocate buffer from marked region, it will try
  *       according to region order: DTCM->SRAM->DDR.
  *
+ *       if it hopes to allcate weight buffer from SRAM, it has to confirm the SRAM range locates in
+ *       ASID1 address scope.
+ *
  * @note fm_idxes
  *       the indexes of feature map tensors, those tensor buffers will firstly try to be allocated from
  *       region specified in 'fm_mem_region'.
@@ -255,12 +258,18 @@ enum {
  * @note wt_idxes
  *       the indexes of weight tensors, those tensor buffers firstly try to be allocated from
  *       region specified in 'wt_mem_region'.
+ *
+ * @note dbg_dispatch and dbg_core_id
+ *       it can dispatch job to some core for debug. it needs not to set them in normal cases.
  */
 typedef struct aipu_create_job_cfg {
     union {
         uint32_t misc = 0;
         struct {
             uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for aipu v3 */
+            uint8_t dbg_dispatch:1;  /**< debug dispatch flag, set 1 to indicate specify job
+                                          to debug core to run */
+            uint8_t dbg_core_id:3;   /**< specify debug core id, [0, max_core_id in cluster] */
             uint8_t qos_level:4;     /**< defalut 0, low priority, only for aipu v3 */
             uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
             uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */

@@ -93,6 +93,8 @@ private:
     uint32_t    m_core_cnt = 0;
     uint32_t    m_qos = 0;
     uint32_t    m_fm_mem_region = AIPU_MEM_REGION_DEFAULT;
+    bool        m_dbg_dispatch = false;
+    uint32_t    m_core_id = 0;
     bool        m_is_defer_run = false;
     bool        m_do_trigger = false;
 

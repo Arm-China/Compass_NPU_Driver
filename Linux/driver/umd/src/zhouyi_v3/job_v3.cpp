@@ -23,7 +23,9 @@
 #endif
 aipudrv::JobV3::JobV3(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_create_job_cfg_t *config):
     JobBase(ctx, graph, dev), m_partition_id(config->partition_id), m_qos(config->qos_level),
-    m_fm_mem_region(config->fm_mem_region)
+    m_fm_mem_region(config->fm_mem_region), m_dbg_dispatch(config->dbg_dispatch),
+    m_core_id(config->dbg_core_id)
+
 {
     m_tcbs.reset();
     m_init_tcb.init(0);
@@ -1066,6 +1068,13 @@ aipu_status_t aipudrv::JobV3::schedule()
         ? AIPU_JOB_EXEC_FLAG_QOS_FAST : AIPU_JOB_EXEC_FLAG_QOS_SLOW;
     desc.kdesc.exec_flag |= (m_sg_cnt == 1)
         ? AIPU_JOB_EXEC_FLAG_SINGLE_GROUP : AIPU_JOB_EXEC_FLAG_MULTI_GROUP;
+    if (m_dbg_dispatch)
+    {
+        desc.kdesc.exec_flag |= AIPU_JOB_EXEC_FLAG_DBG_DISPATCH;
+        desc.kdesc.core_id = m_core_id;
+    } else {
+        desc.kdesc.core_id = 0;
+    }
 
     desc.kdesc.enable_poll_opt = !m_hw_cfg->poll_in_commit_thread;
 
