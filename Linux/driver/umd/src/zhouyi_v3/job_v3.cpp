@@ -1082,7 +1082,7 @@ aipu_status_t aipudrv::JobV3::schedule()
 
     /* small model share one common init-tcb on HW, skip the head init-tcb */
     #ifndef SIMULATION
-    if ((m_sg_cnt == 1) && (m_segmmu_num == 0))
+    if ((m_sg_cnt == 1) && (m_segmmu_num == 0) && m_same_asid)
         desc.kdesc.head_tcb_pa = m_init_tcb.pa + sizeof(tcb_t);
     #endif
 
