@@ -162,6 +162,47 @@ typedef struct {
 } aipu_global_config_hw_t;
 
 /**
+ * @struct callback_args_t
+ *
+ * @brief job callback arguments, 'func_arg' is user input vague argument which
+ *        can be ignored, 'job_id' and 'job_state' is get from KMD for done job.
+ *
+ * @param[in]  func_arg  callback function's input parameter
+ * @param[out] job_id    job id for just done
+ * @param[out] job_state job'd state DONE or EXCEPTION
+ */
+typedef struct {
+    void *func_arg;
+    uint64_t job_id;
+    aipu_job_status_t job_state;
+} callback_args_t;
+
+/**
+ * function prototype for job's callback handler
+ *
+ * @retval 0 for successfully calling, other value for abnormally calling
+ */
+typedef int (*aipu_job_callback_func)(callback_args_t* arg);
+
+/**
+ * @struct callback_wrapper_t
+ *
+ * @brief Wrapper for job's callback function and arguments
+ *
+ * @param[in] cb_func callback function pointer
+ * @param[in] cb_args the arguments for cb_func
+ *
+ * @note Authough it can get done job's information in advance, it still needs to call
+ *       aipu_get_job_status for each committed job to clean UMD internal state. it isn't
+ *       allowed to call aipu_clean_job before aipu_get_job_status for specific job in any
+ *       case (single thread/multiple theads).
+ */
+typedef struct {
+    aipu_job_callback_func cb_func;
+    callback_args_t *cb_args;
+} callback_wrapper_t;
+
+/**
  * @brief AIPU core info struct; returned by UMD API for AIPU debugger to use
  */
 typedef struct aipu_core_info {
@@ -206,15 +247,39 @@ enum {
  *       free space is enough large, you can set `wt_mem_region` to try to allocate
  *       buffer from it. if it fail to allocate buffer from marked region, it will try
  *       according to region order: DTCM->SRAM->DDR.
+ *
+ *       if it hopes to allcate weight buffer from SRAM, it has to confirm the SRAM range locates in
+ *       ASID1 address scope.
+ *
+ * @note fm_idxes
+ *       the indexes of feature map tensors, those tensor buffers will firstly try to be allocated from
+ *       region specified in 'fm_mem_region'.
+ *
+ * @note wt_idxes
+ *       the indexes of weight tensors, those tensor buffers firstly try to be allocated from
+ *       region specified in 'wt_mem_region'.
+ *
+ * @note dbg_dispatch and dbg_core_id
+ *       it can dispatch job to some core for debug. it needs not to set them in normal cases.
  */
-typedef union aipu_create_job_cfg {
-    uint32_t misc = 0;
-    struct {
-        uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for aipu v3 */
-        uint8_t qos_level:4;     /**< defalut 0, low priority, only for aipu v3 */
-        uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
-        uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
+typedef struct aipu_create_job_cfg {
+    union {
+        uint32_t misc = 0;
+        struct {
+            uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for aipu v3 */
+            uint8_t dbg_dispatch:1;  /**< debug dispatch flag, set 1 to indicate specify job
+                                          to debug core to run */
+            uint8_t dbg_core_id:3;   /**< specify debug core id, [0, max_core_id in cluster] */
+            uint8_t qos_level:4;     /**< defalut 0, low priority, only for aipu v3 */
+            uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
+            uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
+        };
     };
+
+    int32_t *fm_idxes;      /**< specify feature maps allocated from 'fm_mem_region' */
+    int32_t fm_idxes_cnt;   /**< the emement number in fm_idxes */
+    int32_t *wt_idxes;      /**< specify weights allocated from 'wt_mem_region' */
+    int32_t wt_idxes_cnt;   /**< the emement number in wt_idxes */
 } aipu_create_job_cfg_t;
 
 /**
@@ -256,6 +321,8 @@ enum {
     AIPU_IOCTL_MARK_SHARED_TENSOR = 0x255,
     AIPU_IOCTL_SET_SHARED_TENSOR,
     AIPU_IOCTL_SET_PROFILE,
+    AIPU_IOCTL_ALLOC_DMABUF,
+    AIPU_IOCTL_FREE_DMABUF,
 };
 
 /**
@@ -544,7 +611,7 @@ aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t job);
  * @note This API should be used by the application after aipu_flush_job successfully returns.
  */
 aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t job,
-    aipu_job_status_t* status, int32_t timeout = 0);
+    aipu_job_status_t* status, int32_t timeout = 0, callback_wrapper_t *cb_wrap = nullptr);
 
 /**
  * @brief This API is used to clean a finished job object scheduled by aipu_finish_job/aipu_flush_job
@@ -830,55 +897,6 @@ aipu_status_t aipu_debugger_free(const aipu_ctx_handle_t* ctx, void* va);
 aipu_status_t aipu_printf(char* printf_base, char* redirect_file);
 
 /**
- * @brief This API is used to import dma-buf buffers allocated by other device drivers to NPU driver.
- *
- * @param[in] ctx    Pointer to a context handle struct returned by aipu_init_context
- * @param[in] job_id Job ID returned by aipu_create_job
- * @param[in] type   Tensor type
- * @param[in] fds    Pointer to a memory location allocated by application where stores
- *                       the file descriptors representing dma-buf tensor buffers
- *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
- * @retval AIPU_STATUS_ERROR_INVALID_TENSOR_TYPE
- * @retval AIPU_STATUS_ERROR_OP_NOT_SUPPORTED
- * @retval AIPU_STATUS_ERROR_INVALID_OP
- *
- * @note The file descriptors should be allocated by another device driver, and indexed in
- *       tensor IDs' order in the fds array.
- * @note Applications should import all fds of the specified tensor type in one importing operation.
- * @note AIPU v1/v2/v3 does not support this feature.
- * @note X86-simulation does not support this feature.
- */
-aipu_status_t aipu_import_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipu_tensor_type_t type, int* fds);
-
-/**
- * @brief This API is used to export dma-buf buffers allocated by NPU driver to other device drivers.
- *
- * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
- * @param[in]  job_id Job ID returned by aipu_create_job
- * @param[in]  type   Tensor type
- * @param[out] fds    Pointer to a memory location allocated by application where UMD stores
- *                        the file descriptors representing dma-buf tensor buffers
- *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
- * @retval AIPU_STATUS_ERROR_INVALID_TENSOR_TYPE
- * @retval AIPU_STATUS_ERROR_OP_NOT_SUPPORTED
- * @retval AIPU_STATUS_ERROR_INVALID_OP
- *
- * @note The file descriptors are allocated by NPU driver, and indexed in tensor IDs' order in the fds array.
- * @note Applications should allocate enough space for the fds pointer for all tensors of the specified type.
- * @note AIPU v1/v2/v3 does not support this feature.
- * @note X86-simulation does not support this feature.
- */
-aipu_status_t aipu_export_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipu_tensor_type_t type, int* fds);
-
-/**
  * @brief This API is used to get NPU's ARCH information.
  *
  * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
@@ -1026,6 +1044,12 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
  *           dynamically enable/disable profiling feature of aipu v3 simulation. arg {1/0}
  *           1: enable profiling
  *           0: disable profiling
+ *      AIPU_IOCTL_ALLOC_DMABUF
+ *           request dma_buf from KMD. arg {struct aipu_dma_buf_request}
+ *           aipu_dma_buf_request->bytes: request size (filled by UMD)
+ *           aipu_dma_buf_request->fd: fd corresponding to dma_buf (filled by KMD)
+ *      AIPU_IOCTL_FREE_DMABUF
+ *           free a dma_buf with its fd. arg { fd }
  */
 aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd, void *arg = nullptr);
 
