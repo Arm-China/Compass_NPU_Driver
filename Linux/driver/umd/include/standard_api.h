@@ -586,7 +586,8 @@ aipu_status_t aipu_finish_job(const aipu_ctx_handle_t* ctx, uint64_t job, int32_
  *
  * @note A flushed job cannot be flushed again before the previous scheduled one is done.
  */
-aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t job);
+aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t job,
+    callback_wrapper_t *cb_wrap = nullptr);
 
 /**
  * @brief This API is used to get the execution status of a flushed job (non-blocking)
@@ -611,7 +612,7 @@ aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t job);
  * @note This API should be used by the application after aipu_flush_job successfully returns.
  */
 aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t job,
-    aipu_job_status_t* status, int32_t timeout = 0, callback_wrapper_t *cb_wrap = nullptr);
+    aipu_job_status_t* status, int32_t timeout = 0);
 
 /**
  * @brief This API is used to clean a finished job object scheduled by aipu_finish_job/aipu_flush_job

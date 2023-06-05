@@ -115,6 +115,9 @@ protected:
 protected:
     uint32_t m_status = AIPU_JOB_STATUS_NO_STATUS;
 
+    /* call back function for handling job self */
+    callback_wrapper_t *cb_wrap = nullptr;
+
 protected:
     const aipu_global_config_simulation_t* m_cfg;
     const aipu_global_config_hw_t* m_hw_cfg;
@@ -165,8 +168,7 @@ public:
     aipu_status_t mark_shared_tensor(aipu_tensor_type_t type, uint32_t tensor, uint64_t &pa_addr);
     aipu_status_t assign_shared_tensor(aipu_tensor_type_t type, uint32_t tensor, uint64_t share_pa_addr);
     virtual aipu_status_t get_status(aipu_job_status_t* status);
-    virtual aipu_status_t get_status_blocking(aipu_job_status_t* status, int32_t time_out,
-        callback_wrapper_t *cb_wrap = nullptr);
+    virtual aipu_status_t get_status_blocking(aipu_job_status_t* status, int32_t time_out);
     aipu_status_t config_mem_dump(uint64_t types, const aipu_job_config_dump_t* config);
     virtual void dumpcfg_alljob() {}
     virtual aipu_status_t specify_io_buffer(uint32_t type, uint32_t index,
@@ -196,6 +198,21 @@ public:
     JOB_ID get_id()
     {
         return m_id;
+    }
+
+    Graph& get_base_graph()
+    {
+        return static_cast<Graph&>(m_graph);
+    }
+
+    void set_job_cb(callback_wrapper_t *_cb_wrap)
+    {
+        cb_wrap = _cb_wrap;
+    }
+
+    callback_wrapper_t *get_job_cb()
+    {
+        return cb_wrap;
     }
 
 public:

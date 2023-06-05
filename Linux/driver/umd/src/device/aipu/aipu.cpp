@@ -210,11 +210,14 @@ aipu_status_t aipudrv::Aipu::schedule(const JobDesc& job)
 }
 
 aipu_ll_status_t aipudrv::Aipu::get_status(std::vector<aipu_job_status_desc>& jobs_status,
-    uint32_t max_cnt, bool of_this_thread, callback_wrapper_t *cb_wrap)
+    uint32_t max_cnt, bool of_this_thread, void *jobbase)
 {
     aipu_ll_status_t ret = AIPU_LL_STATUS_SUCCESS;
     int kret = 0;
     aipu_job_status_query status_query;
+    JobBase *job = (JobBase *)jobbase;
+    JobBase *done_job = nullptr;
+    callback_wrapper_t *cb_wrap = nullptr;
 
     status_query.of_this_thread = of_this_thread;
     status_query.max_cnt = max_cnt;
@@ -231,13 +234,18 @@ aipu_ll_status_t aipudrv::Aipu::get_status(std::vector<aipu_job_status_desc>& jo
     {
         m_job_sts_queue.push_q(status_query.status[i]);
 
-        /* deliver done job to backend timely */
-        if (cb_wrap != nullptr && cb_wrap->cb_func != nullptr
-            && cb_wrap->cb_args != nullptr)
+        done_job = job->get_base_graph().get_job(status_query.status[i].job_id);
+        if (done_job != nullptr)
         {
-            cb_wrap->cb_args->job_id = status_query.status[i].job_id;
-            cb_wrap->cb_args->job_state = (aipu_job_status_t)status_query.status[i].state;
-            cb_wrap->cb_func(cb_wrap->cb_args);
+            cb_wrap = done_job->get_job_cb();
+            /* deliver done job to backend timely */
+            if (cb_wrap != nullptr && cb_wrap->cb_func != nullptr
+                && cb_wrap->cb_args != nullptr)
+            {
+                cb_wrap->cb_args->job_id = status_query.status[i].job_id;
+                cb_wrap->cb_args->job_state = (aipu_job_status_t)status_query.status[i].state;
+                cb_wrap->cb_func(cb_wrap->cb_args);
+            }
         }
     }
 
@@ -253,8 +261,7 @@ aipu_ll_status_t aipudrv::Aipu::get_status(std::vector<aipu_job_status_desc>& jo
 }
 
 aipu_ll_status_t aipudrv::Aipu::poll_status(std::vector<aipu_job_status_desc>& jobs_status,
-    uint32_t max_cnt, int32_t time_out, bool of_this_thread, void *jobbase,
-    callback_wrapper_t *cb_wrap)
+    uint32_t max_cnt, int32_t time_out, bool of_this_thread, void *jobbase)
 {
     aipu_ll_status_t ret = AIPU_LL_STATUS_SUCCESS;
     int kret = 0;
@@ -289,7 +296,7 @@ aipu_ll_status_t aipudrv::Aipu::poll_status(std::vector<aipu_job_status_desc>& j
 
         /* normally return */
         if ((poll_list.revents & POLLIN) == POLLIN)
-            ret = get_status(jobs_status, max_cnt, of_this_thread, cb_wrap);
+            ret = get_status(jobs_status, max_cnt, of_this_thread, jobbase);
 
         if (m_job_sts_queue.is_job_exist(job->get_id()))
         {

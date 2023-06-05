@@ -283,27 +283,8 @@ aipu_status_t aipu_finish_job(const aipu_ctx_handle_t* ctx, uint64_t job_id, int
     return ret;
 }
 
-aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t id)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::JobBase* job = nullptr;
-
-    if (nullptr == ctx)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    if (!aipudrv::valid_job_id(id))
-        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
-
-    ret = api_get_job(ctx, id, &job);
-    if (AIPU_STATUS_SUCCESS != ret)
-        return ret;
-
-    /* callback to be implemented */
-    return job->schedule();
-}
-
-aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t id,
-    aipu_job_status_t* status, int32_t time_out, callback_wrapper_t *cb_wrap)
+aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t id,
+    callback_wrapper_t *cb_wrap)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     aipudrv::JobBase* job = nullptr;
@@ -325,7 +306,29 @@ aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t id,
         return AIPU_STATUS_ERROR_NULL_PTR;
     }
 
-    return job->get_status_blocking(status, time_out, cb_wrap);
+    job->set_job_cb(cb_wrap);
+
+    /* callback to be implemented */
+    return job->schedule();
+}
+
+aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t id,
+    aipu_job_status_t* status, int32_t time_out)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    aipudrv::JobBase* job = nullptr;
+
+    if (nullptr == ctx)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
+    if (!aipudrv::valid_job_id(id))
+        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+
+    ret = api_get_job(ctx, id, &job);
+    if (AIPU_STATUS_SUCCESS != ret)
+        return ret;
+
+    return job->get_status_blocking(status, time_out);
 }
 
 aipu_status_t aipu_clean_job(const aipu_ctx_handle_t* ctx, uint64_t id)

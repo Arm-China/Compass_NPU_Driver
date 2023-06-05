@@ -61,8 +61,7 @@ aipu_status_t aipudrv::JobBase::get_status(aipu_job_status_t* status)
     return m_ctx->log_rt_err_msg(err);
 }
 
-aipu_status_t aipudrv::JobBase::get_status_blocking(aipu_job_status_t* status, int32_t time_out,
-    callback_wrapper_t *cb_wrap)
+aipu_status_t aipudrv::JobBase::get_status_blocking(aipu_job_status_t* status, int32_t time_out)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     std::vector<aipu_job_status_desc> jobs_status;
@@ -75,7 +74,7 @@ aipu_status_t aipudrv::JobBase::get_status_blocking(aipu_job_status_t* status, i
         jobs_status.push_back(desc);
     } else {
         ret = convert_ll_status(m_dev->poll_status(jobs_status, 1, time_out,
-            m_hw_cfg->poll_in_commit_thread, this, cb_wrap));
+            m_hw_cfg->poll_in_commit_thread, this));
         if (ret != AIPU_STATUS_SUCCESS)
             return ret;
     }

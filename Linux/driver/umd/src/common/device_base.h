@@ -174,8 +174,7 @@ public:
     }
     /* blocking with timeout */
     virtual aipu_ll_status_t poll_status(std::vector<aipu_job_status_desc>& jobs_status,
-        uint32_t max_cnt, int32_t time_out, bool of_this_thread, void *jobbase = nullptr,
-        callback_wrapper_t *cb_wrap = nullptr)
+        uint32_t max_cnt, int32_t time_out, bool of_this_thread, void *jobbase = nullptr)
     {
         return AIPU_LL_STATUS_SUCCESS;
     }
