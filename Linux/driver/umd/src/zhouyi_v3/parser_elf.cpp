@@ -124,7 +124,6 @@ aipu_status_t aipudrv::ParserELF::parse_reuse_section(char* bss, uint32_t count,
         section_ir.load_src = nullptr;
         section_ir.align_in_page = ALIGN_ADDR(reuse_desc->align_bytes);
         section_ir.size = reuse_desc->size;
-        section_ir.support_dma_buf = reuse_desc->type != 0;
         subgraph.private_buffers.push_back(section_ir);
     }
 

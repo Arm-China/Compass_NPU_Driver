@@ -110,7 +110,6 @@ protected:
     std::string m_dump_prefix = "temp";
     std::string m_dump_output_prefix = "temp";
     std::string m_dump_misc_prefix = "";
-    bool m_support_dma_buf = false;
     int m_profile_fd = -1;
 
 protected:
@@ -182,14 +181,6 @@ public:
     };
     virtual aipu_status_t bind_core(uint32_t core_id) = 0;
     virtual aipu_status_t debugger_run()
-    {
-        return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
-    }
-    virtual aipu_status_t import_buffers(aipu_tensor_type_t type, int* fds)
-    {
-        return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
-    }
-    virtual aipu_status_t export_buffers(aipu_tensor_type_t type, int* fds)
     {
         return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
     }

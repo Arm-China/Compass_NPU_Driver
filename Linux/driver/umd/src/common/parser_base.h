@@ -187,7 +187,6 @@ struct GraphIOTensorDesc {
     float    scale;
     float    zero_point;
     aipu_data_type_t data_type;
-    bool support_dma_buf;
 
     /**
      * for dumping data from dma_buf, it needs below
@@ -213,7 +212,7 @@ private:
     template<typename sub_section_desc_type>
     aipu_status_t fill_io_tensor_desc_inner(uint32_t reuse_sec_iter,
         uint32_t sub_sec_iter, const sub_section_desc_type& sub_section_load,
-        struct GraphIOTensors& desc, bool support_dma_buf) const;
+        struct GraphIOTensors& desc) const;
 
 protected:
     aipu_status_t parse_bss_section(char* bss, uint32_t size, uint32_t id,

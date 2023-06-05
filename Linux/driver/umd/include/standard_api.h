@@ -277,9 +277,9 @@ typedef struct aipu_create_job_cfg {
     };
 
     int32_t *fm_idxes;      /**< specify feature maps allocated from 'fm_mem_region' */
-    int32_t fm_idxes_cnt;   /**< the emement number in fm_idx_array */
+    int32_t fm_idxes_cnt;   /**< the emement number in fm_idxes */
     int32_t *wt_idxes;      /**< specify weights allocated from 'wt_mem_region' */
-    int32_t wt_idxes_cnt;   /**< the emement number in wt_idx_array */
+    int32_t wt_idxes_cnt;   /**< the emement number in wt_idxes */
 } aipu_create_job_cfg_t;
 
 /**
@@ -895,55 +895,6 @@ aipu_status_t aipu_debugger_free(const aipu_ctx_handle_t* ctx, void* va);
  *       Only support aipu v1/v2.
  */
 aipu_status_t aipu_printf(char* printf_base, char* redirect_file);
-
-/**
- * @brief This API is used to import dma-buf buffers allocated by other device drivers to NPU driver.
- *
- * @param[in] ctx    Pointer to a context handle struct returned by aipu_init_context
- * @param[in] job_id Job ID returned by aipu_create_job
- * @param[in] type   Tensor type
- * @param[in] fds    Pointer to a memory location allocated by application where stores
- *                       the file descriptors representing dma-buf tensor buffers
- *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
- * @retval AIPU_STATUS_ERROR_INVALID_TENSOR_TYPE
- * @retval AIPU_STATUS_ERROR_OP_NOT_SUPPORTED
- * @retval AIPU_STATUS_ERROR_INVALID_OP
- *
- * @note The file descriptors should be allocated by another device driver, and indexed in
- *       tensor IDs' order in the fds array.
- * @note Applications should import all fds of the specified tensor type in one importing operation.
- * @note AIPU v1/v2/v3 does not support this feature.
- * @note X86-simulation does not support this feature.
- */
-aipu_status_t aipu_import_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipu_tensor_type_t type, int* fds);
-
-/**
- * @brief This API is used to export dma-buf buffers allocated by NPU driver to other device drivers.
- *
- * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
- * @param[in]  job_id Job ID returned by aipu_create_job
- * @param[in]  type   Tensor type
- * @param[out] fds    Pointer to a memory location allocated by application where UMD stores
- *                        the file descriptors representing dma-buf tensor buffers
- *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
- * @retval AIPU_STATUS_ERROR_INVALID_TENSOR_TYPE
- * @retval AIPU_STATUS_ERROR_OP_NOT_SUPPORTED
- * @retval AIPU_STATUS_ERROR_INVALID_OP
- *
- * @note The file descriptors are allocated by NPU driver, and indexed in tensor IDs' order in the fds array.
- * @note Applications should allocate enough space for the fds pointer for all tensors of the specified type.
- * @note AIPU v1/v2/v3 does not support this feature.
- * @note X86-simulation does not support this feature.
- */
-aipu_status_t aipu_export_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipu_tensor_type_t type, int* fds);
 
 /**
  * @brief This API is used to get NPU's ARCH information.

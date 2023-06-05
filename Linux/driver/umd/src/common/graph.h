@@ -39,7 +39,6 @@ struct GraphSectionDesc {
     uint32_t relative_addr;
     uint32_t type;                /**< weight const or zerocpy_const(15) */
     uint32_t slot_index;
-    bool support_dma_buf;
     std::vector<GraphSubSectionDesc> sub_sections; /**< sub-section(s) in this section */
     void init()                   /**< section initializer */
     {
@@ -50,7 +49,6 @@ struct GraphSectionDesc {
         relative_addr = 0;
         type = 0;
         slot_index = 0;
-        support_dma_buf = false;
         sub_sections.clear();
     }
 };

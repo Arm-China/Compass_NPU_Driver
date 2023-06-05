@@ -176,8 +176,6 @@ public:
     #endif
 
     void dump_specific_buffers();
-    aipu_status_t import_buffers(aipu_tensor_type_t type, int* fds);
-    aipu_status_t export_buffers(aipu_tensor_type_t type, int* fds);
 
 public:
     /* for simulation, record which cmdpool this job is committed to */

@@ -290,8 +290,7 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
             BufferDesc buf;
             buf.reset();
 
-            /* FIX ME: type */
-            if ((section_desc.support_dma_buf == false) && (section_desc.size != 0))
+            if (section_desc.size != 0)
             {
                 std::string buf_name = "priv_" + std::to_string(sg_idx) + "_" + std::to_string(k);
 
@@ -329,8 +328,7 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                 } else {
                     bufferDesc.reset();
 
-                    /* FIX ME: type */
-                    if ((section_desc.support_dma_buf == false) && (section_desc.size != 0))
+                    if (section_desc.size != 0)
                     {
                         std::string buf_name = "reuse_" + std::to_string(k);
 
@@ -1723,30 +1721,6 @@ void aipudrv::JobV3::dumpcfg_alljob()
     ofsmt.close();
 }
 #endif
-
-aipu_status_t aipudrv::JobV3::import_buffers(aipu_tensor_type_t type, int* fds)
-{
-    if ((type != AIPU_TENSOR_TYPE_INPUT) && (type != AIPU_TENSOR_TYPE_OUTPUT))
-        return AIPU_STATUS_ERROR_INVALID_TENSOR_TYPE;
-
-    if (m_support_dma_buf == false)
-        return AIPU_STATUS_ERROR_INVALID_OP;
-
-    /* TBD */
-    return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
-}
-
-aipu_status_t aipudrv::JobV3::export_buffers(aipu_tensor_type_t type, int* fds)
-{
-    if ((type != AIPU_TENSOR_TYPE_INPUT) && (type != AIPU_TENSOR_TYPE_OUTPUT))
-        return AIPU_STATUS_ERROR_INVALID_TENSOR_TYPE;
-
-    if (m_support_dma_buf == false)
-        return AIPU_STATUS_ERROR_INVALID_OP;
-
-    /* TBD */
-    return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
-}
 
 aipu_status_t aipudrv::JobV3::bind_core(uint32_t partition_id)
 {

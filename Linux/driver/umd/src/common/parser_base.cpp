@@ -77,8 +77,8 @@ aipu_status_t aipudrv::ParserBase::sort_io_tensor(std::vector<GraphIOTensorDesc>
 
 template<typename sub_section_desc_v3_t>
 aipu_status_t aipudrv::ParserBase::fill_io_tensor_desc_inner(uint32_t reuse_sec_iter,
-    uint32_t sub_sec_iter, const sub_section_desc_v3_t& sub_section_load, struct GraphIOTensors& desc,
-    bool support_dma_buf) const
+    uint32_t sub_sec_iter, const sub_section_desc_v3_t& sub_section_load,
+    struct GraphIOTensors& desc) const
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     GraphIOTensorDesc io_desc;
@@ -90,7 +90,6 @@ aipu_status_t aipudrv::ParserBase::fill_io_tensor_desc_inner(uint32_t reuse_sec_
     io_desc.scale = sub_section_load.scale;
     io_desc.zero_point = sub_section_load.zero_point;
     io_desc.data_type = (aipu_data_type_t)sub_section_load.data_type;
-    io_desc.support_dma_buf = support_dma_buf;
     io_desc.dmabuf_fd = -1;
     io_desc.dmabuf_size = 0;
     io_desc.offset_in_dmabuf = 0;
@@ -248,17 +247,11 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
         desc_load_addr = (char*)(desc_load_addr + sizeof(BSSReuseSectionDesc));
         for (uint32_t sub_sec_iter = 0; sub_sec_iter < reuse_desc_load.sub_section_cnt; sub_sec_iter++)
         {
-            bool support_dma_buf = false;
             GraphSubSectionDesc sub_desc_ir;
             if (umd_is_valid_ptr(load_lb, load_ub, desc_load_addr, sizeof(SubSectionDesc)))
                 memcpy(&sub_desc_load, desc_load_addr, sizeof(SubSectionDesc));
             else
                 goto overflow;
-
-            /* FIX ME: type = ? */
-            // if (((SECTION_TYPE_INPUT == sub_desc_load.type) || (SECTION_TYPE_OUTPUT == sub_desc_load.type)) &&
-            //     (reuse_desc_load.type != 0))
-            //     support_dma_buf = true;
 
             /* get io tensor info if this sub-section represents io */
             if ((SECTION_TYPE_INPUT == sub_desc_load.type) ||
@@ -271,7 +264,7 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
                 (SECTION_TYPE_SEGMMU == sub_desc_load.type))
             {
                 fill_io_tensor_desc_inner<SubSectionDesc>(reuse_sec_iter,
-                    sub_sec_iter, sub_desc_load, io, support_dma_buf);
+                    sub_sec_iter, sub_desc_load, io);
             }
 
             /* get subsection desc. */
@@ -299,7 +292,6 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
         section_ir.load_src = nullptr;
         section_ir.align_in_page = ALIGN_ADDR(reuse_desc_load.align_bytes);
         section_ir.size = reuse_desc_load.size;
-        section_ir.support_dma_buf = reuse_desc_load.type != 0;
         gobj.add_reuse_section(id, section_ir);
     }
 

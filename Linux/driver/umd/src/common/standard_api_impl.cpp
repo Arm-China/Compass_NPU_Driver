@@ -714,36 +714,6 @@ finish:
     return ret;
 }
 
-aipu_status_t aipu_import_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipu_tensor_type_t type, int* fds)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::JobBase* job = nullptr;
-
-    if (nullptr == ctx)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    ret = api_get_job(ctx, job_id, &job);
-    if (AIPU_STATUS_SUCCESS != ret)
-        return ret;
-
-    return job->import_buffers(type, fds);
-}
-
-aipu_status_t aipu_export_buffers(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipu_tensor_type_t type, int* fds)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::JobBase* job = nullptr;
-
-    if (nullptr == ctx)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    ret = api_get_job(ctx, job_id, &job);
-    if (AIPU_STATUS_SUCCESS != ret)
-        return ret;
-
-    return job->export_buffers(type, fds);
-}
-
 aipu_status_t aipu_get_target(const aipu_ctx_handle_t* ctx, char *target)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
