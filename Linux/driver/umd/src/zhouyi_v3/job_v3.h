@@ -126,6 +126,13 @@ private:
     std::set<uint32_t> m_fm_idxes;
     std::set<uint32_t> m_wt_idxes;
 
+    /**
+     * optimize reuse and priv_buffer allocation,
+     * reduce calling times of allocation interface.
+     */
+    BufferDesc m_top_priv_buf;
+    BufferDesc m_top_reuse_buf;
+
 public:
     GraphV3& get_graph()
     {
@@ -151,6 +158,7 @@ private:
     void          set_job_params(uint32_t sg_cnt, uint32_t task_per_sg, uint32_t remap, uint32_t core_cnt);
     aipu_status_t alloc_load_job_buffers();
     aipu_status_t free_job_buffers();
+    int alloc_subgraph_buffers_optimized();
     aipu_status_t alloc_subgraph_buffers();
     aipu_status_t init_per_task_data();
     aipu_status_t setup_tcbs();
