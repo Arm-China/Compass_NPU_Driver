@@ -40,11 +40,10 @@ aipu_status_t aipudrv::Graph::load(std::istream& gbin, uint32_t size, bool ver_c
     if (AIPU_STATUS_SUCCESS != ret)
         goto finish;
 
+    m_mem->dump_tracking_log_start();
     m_do_vcheck = ver_check;
     if (ver_check && !m_dev->has_target(m_arch, m_hw_version, m_hw_config, m_hw_revision))
         return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
-
-    m_mem->dump_tracking_log_start();
 
     /* alloc and load text buffer */
     if (m_btext.size != 0)

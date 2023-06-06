@@ -93,7 +93,7 @@ void aipudrv::MemoryBase::add_tracking(DEV_PA_64 pa, uint64_t size, MemOperation
 
     if (tracking.is_32_op)
     {
-        snprintf(f_log, 1024, "%-6u 0x%-16lx %-9s %-9s 0x%-8lx 0x%-8x",
+        snprintf(f_log, 1024, "%-6u 0x%-16lx %-14s %-9s 0x%-8lx 0x%-8x",
             m_tracking_idx,
             tracking.pa,
             tracking.log.c_str(),
@@ -102,7 +102,7 @@ void aipudrv::MemoryBase::add_tracking(DEV_PA_64 pa, uint64_t size, MemOperation
             tracking.data
         );
     } else {
-        snprintf(f_log, 1024, "%-6u 0x%-16lx %-9s %-9s 0x%-8lx %s",
+        snprintf(f_log, 1024, "%-6u 0x%-16lx %-14s %-9s 0x%-8lx %s",
             m_tracking_idx,
             tracking.pa,
             tracking.log.c_str(),
@@ -127,7 +127,7 @@ void aipudrv::MemoryBase::dump_tracking_log_start() const
 
     snprintf(log, 1024, "===========================Memory Info Dump============================");
     write_line(log);
-    snprintf(log, 1024, "No.    Address            Type      OP        Size       Data");
+    snprintf(log, 1024, "No.    Address            Type           OP        Size       Data");
     write_line(log);
     snprintf(log, 1024, "------------------------------------------------------------------");
     write_line(log);
