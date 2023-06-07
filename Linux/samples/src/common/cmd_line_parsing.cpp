@@ -142,6 +142,18 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
         }
     }
 
+    /* support multiple model binary */
+    temp = strtok(opt->bin_file_name, ",");
+    opt->bin_files.push_back(temp);
+    while (temp)
+    {
+        temp = strtok(nullptr, ",");
+        if (temp != nullptr)
+        {
+            opt->bin_files.push_back(temp);
+        }
+    }
+
     temp = strtok(opt->inputs_file_name, ",");
     opt->input_files.push_back(temp);
     while (temp)

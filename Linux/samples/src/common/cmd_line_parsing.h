@@ -16,8 +16,9 @@
 #define BUF_LEN 512
 
 typedef struct cmd_opt {
-    char bin_file_name[BUF_LEN];
-    char inputs_file_name[1000];
+    char bin_file_name[4096];
+    std::vector<std::string> bin_files;
+    char inputs_file_name[1024];
     char gt_file_name[BUF_LEN];
     char dump_dir[BUF_LEN];
     char simulator[BUF_LEN];

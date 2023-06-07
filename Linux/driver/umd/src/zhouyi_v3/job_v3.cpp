@@ -529,12 +529,9 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
                         section_desc.size, buffer) != 0)
                     {
                         ret = AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
-                        if (AIPU_STATUS_SUCCESS != ret)
-                        {
-                            retval = -2;
-                            LOG(LOG_ERR, "get shared buffer %d [fail]", k);
-                            goto add_sg;
-                        }
+                        retval = -2;
+                        LOG(LOG_ERR, "get shared buffer %d [fail]", k);
+                        goto add_sg;
                     }
                     bufferDesc = buffer.desc;
                 } else {
