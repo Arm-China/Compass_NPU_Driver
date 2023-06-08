@@ -317,6 +317,14 @@ public:
         return m_part_caps[0].config;
     }
 
+    uint32_t get_npu_core_cnt()
+    {
+        if (m_part_caps[0].cluster_cnt > 0)
+            return m_part_caps[0].clusters[0].core_cnt;
+        else
+            return 1;
+    }
+
 /**
  * indirectly call simulator's internal interface via this wrapper
  */

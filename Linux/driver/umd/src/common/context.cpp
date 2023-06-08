@@ -645,7 +645,14 @@ aipu_status_t aipudrv::MainContext::aipu_get_target(char *target)
             break;
         case AIPU_ISA_VERSION_ZHOUYI_V3:
             isa_version = "X2_";
-            config = 1204; // fix in future
+            if (m_dev->get_npu_core_cnt() == 3)
+            {
+                arch_cfg = "X2_1204MP3";
+                strncpy(target, arch_cfg.c_str(), 10);
+                return ret;
+            } else {
+                config = 1204;
+            }
             break;
         default:
             return AIPU_STATUS_ERROR_INVALID_CONFIG;
