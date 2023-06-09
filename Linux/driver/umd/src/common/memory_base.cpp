@@ -266,8 +266,10 @@ int aipudrv::MemoryBase::mem_read(uint64_t addr, void *dest, size_t size) const
 {
     int ret = -1;
     char* src = nullptr;
+    if(size == 0)
+        return 0;
 
-    if (pa_to_va(addr, size, &src) == 0)
+    if ((pa_to_va(addr, size, &src) == 0) && (dest != nullptr))
     {
         memcpy(dest, src, size);
         ret = size;
@@ -281,8 +283,10 @@ int aipudrv::MemoryBase::mem_write(uint64_t addr, const void *src, size_t size)
 {
     int ret = -1;
     char* dest = nullptr;
+    if(size == 0)
+        return 0;
 
-    if (pa_to_va(addr, size, &dest) == 0)
+    if ((pa_to_va(addr, size, &dest) == 0) && (src != nullptr))
     {
         memcpy(dest, src, size);
         ret = size;
@@ -296,6 +300,8 @@ int aipudrv::MemoryBase::mem_bzero(uint64_t addr, size_t size)
 {
     int ret = 0;
     char* dest = nullptr;
+    if(size == 0)
+        return 0;
 
     if (pa_to_va(addr, size, &dest) == 0)
     {
