@@ -70,7 +70,7 @@ setenv CONFIG_DRV_BTENVAR_CROSS_CXX_ANDROID_PATH ${CONFIG_DRV_BTENVAR_BASE_DIR}/
 # add C/C++ libs path(s) here for your platform(s)
 
 # 1.3. Other paths
-setenv CONFIG_DRV_RTENVAR_PY_INCD_PATH       /usr/local/python/3.5.2/include/python3.5m
+setenv CONFIG_DRV_RTENVAR_PY_INCD_PATH       /arm/tools/python/python/3.5.2/rhe7-x86_64/include/python3.5m/
 setenv CONFIG_DRV_RTENVAR_NUMPY_INCD_PATH    /arm/tools/python/python/3.5.2/rhe7-x86_64/lib/python3.5/site-packages/numpy/core/include
 # add other path(s) here for your platform(s)
 

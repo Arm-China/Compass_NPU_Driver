@@ -428,6 +428,59 @@ public:
     }
 
     /**
+     * @brief This API is used to send specific command to NPU driver.
+     *
+     * @param[in] ctx Pointer to a context handle struct returned by aipu_init_context
+     * @param[in] cmd cmd
+     * @param[inout] arg input or output argument according to 'cmd'
+     *
+     * @retval AIPU_STATUS_SUCCESS
+     * @retval AIPU_STATUS_ERROR_NULL_PTR
+     * @retval AIPU_STATUS_ERROR_INVALID_CTX
+     * @retval AIPU_STATUS_ERROR_DEV_ABNORMAL
+     *
+     * @note support commands currently
+     *       AIPU_IOCTL_MARK_SHARED_TENSOR:
+     *           mark a shared buffer from belonged job, arg {aipu_shared_tensor_info_t}
+     *           the marked buffer isn't freed on destroying job and directly used by new job.
+     *       AIPU_IOCTL_SET_SHARED_TENSOR:
+     *           specify a marked shared buffer to new job, arg {aipu_shared_tensor_info_t}
+     *           marking shared buffer and setting shared buffer to new job must be performed
+     *           in same one process context.
+     *       AIPU_IOCTL_ENABLE_TICK_COUNTER:
+     *           enable performance counter, no arg
+     *       AIPU_IOCTL_DISABLE_TICK_COUNTER:
+     *           disable performance counter, no arg
+     *       AIPU_IOCTL_CONFIG_CLUSTERS:
+     *           config number of enabled cores in a cluster, arg {struct aipu_config_clusters}
+     *           it is used to disable some core's clock to reduce power consumption.
+     *       AIPU_IOCTL_SET_PROFILE:
+     *           dynamically enable/disable profiling feature of aipu v3 simulation. arg {1/0}
+     *           1: enable profiling
+     *           0: disable profiling
+     *      AIPU_IOCTL_ALLOC_DMABUF
+     *           request dma_buf from KMD. arg {struct aipu_dma_buf_request}
+     *           aipu_dma_buf_request->bytes: request size (filled by UMD)
+     *           aipu_dma_buf_request->fd: fd corresponding to dma_buf (filled by KMD)
+     *      AIPU_IOCTL_FREE_DMABUF
+     *           free a dma_buf with its fd. arg { fd }
+     */
+    int MiscIoctl(aipu_ctx_handle_t *ctx, uint32_t cmd, void *arg = nullptr)
+    {
+        aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+        ret = aipu_ioctl(m_ctx, cmd, arg);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(m_ctx, ret, &m_status_msg);
+            fprintf(stderr, "[PY UMD ERROR] AipuIoctl: %s\n", m_status_msg);
+            return ret;
+        }
+
+        return ret;
+    }
+
+    /**
      * @brief This API is exposed as a SWIG-Python API.
      *        It is used to load a graph.
      *
