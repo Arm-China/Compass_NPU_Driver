@@ -272,9 +272,11 @@ if [ "$BUILD_TEST"x = "sample"x ]; then
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=simulation_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=batch_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=mthread_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=time_cost_test
     else
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=benchmark_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=batch_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=time_cost_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=flush_job_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=profiler_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=sharebuffer_test

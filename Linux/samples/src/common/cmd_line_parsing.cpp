@@ -31,6 +31,7 @@ static struct option opts[] = {
     { "log_level", optional_argument, NULL, 'l' },
     { "dump_opt", optional_argument, NULL, 'o' },
     { "verbose", optional_argument, NULL, 'v' },
+    { "time", required_argument, NULL, 't' },
     { NULL, 0, NULL, 0 }
 };
 
@@ -45,8 +46,9 @@ void help(void)
         "   -d: output data path\n"
         "   -a: aipu v3 arch (X2_1204/X2_1204MP3)\n"
         "   -o: dump options for text/weight/in/out on board(hex form: ff)\n"
+        "   -t: test flush or finish job time(flush | finish), only for basic_time_test\n"
         "   -l: simulator log level(0-3)\n"
-        "   -v: simulator verbose(0,1)\n";
+        "   -v: simulator verbose(0, 1)\n";
 
     std::cout << help_info;
     exit(0);
@@ -71,11 +73,9 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
 
     while (1)
     {
-        c = getopt_long (argc, argv, "hs:C:b:i:c:d:a:s:z:q:k:x:o:l:v", opts, &opt_idx);
+        c = getopt_long(argc, argv, "hs:C:b:i:c:d:a:s:z:q:k:x:o:l:t:v", opts, &opt_idx);
         if (-1 == c)
-        {
             break;
-        }
 
         switch (c)
         {
@@ -101,7 +101,7 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
             break;
 
         case 'c':
-            strcpy(opt->gt_file_name, optarg);
+            strcpy(opt->gts_file_name, optarg);
             break;
 
         case 'd':
@@ -130,6 +130,13 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
             opt->verbose = true;
             break;
 
+        case 't':
+            if (!strncmp(optarg, "flush", 5))
+                opt->flush_time = true;
+            else
+                opt->flush_time = false;
+            break;
+
         case 'h':
             help();
             break;
@@ -149,9 +156,7 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
     {
         temp = strtok(nullptr, ",");
         if (temp != nullptr)
-        {
             opt->bin_files.push_back(temp);
-        }
     }
 
     temp = strtok(opt->inputs_file_name, ",");
@@ -160,56 +165,64 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
     {
         temp = strtok(nullptr, ",");
         if (temp != nullptr)
-        {
             opt->input_files.push_back(temp);
-        }
     }
 
     for (uint32_t i = 0; i < opt->input_files.size(); i++)
     {
         ret = load_file_helper(opt->input_files[i].c_str(), &dest, &size);
         if (ret != 0)
-        {
             goto finish;
-        }
+
         opt->inputs.push_back(dest);
         opt->inputs_size.push_back(size);
     }
 
-    ret = load_file_helper(opt->gt_file_name, &dest, &size);
-    if (ret != 0)
+    temp = strtok(opt->gts_file_name, ",");
+    opt->gt_files.push_back(temp);
+    while (temp)
     {
-        goto finish;
+        temp = strtok(nullptr, ",");
+        if (temp != nullptr)
+            opt->gt_files.push_back(temp);
     }
-    opt->gt = dest;
-    opt->gt_size = size;
+
+    for (uint32_t i = 0; i < opt->gt_files.size(); i++)
+    {
+        ret = load_file_helper(opt->gt_files[i].c_str(), &dest, &size);
+        if (ret != 0)
+            goto finish;
+
+        opt->gts.push_back(dest);
+        opt->gts_size.push_back(size);
+    }
 
     semOp_sp = std::make_shared<SemOp>();
 
 finish:
     if (ret != 0)
-    {
         deinit_test_bench(opt);
-    }
+
     return ret;
 }
 
 int deinit_test_bench(cmd_opt_t* opt)
 {
     if (opt == nullptr)
-    {
         return 0;
-    }
 
     for (uint32_t i = 0; i < opt->inputs.size(); i++)
-    {
         unload_file_helper(opt->inputs[i]);
-    }
+
     opt->input_files.clear();
     opt->inputs_size.clear();
     opt->inputs.clear();
 
-    unload_file_helper(opt->gt);
-    opt->gt_size = 0;
+    for (uint32_t i = 0; i < opt->gts.size(); i++)
+        unload_file_helper(opt->gts[i]);
+
+    opt->gt_files.clear();
+    opt->gts_size.clear();
+    opt->gts.clear();
     return 0;
 }

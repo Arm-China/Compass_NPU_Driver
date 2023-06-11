@@ -87,8 +87,8 @@ void pipeline()
         infer_info[i].job_id = 0;
         infer_info[i].aipubin = opt.bin_file_name;
         infer_info[i].inputbins.assign(opt.input_files.begin(), opt.input_files.end());
-        infer_info[i].gt_data = opt.gt;
-        infer_info[i].gt_size = opt.gt_size;
+        infer_info[i].gt_data = opt.gts[0];
+        infer_info[i].gt_size = opt.gts_size[0];
 
         ret = aipu_load_graph(ctx, infer_info[i].aipubin.c_str(), &graph_id);
         if (ret != AIPU_STATUS_SUCCESS)

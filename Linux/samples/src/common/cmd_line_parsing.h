@@ -19,19 +19,22 @@ typedef struct cmd_opt {
     char bin_file_name[4096];
     std::vector<std::string> bin_files;
     char inputs_file_name[1024];
-    char gt_file_name[BUF_LEN];
+    char gts_file_name[4096];
     char dump_dir[BUF_LEN];
     char simulator[BUF_LEN];
     std::vector<std::string> input_files;
     std::vector<uint32_t> inputs_size;
     std::vector<char*> inputs;
-    char* gt;
+    std::vector<std::string> gt_files;
+    std::vector<uint32_t> gts_size;
+    std::vector<char*> gts;
     std::string x2_arch_desc;
     uint32_t gt_size;
     bool log_level_set = false;
     uint32_t log_level;
     uint32_t dump_opt;
     bool verbose = false;
+    bool flush_time = false;
 } cmd_opt_t;
 
 int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_case);

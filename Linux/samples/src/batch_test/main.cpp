@@ -216,7 +216,7 @@ int main(int argc, char* argv[])
             }
 
             for (uint32_t i = 0; i < MAX_BATCH; i++)
-                pass = check_result_helper(output_data[i], output_desc, opt.gt, opt.gt_size);
+                pass = check_result_helper(output_data[i], output_desc, opt.gts[0], opt.gts_size[0]);
         }
 
     clean_batch_queue:

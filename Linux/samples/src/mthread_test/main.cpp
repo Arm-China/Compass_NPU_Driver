@@ -236,7 +236,7 @@ void non_pipeline()
                 i, i+1, output_cnt);
         }
 
-        pass = check_result(output_data_vec, output_desc, opt.gt, opt.gt_size);
+        pass = check_result(output_data_vec, output_desc, opt.gts[0], opt.gts_size[0]);
 
         // clear the stale data for next loop
         for (uint32_t i = 0; i < output_cnt; i++)
@@ -491,7 +491,7 @@ void pipeline()
                         i, i+1, output_cnt);
                 }
 
-                result = check_result(output_data_vec, output_desc, opt.gt, opt.gt_size);
+                result = check_result(output_data_vec, output_desc, opt.gts[0], opt.gts_size[0]);
                 if (result != 0)
                     pass = result;
 

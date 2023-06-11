@@ -366,7 +366,7 @@ int main(int argc, char* argv[])
                     i, i+1, output_cnt);
             }
 
-            pass = check_result_helper(output_data, output_desc, opt.gt, opt.gt_size);
+            pass = check_result_helper(output_data, output_desc, opt.gts[0], opt.gts_size[0]);
             for (uint32_t i = 0; i < output_data.size(); i++)
             {
                 delete[] output_data[i];
