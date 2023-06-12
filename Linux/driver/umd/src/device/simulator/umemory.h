@@ -64,7 +64,7 @@ private:
         { .base = 0xD0000000, .size = SIM_DTCM_SZ },
     };
     BufferDesc *desc;
-    bool m_gm_mean = true;
+    bool m_gm_mean = false;
 
 private:
     uint32_t get_next_alinged_page_no(uint32_t start, uint32_t align, int mem_region = 0);
