@@ -967,7 +967,8 @@ int aipu_job_manager_cancel_jobs(struct aipu_job_manager *manager, struct file *
 
 	if (!multi_process && manager->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
 		for (id = 0; id < manager->partition_cnt; id++)
-			aipu_job_manager_destroy_command_pool_no_lock(manager, &manager->partitions[id]);
+			aipu_job_manager_destroy_command_pool_no_lock(manager,
+								      &manager->partitions[id]);
 	}
 
 	spin_unlock_irqrestore(&manager->lock, flags);

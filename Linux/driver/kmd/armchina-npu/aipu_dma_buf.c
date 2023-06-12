@@ -4,7 +4,7 @@
 #include <linux/version.h>
 #include "aipu_dma_buf.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
+#if KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE
 static int aipu_dma_buf_attach(struct dma_buf *dmabuf, struct device *dev,
 			       struct dma_buf_attachment *attach)
 #else
@@ -39,7 +39,7 @@ static struct sg_table *aipu_map_dma_buf(struct dma_buf_attachment *attach,
 		goto fail;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 8, 0)
+#if KERNEL_VERSION(5, 8, 0) > LINUX_VERSION_CODE
 	ret = dma_map_sg(attach->dev, sgt->sgl, sgt->nents, dir);
 #else
 	ret = dma_map_sgtable(attach->dev, sgt, dir, 0);
@@ -75,16 +75,16 @@ static int aipu_dma_buf_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 	return ret;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
+#if KERNEL_VERSION(5, 11, 0) > LINUX_VERSION_CODE
 static void *aipu_dma_vmap(struct dma_buf *dmabuf)
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
+#elif KERNEL_VERSION(5, 18, 0) > LINUX_VERSION_CODE
 static int aipu_dma_vmap(struct dma_buf *dmabuf, struct dma_buf_map *map)
 #else
 static int aipu_dma_vmap(struct dma_buf *dmabuf, struct iosys_map *map)
 #endif
 {
 	struct aipu_dma_buf_priv *priv = (struct aipu_dma_buf_priv *)dmabuf->priv;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
+#if KERNEL_VERSION(5, 11, 0) > LINUX_VERSION_CODE
 	return priv->va;
 #else
 	map->is_iomem = false;
@@ -93,9 +93,9 @@ static int aipu_dma_vmap(struct dma_buf *dmabuf, struct iosys_map *map)
 #endif
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
+#if KERNEL_VERSION(5, 11, 0) > LINUX_VERSION_CODE
 static void aipu_dma_vunmap(struct dma_buf *dmabuf, void *vaddr)
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
+#elif KERNEL_VERSION(5, 18, 0) > LINUX_VERSION_CODE
 static void aipu_dma_vunmap(struct dma_buf *dmabuf, struct dma_buf_map *map)
 #else
 static void aipu_dma_vunmap(struct dma_buf *dmabuf, struct iosys_map *map)

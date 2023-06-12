@@ -38,7 +38,7 @@ static struct device *aipu_mm_create_child_dev(struct device *dev, u32 idx)
 	if (!child->dma_parms)
 		goto err;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+#if KERNEL_VERSION(5, 10, 0) > LINUX_VERSION_CODE
 	child->dma_pfn_offset = dev->dma_pfn_offset;
 #else
 	child->dma_range_map = dev->dma_range_map;
@@ -179,9 +179,8 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 
 	/* only head of the list is created; for v3; */
 	reg->tcb_buf_head = create_tcb_buf(mm);
-	if (!reg->tcb_buf_head) {
+	if (!reg->tcb_buf_head)
 		return ERR_PTR(-ENOMEM);
-	}
 
 	/* unused for normal memory */
 	reg->cluster_id = 0;
@@ -515,7 +514,8 @@ static ssize_t aipu_gm_policy_sysfs_store(struct device *dev, struct device_attr
 }
 
 static void add_region_list(struct aipu_memory_manager *mm, int asid,
-				    struct aipu_mem_region *reg) {
+			    struct aipu_mem_region *reg)
+{
 	struct aipu_mem_region_obj *obj = devm_kzalloc(mm->dev, sizeof(*obj), GFP_KERNEL);
 
 	obj->reg = reg;
@@ -815,8 +815,6 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 		} else {
 			mm->reg_cnt = aipu_mm_add_reserved_regions(mm);
 			if (!mm->reg_cnt) {
-				dev_err(mm->dev, "you shall reserve mem region(s) \
-					if no iommu presents");
 				ret = -EINVAL;
 				goto err;
 			}
@@ -832,6 +830,8 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	goto finish;
 
 err:
+	if (!mm->has_iommu && !mm->reg_cnt)
+		dev_err(mm->dev, "you shall reserve mem region(s) if no iommu presents");
 	aipu_deinit_mm(mm);
 
 finish:
@@ -1405,10 +1405,11 @@ void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap)
 }
 
 static int aipu_mm_get_gm_region_no_lock(struct aipu_memory_manager *mm,
-					  struct aipu_buf_desc *buf,
-					  struct aipu_mem_region *gm)
+					 struct aipu_buf_desc *buf,
+					 struct aipu_mem_region *gm)
 {
 	struct aipu_mem_region *reg = aipu_mm_find_region(mm, buf->pa, "get_gm");
+
 	if (!reg)
 		return -EINVAL;
 

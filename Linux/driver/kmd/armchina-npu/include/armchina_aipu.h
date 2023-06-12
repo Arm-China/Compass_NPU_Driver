@@ -290,7 +290,7 @@ enum aipu_job_execution_flag {
  * struct aipu_job_desc - Description of a job to be scheduled.
  * @is_defer_run:      [aipu v1/v2 only, optional] Reserve a core for this job and defer to run
  * @version_compatible:[aipu v1/v2 only, optional] Is this job compatible on different ISA versions
- * @core_id:           [aipu v1/v2/v3 optional] ID of the core to reserve (v1/v2) or debug dispatch (v3)
+ * @core_id:           [aipu v1/v2/v3 optional] ID of the core to reserve/debug dispatch (v3)
  * @partition_id:      [aipu v3 must] ID of the partition requested to schedule a job onto
  * @do_trigger:        [aipu v1/v2 only, optional] Trigger the deferred job to run
  * @aipu_arch:         [must] Target device architecture
