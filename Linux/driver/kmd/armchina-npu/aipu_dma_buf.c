@@ -33,8 +33,7 @@ static struct sg_table *aipu_map_dma_buf(struct dma_buf_attachment *attach,
 	if (!sgt)
 		return NULL;
 
-	ret = dma_get_sgtable_attrs(attach->dev, sgt, priv->va, priv->dma_pa,
-				    priv->bytes, priv->mm->ase[AIPU_BUF_ASID_0]->attrs);
+	ret = dma_get_sgtable_attrs(attach->dev, sgt, priv->va, priv->dma_pa, priv->bytes, 0);
 	if (ret < 0) {
 		dev_err(npu, "failed to get scatterlist from DMA API\n");
 		goto fail;
@@ -43,7 +42,7 @@ static struct sg_table *aipu_map_dma_buf(struct dma_buf_attachment *attach,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 8, 0)
 	ret = dma_map_sg(attach->dev, sgt->sgl, sgt->nents, dir);
 #else
-	ret = dma_map_sgtable(attach->dev, sgt, dir, priv->mm->ase[AIPU_BUF_ASID_0]->attrs);
+	ret = dma_map_sgtable(attach->dev, sgt, dir, 0);
 #endif
 	if (ret) {
 		dev_err(npu, "failed to map sgtable for the attached dev\n");
@@ -126,7 +125,6 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 	struct aipu_dma_buf_priv *priv = NULL;
 	char *va = NULL;
 	struct dma_buf *dmabuf = NULL;
-	struct aipu_mem_region *reg = mm->ase[AIPU_BUF_ASID_0];
 
 	DEFINE_DMA_BUF_EXPORT_INFO(exp);
 
@@ -157,7 +155,7 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 
 	priv->mm = mm;
 	priv->dev_pa = inter_req.desc.pa;
-	priv->dma_pa = inter_req.desc.pa + reg->base_pa - reg->base_iova;
+	priv->dma_pa = inter_req.desc.pa;
 	priv->bytes = inter_req.desc.bytes;
 	priv->va = va;
 

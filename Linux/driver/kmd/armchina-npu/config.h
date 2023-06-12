@@ -7,6 +7,7 @@
 #include <linux/sizes.h>
 
 #define AIPU_CONFIG_ENABLE_MEM_MANAGEMENT   1
+#define AIPU_CONFIG_FORCE_CONTIGUOUS        0
 #define AIPU_CONFIG_HOST_MAP_SRAM           0
 #define AIPU_CONFIG_HOST_MAP_DTCM           0
 #define AIPU_CONFIG_USE_DEFAULT_MEM_SIZE    0

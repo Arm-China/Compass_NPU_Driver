@@ -266,7 +266,7 @@ regions to be reserved to be 32 because Linux kernel accepts 64 at maximum.
 
 For *dtcm* type, currently we only accept to reserve at maximum one region. If you would like to reserve
 an address in SRAM or memory to be used as a DTCM region, please use the *dtcm* type. *dtcm* type only works
-for V2 (X1) and V3.
+for V2 (X1).
 
 The regions can be reserved in any sequence.
 
@@ -281,30 +281,35 @@ An example:
             compatible = "shared-dma-pool";
             reusable;
             reg = <0x0 0xA0000000 0x0 0x10000000>;
+            asid = <0>;
         };
 
         aipu_res_1: dtcm@C0000000 {
             compatible = "shared-dma-pool";
             reusable;
             reg = <0x0 0xC0000000 0x0 0x800000>;
+            asid = <0>;
         };
 
         aipu_res_2: sram@C0800000 {
             compatible = "shared-dma-pool";
             reusable;
             reg = <0x0 0xC0800000 0x0 0x400000>;
+            asid = <0>;
         };
 
         aipu_res_3: sram@C1000000 {
             compatible = "shared-dma-pool";
             reusable;
             reg = <0x0 0xC1000000 0x0 0x800000>;
+            asid = <1>;
         };
 
         aipu_res_4: memory@B0000000 {
             compatible = "shared-dma-pool";
             reusable;
             reg = <0x0 0xB0000000 0x0 0x10000000>;
+            asid = <1>;
         };
     };
 
@@ -342,6 +347,7 @@ to reserve are just for the purpose of usage demo. For example,
             compatible = "shared-dma-pool";
             no-map;
             reg = <0x10 0x00000000 0x0 0x10000000>;
+            asid = <0 1>;
         };
     };
 
@@ -356,6 +362,7 @@ to reserve are just for the purpose of usage demo. For example,
             compatible = "shared-dma-pool";
             reusable;
             reg = <0x10 0x00000000 0x0 0x10000000>;
+            asid = <0 1>;
         };
     };
 
@@ -402,8 +409,10 @@ Currently, AIPU driver supports SMMU-401. You may bind it as followed:
         /* ... */
     };
 
-To use a physically contiguous DMA region behind, you may reserve it as followed:
+To use a physically contiguous DMA region behind, you may reserve it as followed and enable the config
+option AIPU_CONFIG_FORCE_CONTIGUOUS in config.h:
 
+in dts:
     aipu@1280010000 {
         compatible = "armchina,zhouyi";
         memory-region = <&aipu_res_0>;
@@ -411,6 +420,9 @@ To use a physically contiguous DMA region behind, you may reserve it as followed
         /* other attributes */
         /* ... */
     };
+
+in config.h:
+    #define AIPU_CONFIG_FORCE_CONTIGUOUS        1
 
 3.1.4.3 SoC SRAM
 ----------------
@@ -475,6 +487,7 @@ followed:
             compatible = "shared-dma-pool";
             no-map;
             reg = <0x0 0xA0000000 0x0 0x10000000>;
+            asid = <0 1>;
         };
     };
 
@@ -490,6 +503,7 @@ followed:
             compatible = "shared-dma-pool";
             no-map;
             reg = <0x0 0xA0000000 0x0 0x10000000>;
+            asid = <0 1>;
         };
     };
 
@@ -509,7 +523,7 @@ This attribute is optional and by default this value in driver is 0 if not activ
 3.1.5 ASID Region Base & Size
 -----------------------------
 Zhouyi V2 & V3 NPUs support 4 groups of ASID regions, which are used to direct different types
-of data to different address spaces. The base addresses and size of the 4 ASID regions should be
+of data to different address spaces. The base addresses and size of the ASID regions should be
 configured in NPU device tree.
 
 For the n^th ASE region, the addresses used to access the system memory are calculated as:
@@ -524,14 +538,15 @@ For the n^th ASE region, the addresses used to access the system memory are calc
         VA_32 is a 32 bits virtual address configured in external registers or rodata sections
             and used in NPU
 
-NPU driver will link the ASID regions to the corresponding reserved memory regions (if any).
-
-This attribute is optional. If not set, the NPU driver will choose a shared base address for
-all the ASID regions.
-
 If you have reserved memory region(s), please configure the ASID in the reserved memory node as:
 
     asid = <id_0 id_1 id_2 id_3>; /* variable array contains the id(s) this mem region supports */
+
+Currently, the Zhouyi SDK only enable ASID 0 and ASID 1. Therefore, your reserved region should be
+ASID 0 and/or 1, and there must be at least one region belongs to ASID 0 and ASID 1, respectively.
+
+It should be noted that if multiple regions share the same ASID, the high 32 bits of their base addresses
+should be identical.
 
 For example,
 

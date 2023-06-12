@@ -88,10 +88,10 @@ struct tcb_buf {
  * @count: bitmap bit count/page count
  * @dev: region specific device (for multiple DMA/CMA regions)
  * @attrs: attributes for DMA API
- * @list: gm region list
  * @tcb_buf_head: TCB buffer list
  * @cluster_id: the ID of the cluster owns this GM region
  * @qos: qos level of this GM region
+ * @invalid: if this region is invalid (cannot be used) or not
  */
 struct aipu_mem_region {
 	enum aipu_mem_region_type type;
@@ -105,31 +105,32 @@ struct aipu_mem_region {
 	unsigned long count;
 	struct device *dev;
 	unsigned long attrs;
-	struct list_head list;
 	struct tcb_buf *tcb_buf_head;
 	/* for gm only */
 	int cluster_id;
 	int qos;
+	bool invalid;
+};
+
+struct aipu_mem_region_obj {
+	struct aipu_mem_region *reg;
+	struct list_head list;
 };
 
 /**
- * struct aipu_mem_region_list - memory region list
- * @reg: regions
+ * struct aipu_mem_region_list - memory region list share the same ASID
+ * @obj: region objects
  * @cnt: region count
- * @max_cnt: maximum supported region count
- * @disable: are regions disabled
- * @type: type of regions
+ * @valid_cnt: valid region count
  * @base: base address of the regions
- * @tot_size: total size of the regions
+ * @range: address range (i.e. max_addr - min_addr) of the regions
  */
 struct aipu_mem_region_list {
-	struct aipu_mem_region *reg;
-	u32 cnt;
-	u32 max_cnt;
-	int disable;
-	enum aipu_mem_region_type type;
-	u64 base;
-	u64 tot_size;
+	struct aipu_mem_region_obj *obj;
+	int cnt;
+	int valid_cnt;
+	dma_addr_t base;
+	u32 range;
 };
 
 /**
@@ -147,27 +148,35 @@ struct aipu_sram_disable_per_fd {
 /**
  * struct aipu_memory_manager - AIPU memory management struct (MM)
  * @version: AIPU ISA version number
- * @limit: AIPU device address space upper bound
  * @has_iommu: system has an IOMMU for AIPU to use or not
- * @gm_policy: GM policy determined by customer (AIPU_GM_POLICY_SHARED/AIPU_GM_POLICY_HALF_DIVIDED)
  * @dev: device struct pointer (AIPU core 0)
  * @lock: lock for reg and sram_disable_head
- * @mem: memory regions, contains memory/SRAM/DTCM/GM
- * @ase: four address space extension regions
- * @sram_disable_head: sram disable list
+ * @reg_cnt: region count
+ * @regs: array of all reserved regions
+ * @mem: array of reserved regions in different asids
+ * @gm: V3 GM region
+ * @gm_policy: GM policy determined by customer (AIPU_GM_POLICY_SHARED/AIPU_GM_POLICY_HALF_DIVIDED)
+ * @gm_max_cnt: maximum count of GM region
+ * @dtcm_max_cnt: maximum count of DTCM region
+ * @sram_disable_head: SRAM disable list
+ * @sram_disable: disable count of SRAM
  * @gm_policy_attr: GM policy sysfs attribute, for v3 only
  * @slock:   TCB buffer lock
  */
 struct aipu_memory_manager {
 	int version;
-	u64 limit;
 	bool has_iommu;
-	u32 gm_policy;
 	struct device *dev;
 	struct mutex lock; /* Protect sram disabled head struct */
-	struct aipu_mem_region_list mem[AIPU_MEM_REGION_TYPE_MAX];
-	struct aipu_mem_region *ase[ZHOUYI_ASID_COUNT];
+	int reg_cnt;
+	struct aipu_mem_region *regs[AIPU_CONFIG_MAX_RESERVED_REGIONS];
+	struct aipu_mem_region_list mem[ZHOUYI_ASID_COUNT];
+	struct aipu_mem_region *gm;
+	int gm_policy;
+	int gm_max_cnt;
+	int dtcm_max_cnt;
 	struct aipu_sram_disable_per_fd *sram_disable_head;
+	int sram_disable;
 	struct device_attribute *gm_policy_attr;
 	spinlock_t slock; /* Protect tcb_buf list */
 };

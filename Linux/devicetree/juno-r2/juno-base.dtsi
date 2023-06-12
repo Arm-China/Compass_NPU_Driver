@@ -847,24 +847,28 @@
 			compatible = "shared-dma-pool";
 			reusable;
 			reg = <0x0 0xA0000000 0x0 0x10000000>;
+			asid = <0>;
 		};
 
 		aipu_reserved_1: memory@B0000000 {
 			compatible = "shared-dma-pool";
 			reusable;
 			reg = <0x0 0xB0000000 0x0 0x10000000>;
+			asid = <1>;
 		};
 
 		aipu_reserved_2: dtcm@C0000000 {
 			compatible = "shared-dma-pool";
 			reusable;
 			reg = <0x0 0xC0000000 0x0 0x800000>;
+			asid = <0>;
 		};
 
 		aipu_reserved_3: sram@C1000000 {
 			compatible = "shared-dma-pool";
 			reusable;
 			reg = <0x0 0xC1000000 0x0 0x800000>;
+			asid = <0 1>;
 		};
 	};
 

@@ -51,6 +51,11 @@ err:
 	return NULL;
 }
 
+static struct list_head *get_region_head(struct aipu_memory_manager *mm, int asid)
+{
+	return &mm->mem[asid].obj->list;
+}
+
 struct tcb_buf *create_tcb_buf(struct aipu_memory_manager *mm)
 {
 	struct tcb_buf *tcb = NULL;
@@ -65,16 +70,16 @@ static struct tcb_buf *aipu_mm_find_tcb_buf_no_lock(struct aipu_memory_manager *
 						    struct aipu_mem_region **reg, u64 iova,
 						    char *log_str)
 {
-	struct aipu_mem_region *region = NULL;
+	struct aipu_mem_region_obj *obj = NULL;
 	struct tcb_buf *curr = NULL;
 
 	if (!mm || !reg)
 		return NULL;
 
-	list_for_each_entry(region, &mm->mem[AIPU_MEM_REGION_TYPE_MEMORY].reg->list, list) {
-		list_for_each_entry(curr, &region->tcb_buf_head->node, node) {
+	list_for_each_entry(obj, get_region_head(mm, AIPU_BUF_ASID_0), list) {
+		list_for_each_entry(curr, &obj->reg->tcb_buf_head->node, node) {
 			if (iova >= curr->head && iova <= curr->tail) {
-				*reg = region;
+				*reg = obj->reg;
 				return curr;
 			}
 		}
@@ -108,119 +113,9 @@ static int aipu_mm_init_pages(struct aipu_memory_manager *mm, struct aipu_mem_re
 	if (!reg->pages)
 		return -ENOMEM;
 
+	reg->base_pfn = PFN_DOWN(reg->base_iova);
+
 	return 0;
-}
-
-static int aipu_mm_init_mem_region(struct aipu_memory_manager *mm, struct aipu_mem_region *reg,
-				   u32 idx, enum aipu_mem_region_type type, bool reserved)
-{
-	int ret = 0;
-	void *va = NULL;
-	bool enable_iommu = false;
-
-	if (!mm || !reg || !reg->bytes)
-		return -EINVAL;
-
-	if (!mm->has_iommu && !reserved) {
-		dev_err(mm->dev, "memory should be reserved if no IOMMU exists\n");
-		return -EINVAL;
-	}
-
-	if (!reserved && (type == AIPU_MEM_REGION_TYPE_SRAM || type == AIPU_MEM_REGION_TYPE_DTCM)) {
-		dev_err(mm->dev, "to init a SRAM/DTCM region, you should reserve it: %d\n", type);
-		return -EINVAL;
-	}
-
-	reg->dev = aipu_mm_create_child_dev(mm->dev, idx);
-
-	/* only head of the list is created; for v3; */
-	reg->tcb_buf_head = create_tcb_buf(mm);
-	if (!reg->tcb_buf_head)
-		goto err;
-
-	/* unused for normal memory */
-	reg->cluster_id = 0;
-	reg->qos = AIPU_GM_QOS_NONE;
-
-	/* CMA reserved */
-	if (reserved) {
-		ret = of_reserved_mem_device_init_by_idx(reg->dev, mm->dev->of_node, idx);
-		if (ret) {
-			dev_err(reg->dev, "init reserved mem failed: idx %d (%d)\n", idx, ret);
-			goto err;
-		}
-	}
-
-	if (mm->has_iommu) {
-		ret = dma_set_coherent_mask(reg->dev, DMA_BIT_MASK(31));
-		if (ret) {
-			dev_err(reg->dev, "DMA set coherent mask failed: idx %d (%d)!\n", idx, ret);
-			goto err;
-		}
-		enable_iommu = true;
-	} else {
-		dma_set_coherent_mask(reg->dev, DMA_BIT_MASK(32));
-	}
-
-	if (mm->has_iommu)
-		reg->attrs = DMA_ATTR_FORCE_CONTIGUOUS;
-	else
-		reg->attrs = 0;
-
-	/* get memory from system in init stage if the flag is enabled */
-	if (AIPU_CONFIG_ENABLE_MEM_MANAGEMENT) {
-		if (!reserved && AIPU_CONFIG_USE_DEFAULT_MEM_SIZE == 1 &&
-		    reg->bytes > AIPU_CONFIG_DEFAULT_MEM_SIZE)
-			reg->bytes = AIPU_CONFIG_DEFAULT_MEM_SIZE;
-
-		va = dma_alloc_attrs(reg->dev, reg->bytes, &reg->base_iova, GFP_KERNEL, reg->attrs);
-		if (!va) {
-			dev_err(reg->dev, "dma_alloc_attrs failed: idx %d (bytes: 0x%llx, attrs %ld)\n",
-				idx, reg->bytes, reg->attrs);
-			ret = -EINVAL;
-			goto err;
-		}
-		reg->base_va = va;
-
-		/* to be used in driver mem management (aipu_mm_alloc_in_region_no_lock) */
-		reg->count = reg->bytes >> PAGE_SHIFT;
-		reg->bitmap = devm_kzalloc(reg->dev,
-					   BITS_TO_LONGS(reg->count) * sizeof(long), GFP_KERNEL);
-		if (!reg->bitmap)
-			return -ENOMEM;
-
-		reg->pages = vzalloc(reg->count * sizeof(struct aipu_virt_page *));
-		if (!reg->pages)
-			return -ENOMEM;
-
-		reg->base_pfn = PFN_DOWN(reg->base_iova);
-	} else {
-		/* no allocation from system in init stage */
-		reg->base_va = NULL;
-		reg->base_iova = 0;
-		reg->count = 0;
-		reg->bitmap = NULL;
-		reg->pages = NULL;
-		reg->base_pfn = 0;
-	}
-
-	dev_info(reg->dev, "init %s region done: %s [0x%llx, 0x%llx]\n",
-		 type == AIPU_MEM_REGION_TYPE_MEMORY ? "MEMORY" :
-		 (type == AIPU_MEM_REGION_TYPE_SRAM ? "SRAM" :
-		  (type == AIPU_MEM_REGION_TYPE_DTCM ? "DTCM" : "GM")),
-		 enable_iommu ? "iova" : "pa",
-		 reg->base_iova, reg->base_iova + reg->bytes - 1);
-	goto finish;
-
-err:
-	if (reg->base_va) {
-		dma_free_attrs(reg->dev, reg->bytes, reg->base_va, reg->base_iova, reg->attrs);
-		reg->base_va = NULL;
-	}
-	of_reserved_mem_device_release(reg->dev);
-
-finish:
-	return ret;
 }
 
 static void aipu_mm_deinit_mem_region(struct aipu_memory_manager *mm, struct aipu_mem_region *reg)
@@ -235,7 +130,11 @@ static void aipu_mm_deinit_mem_region(struct aipu_memory_manager *mm, struct aip
 		reg->base_iova = 0;
 	}
 
-	of_reserved_mem_device_release(reg->dev);
+	/* reserved */
+	if (reg->base_pa) {
+		of_reserved_mem_device_release(reg->dev);
+		reg->base_pa = 0;
+	}
 
 	if (reg->pages) {
 		vfree(reg->pages);
@@ -250,6 +149,92 @@ static void aipu_mm_deinit_mem_region(struct aipu_memory_manager *mm, struct aip
 
 	reg->bytes = 0;
 	reg->base_va = NULL;
+}
+
+static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager *mm,
+						     enum aipu_mem_region_type type,
+						     u64 addr, u64 size, u32 idx,
+						     bool reserved)
+{
+	int ret = 0;
+	void *va = NULL;
+	struct aipu_mem_region *reg = NULL;
+
+	if (!mm || !size)
+		return ERR_PTR(-EINVAL);
+
+	if (!mm->has_iommu && !reserved) {
+		dev_err(mm->dev, "memory should be reserved if no IOMMU exists\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+	reg = devm_kzalloc(mm->dev, sizeof(*reg), GFP_KERNEL);
+	if (!reg)
+		return ERR_PTR(-ENOMEM);
+
+	reg->base_pa = addr;
+	reg->bytes = size;
+
+	reg->dev = aipu_mm_create_child_dev(mm->dev, idx);
+
+	/* only head of the list is created; for v3; */
+	reg->tcb_buf_head = create_tcb_buf(mm);
+	if (!reg->tcb_buf_head) {
+		return ERR_PTR(-ENOMEM);
+	}
+
+	/* unused for normal memory */
+	reg->cluster_id = 0;
+	reg->qos = AIPU_GM_QOS_NONE;
+
+	if (reserved ||
+	    (mm->has_iommu && AIPU_CONFIG_FORCE_CONTIGUOUS)) {
+		ret = of_reserved_mem_device_init_by_idx(reg->dev, mm->dev->of_node, idx);
+		if (ret) {
+			dev_err(reg->dev, "init reserved mem failed: idx %d (%d)\n",
+				idx, ret);
+			return ERR_PTR(ret);
+		}
+	}
+
+	ret = dma_set_coherent_mask(reg->dev, DMA_BIT_MASK(32));
+	if (ret) {
+		dev_err(reg->dev, "DMA set coherent mask failed: idx %d (%d)!\n", idx, ret);
+		goto err;
+	}
+
+	if (mm->has_iommu && AIPU_CONFIG_FORCE_CONTIGUOUS)
+		reg->attrs = DMA_ATTR_FORCE_CONTIGUOUS;
+	else
+		reg->attrs = 0;
+
+	va = dma_alloc_attrs(reg->dev, reg->bytes, &reg->base_iova, GFP_KERNEL, reg->attrs);
+	if (!va) {
+		dev_err(reg->dev, "dma_alloc_attrs failed: idx %d (bytes: 0x%llx, attrs %ld)\n",
+			idx, reg->bytes, reg->attrs);
+		ret = -EINVAL;
+		goto err;
+	}
+	reg->base_va = va;
+
+	ret = aipu_mm_init_pages(mm, reg);
+	if (ret)
+		goto err;
+
+	dev_info(reg->dev, "init %s region done: %s [0x%llx, 0x%llx]\n",
+		 type == AIPU_MEM_REGION_TYPE_MEMORY ? "MEMORY" :
+		 (type == AIPU_MEM_REGION_TYPE_SRAM ? "SRAM" :
+		  (type == AIPU_MEM_REGION_TYPE_DTCM ? "DTCM" : "GM")),
+		 mm->has_iommu ? "iova" : "pa",
+		 reg->base_iova, reg->base_iova + reg->bytes - 1);
+	goto finish;
+
+err:
+	aipu_mm_deinit_mem_region(mm, reg);
+	return ERR_PTR(ret);
+
+finish:
+	return reg;
 }
 
 static int get_free_bitmap_no(struct aipu_memory_manager *mm, struct aipu_mem_region *reg,
@@ -297,13 +282,13 @@ static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
 	struct tcb_buf *tcb = NULL;
 
 	/* filp == NULL means GM initialization or exit TCB allocation */
-	if (!mm || !buf_req || !reg)
+	if (!mm || !buf_req || !reg || reg->invalid)
 		return -EINVAL;
 
 	alloc_nr = ALIGN(buf_req->bytes, PAGE_SIZE) >> PAGE_SHIFT;
 	bitmap_no = get_free_bitmap_no(mm, reg, buf_req);
 	if (bitmap_no >= reg->count) {
-		dev_err(reg->dev, "alloc in region failed: no free buffer");
+		dev_dbg(reg->dev, "alloc in region failed: no free buffer");
 		return -ENOMEM;
 	}
 
@@ -323,7 +308,7 @@ static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
 	buf_req->desc.dev_offset = reg->base_iova + (bitmap_no << PAGE_SHIFT);
 	buf_req->desc.pa = buf_req->desc.dev_offset;
 	buf_req->desc.bytes = alloc_nr * PAGE_SIZE;
-	buf_req->desc.asid = AIPU_BUF_ASID_0;
+	buf_req->desc.asid = buf_req->asid;
 	buf_req->desc.region = reg->type;
 	buf_req->desc.gm_base = get_gm_base(mm, reg, buf_req);
 
@@ -368,7 +353,7 @@ int aipu_mm_free_in_region_no_lock(struct aipu_memory_manager *mm, struct aipu_b
 	unsigned long alloc_nr = 0;
 	struct aipu_virt_page *page = NULL;
 
-	if (!mm || !buf || !reg)
+	if (!mm || !buf || !reg || reg->invalid)
 		return -EINVAL;
 
 	bitmap_no = pa_to_bitmap_no(mm, reg, buf->pa);
@@ -420,14 +405,13 @@ int aipu_mm_free_in_region_no_lock(struct aipu_memory_manager *mm, struct aipu_b
 static struct aipu_mem_region *aipu_mm_find_region(struct aipu_memory_manager *mm, u64 iova,
 						   char *log_str)
 {
-	int type;
+	int idx = 0;
 	struct aipu_mem_region *reg = NULL;
 
-	for (type = AIPU_MEM_REGION_TYPE_MEMORY; type < AIPU_MEM_REGION_TYPE_MAX; type++) {
-		list_for_each_entry(reg, &mm->mem[type].reg->list, list) {
-			if (iova >= reg->base_iova && (iova < reg->base_iova + reg->bytes))
-				return reg;
-		}
+	for (idx = 0; idx < mm->reg_cnt; idx++) {
+		reg = mm->regs[idx];
+		if (iova >= reg->base_iova && (iova < reg->base_iova + reg->bytes))
+			return reg;
 	}
 
 	dev_err(mm->dev, "[%s] invalid buffer address 0x%llx not found",
@@ -530,29 +514,195 @@ static ssize_t aipu_gm_policy_sysfs_store(struct device *dev, struct device_attr
 	return count;
 }
 
-static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager *mm,
-						     struct aipu_mem_region_list *head,
-						     u64 addr, u64 size, u32 idx)
+static void add_region_list(struct aipu_memory_manager *mm, int asid,
+				    struct aipu_mem_region *reg) {
+	struct aipu_mem_region_obj *obj = devm_kzalloc(mm->dev, sizeof(*obj), GFP_KERNEL);
+
+	obj->reg = reg;
+	INIT_LIST_HEAD(&obj->list);
+
+	list_add(&obj->list, &mm->mem[asid].obj->list);
+	mm->mem[asid].cnt++;
+}
+
+static int aipu_mm_add_reserved_regions(struct aipu_memory_manager *mm)
 {
 	int ret = 0;
+	int idx = 0;
+	int asid_idx = 0;
+	struct device_node *np = NULL;
+	enum aipu_mem_region_type type;
+	struct resource res;
+	struct aipu_mem_region *reg = NULL;
+	bool asid_set = false;
+	u32 dtcm_cnt = 0;
+	u32 reg_cnt = 0;
+
+	do {
+		u64 size = 0;
+
+		np = of_parse_phandle(mm->dev->of_node, "memory-region", idx);
+		if (!np)
+			break;
+
+		/* get type of this region */
+		if (!strcmp(np->name, "memory")) {
+			type = AIPU_MEM_REGION_TYPE_MEMORY;
+		} else if (!strcmp(np->name, "sram")) {
+			type = AIPU_MEM_REGION_TYPE_SRAM;
+		} else if (!strcmp(np->name, "dtcm")) {
+			type = AIPU_MEM_REGION_TYPE_DTCM;
+		} else {
+			dev_err(mm->dev, "invalid memory region name: %s\n", np->name);
+			continue;
+		}
+
+		/* bypass mapping SoC SRAM if CPU cannot access it */
+		if (type == AIPU_MEM_REGION_TYPE_SRAM && !AIPU_CONFIG_HOST_MAP_SRAM) {
+			dev_info(mm->dev, "dts: bypass this sram region (cpu cannot access it)\n");
+			continue;
+		}
+
+		if (type == AIPU_MEM_REGION_TYPE_DTCM && dtcm_cnt == mm->dtcm_max_cnt) {
+			dev_err(mm->dev, "dts: bypass this dtcm region for the max_cnt limit\n");
+			continue;
+		}
+
+		if (type == AIPU_MEM_REGION_TYPE_DTCM &&
+		    mm->version == AIPU_ISA_VERSION_ZHOUYI_V1) {
+			dev_err(mm->dev, "dts: bypass because v1 does not support dtcm\n");
+			continue;
+		}
+
+		ret = of_address_to_resource(np, 0, &res);
+		if (ret) {
+			of_node_put(np);
+			dev_err(mm->dev, "of_address_to_resource failed (ret = %d)", ret);
+			continue;
+		}
+
+		size = res.end - res.start + 1;
+		if (type == AIPU_MEM_REGION_TYPE_DTCM && size > ZHOUYI_V2_DTCM_MAX_BYTES) {
+			dev_info(mm->dev,
+				 "the DTCM will be clipped to the maximum configurable value\n");
+			size = ZHOUYI_V2_DTCM_MAX_BYTES;
+		}
+
+		reg = aipu_mm_create_region(mm, type, res.start, size, idx, true);
+		if (IS_ERR(reg)) {
+			dev_err(mm->dev, "create new region failed (ret = %ld)", PTR_ERR(reg));
+			continue;
+		}
+
+		mm->regs[reg_cnt] = reg;
+
+		/* get asid of this region */
+		if (mm->version > AIPU_ISA_VERSION_ZHOUYI_V1) {
+			for (asid_idx = 0; asid_idx < ZHOUYI_ASID_COUNT; asid_idx++) {
+				u32 asid = 0;
+
+				if (!of_property_read_u32_index(np, "asid", asid_idx, &asid)) {
+					if (asid >= ZHOUYI_ASID_COUNT) {
+						dev_err(mm->dev, "dts: invalid asid: %u\n", asid);
+						continue;
+					}
+
+					add_region_list(mm, asid, reg);
+					asid_set = true;
+				} else {
+					break;
+				}
+			}
+
+			if (!asid_set) {
+				dev_err(mm->dev, "dts: reg asid is not set, use default asid\n");
+				add_region_list(mm, AIPU_BUF_ASID_0, reg);
+				add_region_list(mm, AIPU_BUF_ASID_1, reg);
+			}
+		} else {
+			/* use ASID 0 for V1 */
+			add_region_list(mm, AIPU_BUF_ASID_0, reg);
+		}
+
+		of_node_put(np);
+		if (type == AIPU_MEM_REGION_TYPE_DTCM)
+			dtcm_cnt++;
+		reg_cnt++;
+	} while (++idx < AIPU_CONFIG_MAX_RESERVED_REGIONS);
+
+	return reg_cnt;
+}
+
+static int aipu_mm_add_iommu_region(struct aipu_memory_manager *mm)
+{
 	struct aipu_mem_region *reg = NULL;
 
-	if (!mm || !head || !size)
-		return ERR_PTR(-EINVAL);
+	/* this feature is to be updated */
+	reg = aipu_mm_create_region(mm, AIPU_MEM_REGION_TYPE_MEMORY,
+				    0, AIPU_CONFIG_DEFAULT_MEM_SIZE, 0, false);
+	if (IS_ERR(reg)) {
+		dev_err(mm->dev, "create new smmu region failed (ret = %ld)", PTR_ERR(reg));
+		return PTR_ERR(reg);
+	}
 
-	reg = devm_kzalloc(mm->dev, sizeof(*reg), GFP_KERNEL);
-	if (!reg)
-		return ERR_PTR(-ENOMEM);
+	mm->regs[0] = reg;
+	mm->reg_cnt = 1;
 
-	reg->base_pa = addr;
-	reg->bytes = size;
-	ret = aipu_mm_init_mem_region(mm, reg, idx, head->type, true);
-	if (ret)
-		return ERR_PTR(ret);
+	add_region_list(mm, AIPU_BUF_ASID_0, reg);
+	add_region_list(mm, AIPU_BUF_ASID_1, reg);
 
-	list_add(&reg->list, &head->reg->list);
-	head->cnt++;
-	return reg;
+	return 0;
+}
+
+static void aipu_mm_set_asid_base(struct aipu_memory_manager *mm)
+{
+	struct aipu_mem_region_obj *obj = NULL;
+	struct aipu_mem_region *reg = NULL;
+	int asid = AIPU_BUF_ASID_0;
+
+	for (asid = AIPU_BUF_ASID_0; asid < ZHOUYI_ASID_COUNT; asid++) {
+		u64 first_base = 0;
+		u64 asid_base = 0;
+		u32 range = 0;
+		u32 high = 0;
+		u32 end  = 0;
+
+		list_for_each_entry(obj, get_region_head(mm, asid), list) {
+			reg = obj->reg;
+			end = (u32)reg->base_iova + reg->bytes;
+
+			if (!range) {
+				high = end;
+				first_base = reg->base_iova;
+				asid_base = first_base;
+				range = reg->bytes;
+			}
+
+			if (reg->base_iova >> 32 != first_base >> 32) {
+				dev_err(mm->dev, "invalid region: [0x%llx, 0x%llx]",
+					reg->base_iova, reg->base_iova + reg->bytes - 1);
+				dev_err(mm->dev, "one asid should use the same hi32 base");
+				reg->invalid = true;
+				continue;
+			}
+
+			high = end > high ? end : high;
+
+			if (reg->base_iova != first_base) {
+				asid_base = ((first_base >> 32) << 32);
+				range = high;
+			}
+
+			mm->mem[asid].valid_cnt++;
+		}
+
+		if (range) {
+			mm->mem[asid].base = asid_base;
+			mm->mem[asid].range = range;
+			dev_info(mm->dev, "set ASID %d done: base: 0x%llx, range 0x%x\n",
+				 asid, asid_base, range);
+		}
+	}
 }
 
 /**
@@ -566,21 +716,16 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, int version)
 {
 	int ret = 0;
-	int idx = 0;
-	int asid_idx = 0;
-	struct device_node *np = NULL;
-	enum aipu_mem_region_type type;
-	struct resource res;
 	struct iommu_group *group = NULL;
+	struct aipu_mem_region_obj *obj = NULL;
 	struct aipu_mem_region *reg = NULL;
-	bool asid_set = false;
+	int asid = 0;
 
 	if (!mm || !p_dev)
 		return -EINVAL;
 
 	memset(mm, 0, sizeof(*mm));
 	mm->version = version;
-	mm->limit = 0xC0000000;
 	mm->dev = &p_dev->dev;
 	mutex_init(&mm->lock);
 	mm->sram_disable_head = devm_kzalloc(mm->dev, sizeof(*mm->sram_disable_head), GFP_KERNEL);
@@ -589,38 +734,34 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	INIT_LIST_HEAD(&mm->sram_disable_head->list);
 	spin_lock_init(&mm->slock);
 
-	for (type = AIPU_MEM_REGION_TYPE_MEMORY; type < AIPU_MEM_REGION_TYPE_MAX; type++) {
+	for (asid = AIPU_BUF_ASID_0; asid < ZHOUYI_ASID_COUNT; asid++) {
+		obj = devm_kzalloc(mm->dev, sizeof(*obj), GFP_KERNEL);
+		if (!obj)
+			return -ENOMEM;
+
 		reg = devm_kzalloc(mm->dev, sizeof(*reg), GFP_KERNEL);
 		if (!reg)
 			return -ENOMEM;
 
-		reg->type = type;
+		reg->type = AIPU_MEM_REGION_TYPE_MAX;
 		reg->qos = AIPU_GM_QOS_NONE;
-		INIT_LIST_HEAD(&reg->list);
+		obj->reg = reg;
+		INIT_LIST_HEAD(&obj->list);
 
-		mm->mem[type].reg = reg;
-		mm->mem[type].cnt = 0;
-		mm->mem[type].disable = 0;
-		mm->mem[type].type = type;
-		mm->mem[type].base = U64_MAX;
-		mm->mem[type].tot_size = 0;
-
-		/* we do not limit the count of memory/SRAM regions in DTS */
-		mm->mem[type].max_cnt = AIPU_CONFIG_MAX_RESERVED_REGIONS;
+		mm->mem[asid].obj = obj;
+		mm->mem[asid].cnt = 0;        /* to be updated */
+		mm->mem[asid].valid_cnt = 0;  /* to be updated */
+		mm->mem[asid].base = U64_MAX; /* to be calculated */
+		mm->mem[asid].range = 0;      /* to be calculated */
 	}
 
 	/* we accept at maximum 2 GM regions: for QoS fast & slow */
 	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3)
-		mm->mem[AIPU_MEM_REGION_TYPE_GM].max_cnt = 2;
-	else
-		mm->mem[AIPU_MEM_REGION_TYPE_GM].max_cnt = 0;
+		mm->gm_max_cnt = 2;
 
-	/* currently, we only support one DTCM region in v2_2/v3 */
-	if (mm->version != AIPU_ISA_VERSION_ZHOUYI_V2_2 &&
-	    mm->version != AIPU_ISA_VERSION_ZHOUYI_V3)
-		mm->mem[AIPU_MEM_REGION_TYPE_DTCM].max_cnt = 0;
-	else
-		mm->mem[AIPU_MEM_REGION_TYPE_DTCM].max_cnt = 1;
+	/* currently, we only support one DTCM region in v2_2 */
+	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
+		mm->dtcm_max_cnt = 1;
 
 	/**
 	 * Device tree binding for Zhouyi V3:
@@ -664,111 +805,29 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	 * If AIPU is behind an IOMMU, in devicetree, memory-region attribute is optional;
 	 * otherwise it must be specified;
 	 *
-	 * [memory] type is necessary; [sram] & [dtcm] types are optional;
-	 *
 	 * KMD can accept multiple DRAM regions and/or multiple SRAM regions;
 	 */
-	while (idx < AIPU_CONFIG_MAX_RESERVED_REGIONS) {
-		u64 size = 0;
-
-		np = of_parse_phandle(mm->dev->of_node, "memory-region", idx);
-		if (!np)
-			break;
-
-		if (!strcmp(np->name, "memory")) {
-			type = AIPU_MEM_REGION_TYPE_MEMORY;
-		} else if (!strcmp(np->name, "sram")) {
-			type = AIPU_MEM_REGION_TYPE_SRAM;
-		} else if (!strcmp(np->name, "dtcm")) {
-			type = AIPU_MEM_REGION_TYPE_DTCM;
+	if (AIPU_CONFIG_ENABLE_MEM_MANAGEMENT) {
+		if (mm->has_iommu) {
+			ret = aipu_mm_add_iommu_region(mm);
+			if (ret)
+				goto err;
 		} else {
-			dev_err(mm->dev, "invalid memory region name: %s\n", np->name);
-			ret = -EINVAL;
-			goto err;
-		}
-
-		if (mm->mem[type].cnt == mm->mem[type].max_cnt) {
-			idx++;
-			continue;
-		}
-
-		/* bypass mapping SoC SRAM if CPU cannot access it */
-		if (type == AIPU_MEM_REGION_TYPE_SRAM && !AIPU_CONFIG_HOST_MAP_SRAM) {
-			idx++;
-			continue;
-		}
-
-		ret = of_address_to_resource(np, 0, &res);
-		if (ret) {
-			of_node_put(np);
-			dev_err(mm->dev, "of_address_to_resource failed (ret = %d)", ret);
-			ret = -EINVAL;
-			goto err;
-		}
-
-		size = res.end - res.start + 1;
-		if (type == AIPU_MEM_REGION_TYPE_DTCM && size > ZHOUYI_V2_DTCM_MAX_BYTES) {
-			dev_info(mm->dev,
-				 "the DTCM will be clipped to the maximum configurable value\n");
-			size = ZHOUYI_V2_DTCM_MAX_BYTES;
-		}
-
-		/* dtcm register is configured based on these info */
-		if (mm->mem[type].base > res.start)
-			mm->mem[type].base = res.start;
-		mm->mem[type].tot_size += size;
-
-		/* bypass mapping DTCM if CPU cannot access it */
-		if (type == AIPU_MEM_REGION_TYPE_DTCM && !AIPU_CONFIG_HOST_MAP_DTCM) {
-			idx++;
-			continue;
-		}
-
-		reg = aipu_mm_create_region(mm, &mm->mem[type], res.start, size, idx);
-		if (IS_ERR(reg)) {
-			ret = PTR_ERR(reg);
-			goto err;
-		}
-
-		for (asid_idx = 0; asid_idx < ZHOUYI_ASID_COUNT; asid_idx++) {
-			u32 asid = AIPU_BUF_ASID_0;
-
-			if (!of_property_read_u32_index(np, "asid", asid_idx, &asid)) {
-				if (asid >= ZHOUYI_ASID_COUNT) {
-					dev_err(mm->dev, "dts: invalid asid: %u\n", asid);
-					continue;
-				}
-
-				mm->ase[asid] = reg;
-				asid_set = true;
-			} else {
-				break;
+			mm->reg_cnt = aipu_mm_add_reserved_regions(mm);
+			if (!mm->reg_cnt) {
+				dev_err(mm->dev, "you shall reserve mem region(s) \
+					if no iommu presents");
+				ret = -EINVAL;
+				goto err;
 			}
 		}
-
-		of_node_put(np);
-		idx++;
+	} else {
+		/* to be supported */
+		mm->reg_cnt = 0;
 	}
 
-	for (asid_idx = 0; asid_idx < ZHOUYI_ASID_COUNT; asid_idx++) {
-		/* if any asid region is not set in dts, memory allocation at runtime may fail */
-		if (!mm->ase[asid_idx]) {
-			dev_err(mm->dev, "dts: region of asid #%u is not set\n", asid_idx);
-		} else {
-			dev_info(mm->dev, "dts: asid #%u base: 0x%llx, size 0x%llx\n", asid_idx,
-				 mm->ase[asid_idx]->base_iova, mm->ase[asid_idx]->bytes);
-		}
-	}
-
-	if (!asid_set) {
-		dev_info(mm->dev, "the default asid regions will be applied\n");
-
-		/* the last created region is registered to all ASEs */
-		mm->ase[AIPU_BUF_ASID_0] = reg;
-		mm->ase[AIPU_BUF_ASID_1] = reg;
-		mm->ase[AIPU_BUF_ASID_2] = reg;
-		mm->ase[AIPU_BUF_ASID_3] = reg;
-	}
+	if (version > AIPU_ISA_VERSION_ZHOUYI_V1)
+		aipu_mm_set_asid_base(mm);
 
 	goto finish;
 
@@ -785,21 +844,31 @@ finish:
  */
 int aipu_deinit_mm(struct aipu_memory_manager *mm)
 {
-	int type = 0;
+	int idx = 0;
 	struct aipu_mem_region *reg = NULL;
 
 	/* deinit GM regions in a different way */
-	for (type = 0; type < AIPU_MEM_REGION_TYPE_GM; type++) {
-		list_for_each_entry(reg, &mm->mem[type].reg->list, list)
-			aipu_mm_deinit_mem_region(mm, reg);
-	}
+	for (idx = 0; idx < mm->reg_cnt; idx++) {
+		reg = mm->regs[idx];
 
-	aipu_mm_deinit_gm(mm);
+		if (reg->type != AIPU_MEM_REGION_TYPE_GM) {
+			aipu_mm_deinit_mem_region(mm, reg);
+		} else if (mm->gm_policy != AIPU_GM_POLICY_NONE) {
+			if (reg->pages) {
+				vfree(reg->pages);
+				reg->pages = NULL;
+			}
+		}
+		mm->regs[idx] = NULL;
+	}
 
 	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3 && mm->gm_policy_attr) {
 		aipu_common_destroy_attr(mm->dev, &mm->gm_policy_attr);
 		mm->gm_policy_attr = NULL;
 	}
+
+	memset(&mm->mem, 0, sizeof(*mm->mem) * ZHOUYI_ASID_COUNT);
+	mm->reg_cnt = 0;
 
 	return 0;
 }
@@ -816,10 +885,13 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 		  struct file *filp)
 {
 	int ret = 0;
+	struct aipu_mem_region_obj *obj = NULL;
 	struct aipu_mem_region *reg = NULL;
 	int type;
 	unsigned long flags;
 	struct tcb_buf *tcb = NULL;
+	bool allocated = false;
+	bool fall_back = false;
 
 	if (!mm || !buf_req)
 		return -EINVAL;
@@ -830,6 +902,9 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 			buf_req->bytes, buf_req->align_in_page, buf_req->asid);
 		return -EINVAL;
 	}
+
+	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V1)
+		buf_req->asid = AIPU_BUF_ASID_0;
 
 	if (buf_req->region == AIPU_BUF_REGION_QOS_SLOW_GM ||
 	    buf_req->region == AIPU_BUF_REGION_QOS_FAST_GM) {
@@ -850,50 +925,41 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 	    type == AIPU_MEM_REGION_TYPE_GM)
 		type = AIPU_MEM_REGION_TYPE_SRAM;
 
-	/* fall back to MEMORY if SRAM/DTCM/GM region count is 0 */
-	if (!mm->mem[type].cnt)
-		type = AIPU_MEM_REGION_TYPE_MEMORY;
-
 	mutex_lock(&mm->lock);
 
-	/* try to allocate from the matched ASID region first */
-	reg = mm->ase[buf_req->asid];
-	if (reg) {
-		ret = aipu_mm_alloc_in_region_no_lock(mm, buf_req, reg, filp, &tcb);
-		if (!ret) {
-			buf_req->desc.asid = buf_req->asid;
-			goto unlock;
-		}
-		dev_info(mm->dev, "allocation failed: size 0x%llx, asid %u, fall back to others\n",
-			 buf_req->bytes, buf_req->asid);
-	}
+	/* should check after lock */
+	if (type == AIPU_MEM_REGION_TYPE_SRAM && mm->sram_disable)
+		type = AIPU_MEM_REGION_TYPE_MEMORY;
 
-	/* allocate from the specified regions */
-	list_for_each_entry(reg, &mm->mem[type].reg->list, list) {
-		ret = aipu_mm_alloc_in_region_no_lock(mm, buf_req, reg, filp, &tcb);
-		if (!ret)
-			break;
-	}
-
-	/* try to allocate from memory regions if SRAM/DTCM/GM has no free buffer */
-	if (ret && type != AIPU_MEM_REGION_TYPE_MEMORY) {
-		dev_info(mm->dev,
-			 "mm allocate region type %d failed, fall back to memory regions\n", type);
-		list_for_each_entry(reg, &mm->mem[AIPU_MEM_REGION_TYPE_MEMORY].reg->list, list) {
+alloc:
+	list_for_each_entry(obj, get_region_head(mm, buf_req->asid), list) {
+		reg = obj->reg;
+		if (reg->type == type) {
 			ret = aipu_mm_alloc_in_region_no_lock(mm, buf_req, reg, filp, &tcb);
-			if (!ret)
+			if (!ret) {
+				allocated = true;
 				break;
+			}
 		}
 	}
 
-	if (ret) {
+	/* fall back to main memory */
+	if (!allocated && !fall_back && type != AIPU_MEM_REGION_TYPE_MEMORY) {
+		type = AIPU_MEM_REGION_TYPE_MEMORY;
+		fall_back = true;
+		goto alloc;
+	}
+
+	if (!allocated) {
 		dev_err(mm->dev,
 			"[malloc] buffer allocation failed for: bytes 0x%llx, page align %d\n",
 			buf_req->bytes, buf_req->align_in_page);
-		goto unlock;
+	} else if (fall_back) {
+		dev_info(mm->dev,
+			 "[malloc] buffer allocation done (fall back to memory): bytes 0x%llx\n",
+			 buf_req->bytes);
 	}
 
-unlock:
 	WARN_ON(buf_req->desc.pa % (buf_req->align_in_page << PAGE_SHIFT));
 	mutex_unlock(&mm->lock);
 	if (reg && tcb) {
@@ -948,14 +1014,10 @@ int aipu_mm_free(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf, stru
  */
 void aipu_mm_free_buffers(struct aipu_memory_manager *mm, struct file *filp)
 {
-	struct aipu_mem_region *reg = NULL;
-	int type;
+	int idx = 0;
 
-	for (type = AIPU_MEM_REGION_TYPE_MEMORY; type < AIPU_MEM_REGION_TYPE_MAX; type++) {
-		list_for_each_entry(reg, &mm->mem[type].reg->list, list) {
-			aipu_mm_free_filp_in_region(mm, reg, filp);
-		}
-	}
+	for (idx = 0; idx < mm->reg_cnt; idx++)
+		aipu_mm_free_filp_in_region(mm, mm->regs[idx], filp);
 }
 
 /**
@@ -1028,22 +1090,20 @@ int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 int aipu_mm_disable_sram_allocation(struct aipu_memory_manager *mm, struct file *filp)
 {
 	int ret = 0;
+	int idx = 0;
 	struct aipu_mem_region *reg = NULL;
 	struct aipu_sram_disable_per_fd *sram_disable_per_fd = NULL;
 
 	if (!mm)
 		return -EINVAL;
 
-	/* If there is no SRAM in this system, it cannot be disabled. */
-	if (!mm->mem[AIPU_MEM_REGION_TYPE_SRAM].cnt) {
-		dev_err(mm->dev, "no SRAM region to be disabled");
-		return -EPERM;
-	}
-
 	mutex_lock(&mm->lock);
 	/* If SRAM is under using by driver & AIPU, it cannot be disabled. */
-	list_for_each_entry(reg, &mm->mem[AIPU_MEM_REGION_TYPE_SRAM].reg->list, list) {
-		if (!bitmap_empty(reg->bitmap, reg->count)) {
+	for (idx = 0; idx < mm->reg_cnt; idx++) {
+		reg = mm->regs[idx];
+
+		if (reg->type == AIPU_MEM_REGION_TYPE_SRAM &&
+		    !bitmap_empty(reg->bitmap, reg->count)) {
 			dev_err(mm->dev, "the SRAM region to be disabled is under using");
 			ret = -EPERM;
 			break;
@@ -1070,7 +1130,7 @@ int aipu_mm_disable_sram_allocation(struct aipu_memory_manager *mm, struct file 
 			sram_disable_per_fd->filp = filp;
 			list_add(&sram_disable_per_fd->list, &mm->sram_disable_head->list);
 		}
-		mm->mem[AIPU_MEM_REGION_TYPE_SRAM].disable++;
+		mm->sram_disable++;
 	}
 unlock:
 	mutex_unlock(&mm->lock);
@@ -1092,13 +1152,8 @@ int aipu_mm_enable_sram_allocation(struct aipu_memory_manager *mm, struct file *
 	if (!mm)
 		return -EINVAL;
 
-	if (!mm->mem[AIPU_MEM_REGION_TYPE_SRAM].cnt) {
-		dev_err(mm->dev, "no SRAM region to be enabled");
-		return -EPERM;
-	}
-
 	mutex_lock(&mm->lock);
-	if (mm->mem[AIPU_MEM_REGION_TYPE_SRAM].disable == 0) {
+	if (mm->sram_disable == 0) {
 		ret = -EPERM;
 		goto unlock;
 	}
@@ -1110,7 +1165,7 @@ int aipu_mm_enable_sram_allocation(struct aipu_memory_manager *mm, struct file *
 			break;
 		}
 	}
-	mm->mem[AIPU_MEM_REGION_TYPE_SRAM].disable--;
+	mm->sram_disable--;
 unlock:
 	mutex_unlock(&mm->lock);
 	return ret;
@@ -1327,9 +1382,7 @@ u64 aipu_mm_get_asid_base(struct aipu_memory_manager *mm, u32 asid)
 	if (!mm || asid >= ZHOUYI_ASID_COUNT)
 		return 0;
 
-	if (mm->ase[asid])
-		return mm->ase[asid]->base_iova;
-	return 0;
+	return mm->mem[asid].base;
 }
 
 u64 aipu_mm_get_asid_size(struct aipu_memory_manager *mm, u32 asid)
@@ -1337,9 +1390,7 @@ u64 aipu_mm_get_asid_size(struct aipu_memory_manager *mm, u32 asid)
 	if (!mm || asid >= ZHOUYI_ASID_COUNT)
 		return 0;
 
-	if (mm->ase[asid])
-		return mm->ase[asid]->bytes;
-	return 0;
+	return mm->mem[asid].range;
 }
 
 void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap)
@@ -1353,13 +1404,16 @@ void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap)
 	cap->asid3_base = aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_3);
 }
 
-static void aipu_mm_get_gm_region_no_lock(struct aipu_memory_manager *mm,
-					  struct aipu_mem_region *reg,
+static int aipu_mm_get_gm_region_no_lock(struct aipu_memory_manager *mm,
 					  struct aipu_buf_desc *buf,
 					  struct aipu_mem_region *gm)
 {
+	struct aipu_mem_region *reg = aipu_mm_find_region(mm, buf->pa, "get_gm");
+	if (!reg)
+		return -EINVAL;
+
 	gm->base_iova = buf->pa;
-	gm->base_pa = gm->base_iova; /* should not be used */
+	gm->base_pa = 0;
 	gm->base_va = (void *)((unsigned long *)reg->base_va + gm->base_iova - reg->base_iova);
 	gm->bytes = buf->bytes;
 	gm->base_pfn = PFN_DOWN(gm->base_iova);
@@ -1367,14 +1421,13 @@ static void aipu_mm_get_gm_region_no_lock(struct aipu_memory_manager *mm,
 	gm->tcb_buf_head = NULL;
 	gm->dev = reg->dev;
 	gm->attrs = reg->attrs;
-	aipu_mm_init_pages(mm, gm);
+	return aipu_mm_init_pages(mm, gm);
 }
 
 int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes, int cluster_id)
 {
 	int ret = 0;
 	struct aipu_buf_request buf_req;
-	struct aipu_mem_region *reg = NULL;
 	struct aipu_mem_region *gm = NULL;
 
 	if (!mm || !bytes || mm->gm_policy == AIPU_GM_POLICY_NONE) {
@@ -1388,12 +1441,6 @@ int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes, int cluster_id)
 	buf_req.asid = AIPU_BUF_ASID_0;
 	buf_req.bytes = bytes;
 
-	list_for_each_entry(reg, &mm->mem[AIPU_MEM_REGION_TYPE_MEMORY].reg->list, list) {
-		ret = aipu_mm_alloc_in_region_no_lock(mm, &buf_req, reg, NULL, NULL);
-		if (!ret)
-			break;
-	}
-
 	ret = aipu_mm_alloc(mm, &buf_req, NULL);
 	if (ret) {
 		dev_err(mm->dev, "GM allocation failed: bytes 0x%x", bytes);
@@ -1403,11 +1450,15 @@ int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes, int cluster_id)
 	gm = devm_kzalloc(mm->dev, sizeof(*gm), GFP_KERNEL);
 	gm->cluster_id = cluster_id;
 	gm->qos = AIPU_GM_QOS_ALL;
-	aipu_mm_get_gm_region_no_lock(mm, reg, &buf_req.desc, gm);
-	list_add(&gm->list, &mm->mem[AIPU_MEM_REGION_TYPE_GM].reg->list);
 
-	mm->mem[AIPU_MEM_REGION_TYPE_GM].base = gm->base_iova;
-	mm->mem[AIPU_MEM_REGION_TYPE_GM].tot_size = bytes;
+	ret = aipu_mm_get_gm_region_no_lock(mm, &buf_req.desc, gm);
+	if (ret) {
+		dev_err(mm->dev, "init GM region failed\n");
+		return ret;
+	}
+
+	mm->gm = gm;
+
 	dev_info(mm->dev, "cluster #%d GM region allocated: pa [0x%llx, 0x%llx]",
 		 cluster_id, gm->base_iova, gm->base_iova + gm->bytes - 1);
 
@@ -1416,16 +1467,12 @@ int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes, int cluster_id)
 
 void aipu_mm_deinit_gm(struct aipu_memory_manager *mm)
 {
-	struct aipu_mem_region *gm = NULL;
-
-	if (!mm || mm->gm_policy == AIPU_GM_POLICY_NONE)
+	if (!mm || mm->gm)
 		return;
 
-	list_for_each_entry(gm, &mm->mem[AIPU_MEM_REGION_TYPE_GM].reg->list, list) {
-		if (gm->pages) {
-			vfree(gm->pages);
-			gm->pages = NULL;
-		}
+	if (mm->gm->pages) {
+		vfree(mm->gm->pages);
+			mm->gm->pages = NULL;
 	}
 }
 
@@ -1455,17 +1502,16 @@ void aipu_mm_get_gm(struct aipu_memory_manager *mm, struct aipu_cap *cap)
 	cap->gm1_base = 0;
 	cap->gm1_size = 0;
 
-	if (!mm || mm->version != AIPU_ISA_VERSION_ZHOUYI_V3 ||
-	    mm->gm_policy == AIPU_GM_POLICY_NONE)
+	if (!mm || !mm->gm)
 		return;
 
-	cap->gm0_base = mm->mem[AIPU_MEM_REGION_TYPE_GM].base;
+	cap->gm0_base = mm->gm->base_iova;
 
 	mutex_lock(&mm->lock);
 	if (mm->gm_policy == AIPU_GM_POLICY_SHARED) {
-		cap->gm0_size = mm->mem[AIPU_MEM_REGION_TYPE_GM].tot_size;
+		cap->gm0_size = mm->gm->bytes;
 	} else {
-		cap->gm0_size = mm->mem[AIPU_MEM_REGION_TYPE_GM].tot_size >> 1;
+		cap->gm0_size = mm->gm->bytes >> 1;
 		cap->gm1_base = cap->gm0_base + cap->gm0_size;
 		cap->gm1_size = cap->gm0_size;
 	}
@@ -1474,12 +1520,22 @@ void aipu_mm_get_gm(struct aipu_memory_manager *mm, struct aipu_cap *cap)
 
 void get_dtcm(struct aipu_memory_manager *mm, u64 *base, u32 *size)
 {
-	struct aipu_mem_region_list *region;
+	struct aipu_mem_region *reg = NULL;
+	int idx = 0;
 
 	if (!mm || !base || !size)
 		return;
 
-	region = &mm->mem[AIPU_MEM_REGION_TYPE_DTCM];
-	*base = region->base;
-	*size = region->tot_size;
+	for (idx = 0; idx < mm->reg_cnt; idx++) {
+		reg = mm->regs[idx];
+
+		if (mm->regs[idx]->type == AIPU_MEM_REGION_TYPE_DTCM) {
+			*base = reg->base_iova;
+			*size = reg->bytes;
+			return;
+		}
+	}
+
+	*base = 0;
+	*size = 0;
 }
