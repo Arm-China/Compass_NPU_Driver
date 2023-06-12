@@ -19,7 +19,7 @@ namespace aipudrv
 
 #define TOTAL_SIM_MEM_SZ (14UL << 28)
 #define SIM_SRAM_SZ      (0)
-#define SIM_DTCM_SZ      (8 << 20) /* 8 MB */
+#define SIM_DTCM_SZ      (4 << 20) /* 4 MB */
 
 enum {
     MEM_REGION_DDR  = 0,
@@ -74,8 +74,15 @@ public:
     {
         if ((region == MEM_REGION_SRAM) && (m_memblock[MEM_REGION_SRAM].size != 0))
             return m_memblock[MEM_REGION_SRAM].base;
+        else if (region == MEM_REGION_DTCM)
+            return m_memblock[MEM_REGION_DTCM].base;
         else
             return m_memblock[MEM_REGION_DDR].base;
+    }
+
+    uint32_t get_memregion_size(int region)
+    {
+        return m_memblock[region].size;
     }
 
 public:

@@ -130,8 +130,8 @@ typedef struct {
      * set simulator to be NULL for aipu v3;
      * log_level works for all simulator versions;
      */
-    const char* simulator;
-    const char* log_file_path;
+    const char *simulator;
+    const char *log_file_path;
     const char *x2_arch_desc;
     const char *plugin_name;
     const char *json_filename;

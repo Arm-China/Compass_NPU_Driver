@@ -39,6 +39,10 @@ bool aipudrv::Simulator::has_target(uint32_t arch, uint32_t version, uint32_t co
     aipu_cap.config = config;
     m_part_caps.push_back(aipu_cap);
 
+    if (version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
+        m_dram->set_dtcm_info(((UMemory *)m_dram)->get_memregion_base(MEM_REGION_DTCM),
+            ((UMemory *)m_dram)->get_memregion_size(MEM_REGION_DTCM));
+
     return true;
 }
 
@@ -202,6 +206,11 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
         ofs << "EN_EVAL=1\n";
     else
         ofs << "EN_EVAL=0\n";
+
+    /* Only aipu v2(X1) support DTCM */
+    if (job.kdesc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
+        ofs << "DTCM_SIZE=0x" << std::hex << m_dram->get_dtcm_size() << "\n";
+
     ofs << "\n";
 
     /**
