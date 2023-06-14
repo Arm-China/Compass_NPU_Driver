@@ -118,6 +118,12 @@ protected:
     /* call back function for handling job self */
     callback_wrapper_t *cb_wrap = nullptr;
 
+    /**
+     * set 'true' if successfully alloc a large buffer
+     * to gather more scatter buffers
+     */
+    bool m_optimized_reuse_alloc = false;
+
 protected:
     const aipu_global_config_simulation_t* m_cfg;
     const aipu_global_config_hw_t* m_hw_cfg;

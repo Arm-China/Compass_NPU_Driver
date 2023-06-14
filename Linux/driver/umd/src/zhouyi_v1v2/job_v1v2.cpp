@@ -29,12 +29,12 @@ aipudrv::JobV12::~JobV12()
 {
 }
 
-aipu_status_t aipudrv::JobV12::setup_rodata_v12()
+aipu_status_t aipudrv::JobV12::setup_rodata_v12(std::set<uint32_t> *dma_buf_idx)
 {
     const std::vector<struct GraphParamMapLoadDesc>& param_map =
         get_graph().m_param_map;
 
-    return setup_rodata(param_map, m_reuses, m_weights, m_rodata, m_descriptor);
+    return setup_rodata(param_map, m_reuses, m_weights, m_rodata, m_descriptor, dma_buf_idx);
 }
 
 aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
@@ -158,6 +158,73 @@ finish:
     if (ret)
         free_job_buffers();
 
+    return ret;
+}
+
+aipu_status_t aipudrv::JobV12::specify_io_buffer(uint32_t type, uint32_t index,
+    uint64_t offset, int fd, bool update_ro)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    const std::vector<struct GraphIOTensorDesc> *iobuffer_vec = nullptr;
+    BufferDesc *bufferDesc = nullptr;
+    const char *str = "free_input";
+    uint32_t reuse_index = 0;
+    uint64_t buffer_pa = 0;
+    struct aipu_dma_buf dma_buf{fd, 0, 0};
+
+    switch (type)
+    {
+        case AIPU_TENSOR_TYPE_INPUT:
+            iobuffer_vec = &get_graph().m_io.inputs;
+            break;
+
+        case AIPU_TENSOR_TYPE_OUTPUT:
+            iobuffer_vec = &get_graph().m_io.outputs;
+            str = "free_output";
+            break;
+
+        default:
+            ret = AIPU_STATUS_ERROR_INVALID_TENSOR_ID;
+            LOG(LOG_ERR, "tensor type: %d, index: %d [not exist]\n",
+                type, index);
+            goto out;
+    }
+
+    if (index > iobuffer_vec->size())
+    {
+        ret = AIPU_STATUS_ERROR_INVALID_TENSOR_ID;
+        goto out;
+    }
+
+    /* free io buffer allocated internally,replace it with new buffer */
+    reuse_index = (*iobuffer_vec)[index].ref_section_iter;
+    bufferDesc = &m_reuses[reuse_index];
+    m_dma_buf_idx.insert(reuse_index);
+
+    if (!m_optimized_reuse_alloc)
+    {
+        ret = m_mem->free(bufferDesc, str);
+        if (ret != AIPU_STATUS_SUCCESS)
+            goto out;
+    }
+
+    ret = convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_GET_DMA_BUF_INFO, &dma_buf));
+    if (ret != AIPU_STATUS_SUCCESS)
+        goto out;
+
+    buffer_pa = dma_buf.pa + offset;
+    bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
+    (*iobuffer_vec)[index].set_dmabuf_info(fd, dma_buf.bytes, offset);
+
+    if (update_ro)
+    {
+        update_io_buffers(get_graph().m_io, m_reuses);
+        ret = setup_rodata_v12(&m_dma_buf_idx);
+        if (AIPU_STATUS_SUCCESS != ret)
+            goto out;
+    }
+
+out:
     return ret;
 }
 

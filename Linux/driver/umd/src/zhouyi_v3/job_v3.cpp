@@ -606,6 +606,7 @@ add_sg:
         }
     }
 
+    m_optimized_reuse_alloc = true;
     return retval;
 
 alloc_fail:
@@ -832,9 +833,13 @@ aipu_status_t aipudrv::JobV3::specify_io_buffer(uint32_t type, uint32_t index,
     reuse_index = (*iobuffer_vec)[index].ref_section_iter;
     bufferDesc = &m_sg_job[0].reuses[reuse_index];
     m_sg_job[0].dma_buf_idx.insert(reuse_index);
-    ret = m_mem->free(bufferDesc, str);
-    if (ret != AIPU_STATUS_SUCCESS)
-        goto out;
+
+    if (!m_optimized_reuse_alloc)
+    {
+        ret = m_mem->free(bufferDesc, str);
+        if (ret != AIPU_STATUS_SUCCESS)
+            goto out;
+    }
 
     ret = convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_GET_DMA_BUF_INFO, &dma_buf));
     if (ret != AIPU_STATUS_SUCCESS)

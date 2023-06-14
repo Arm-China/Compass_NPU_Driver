@@ -38,6 +38,13 @@ private:
     uint32_t m_bind_core_id = 0;
     uint32_t m_fm_mem_region = AIPU_BUF_REGION_DEFAULT;
 
+public:
+    /**
+     * record buffer index, will not free these special buffer as it is
+     * allocated externally.
+     */
+    std::set<uint32_t>   m_dma_buf_idx;
+
 private:
     GraphV12& get_graph()
     {
@@ -54,13 +61,15 @@ private:
         return static_cast< std::vector<BufferDesc>& >(m_reuses);
     }
     aipu_status_t free_job_buffers();
-    aipu_status_t setup_rodata_v12();
+    aipu_status_t setup_rodata_v12(std::set<uint32_t> *dma_buf_idx = nullptr);
 
 public:
     virtual aipu_status_t init(const aipu_global_config_simulation_t* cfg,
         const aipu_global_config_hw_t* hw_cfg);
     virtual aipu_status_t schedule();
     virtual aipu_status_t destroy();
+    virtual aipu_status_t specify_io_buffer(uint32_t type, uint32_t index,
+        uint64_t offset, int fd = -1, bool update_ro = true);
     aipu_status_t config_simulation(uint64_t types, const aipu_job_config_simulation_t* config);
     aipu_status_t bind_core(uint32_t core_id);
     aipu_status_t debugger_run();
