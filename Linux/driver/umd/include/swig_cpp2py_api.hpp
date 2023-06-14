@@ -463,7 +463,7 @@ public:
 
             default:
                 fprintf(stderr, "[PY UMD ERROR] AipuIoctl: no support cmd %d\n", cmd);
-                return ret;
+                return -1;
         }
 
         ret = aipu_ioctl(m_ctx, ioctl_cmd, nullptr);
