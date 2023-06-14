@@ -35,6 +35,13 @@ enum aipu_mem_region_type {
 
 struct tcb_buf;
 
+struct aipu_direct_mem {
+	struct aipu_buf_desc desc;
+	void *va;
+	struct file *filp;
+	struct list_head list;
+};
+
 /**
  * struct aipu_virt_page - virtual page
  * @tid: ID of thread requested this page (and the following pages)
@@ -172,6 +179,7 @@ struct aipu_memory_manager {
 	struct aipu_mem_region *regs[AIPU_CONFIG_MAX_RESERVED_REGIONS];
 	struct aipu_mem_region_list mem[ZHOUYI_ASID_COUNT];
 	struct aipu_mem_region *gm;
+	struct aipu_direct_mem *direct_mem;
 	int gm_policy;
 	int gm_max_cnt;
 	int dtcm_max_cnt;

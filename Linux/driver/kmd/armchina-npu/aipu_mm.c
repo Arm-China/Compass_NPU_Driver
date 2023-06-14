@@ -163,11 +163,6 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 	if (!mm || !size)
 		return ERR_PTR(-EINVAL);
 
-	if (!mm->has_iommu && !reserved) {
-		dev_err(mm->dev, "memory should be reserved if no IOMMU exists\n");
-		return ERR_PTR(-EINVAL);
-	}
-
 	reg = devm_kzalloc(mm->dev, sizeof(*reg), GFP_KERNEL);
 	if (!reg)
 		return ERR_PTR(-ENOMEM);
@@ -755,6 +750,11 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 		mm->mem[asid].range = 0;      /* to be calculated */
 	}
 
+	mm->direct_mem = devm_kzalloc(mm->dev, sizeof(*mm->direct_mem), GFP_KERNEL);
+	if (!mm->direct_mem)
+		return -ENOMEM;
+	INIT_LIST_HEAD(&mm->direct_mem->list);
+
 	/* we accept at maximum 2 GM regions: for QoS fast & slow */
 	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3)
 		mm->gm_max_cnt = 2;
@@ -798,43 +798,27 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	iommu_group_put(group);
 	dev_info(mm->dev, "AIPU is%s behind an IOMMU\n", mm->has_iommu ? "" : " not");
 
-	dev_info(mm->dev, "driver mem management is %s\n",
-		 AIPU_CONFIG_ENABLE_MEM_MANAGEMENT ? "enabled" : "disabled");
-
 	/*
 	 * If AIPU is behind an IOMMU, in devicetree, memory-region attribute is optional;
-	 * otherwise it must be specified;
+	 * otherwise the device specific or system global DMA/CMA region is used;
 	 *
 	 * KMD can accept multiple DRAM regions and/or multiple SRAM regions;
 	 */
-	if (AIPU_CONFIG_ENABLE_MEM_MANAGEMENT) {
-		if (mm->has_iommu) {
-			ret = aipu_mm_add_iommu_region(mm);
-			if (ret)
-				goto err;
-		} else {
-			mm->reg_cnt = aipu_mm_add_reserved_regions(mm);
-			if (!mm->reg_cnt) {
-				ret = -EINVAL;
-				goto err;
-			}
+	if (!mm->has_iommu)
+		mm->reg_cnt = aipu_mm_add_reserved_regions(mm);
+	else if (AIPU_CONFIG_FORCE_CONTIGUOUS)
+		ret = aipu_mm_add_iommu_region(mm);
+
+	if (version > AIPU_ISA_VERSION_ZHOUYI_V1) {
+		if (!mm->reg_cnt) {
+			dev_err(mm->dev, "zero reg count is not supported on v2/v3");
+			return -EINVAL;
 		}
-	} else {
-		/* to be supported */
-		mm->reg_cnt = 0;
+		aipu_mm_set_asid_base(mm);
 	}
 
-	if (version > AIPU_ISA_VERSION_ZHOUYI_V1)
-		aipu_mm_set_asid_base(mm);
+	dev_info(mm->dev, "driver mem management is %s\n", mm->reg_cnt ? "enabled" : "disabled");
 
-	goto finish;
-
-err:
-	if (!mm->has_iommu && !mm->reg_cnt)
-		dev_err(mm->dev, "you shall reserve mem region(s) if no iommu presents");
-	aipu_deinit_mm(mm);
-
-finish:
 	return ret;
 }
 
@@ -871,6 +855,43 @@ int aipu_deinit_mm(struct aipu_memory_manager *mm)
 	mm->reg_cnt = 0;
 
 	return 0;
+}
+
+static int aipu_mm_direct_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_req,
+				struct file *filp)
+{
+	int ret = 0;
+	void *va = NULL;
+	dma_addr_t iova = 0;
+	struct aipu_direct_mem *mem = NULL;
+
+	va = dma_alloc_coherent(mm->dev, buf_req->bytes, &iova, GFP_KERNEL);
+	if (!va)
+		return -ENOMEM;
+
+	mem = devm_kzalloc(mm->dev, sizeof(*mem), GFP_KERNEL);
+	if (!mem) {
+		ret = -ENOMEM;
+		goto err;
+	}
+
+	buf_req->desc.pa = iova;
+	buf_req->desc.dev_offset = iova;
+	buf_req->desc.bytes = buf_req->bytes;
+	mem->desc = buf_req->desc;
+	mem->va = va;
+	mem->filp = filp;
+	INIT_LIST_HEAD(&mem->list);
+
+	mutex_lock(&mm->lock);
+	list_add(&mem->list, &mm->direct_mem->list);
+	mutex_unlock(&mm->lock);
+
+	return 0;
+
+err:
+	dma_free_coherent(mm->dev, buf_req->bytes, va, iova);
+	return ret;
 }
 
 /**
@@ -925,6 +946,9 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 	    type == AIPU_MEM_REGION_TYPE_GM)
 		type = AIPU_MEM_REGION_TYPE_SRAM;
 
+	if (!mm->reg_cnt)
+		return aipu_mm_direct_alloc(mm, buf_req, filp);
+
 	mutex_lock(&mm->lock);
 
 	/* should check after lock */
@@ -970,6 +994,24 @@ alloc:
 	return ret;
 }
 
+static int aipu_mm_direct_free(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf,
+			       struct file *filp)
+{
+	struct aipu_direct_mem *mem = NULL;
+
+	mutex_lock(&mm->lock);
+	list_for_each_entry(mem, &mm->direct_mem->list, list) {
+		if (mem->desc.pa == buf->pa && mem->filp == filp) {
+			dma_free_coherent(mm->dev, mem->desc.bytes, mem->va, mem->desc.pa);
+			list_del(&mem->list);
+			devm_kfree(mm->dev, mem);
+			break;
+		}
+	}
+	mutex_unlock(&mm->lock);
+	return 0;
+}
+
 /**
  * @aipu_mm_free() - free buffer allocated by aipu_mm_alloc()
  * @mm:   pointer to memory manager struct initialized in aipu_init_mm()
@@ -987,6 +1029,9 @@ int aipu_mm_free(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf, stru
 
 	if (!mm || !buf)
 		return -EINVAL;
+
+	if (!mm->reg_cnt)
+		return aipu_mm_direct_free(mm, buf, filp);
 
 	reg = aipu_mm_find_region(mm, buf->pa, "free");
 	if (!reg)
@@ -1015,9 +1060,59 @@ int aipu_mm_free(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf, stru
 void aipu_mm_free_buffers(struct aipu_memory_manager *mm, struct file *filp)
 {
 	int idx = 0;
+	struct aipu_direct_mem *mem = NULL;
+	struct aipu_direct_mem *next = NULL;
+
+	if (!mm->reg_cnt) {
+		mutex_lock(&mm->lock);
+		list_for_each_entry_safe(mem, next, &mm->direct_mem->list, list) {
+			if (mem->filp == filp) {
+				dma_free_coherent(mm->dev, mem->desc.bytes, mem->va,
+						  mem->desc.pa);
+				list_del(&mem->list);
+				devm_kfree(mm->dev, mem);
+			}
+		}
+		mutex_unlock(&mm->lock);
+		return;
+	}
 
 	for (idx = 0; idx < mm->reg_cnt; idx++)
 		aipu_mm_free_filp_in_region(mm, mm->regs[idx], filp);
+}
+
+static int aipu_mm_direct_mmap(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
+			       struct file *filp)
+{
+	int ret = 0;
+	struct aipu_direct_mem *mem = NULL;
+	u64 offset = vma->vm_pgoff * PAGE_SIZE;
+	unsigned long vm_pgoff = 0;
+
+	mutex_lock(&mm->lock);
+	list_for_each_entry(mem, &mm->direct_mem->list, list) {
+		if (mem->desc.pa == offset && mem->filp == filp)
+			break;
+	}
+
+	if (!mem) {
+		ret = -EINVAL;
+		goto unlock;
+	}
+
+	vm_pgoff = vma->vm_pgoff;
+	vma->vm_pgoff = 0;
+	vma->vm_flags |= VM_IO;
+	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+
+	/* we only mmap from the start of this buffer */
+	ret = dma_mmap_coherent(mm->dev, vma, mem->va, (dma_addr_t)offset, mem->desc.bytes);
+	vma->vm_pgoff = vm_pgoff;
+
+unlock:
+	mutex_unlock(&mm->lock);
+
+	return ret;
 }
 
 /**
@@ -1041,6 +1136,9 @@ int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 
 	if (!mm || !vma)
 		return -EINVAL;
+
+	if (!mm->reg_cnt)
+		return aipu_mm_direct_mmap(mm, vma, filp);
 
 	offset = vma->vm_pgoff * PAGE_SIZE;
 	len = vma->vm_end - vma->vm_start;
@@ -1094,7 +1192,7 @@ int aipu_mm_disable_sram_allocation(struct aipu_memory_manager *mm, struct file 
 	struct aipu_mem_region *reg = NULL;
 	struct aipu_sram_disable_per_fd *sram_disable_per_fd = NULL;
 
-	if (!mm)
+	if (!mm || !mm->reg_cnt)
 		return -EINVAL;
 
 	mutex_lock(&mm->lock);
@@ -1149,7 +1247,7 @@ int aipu_mm_enable_sram_allocation(struct aipu_memory_manager *mm, struct file *
 	int ret = 0;
 	struct aipu_sram_disable_per_fd *sram_disable_per_fd = NULL;
 
-	if (!mm)
+	if (!mm || !mm->reg_cnt)
 		return -EINVAL;
 
 	mutex_lock(&mm->lock);
@@ -1181,10 +1279,25 @@ unlock:
  */
 char *aipu_mm_get_va(struct aipu_memory_manager *mm, u64 dev_pa)
 {
+	void *va = NULL;
 	struct aipu_mem_region *reg = NULL;
+	struct aipu_direct_mem *mem = NULL;
 
 	if (!mm)
 		return NULL;
+
+	if (!mm->reg_cnt) {
+		mutex_lock(&mm->lock);
+		list_for_each_entry(mem, &mm->direct_mem->list, list) {
+			if (mem->desc.pa <= dev_pa &&
+			    dev_pa <= (mem->desc.pa + mem->desc.bytes)) {
+				va = mem->va + dev_pa - mem->desc.pa;
+				break;
+			}
+		}
+		mutex_unlock(&mm->lock);
+		return va;
+	}
 
 	reg = aipu_mm_find_region(mm, dev_pa, "get_va");
 	if (!reg)
