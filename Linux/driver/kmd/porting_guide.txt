@@ -940,11 +940,9 @@ This script uses Linux kernel checkpatch scripts.
 
 9. Compatibility
 ================
-Zhouyi NPU KMD supports Linux kernel version from 4.x to 5.x. Specifically, we tested the code on
+Zhouyi NPU KMD supports Linux kernel version > 5.0. Specifically, we tested the code on
 the following Linux kernel versions:
 
-    4.9.51
-    4.9.168
     5.4.66
     5.10.5
     5.11.18
@@ -952,8 +950,11 @@ the following Linux kernel versions:
     5.13.8
     5.14.6
     5.15.5
+    5.18.0
+    5.19.0
+    6.0.1
 
-If you find that KMD has compatibility issues with any kernel version (> 4.9.0), please contact us
+If you find that KMD has compatibility issues with any kernel version (> 5.0), please contact us
 and report the issues. Thanks.
 
 10. License
