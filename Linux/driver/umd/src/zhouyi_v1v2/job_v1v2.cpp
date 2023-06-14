@@ -37,10 +37,128 @@ aipu_status_t aipudrv::JobV12::setup_rodata_v12(std::set<uint32_t> *dma_buf_idx)
     return setup_rodata(param_map, m_reuses, m_weights, m_rodata, m_descriptor, dma_buf_idx);
 }
 
+int aipudrv::JobV12::alloc_reuse_buffer_optimized()
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    uint32_t reuse_buf_total_size = 0;
+    uint32_t offset = 0;
+    uint32_t max_align_in_page = 0;
+    int retval = 0;
+
+    m_top_reuse_buf.reset();
+
+    for (uint32_t i = 0; i < get_graph().m_reuse_sections.size(); i++)
+    {
+        uint32_t align_in_page = get_graph().m_reuse_sections[i].align_in_page;
+
+        if (get_graph().m_shared_tensor_map.count(i) == 1)
+            continue;
+
+        max_align_in_page = (align_in_page > max_align_in_page) ? align_in_page : max_align_in_page;
+
+        const GraphSectionDesc &section_desc = get_graph().m_reuse_sections[i];
+        reuse_buf_total_size = (reuse_buf_total_size + ((align_in_page << 12) - 1)) &
+                                ~((align_in_page << 12) - 1);
+        LOG(LOG_DEBUG, "buf %d: align total size: %x, buf align size: %x\n",
+            i, reuse_buf_total_size, ALIGN_PAGE(section_desc.size));
+        reuse_buf_total_size += ALIGN_PAGE(section_desc.size);
+    }
+
+    ret = m_mem->malloc(reuse_buf_total_size, max_align_in_page, &m_top_reuse_buf, "tot_reuse");
+    if (AIPU_STATUS_SUCCESS != ret)
+    {
+        retval = -1;
+        LOG(LOG_ERR, "alloc total reuse buffer, size: 0x%x [fail]\n", reuse_buf_total_size);
+        goto alloc_fail;
+    }
+
+    for (uint32_t i = 0; i < get_graph().m_reuse_sections.size(); i++)
+    {
+        uint32_t size = get_graph().m_reuse_sections[i].size;
+        uint32_t align_in_page = get_graph().m_reuse_sections[i].align_in_page;
+        BufferDesc bufferDesc;
+
+        if (get_graph().m_shared_tensor_map.count(i) == 1)
+        {
+            Buffer buffer;
+            if(m_mem->get_shared_buffer(get_graph().m_shared_tensor_map[i], size, buffer) != 0)
+            {
+                ret = AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
+                retval = -2;
+                goto alloc_fail;
+            }
+            bufferDesc = buffer.desc;
+        } else {
+            bufferDesc.reset();
+            if (size != 0)
+            {
+                bufferDesc.init(m_top_reuse_buf.asid_base, m_top_reuse_buf.pa + offset,
+                    ALIGN_PAGE(size), size);
+                offset = (offset + ((align_in_page << 12) - 1)) &
+                        ~((align_in_page << 12) - 1);
+                offset += ALIGN_PAGE(size);
+            }
+        }
+
+        if (m_dump_reuse)
+            m_mem->mem_bzero(bufferDesc.pa, bufferDesc.size);
+
+        m_reuses.push_back(bufferDesc);
+    }
+
+    m_optimized_reuse_alloc = true;
+    return retval;
+
+alloc_fail:
+    return retval;
+}
+
+
+aipu_status_t aipudrv::JobV12::alloc_reuse_buffer()
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+    for (uint32_t i = 0; i < get_graph().m_reuse_sections.size(); i++)
+    {
+        uint32_t size = get_graph().m_reuse_sections[i].size;
+        uint32_t align_in_page = get_graph().m_reuse_sections[i].align_in_page;
+        BufferDesc bufferDesc;
+
+        if (get_graph().m_shared_tensor_map.count(i) == 1)
+        {
+            Buffer buffer;
+            if(m_mem->get_shared_buffer(get_graph().m_shared_tensor_map[i], size, buffer) != 0)
+            {
+                ret = AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
+                goto finish;
+            }
+            bufferDesc = buffer.desc;
+        } else {
+            bufferDesc.reset();
+            if (size != 0)
+            {
+                std::string str = "reuse_" + std::to_string(i);
+                ret = m_mem->malloc(size, align_in_page, &bufferDesc, str.c_str(), m_fm_mem_region);
+                if (AIPU_STATUS_SUCCESS != ret)
+                    goto finish;
+            }
+        }
+
+        if (m_dump_reuse)
+            m_mem->mem_bzero(bufferDesc.pa, bufferDesc.size);
+
+        m_reuses.push_back(bufferDesc);
+    }
+
+finish:
+    return ret;
+}
+
 aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
     const aipu_global_config_hw_t* hw_cfg)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    int retval = -1;
 
     m_cfg = cfg;
     m_hw_cfg = hw_cfg;
@@ -91,36 +209,17 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
         goto finish;
 
     /* 4. allocate reuse buffers */
-    for (uint32_t i = 0; i < get_graph().m_reuse_sections.size(); i++)
+    if (get_graph().m_hw_version != AIPU_ISA_VERSION_ZHOUYI_V1)
+        retval = alloc_reuse_buffer_optimized();
+
+    if (retval == -1)
     {
-        uint32_t size = get_graph().m_reuse_sections[i].size;
-        uint32_t align_in_page = get_graph().m_reuse_sections[i].align_in_page;
-        BufferDesc bufferDesc;
-
-        if (get_graph().m_shared_tensor_map.count(i) == 1)
-        {
-            Buffer buffer;
-            if(m_mem->get_shared_buffer(get_graph().m_shared_tensor_map[i], size, buffer) != 0)
-            {
-                ret = AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
-                goto finish;
-            }
-            bufferDesc = buffer.desc;
-        } else {
-            bufferDesc.reset();
-            if (size != 0)
-            {
-                std::string str = "reuse_" + std::to_string(i);
-                ret = m_mem->malloc(size, align_in_page, &bufferDesc, str.c_str(), m_fm_mem_region);
-                if (AIPU_STATUS_SUCCESS != ret)
-                    goto finish;
-            }
-        }
-
-        if (m_dump_reuse)
-            m_mem->mem_bzero(bufferDesc.pa, bufferDesc.size);
-
-        m_reuses.push_back(bufferDesc);
+        ret = alloc_reuse_buffer();
+        if (AIPU_STATUS_SUCCESS != ret)
+            goto finish;
+    } else if (retval < -1) {
+        ret = AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
+        goto finish;
     }
 
     /* 5. init weights address */

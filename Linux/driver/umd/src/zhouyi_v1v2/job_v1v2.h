@@ -37,6 +37,7 @@ private:
     bool m_do_trigger = false;
     uint32_t m_bind_core_id = 0;
     uint32_t m_fm_mem_region = AIPU_BUF_REGION_DEFAULT;
+    BufferDesc m_top_reuse_buf;
 
 public:
     /**
@@ -62,6 +63,8 @@ private:
     }
     aipu_status_t free_job_buffers();
     aipu_status_t setup_rodata_v12(std::set<uint32_t> *dma_buf_idx = nullptr);
+    aipu_status_t alloc_reuse_buffer();
+    int alloc_reuse_buffer_optimized();
 
 public:
     virtual aipu_status_t init(const aipu_global_config_simulation_t* cfg,
