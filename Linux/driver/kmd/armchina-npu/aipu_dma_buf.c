@@ -2,6 +2,7 @@
 /* Copyright (c) 2023 Arm Technology (China) Co. Ltd. All rights reserved. */
 
 #include <linux/version.h>
+#include <linux/module.h>
 #include "aipu_dma_buf.h"
 
 #if KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE
@@ -232,3 +233,7 @@ int aipu_get_dma_buf_info(struct aipu_dma_buf *dmabuf_info)
 	dma_buf_put(dmabuf);
 	return 0;
 }
+
+#if KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE
+MODULE_IMPORT_NS(DMA_BUF);
+#endif
