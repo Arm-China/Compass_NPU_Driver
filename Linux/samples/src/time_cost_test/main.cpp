@@ -45,7 +45,7 @@ using namespace std;
 #define GRAPH_CNT 50
 #define PIPELINE_JOB_CNT 50
 
-#define DUMP 1
+#define DUMP 0
 
 int main(int argc, char* argv[])
 {
@@ -81,7 +81,7 @@ int main(int argc, char* argv[])
     uint32_t cfg_types = 0;
     #endif
 
-    AIPU_CRIT() << "usage: ./aipu_basic_time_test -t flush|finish -b aipu.bin -i input0.bin -c output.bin -d ./\n";
+    AIPU_CRIT() << "usage: ./aipu_time_cost_test -t flush|finish -b aipu.bin -i input0.bin -c output.bin -d ./\n";
 
     if (access("/dev/aipu", F_OK) == 0)
         run_on_platform = ON_HW;
@@ -98,7 +98,7 @@ int main(int argc, char* argv[])
     aipu_job_config_dump_t mem_dump_config;
     memset(&mem_dump_config, 0, sizeof(mem_dump_config));
 
-    if(init_test_bench(argc, argv, &opt, "basic_time_test"))
+    if(init_test_bench(argc, argv, &opt, "time_cost_test"))
     {
         AIPU_ERR()("invalid command line options/args\n");
         goto finish;

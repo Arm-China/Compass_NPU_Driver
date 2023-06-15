@@ -44,7 +44,8 @@ int main(int argc, char* argv[])
     uint32_t part_idx = 0, part_cnt = 0, cluster_cnt = 0, core_cnt = 0;
     aipu_create_job_cfg_t create_job_cfg = {0};
 
-    AIPU_CRIT() << "usage: ./aipu_x2_simulation_test -a X2_1204/X2_1204MP3 -b aipu.bin -i input0.bin -c output.bin -d ./\n";
+    AIPU_CRIT() << "usage: ./aipu_v3_simulation_test "
+                    "-a X2_1204/X2_1204MP3 -b aipu.bin -i input0.bin -c output.bin -d ./\n";
 
     /**
      * For compatibility and avoiding segfault issues in the future,
@@ -58,7 +59,7 @@ int main(int argc, char* argv[])
     aipu_job_config_dump_t mem_dump_config;
     memset(&mem_dump_config, 0, sizeof(mem_dump_config));
 
-    if(init_test_bench(argc, argv, &opt, "x2_simulation_test"))
+    if(init_test_bench(argc, argv, &opt, "v3_simulation_test"))
     {
         AIPU_ERR()("invalid command line options/args\n");
         goto finish;

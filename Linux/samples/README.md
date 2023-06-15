@@ -70,7 +70,14 @@ note:
 # ./aipu_dmabuf_vmap_test
 ```
 
+- dmabuf_dma_test: access dma_buf via DMA HW in kernel mode and mmap in user mode
+```bash
+# insmod importer.ko
+# ./aipu_dmabuf_vmap_test
+```
 
 note:
 - These cases will cover both UMD and KMD part.
 - Add the path of UMD library to LD_LIBRARY_PATH.
+- When using dma_buf mechanism, it has to ensure the input&output buffer as independed one,
+  they can't be reused with other intermidiate buffers on building model binary.

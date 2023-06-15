@@ -12,6 +12,9 @@
  * @brief request one dma_buf and filled it firstly, then
  *        specify this dma_buf as model's input tensor buffer.
  *
+ * @note  it has to ensure that the input&output buffers can't be shared with
+ *        other intermidiate buffers.
+ *
  */
 
 #include <stdio.h>
@@ -151,12 +154,12 @@ int main(int argc, char* argv[])
     aipu_create_job_cfg create_job_cfg = {0};
     aipu_shared_tensor_info_t share_tensor;
 
-    AIPU_CRIT() << "usage: ./aipu_simulation_test -b aipu.bin -i input0.bin -c output.bin -d ./\n";
+    AIPU_CRIT() << "usage: ./aipu_dmabuf_mmap_test -b aipu.bin -i input0.bin -c output.bin -d ./\n";
 
     aipu_job_config_dump_t mem_dump_config;
     memset(&mem_dump_config, 0, sizeof(mem_dump_config));
 
-    if(init_test_bench(argc, argv, &opt, "simulation_test"))
+    if(init_test_bench(argc, argv, &opt, "dmabuf_mmap_test"))
     {
         AIPU_ERR()("invalid command line options/args\n");
         goto finish;
