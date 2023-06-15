@@ -1086,28 +1086,26 @@ static int aipu_mm_direct_mmap(struct aipu_memory_manager *mm, struct vm_area_st
 {
 	int ret = 0;
 	struct aipu_direct_mem *mem = NULL;
-	u64 offset = vma->vm_pgoff * PAGE_SIZE;
-	unsigned long vm_pgoff = 0;
+	dma_addr_t iova = vma->vm_pgoff << PAGE_SHIFT;
 
 	mutex_lock(&mm->lock);
 	list_for_each_entry(mem, &mm->direct_mem->list, list) {
-		if (mem->desc.pa == offset && mem->filp == filp)
+		if (mem->desc.pa <= iova && iova < (mem->desc.pa + mem->desc.bytes) &&
+		    mem->filp == filp)
 			break;
 	}
 
-	if (!mem) {
+	if (!mem || !mem->desc.bytes) {
 		ret = -EINVAL;
 		goto unlock;
 	}
 
-	vm_pgoff = vma->vm_pgoff;
-	vma->vm_pgoff = 0;
+	vma->vm_pgoff = (iova - mem->desc.pa) >> PAGE_SHIFT;
 	vma->vm_flags |= VM_IO;
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
-	/* we only mmap from the start of this buffer */
-	ret = dma_mmap_coherent(mm->dev, vma, mem->va, (dma_addr_t)offset, mem->desc.bytes);
-	vma->vm_pgoff = vm_pgoff;
+	ret = dma_mmap_coherent(mm->dev, vma, mem->va, mem->desc.pa, mem->desc.bytes);
+	vma->vm_pgoff = iova >> PAGE_SHIFT;
 
 unlock:
 	mutex_unlock(&mm->lock);
@@ -1127,10 +1125,7 @@ int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 		     struct file *filp)
 {
 	int ret = 0;
-	u64 offset = 0;
-	int len = 0;
-	size_t mmap_size = 0;
-	unsigned long vm_pgoff = 0;
+	dma_addr_t iova = 0;
 	struct aipu_mem_region *reg = NULL;
 	struct aipu_virt_page *first_page = NULL;
 
@@ -1140,40 +1135,29 @@ int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 	if (!mm->reg_cnt)
 		return aipu_mm_direct_mmap(mm, vma, filp);
 
-	offset = vma->vm_pgoff * PAGE_SIZE;
-	len = vma->vm_end - vma->vm_start;
+	iova = vma->vm_pgoff << PAGE_SHIFT;
 
-	reg = aipu_mm_find_region(mm, offset, "mmap");
+	reg = aipu_mm_find_region(mm, iova, "mmap");
 	if (!reg)
 		return -EINVAL;
 
-	first_page = aipu_mm_find_page(mm, reg, filp, offset);
+	first_page = aipu_mm_find_page(mm, reg, filp, iova);
 	if (!first_page) {
-		dev_err(mm->dev, "[mmap] page not found at offset 0x%llx", offset);
+		dev_err(mm->dev, "[mmap] page not found at dev_iova 0x%llx", iova);
 		return -EINVAL;
 	}
 
-	vm_pgoff = vma->vm_pgoff;
-	vma->vm_pgoff = 0;
+	vma->vm_pgoff = (iova - reg->base_iova) >> PAGE_SHIFT;
 	vma->vm_flags |= VM_IO;
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
-	if (mm->has_iommu && !reg->attrs) {
-		vma->vm_pgoff = (offset - reg->base_iova) >> PAGE_SHIFT;
-		mmap_size = reg->bytes;
-	} else {
-		mmap_size = first_page->contiguous_alloc_len << PAGE_SHIFT;
-	}
-
-	ret = dma_mmap_attrs(reg->dev, vma,
-			     (void *)((u64)reg->base_va + offset - reg->base_iova),
-			     (dma_addr_t)offset, mmap_size, reg->attrs);
-
-	vma->vm_pgoff = vm_pgoff;
+	ret = dma_mmap_attrs(reg->dev, vma, reg->base_va, reg->base_iova, reg->bytes, reg->attrs);
 	if (!ret)
 		first_page->map_num++;
 	else
-		dev_err(mm->dev, "dma_mmap_attrs failed at offset 0x%llx (ret = %d)", offset, ret);
+		dev_err(mm->dev, "dma_mmap_attrs failed at iova 0x%llx (ret = %d)", iova, ret);
+
+	vma->vm_pgoff = iova >> PAGE_SHIFT;
 
 	return ret;
 }
