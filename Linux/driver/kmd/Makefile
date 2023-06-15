@@ -42,7 +42,11 @@ else
                     -DCONFIG_ARMCHINA_NPU_ARCH_V3
 endif
 
-INIT_OBJ := $(SRC_DIR)/armchina-npu/default/default.o
+ifeq ($(BUILD_TARGET_PLATFORM_KMD), BUILD_PLATFORM_R329)
+    INIT_OBJ  := $(SRC_DIR)/armchina-npu/r329/r329.o
+else
+    INIT_OBJ := $(SRC_DIR)/armchina-npu/default/default.o
+endif
 
 OBJS     := $(COMM_OBJ) $(AIPU_OBJ) $(SOC_OBJ)
 

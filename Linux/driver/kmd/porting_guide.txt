@@ -68,8 +68,11 @@ To build with the default SoC impl.:
 
     $./build_all.sh -p [juno/6cg]   #juno/6cg using default SoC impl.
 
-If you implement your specific SoC integration instead of using the default samples,
+To build with the R329 SoC impl.:
 
+    $./build_all.sh -p r329
+
+If you implement your specific SoC integration instead of using the default/r329 samples,
 you are suggested to update the build_all.sh and build with
 
     $./build_all.sh -p [MY_SOC]
