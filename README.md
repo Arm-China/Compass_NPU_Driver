@@ -8,8 +8,6 @@ include kernel driver (KMD) and user lib (UMD).
 the reference related to how to config dts to enable AIPU on embedded boards.
 ### samples
 the samples related to how to call UMD APIs to implement inference APPs.
-### out-of-box
-the simplest demo running on simulator.
 ### unit_test
 the unit test cases for UMD and KMD.
 
