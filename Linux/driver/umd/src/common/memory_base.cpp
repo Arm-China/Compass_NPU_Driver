@@ -228,22 +228,31 @@ unlock:
 int aipudrv::MemoryBase::pa_to_va(uint64_t addr, uint64_t size, char** va) const
 {
     int ret = 0;
+    bool found = true;
     auto iter = m_allocated.end();
 
     pthread_rwlock_wrlock(&m_lock);
     *va = nullptr;
-    iter = get_allocated_buffer((std::map<DEV_PA_64, Buffer> *)&m_allocated, addr);
-    if (iter == m_allocated.end())
+
+    for (auto item : m_allocated_buf_map)
     {
-        iter = m_reserved.end();
-        iter = get_allocated_buffer((std::map<DEV_PA_64, Buffer> *)&m_reserved, addr);
-        if (iter == m_reserved.end())
+        iter = get_allocated_buffer(item, addr);
+        if (iter == item->end())
         {
-            ret = -1;
-            LOG(LOG_ERR, "invalid pa addr 0x%lx is used: no such a buffer\n", addr);
-            dump_stack();
-            goto unlock;
+            found = false;
+            continue;
+        } else {
+            found = true;
+            break;
         }
+    }
+
+    if (!found)
+    {
+        ret = -1;
+        LOG(LOG_ERR, "invalid pa addr 0x%lx is used: no such a buffer\n", addr);
+        dump_stack();
+        goto unlock;
     }
 
     /* found the buffer in m_allocated/m_reserved */

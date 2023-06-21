@@ -42,19 +42,21 @@ struct BufferDesc
     uint64_t  size;     /**< buffer size */
     uint64_t  req_size; /**< requested size (<= buffer size) */
     uint64_t  dev_offset;
-    DEV_PA_64 gm_base; /**< GM base address for this buffer if allcated from GM */
+    DEV_PA_64 gm_base;  /**< GM base address for this buffer if allcated from GM */
     uint32_t  ram_region = AIPU_BUF_REGION_DEFAULT;
+    int32_t   asid;     /**< ASID index */
 
     void init(DEV_PA_64 _asid_base, DEV_PA_64 _pa, uint64_t _size,
-        uint64_t _req_size, uint64_t _offset = 0, uint32_t _ram_region = 0, DEV_PA_64 _gm_base = 0)
+        uint64_t _req_size, uint64_t _offset = 0, uint32_t _asid_ram_region = 0, DEV_PA_64 _gm_base = 0)
     {
         pa = _pa;
         asid_base = _asid_base;
         align_asid_pa = _pa - asid_base;
+        asid = (_asid_ram_region >> 8) & 0xff;
         size = _size;
         req_size = _req_size;
         dev_offset = _offset;
-        ram_region = _ram_region;
+        ram_region = _asid_ram_region & 0xff;
         gm_base = _gm_base;
     }
 
@@ -197,6 +199,10 @@ private:
 protected:
     std::map<DEV_PA_64, Buffer> m_allocated;
     std::map<DEV_PA_64, Buffer> m_reserved;
+    std::map<DEV_PA_64, Buffer>* m_allocated_buf_map[2] = {
+        (std::map<DEV_PA_64, Buffer>*)&m_allocated,
+        (std::map<DEV_PA_64, Buffer>*)&m_reserved
+    };
     mutable pthread_rwlock_t m_lock;
 
 private:

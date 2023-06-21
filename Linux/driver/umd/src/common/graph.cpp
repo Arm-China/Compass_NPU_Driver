@@ -97,14 +97,19 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
 
     if (get_weight_region() == AIPU_MEM_REGION_DEFAULT)
     {
+        uint32_t asid = 0;
+
         if (m_weight.size == 0 && m_bweight.size != 0)
         {
+            if (m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3)
+                asid = 1;
+
             /**
              * allocate weight from ASID1 region defalut.if all ASIDs are configured
              * with the same base addr, it's also equal to allocate from ASID0.
              */
             ret = m_mem->malloc(get_const_size(), 0, &m_weight, "weight",
-                (1 << 8) | AIPU_MEM_REGION_DEFAULT);
+                (asid << 8) | AIPU_MEM_REGION_DEFAULT);
             if (AIPU_STATUS_SUCCESS != ret)
             {
                 LOG(LOG_ERR, "alloc weight buffer [fail]");
@@ -140,7 +145,7 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
                 m_mem->write(m_weight.pa + static_section->relative_addr,
                     m_bweight.va + static_section->offset_in_file, static_section->size);
                 buf.init(m_weight.asid_base, m_weight.pa + static_section->relative_addr,
-                    static_section->size, static_section->size);
+                    static_section->size, static_section->size, 0, asid << 8);
             }
 
             m_weights.push_back(buf);

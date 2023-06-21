@@ -335,6 +335,7 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                         /* handle buffer if allocated from GM */
                         if (m_gm->gm_is_gm_buffer(k, GM_BUF_TYPE_REUSE))
                         {
+                            buf_name = "gm_" + buf_name;
                             ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, bufferDesc);
                         } else {
                             if (m_fm_idxes.count(k) == 1)
@@ -544,6 +545,7 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
                         /* handle buffer if allocated from GM */
                         if (m_gm->gm_is_gm_buffer(k, GM_BUF_TYPE_REUSE))
                         {
+                            buf_name = "gm_" + buf_name;
                             ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, bufferDesc);
                             if (AIPU_STATUS_SUCCESS != ret)
                             {

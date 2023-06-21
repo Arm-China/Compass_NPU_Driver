@@ -147,18 +147,21 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
     if (umd_asid_base != nullptr)
     {
         umd_asid_base_pa = strtoul(umd_asid_base, &ptr, 10);
-        if (umd_asid_base_pa > get_umemory()->get_memregion_base(MEM_REGION_DDR))
+        if (umd_asid_base_pa > get_umemory()->get_memregion_base(ASID_REGION_0, MEM_REGION_DDR))
         {
-            umd_asid_base_pa = get_umemory()->get_memregion_base(MEM_REGION_DDR);
+            umd_asid_base_pa = get_umemory()->get_memregion_base(ASID_REGION_0, MEM_REGION_DDR);
             LOG(LOG_WARN, "\nreq ASID base > sim DDR base, use DDR base as ASID base: 0x%lx\n",
                 umd_asid_base_pa);
         }
     } else {
-        umd_asid_base_pa = get_umemory()->get_memregion_base(MEM_REGION_DDR);
+        umd_asid_base_pa = get_umemory()->get_memregion_base(ASID_REGION_0, MEM_REGION_DDR);
     }
 
     m_dram->set_asid_base(0, umd_asid_base_pa);
-    m_dram->set_asid_base(1, get_umemory()->get_memregion_base(MEM_REGION_SRAM));
+    if (SHARE_ONE_ASID == 1)
+        m_dram->set_asid_base(1, umd_asid_base_pa);
+    else
+        m_dram->set_asid_base(1, get_umemory()->get_memregion_base(ASID_REGION_1, MEM_REGION_DDR));
     m_dram->set_asid_base(2, umd_asid_base_pa);
     m_dram->set_asid_base(3, umd_asid_base_pa);
 

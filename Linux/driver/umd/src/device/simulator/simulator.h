@@ -55,6 +55,12 @@ private:
     aipu_status_t update_simulation_rtcfg(const JobDesc& job, SimulationJobCtx& ctx);
 
 public:
+    UMemory *get_umemory(void)
+    {
+        return static_cast<UMemory*>(m_dram);
+    }
+
+public:
     bool has_target(uint32_t arch, uint32_t version, uint32_t config, uint32_t rev);
     aipu_status_t schedule(const JobDesc& job);
     aipu_status_t get_simulation_instance(void** simulator, void** memory)

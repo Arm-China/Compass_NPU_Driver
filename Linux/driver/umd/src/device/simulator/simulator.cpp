@@ -40,8 +40,8 @@ bool aipudrv::Simulator::has_target(uint32_t arch, uint32_t version, uint32_t co
     m_part_caps.push_back(aipu_cap);
 
     if (version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
-        m_dram->set_dtcm_info(((UMemory *)m_dram)->get_memregion_base(MEM_REGION_DTCM),
-            ((UMemory *)m_dram)->get_memregion_size(MEM_REGION_DTCM));
+        m_dram->set_dtcm_info(get_umemory()->get_memregion_base(ASID_REGION_0, MEM_REGION_DTCM),
+            get_umemory()->get_memregion_size(ASID_REGION_0, MEM_REGION_DTCM));
 
     return true;
 }
