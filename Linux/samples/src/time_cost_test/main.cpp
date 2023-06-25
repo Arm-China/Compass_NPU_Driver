@@ -111,6 +111,7 @@ int main(int argc, char* argv[])
     else
         sim_glb_config.log_level = 2;
 
+    sim_glb_config.simulator = opt.simulator;
     sim_glb_config.verbose = opt.verbose;
     sim_glb_config.en_eval = true;
     sim_job_config.data_dir = opt.dump_dir;
@@ -268,6 +269,7 @@ int main(int argc, char* argv[])
                 goto clean_job;
             }
             AIPU_INFO()("set dump config success\n");
+            #endif
 
             if (run_on_platform == ON_SIMULATOR)
             {
@@ -280,7 +282,6 @@ int main(int argc, char* argv[])
                 }
                 AIPU_INFO()("set job simulation config success\n");
             }
-            #endif
 
             gettimeofday(&flush_t1, NULL);
             ret = aipu_flush_job(ctx, job_id[job]);
@@ -368,7 +369,7 @@ int main(int argc, char* argv[])
                 goto clean_job;
             }
             AIPU_INFO()("set dump config success\n");
-
+            #endif
             if (run_on_platform == ON_SIMULATOR)
             {
                 ret = aipu_config_job(ctx, job_id[job], AIPU_CONFIG_TYPE_SIMULATION, &sim_job_config);
@@ -380,7 +381,7 @@ int main(int argc, char* argv[])
                 }
                 AIPU_INFO()("set job simulation config success\n");
             }
-            #endif
+
 
             gettimeofday(&finish_t1, NULL);
             ret = aipu_finish_job(ctx, job_id[job], -1);
