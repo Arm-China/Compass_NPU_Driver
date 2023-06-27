@@ -276,7 +276,7 @@ aipu_ll_status_t aipudrv::Aipu::poll_status(std::vector<aipu_job_status_desc>& j
      */
     if (m_job_sts_queue.is_job_exist(job->get_id()))
     {
-        jobs_status.push_back(*m_job_sts_queue.pop_q(job->get_id()));
+        jobs_status.push_back(m_job_sts_queue.pop_q(job->get_id()));
         return ret;
     }
 
@@ -300,7 +300,7 @@ aipu_ll_status_t aipudrv::Aipu::poll_status(std::vector<aipu_job_status_desc>& j
 
         if (m_job_sts_queue.is_job_exist(job->get_id()))
         {
-            jobs_status.push_back(*m_job_sts_queue.pop_q(job->get_id()));
+            jobs_status.push_back(m_job_sts_queue.pop_q(job->get_id()));
             return ret;
         }
     } while (time_out == -1);

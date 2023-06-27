@@ -37,13 +37,13 @@ class JobStatusQueue
         pthread_rwlock_unlock(&m_jobstsq_lock);
     }
 
-    aipu_job_status_desc *pop_q(JOB_ID job_id)
+    aipu_job_status_desc pop_q(JOB_ID job_id)
     {
-        aipu_job_status_desc *desc = nullptr;
+        aipu_job_status_desc desc{0};
         pthread_rwlock_wrlock(&m_jobstsq_lock);
         if (m_jobstsq.count(job_id))
         {
-            desc = &m_jobstsq[job_id];
+            desc = m_jobstsq[job_id];
             m_jobstsq.erase(job_id);
         }
         pthread_rwlock_unlock(&m_jobstsq_lock);
