@@ -65,6 +65,10 @@ export CONFIG_DRV_BTENVAR_ANDROID_CXX_PATH=${CONFIG_DRV_BTENVAR_ANDROID_NDK_PATH
 export CONFIG_DRV_BTENVAR_CROSS_CXX_ANDROID_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/build_env/aarch64-linux-android-4.9/bin
 export CONFIG_DRV_BTENVAR_ANDROID_KPATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/linux-kernel/linux-android-4.14.59
 
+# Other paths
+export CONFIG_DRV_RTENVAR_PY_INCD_PATH=/arm/tools/python/python/3.8.5/rhe7-x86_64/include/python3.8
+export CONFIG_DRV_RTENVAR_NUMPY_INCD_PATH=/arm/tools/python/python/3.8.5/rhe7-x86_64/lib/python3.8/site-packages/numpy/core/include/
+
 ### Toolchains
 ### add toolchain/kernel path of your supported platform(s)
 # Target platform: android

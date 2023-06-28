@@ -131,8 +131,4 @@ public:
 };
 }
 
-struct ctx_handle {
-    uint32_t handle;
-};
-
 #endif /* _CONTEXT_H_ */

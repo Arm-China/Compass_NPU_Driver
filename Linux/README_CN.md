@@ -49,7 +49,7 @@ COMPASS_DRV_BTENVAR_CROSS_CXX=aarch64-linux-gnu-g++
 - 指定交叉编译KMD的工具链
 COMPASS_DRV_BTENVAR_CROSS_COMPILE_GNU=aarch64-linux-gnu-
 
-- 编译命令
+- 编译standard api命令
 
 ```bash
 # cd Linux
@@ -57,6 +57,22 @@ COMPASS_DRV_BTENVAR_CROSS_COMPILE_GNU=aarch64-linux-gnu-
 or
 # source env_setup.sh (for csh env)
 # ./build_all.sh -p juno [-d]
+```
+
+- 编译python api命令
+
+  Python api的功能有限，主要用于快速验证。
+
+  按照本地环境先设置好Python的头文件路径，Python的版本要最低要3.6。
+  CONFIG_DRV_RTENVAR_PY_INCD_PATH=/usr/local/include/python3.6
+
+```bash
+# cd Linux
+
+# source bash_env_setup.sh (for bash env)
+or
+# source env_setup.sh (for csh env)
+# ./build_all.sh -p juno -a python_api [-d]
 ```
 
 - 如果以上命令成功执行，一个驱动加载模块aipu.ko和一个用户态动态链接库libaipudrv.so将产生，并且被存放在bin文件夹中。
@@ -99,7 +115,7 @@ COMPASS_DRV_BTENVAR_X86_CXX=g++
 CONFIG_DRV_RTENVAR_SIM_PATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/bin/
 COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/lib/
 
-- 编译命令
+- 编译standard api命令
 
 ```bash
 # cd Linux
@@ -107,6 +123,19 @@ COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/lib/
 or
 # source env_setup.sh (for csh env)
 # ./build_all.sh -p sim [-d]
+```
+
+- 编译python api命令
+
+  Python api的功能有限，主要用于快速验证。
+
+```bash
+# cd Linux
+
+# source bash_env_setup.sh (for bash env)
+or
+# source env_setup.sh (for csh env)
+# ./build_all.sh -p juno -a python_api [-d]
 ```
 
 - 如果以上命令成功执行，一个驱动加载模块aipu.ko和一个用户态动态链接库libaipudrv.so将产生，并且被存放在bin文件夹中。

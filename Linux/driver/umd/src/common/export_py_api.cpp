@@ -4,13 +4,10 @@
 
 
 /**
- * @file  swig_cpp2py_api.hpp
- * @brief AIPU User Mode Driver (UMD) C++ to Python API header
+ * @file  swig_cpp2py_api.cpp
+ * @brief AIPU User Mode Driver (UMD) C++ to Python API implementation
  * @version 1.0
  */
-
-#ifndef _SWIG_CPP2PY_API_HPP_
-#define _SWIG_CPP2PY_API_HPP_
 
 #include <string>
 #include <cstring>
@@ -21,6 +18,7 @@
 #include <vector>
 #include "standard_api.h"
 #include "kmd/armchina_aipu.h"
+#include "pybind11/pybind11.h"
 
 class Graph
 {
@@ -555,6 +553,7 @@ public:
         static Aipu aipu;
         return aipu;
     }
+
     int init_dev()
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
@@ -573,6 +572,7 @@ public:
         }
         return ret;
     }
+
     void deinit_dev()
     {
         if (m_ctx)
@@ -582,7 +582,7 @@ public:
         }
     }
 
-private:
+public:
     Aipu(){};
     Aipu(const Aipu& aipu) = delete;
     Aipu& operator=(const Aipu& aipu) = delete;
@@ -599,15 +599,69 @@ private:
     uint64_t    m_graph_id;
 };
 
-/**
- * @brief This API is exposed as a SWIG-Python API.
- *        It is used to open the AIPU device which should be called first of all.
- */
-Aipu& OpenDevice();
-/**
- * @brief This API is exposed as a SWIG-Python API.
- *        It is used to close an opened AIPU device which should be called at last.
- */
-void  CloseDevice();
+Aipu& OpenDevice()
+{
+    Aipu& aipu = Aipu::get_aipu();
+    aipu.init_dev();
+    return aipu;
+}
 
-#endif /* _SWIG_CPP2PY_API_HPP_ */
+void CloseDevice()
+{
+    Aipu& aipu = Aipu::get_aipu();
+    aipu.deinit_dev();
+}
+
+namespace py = pybind11;
+
+/**
+ * Decare entry module: libaipudriv
+ *
+ * example:
+ *
+ * import libaipudrv (or from libaipudrv import *)
+ *
+ * aipu=OpenDevice()
+ * graph = aipu.LoadGraph(aipu.bin)
+ * ret = graph.LoadInputTensor(0, input.bin)
+ * graph.Run()
+ * output_tensor = graph.GetOutputTensor(100)
+ * aipu.UnloadGraph(graph)
+ * CloseDevice()
+ */
+PYBIND11_MODULE(libaipudrv, m) {
+    m.doc() = "CompassNPU UMD python APIs";
+
+    /* bind global function */
+    m.def("OpenDevice", &OpenDevice, py::return_value_policy::reference);
+    m.def("CloseDevice", &CloseDevice, "Close device");
+
+    /* bind to Graph class */
+    py::class_<Graph>(m, "Graph")
+        .def(py::init<aipu_ctx_handle_t *, uint64_t>())
+        .def("create_job", &Graph::create_job)
+        .def("GetInputTensorNumber", &Graph::GetInputTensorNumber)
+        .def("GetOutputTensorNumber", &Graph::GetOutputTensorNumber)
+        .def("GetDumpTensorNumber", &Graph::GetDumpTensorNumber)
+        .def("LoadInputTensor", &Graph::LoadInputTensor)
+        .def("Run", &Graph::Run)
+        .def("GetOutputTensor", &Graph::GetOutputTensor)
+        .def("GetDumpTensor", &Graph::GetDumpTensor)
+        .def("GetProfileTensor", &Graph::GetProfileTensor)
+        .def("Run", &Graph::Run)
+        .def("GetOutputTensor", &Graph::GetOutputTensor)
+        .def("GetDumpTensor", &Graph::GetDumpTensor);
+
+    /* bind to Aipu class */
+    py::class_<Aipu>(m, "Aipu")
+        .def(py::init())
+        .def("SetSimulator", &Aipu::SetSimulator)
+        .def("SetX2Arch", &Aipu::SetX2Arch)
+        .def("SetX2JobConfig", &Aipu::SetX2JobConfig)
+        .def("MiscIoctl", &Aipu::MiscIoctl)
+        .def("LoadGraph", &Aipu::LoadGraph)
+        .def("UnloadGraph", &Aipu::UnloadGraph)
+        .def("get_aipu", &Aipu::get_aipu)
+        .def("init_dev", &Aipu::init_dev)
+        .def("deinit_dev", &Aipu::deinit_dev);
+}

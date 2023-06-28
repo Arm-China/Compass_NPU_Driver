@@ -27,7 +27,11 @@ ANDROIDLDFLAGS := -Wl,-O3 -Wl,--gc-sections \
                   -static-libstdc++ -Wl,--build-id -Wl,--warn-shared-textrel -Wl,--fatal-warnings -Qunused-arguments -Wl,-z,noexecstack  -Wl,-z,defs
 
 ifeq ($(BUILD_DEBUG_FLAG), debug)
+    ifeq ($(BUILD_UMD_API_TYPE), python_api)
+    CXXFLAGS += -O2 -g -DRTDEBUG=1
+    else
     CXXFLAGS += -O0 -g -DRTDEBUG=1
+    endif
 else
     CXXFLAGS += -O2 -DRTDEBUG=0
 endif
@@ -93,9 +97,9 @@ ifneq ($(BUILD_AIPU_VERSION), aipu_v3)
 endif
 
 ifeq ($(BUILD_UMD_API_TYPE), python_api)
-    SRCS += $(SRC_COMMON)/swig_cpp2py_api.cpp
+    SRCS += $(SRC_COMMON)/export_py_api.cpp
     CXXFLAGS += -fwrapv -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2
-    INCD += -I$(CONFIG_DRV_RTENVAR_PY_INCD_PATH)
+    INCD += -I$(CONFIG_DRV_RTENVAR_PY_INCD_PATH) -I./3rdparty/pybind11/include/
 endif
 
 ifeq ($(BUILD_WITH_NUMPY), yes)
@@ -116,7 +120,7 @@ SRC_DIRS := $(patsubst $(SRC_ROOT)/%, %, $(SRC_DIRS))
 OBJS := $(patsubst $(SRC_ROOT)/%.cpp, $(COMPASS_DRV_BTENVAR_UMD_BUILD_DIR)/%.o, $(SRCS))
 TARGET := $(BUILD_AIPU_DRV_ODIR)/$(COMPASS_DRV_BTENVAR_UMD_SO_NAME_FULL)
 A_TARGET := $(BUILD_AIPU_DRV_ODIR)/$(COMPASS_DRV_BTENVAR_UMD_A_NAME_FULL)
-PY_TARGET := $(BUILD_AIPU_DRV_ODIR)/_$(COMPASS_DRV_BTENVAR_UMD_SO_NAME)
+PY_TARGET := $(BUILD_AIPU_DRV_ODIR)/$(COMPASS_DRV_BTENVAR_UMD_SO_NAME)
 
 standard_api: build-repo $(TARGET) $(A_TARGET)
 python_api:  build-repo $(PY_TARGET)
@@ -130,14 +134,8 @@ $(TARGET): $(OBJS)
 $(A_TARGET): $(OBJS)
 	$(AR) crus $@ $(OBJS)
 
-$(PY_TARGET): $(OBJS) $(COMPASS_DRV_BTENVAR_UMD_BUILD_DIR)/libaipudrv_wrap.o
+$(PY_TARGET): $(OBJS)
 	$(CXX) $^ $(LDFLAGS) -lstdc++ -o $@
-
-$(COMPASS_DRV_BTENVAR_UMD_BUILD_DIR)/libaipudrv_wrap.o: libaipudrv.i
-	swig $(SWIGFLAGS) -c++ -python libaipudrv.i
-	$(CXX) $(CXXFLAGS) $(INCD) -c libaipudrv_wrap.cxx -o $@
-	mv libaipudrv.py $(BUILD_AIPU_DRV_ODIR)
-	rm -f libaipudrv_wrap.cxx
 
 build-repo:
 	@$(call make-repo)

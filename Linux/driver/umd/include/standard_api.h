@@ -15,6 +15,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+struct ctx_handle {
+    uint32_t handle;
+};
+
 typedef struct ctx_handle aipu_ctx_handle_t;
 
 typedef enum {

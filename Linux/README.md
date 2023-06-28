@@ -62,6 +62,22 @@ or
 # ./build_all.sh -p juno [-d]
 ```
 
+- compile commands for python api
+
+  the Python APIs are just with limited functionality, it's mainly for quickly verification.
+
+  set Python header files path firstly,it has to install Python version >= 3.6
+  CONFIG_DRV_RTENVAR_PY_INCD_PATH=/usr/local/include/python3.6
+
+```bash
+# cd Linux
+
+# source bash_env_setup.sh (for bash env)
+or
+# source env_setup.sh (for csh env)
+# ./build_all.sh -p juno -a python_api [-d]
+```
+
 - If the command run normally, a folder named 'bin' is created, the corresponding KMD driver(aipu.ko) and UMD library(libaipudrv.so) are generated and stored in it.
 
 ### 2.2 Compile UMD for x86_64 simulator
@@ -103,7 +119,7 @@ COMPASS_DRV_BTENVAR_X86_CXX=g++
 CONFIG_DRV_RTENVAR_SIM_PATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/bin/
 COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/lib/
 
-- compile commands
+- compile commands for standard api
 
 ```bash
 # cd Linux
@@ -112,6 +128,19 @@ COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/lib/
 or
 # source env_setup.sh (for csh env)
 # ./build_all.sh -p sim [-d]
+```
+
+- compile commands for python api
+
+  the Python APIs are just with limited functionality, it's mainly for quickly verification.
+
+```bash
+# cd Linux
+
+# source bash_env_setup.sh (for bash env)
+or
+# source env_setup.sh (for csh env)
+# ./build_all.sh -p sim -a python_api [-d]
 ```
 
 - If the command run normally, a folder named 'bin' is created, the UMD library(libaipudrv.so)
