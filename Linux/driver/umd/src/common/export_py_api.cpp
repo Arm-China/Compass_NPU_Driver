@@ -19,6 +19,7 @@
 #include "standard_api.h"
 #include "kmd/armchina_aipu.h"
 #include "pybind11/pybind11.h"
+#include "pybind11/stl.h"
 
 class Graph
 {
@@ -26,7 +27,7 @@ public:
     /**
      * Internal
      */
-    int create_job(aipu_create_job_cfg_t *create_job_config = nullptr)
+    aipu_status_t create_job(aipu_create_job_cfg_t *create_job_config = nullptr)
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
@@ -528,8 +529,12 @@ public:
         }
 
         graph = new Graph(m_ctx, m_graph_id);
-        graph->create_job(&m_x2_create_job_config);
+        ret = graph->create_job(&m_x2_create_job_config);
 
+        if (ret != AIPU_STATUS_SUCCESS) {
+            delete graph;
+            graph = nullptr;
+        }
         return graph;
     }
 
@@ -659,7 +664,7 @@ PYBIND11_MODULE(libaipudrv, m) {
         .def("SetX2Arch", &Aipu::SetX2Arch)
         .def("SetX2JobConfig", &Aipu::SetX2JobConfig)
         .def("MiscIoctl", &Aipu::MiscIoctl)
-        .def("LoadGraph", &Aipu::LoadGraph)
+        .def("LoadGraph", &Aipu::LoadGraph, py::return_value_policy::reference)
         .def("UnloadGraph", &Aipu::UnloadGraph)
         .def("get_aipu", &Aipu::get_aipu)
         .def("init_dev", &Aipu::init_dev)
