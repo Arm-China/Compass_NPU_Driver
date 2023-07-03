@@ -15,11 +15,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-struct ctx_handle {
+typedef struct ctx_handle {
     uint32_t handle;
-};
-
-typedef struct ctx_handle aipu_ctx_handle_t;
+} aipu_ctx_handle_t;
 
 typedef enum {
     DEV_IDLE = 0,
@@ -213,23 +211,23 @@ typedef struct aipu_core_info {
     uint64_t reg_base; /**< core register base address */
 } aipu_core_info_t;
 
-enum {
+typedef enum {
     AIPU_JOB_PART0 = 0x0,
     AIPU_JOB_PART1 = 0x1,
     AIPU_JOB_PART2 = 0x2,
     AIPU_JOB_PART3 = 0x3,
-};
+} aipu_job_part_t;
 
-enum {
+typedef enum {
     AIPU_JOB_QOS_SLOW = 0x0,
     AIPU_JOB_QOS_HIGH = 0x1
-};
+} aipu_job_qos_t;
 
-enum {
+typedef enum {
 	AIPU_MEM_REGION_DEFAULT = 0,
 	AIPU_MEM_REGION_SRAM    = 1,
 	AIPU_MEM_REGION_DTCM    = 2
-};
+} aipu_mem_region_t;
 
 /**
  * @union aipu_create_job_cfg
@@ -321,13 +319,13 @@ typedef struct aipu_shared_tensor_info {
 /**
  * @brief ioctl commands to operate shared tensor buffer for KMD
  */
-enum {
+typedef enum {
     AIPU_IOCTL_MARK_SHARED_TENSOR = 0x255,
     AIPU_IOCTL_SET_SHARED_TENSOR,
     AIPU_IOCTL_SET_PROFILE,
     AIPU_IOCTL_ALLOC_DMABUF,
     AIPU_IOCTL_FREE_DMABUF,
-};
+} aipu_ioctl_cmd_t;
 
 /**
  * @brief This aipu_status_t enumeration captures the result of any API function

@@ -116,7 +116,7 @@ protected:
     uint32_t m_status = AIPU_JOB_STATUS_NO_STATUS;
 
     /* call back function for handling job self */
-    callback_wrapper_t *cb_wrap = nullptr;
+    callback_wrapper_t *m_cb_wrap = nullptr;
 
     /**
      * set 'true' if successfully alloc a large buffer
@@ -213,12 +213,12 @@ public:
 
     void set_job_cb(callback_wrapper_t *_cb_wrap)
     {
-        cb_wrap = _cb_wrap;
+        m_cb_wrap = _cb_wrap;
     }
 
     callback_wrapper_t *get_job_cb()
     {
-        return cb_wrap;
+        return m_cb_wrap;
     }
 
 public:
