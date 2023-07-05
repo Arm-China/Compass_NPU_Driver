@@ -164,45 +164,14 @@ typedef struct {
 } aipu_global_config_hw_t;
 
 /**
- * @struct callback_args_t
+ * @brief function prototype for job's callback handler
  *
- * @brief job callback arguments, 'func_arg' is user input vague argument which
- *        can be ignored, 'job_id' and 'job_state' is get from KMD for done job.
- *
- * @param[in]  func_arg  callback function's input parameter
- * @param[out] job_id    job id for just done
- * @param[out] job_state job'd state DONE or EXCEPTION
- */
-typedef struct {
-    void *func_arg;
-    uint64_t job_id;
-    aipu_job_status_t job_state;
-} callback_args_t;
-
-/**
- * function prototype for job's callback handler
+ * @param[in] job_id    Done job's id
+ * @param[in] job_state Done job's state
  *
  * @retval 0 for successfully calling, other value for abnormally calling
  */
-typedef int (*aipu_job_callback_func)(callback_args_t* arg);
-
-/**
- * @struct callback_wrapper_t
- *
- * @brief Wrapper for job's callback function and arguments
- *
- * @param[in] cb_func callback function pointer
- * @param[in] cb_args the arguments for cb_func
- *
- * @note Authough it can get done job's information in advance, it still needs to call
- *       aipu_get_job_status for each committed job to clean UMD internal state. it isn't
- *       allowed to call aipu_clean_job before aipu_get_job_status for specific job in any
- *       case (single thread/multiple theads).
- */
-typedef struct {
-    aipu_job_callback_func cb_func;
-    callback_args_t *cb_args;
-} callback_wrapper_t;
+typedef int (*aipu_job_callback_func_t)(uint64_t job_id, aipu_job_status_t job_state);
 
 /**
  * @brief AIPU core info struct; returned by UMD API for AIPU debugger to use
@@ -224,9 +193,9 @@ typedef enum {
 } aipu_job_qos_t;
 
 typedef enum {
-	AIPU_MEM_REGION_DEFAULT = 0,
-	AIPU_MEM_REGION_SRAM    = 1,
-	AIPU_MEM_REGION_DTCM    = 2
+    AIPU_MEM_REGION_DEFAULT = 0,
+    AIPU_MEM_REGION_SRAM    = 1,
+    AIPU_MEM_REGION_DTCM    = 2
 } aipu_mem_region_t;
 
 /**
@@ -589,7 +558,7 @@ aipu_status_t aipu_finish_job(const aipu_ctx_handle_t* ctx, uint64_t job, int32_
  * @note A flushed job cannot be flushed again before the previous scheduled one is done.
  */
 aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t job,
-    callback_wrapper_t *cb_wrap = nullptr);
+    aipu_job_callback_func_t cb_func = nullptr);
 
 /**
  * @brief This API is used to get the execution status of a flushed job (non-blocking)

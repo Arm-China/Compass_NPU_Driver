@@ -116,7 +116,7 @@ protected:
     uint32_t m_status = AIPU_JOB_STATUS_NO_STATUS;
 
     /* call back function for handling job self */
-    callback_wrapper_t *m_cb_wrap = nullptr;
+    aipu_job_callback_func_t m_callback_func = nullptr;
 
     /**
      * set 'true' if successfully alloc a large buffer
@@ -211,14 +211,14 @@ public:
         return static_cast<Graph&>(m_graph);
     }
 
-    void set_job_cb(callback_wrapper_t *_cb_wrap)
+    void set_job_cb(aipu_job_callback_func_t _cb_wrap)
     {
-        m_cb_wrap = _cb_wrap;
+        m_callback_func = _cb_wrap;
     }
 
-    callback_wrapper_t *get_job_cb()
+    aipu_job_callback_func_t get_job_cb()
     {
-        return m_cb_wrap;
+        return m_callback_func;
     }
 
 public:

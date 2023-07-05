@@ -217,7 +217,7 @@ aipu_ll_status_t aipudrv::Aipu::get_status(std::vector<aipu_job_status_desc>& jo
     aipu_job_status_query status_query;
     JobBase *job = (JobBase *)jobbase;
     JobBase *done_job = nullptr;
-    callback_wrapper_t *cb_wrap = nullptr;
+    aipu_job_callback_func_t job_callback_func = nullptr;
 
     status_query.of_this_thread = of_this_thread;
     status_query.max_cnt = max_cnt;
@@ -237,14 +237,12 @@ aipu_ll_status_t aipudrv::Aipu::get_status(std::vector<aipu_job_status_desc>& jo
         done_job = job->get_base_graph().get_job(status_query.status[i].job_id);
         if (done_job != nullptr)
         {
-            cb_wrap = done_job->get_job_cb();
+            job_callback_func = done_job->get_job_cb();
             /* deliver done job to backend timely */
-            if (cb_wrap != nullptr && cb_wrap->cb_func != nullptr
-                && cb_wrap->cb_args != nullptr)
+            if (job_callback_func != nullptr)
             {
-                cb_wrap->cb_args->job_id = status_query.status[i].job_id;
-                cb_wrap->cb_args->job_state = (aipu_job_status_t)status_query.status[i].state;
-                cb_wrap->cb_func(cb_wrap->cb_args);
+                job_callback_func(status_query.status[i].job_id,
+                    (aipu_job_status_t)status_query.status[i].state);
             }
         }
     }

@@ -284,7 +284,7 @@ aipu_status_t aipu_finish_job(const aipu_ctx_handle_t* ctx, uint64_t job_id, int
 }
 
 aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t id,
-    callback_wrapper_t *cb_wrap)
+    aipu_job_callback_func_t job_cb_func)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     aipudrv::JobBase* job = nullptr;
@@ -299,14 +299,7 @@ aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t id,
     if (AIPU_STATUS_SUCCESS != ret)
         return ret;
 
-    if (cb_wrap != nullptr && (cb_wrap->cb_func == nullptr
-        || cb_wrap->cb_args == nullptr))
-    {
-        LOG(LOG_ERR, "job callback func with invalid arguments\n");
-        return AIPU_STATUS_ERROR_NULL_PTR;
-    }
-
-    job->set_job_cb(cb_wrap);
+    job->set_job_cb(job_cb_func);
 
     /* callback to be implemented */
     return job->schedule();
