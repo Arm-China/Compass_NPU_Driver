@@ -68,8 +68,9 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
     if (AIPU_STATUS_SUCCESS != ret)
     {
         retval = -1;
-        LOG(LOG_ERR, "alloc total reuse buffer, size: 0x%x [fail]\n", reuse_buf_total_size);
-        goto alloc_fail;
+        LOG(LOG_WARN, "optmize alloc reuse buffer, size: 0x%x [fail], try scatter alloc\n",
+            reuse_buf_total_size);
+        goto opt_alloc_fail;
     }
 
     for (uint32_t i = 0; i < get_graph().m_reuse_sections.size(); i++)
@@ -85,7 +86,7 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
             {
                 ret = AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
                 retval = -2;
-                goto alloc_fail;
+                goto opt_alloc_fail;
             }
             bufferDesc = buffer.desc;
         } else {
@@ -109,7 +110,7 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
     m_optimized_reuse_alloc = true;
     return retval;
 
-alloc_fail:
+opt_alloc_fail:
     return retval;
 }
 

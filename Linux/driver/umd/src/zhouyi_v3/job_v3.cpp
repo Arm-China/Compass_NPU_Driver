@@ -477,8 +477,9 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
         if (AIPU_STATUS_SUCCESS != ret)
         {
             retval = -1;
-            LOG(LOG_ERR, "alloc total private buffer, size: 0x%x [fail]\n", priv_buf_total_size);
-            goto alloc_fail;
+            LOG(LOG_WARN, "optmize alloc private buffer, size: 0x%x [fail], try scatter alloc\n",
+                priv_buf_total_size);
+            goto opt_alloc_fail;
         }
     }
 
@@ -486,8 +487,9 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
     if (AIPU_STATUS_SUCCESS != ret)
     {
         retval = -1;
-        LOG(LOG_ERR, "alloc total reuse buffer, size: 0x%x [fail]\n", reuse_buf_total_size);
-        goto alloc_fail;
+        LOG(LOG_WARN, "optmize alloc reuse buffer, size: 0x%x [fail], try scatter alloc\n",
+            reuse_buf_total_size);
+        goto opt_alloc_fail;
     }
 
     for (uint32_t sg_idx = 0; sg_idx < m_sg_cnt; sg_idx++)
@@ -611,7 +613,7 @@ add_sg:
     m_optimized_reuse_alloc = true;
     return retval;
 
-alloc_fail:
+opt_alloc_fail:
     if (m_top_priv_buf.size > 0)
     {
         m_mem->free(&m_top_priv_buf);
