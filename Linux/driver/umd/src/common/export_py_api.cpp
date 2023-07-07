@@ -1133,9 +1133,8 @@ class NPU
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         const char *status_msg = nullptr;
-        callback_wrapper_t *cb_wrap = nullptr;
 
-        ret = aipu_flush_job(m_ctx, job_id, cb_wrap);
+        ret = aipu_flush_job(m_ctx, job_id, nullptr);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(m_ctx, ret, &status_msg);
