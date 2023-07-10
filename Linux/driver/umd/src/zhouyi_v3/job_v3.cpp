@@ -1365,9 +1365,11 @@ void aipudrv::JobV3::dump_specific_buffers()
     if (m_dump_profile && m_profiler.size() > 0)
     {
         std::string profile_file_name = m_dump_dir + "/" + m_dump_misc_prefix + "_PerfData.bin";
-        m_profile_fd = open(profile_file_name.c_str(), O_RDWR);
+        m_profile_fd = open(profile_file_name.c_str(), O_RDWR | O_CREAT, 0644);
         if (m_profile_fd < 0)
             LOG(LOG_ALERT, "open: %s [fail], ret: %d\n", profile_file_name.c_str(), m_profile_fd);
+        else
+            chmod(profile_file_name.c_str(), 0644);
 
         convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_ENABLE_TICK_COUNTER, nullptr));
     }

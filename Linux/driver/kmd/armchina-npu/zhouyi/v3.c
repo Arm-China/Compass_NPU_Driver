@@ -163,7 +163,7 @@ static void zhouyi_v3_destroy_command_pool(struct aipu_partition *partition)
 			aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
 	}
 
-	dev_dbg(partition->dev, "command pool #%d was destroyed\n", partition->id);
+	dev_info(partition->dev, "command pool #%d was destroyed\n", partition->id);
 }
 
 static int get_qos(u32 exec_flag)

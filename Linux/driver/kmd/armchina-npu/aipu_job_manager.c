@@ -5,6 +5,8 @@
 #include <linux/time.h>
 #include <linux/uaccess.h>
 #include <linux/poll.h>
+#include <linux/file.h>
+#include <linux/fs.h>
 #include "aipu_job_manager.h"
 #include "aipu_priv.h"
 #include "aipu_common.h"
@@ -72,8 +74,9 @@ static void delete_wait_queue(struct aipu_thread_wait_queue **wait_queue_head)
 	}
 }
 
-static int init_aipu_job(struct aipu_job *job, struct aipu_job_desc *desc,
-			 struct aipu_thread_wait_queue *queue, struct file *filp)
+static int init_aipu_job(struct aipu_job_manager *manager, struct aipu_job *job,
+			 struct aipu_job_desc *desc, struct aipu_thread_wait_queue *queue,
+			 struct file *filp)
 {
 	if (unlikely(!job))
 		return -EINVAL;
@@ -97,6 +100,11 @@ static int init_aipu_job(struct aipu_job *job, struct aipu_job_desc *desc,
 	job->done_time = ns_to_ktime(0);
 	job->wake_up = 0;
 	job->prev_tail_tcb = 0;
+	job->prof_filp = NULL;
+	job->prof_head = kmem_cache_alloc(manager->prof_cache, GFP_KERNEL);
+	job->prof_head->data = NULL;
+	job->prof_head->size = 0;
+	INIT_LIST_HEAD(&job->prof_head->node);
 
 	return 0;
 }
@@ -104,8 +112,27 @@ static int init_aipu_job(struct aipu_job *job, struct aipu_job_desc *desc,
 static void destroy_aipu_job(struct aipu_job_manager *manager, struct aipu_job *job)
 {
 	struct aipu_thread_wait_queue *job_aipu_wait_queue = NULL;
+	struct profiler *curr = NULL;
+	struct profiler *next = NULL;
 
 	WARN_ON(!job);
+
+	if (job->prof_filp) {
+		fput(job->prof_filp);
+		job->prof_filp = NULL;
+	}
+
+	list_for_each_entry_safe(curr, next, &job->prof_head->node, node) {
+		kfree(curr->data);
+		curr->data = NULL;
+		curr->size = 0;
+		kmem_cache_free(manager->prof_cache, curr);
+	}
+
+	if (job->prof_head) {
+		kmem_cache_free(manager->prof_cache, job->prof_head);
+		job->prof_head = NULL;
+	}
 
 	if (likely(job->thread_queue)) {
 		job_aipu_wait_queue =
@@ -127,11 +154,20 @@ static struct aipu_job *create_aipu_job(struct aipu_job_manager *manager,
 	if (unlikely(!new_aipu_job))
 		return ERR_PTR(-ENOMEM);
 
-	ret = init_aipu_job(new_aipu_job, desc, queue, filp);
+	ret = init_aipu_job(manager, new_aipu_job, desc, queue, filp);
 	if (unlikely(ret)) {
 		destroy_aipu_job(manager, new_aipu_job);
 		new_aipu_job = NULL;
 		return ERR_PTR(ret);
+	}
+
+	if (desc && desc->profile_fd) {
+		new_aipu_job->prof_filp = fget(desc->profile_fd);
+		if (IS_ERR(new_aipu_job->prof_filp)) {
+			dev_err(manager->dev, "get profiler struct file failed: fd %llu\n",
+				desc->profile_fd);
+			new_aipu_job->prof_filp = NULL;
+		}
 	}
 
 	if (queue)
@@ -553,6 +589,8 @@ int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_m
 	manager->idle_bmap = NULL;
 	manager->job_cache =
 		kmem_cache_create("aipu_job_cache", sizeof(struct aipu_job), 0, SLAB_PANIC, NULL);
+	manager->prof_cache =
+		kmem_cache_create("aipu_prof_cache", sizeof(struct profiler), 0, SLAB_PANIC, NULL);
 	manager->scheduled_head = create_aipu_job(manager, NULL, NULL, NULL);
 	INIT_LIST_HEAD(&manager->scheduled_head->node);
 	spin_lock_init(&manager->lock);
@@ -615,6 +653,8 @@ void deinit_aipu_job_manager(struct aipu_job_manager *manager)
 	mutex_destroy(&manager->wq_lock);
 	kmem_cache_destroy(manager->job_cache);
 	manager->job_cache = NULL;
+	kmem_cache_destroy(manager->prof_cache);
+	manager->prof_cache = NULL;
 	manager->is_init = 0;
 	if (manager->exit_tcb.bytes)
 		aipu_mm_free(manager->mm, &manager->exit_tcb, NULL);
@@ -702,6 +742,112 @@ static void aipu_job_manager_real_time_printk(struct aipu_job_manager *manager,
 	}
 }
 
+static void aipu_job_manager_real_time_get_pdata(struct aipu_job_manager *manager,
+						 struct job_irq_info *info)
+{
+	u32 *info_va = NULL;
+	char *data_va = NULL;
+	u64 info_pa = 0;
+	u64 data_pa = 0;
+	u32 data_size = 0;
+	struct aipu_job *curr = NULL;
+	u64 tcbp = 0;
+	struct file *f = NULL;
+	struct profiler *prof = NULL;
+
+	WARN_ON(!manager || !info);
+	tcbp = manager->asid0_base + info->tail_tcbp;
+	info_pa = manager->asid0_base + GET_PROFILER_BUF_PA(info->sig_flag);
+	info_va = (u32 *)aipu_mm_get_va(manager->mm, info_pa);
+	if (!info_va) {
+		dev_err(manager->dev, "profiler info buffer is not found: 0x%llx\n", info_pa);
+		return;
+	}
+
+	data_pa = manager->asid0_base + info_va[0];
+	data_size = info_va[1];
+	data_va = (char *)aipu_mm_get_va(manager->mm, data_pa);
+	if (!data_va) {
+		dev_err(manager->dev, "profiler data buffer is not found: 0x%llx\n", data_pa);
+		return;
+	}
+
+	if (!data_size) {
+		dev_err(manager->dev, "profiler data buffer size is 0\n");
+		return;
+	}
+
+	spin_lock(&manager->lock);
+	list_for_each_entry(curr, &manager->scheduled_head->node, node) {
+		if (curr->desc.head_tcb_pa <= tcbp && tcbp <= curr->desc.tail_tcb_pa) {
+			f = curr->prof_filp;
+			if (!f)
+				dev_err(manager->dev, "no opened profiler file to be written\n");
+			break;
+		}
+	}
+	spin_unlock(&manager->lock);
+
+	if (curr && f) {
+		prof = kmem_cache_alloc(manager->prof_cache, GFP_ATOMIC);
+		if (!prof) {
+			dev_err(manager->dev, "allocate struct profiler failed\n");
+			return;
+		}
+
+		prof->data = kmalloc(data_size, GFP_ATOMIC);
+		if (!prof->data)
+			return;
+
+		memcpy(prof->data, data_va, data_size);
+		prof->size = data_size;
+		list_add_tail(&prof->node, &curr->prof_head->node);
+		dev_dbg(manager->dev, "get profiler data: size 0x%x\n", data_size);
+	}
+}
+
+static void aipu_job_manager_dump_pdata(struct aipu_job_manager *manager,
+					struct aipu_job *job)
+{
+	int ret = 0;
+	char *data_va = NULL;
+	u64 data_pa = 0;
+	u32 data_size = 0;
+	struct profiler *prof = NULL;
+	struct file *f = NULL;
+
+	WARN_ON(!manager || !job);
+
+	if (job->prof_head) {
+		f = job->prof_filp;
+		list_for_each_entry(prof, &job->prof_head->node, node) {
+			if (prof->data && prof->size) {
+				ret = kernel_write(f, prof->data, prof->size, &f->f_pos);
+				dev_info(manager->dev, "write profiler data size: %d\n", ret);
+			}
+		}
+	}
+
+	data_pa = job->desc.profile_pa;
+	data_size = job->desc.profile_sz;
+	if (!data_size)
+		return;
+
+	data_va = (char *)aipu_mm_get_va(manager->mm, data_pa);
+	if (!data_va) {
+		dev_err(manager->dev, "(old) profiler buffer is not found: 0x%llx\n", data_pa);
+		return;
+	}
+
+	if (!job->prof_filp) {
+		dev_err(manager->dev, "(old) prof_filp not found\n");
+		return;
+	}
+
+	ret = kernel_write(job->prof_filp, data_va, data_size, &job->prof_filp->f_pos);
+	dev_info(manager->dev, "(old) write profiler data size: %u\n", ret);
+}
+
 static bool is_v3_job_done_or_excep(struct aipu_job *job, struct job_irq_info *info,
 				    u64 asid_base, int flag)
 {
@@ -755,8 +901,15 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 
 	manager = get_job_manager(partition);
 
-	if (IS_SIGNAL_IRQ(flag) && IS_PRINTF_SIGNAL(info->sig_flag))
-		aipu_job_manager_real_time_printk(manager, partition, info);
+	if (IS_SIGNAL_IRQ(flag)) {
+		if (IS_PRINTF_SIGNAL(info->sig_flag)) {
+			aipu_job_manager_real_time_printk(manager, partition, info);
+		} else if (IS_PROFILER_SIGNAL(info->sig_flag)) {
+			pr_info("profiler signal intr...\n");
+			aipu_job_manager_real_time_get_pdata(manager, info);
+			return;
+		}
+	}
 
 	spin_lock(&manager->lock);
 	if (do_abortion(flag, info)) {
@@ -865,6 +1018,10 @@ void aipu_job_manager_irq_bottom_half(struct aipu_partition *core)
 			if (curr->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3 &&
 			    curr->prev_tail_tcb)
 				aipu_mm_unlink_tcb(manager->mm, curr->prev_tail_tcb);
+
+			spin_unlock_irqrestore(&manager->lock, flags);
+			aipu_job_manager_dump_pdata(manager, curr);
+			spin_lock_irqsave(&manager->lock, flags);
 		}
 
 		/* destroy the v3 command pool if all jobs are done */

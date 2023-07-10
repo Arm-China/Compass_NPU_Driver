@@ -60,6 +60,18 @@ struct job_irq_info {
 };
 
 /**
+ * struct profiler - maintain profiling data information (v3)
+ * @data: pointer to the profiling data
+ * @size: size of the data
+ * @node: list node
+ */
+struct profiler {
+	void *data;
+	u32 size;
+	struct list_head node;
+};
+
+/**
  * struct aipu_job - job struct describing a job under scheduling in job manager
  *        Job status will be tracked as soon as interrupt or user evenets come in.
  * @uthread_id: ID of user thread scheduled this job
@@ -74,6 +86,8 @@ struct job_irq_info {
  * @pdata: profiling data (enabled by profiling flag in desc)
  * @wake_up: wake up flag
  * @prev_tail_tcb: address of the tail TCB of the previous job linking this job (v3 only)
+ * @prof_filp: pointer to a struct file (the profiler data dump file created in user mode)
+ * @prof_head: head of the profiler data list
  */
 struct aipu_job {
 	int uthread_id;
@@ -88,6 +102,8 @@ struct aipu_job {
 	struct aipu_ext_profiling_data pdata;
 	int wake_up;
 	u64 prev_tail_tcb;
+	struct file *prof_filp;
+	struct profiler *prof_head;
 };
 
 enum aipu_job_qos {
@@ -138,6 +154,7 @@ struct command_pool {
  * @wait_queue_head: wait queue list head
  * @wq_lock:         waitqueue lock
  * @job_cache:       slab cache of aipu_job
+ * @prof_cache:      slab cache of struct profiler
  * @is_init:         init flag
  * @exec_flag:       execution flags propagated to all jobs
  * @mm:              reference to memory manager
@@ -158,6 +175,7 @@ struct aipu_job_manager {
 	struct aipu_thread_wait_queue *wait_queue_head;
 	struct mutex wq_lock; /* Protect thread wait queue */
 	struct kmem_cache *job_cache;
+	struct kmem_cache *prof_cache;
 	int is_init;
 	int exec_flag;
 	struct aipu_memory_manager *mm;
