@@ -108,6 +108,20 @@ static void aipu_dma_release(struct dma_buf *dmabuf)
 {
 }
 
+#if KERNEL_VERSION(5, 6, 0) > LINUX_VERSION_CODE
+static void *aipu_dma_map(struct dma_buf *dmabuf, unsigned long page_num)
+{
+	return NULL;
+}
+#endif
+
+#if KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE
+void *aipu_dma_map_atomic(struct dma_buf *dmabuf, unsigned long page_num)
+{
+	return NULL;
+}
+#endif
+
 static struct dma_buf_ops aipu_dma_buf_ops = {
 	.attach = aipu_dma_buf_attach,
 	.detach = aipu_dma_buf_detach,
@@ -117,6 +131,12 @@ static struct dma_buf_ops aipu_dma_buf_ops = {
 	.vmap   = aipu_dma_vmap,
 	.vunmap = aipu_dma_vunmap,
 	.release = aipu_dma_release,
+#if KERNEL_VERSION(5, 6, 0) > LINUX_VERSION_CODE
+	.map = aipu_dma_map,
+#endif
+#if KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE
+	.map_atomic = aipu_dma_map_atomic,
+#endif
 };
 
 int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_request *request)
