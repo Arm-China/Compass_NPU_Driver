@@ -340,8 +340,6 @@ static int partition_upper_half(struct aipu_partition *partition)
 	} else if (IS_DONE_IRQ(status)) {
 		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
 			     CLEAR_CMD_POOL_DONE);
-		if (IS_TEC_IRQ(status))
-			status &= ~CLEAR_CMD_POOL_DONE;
 	} else if (IS_ERROR_IRQ(status)) {
 		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
 			     CLEAR_CMD_POOL_ERROR);
@@ -350,14 +348,16 @@ static int partition_upper_half(struct aipu_partition *partition)
 			     CLEAR_CMD_POOL_EXCEPTION);
 	}
 
-	aipu_job_manager_irq_upper_half(partition, GET_INTR_TYPE(status), &info);
-	if (IS_SIGNAL_IRQ(status)) {
-		WARN_ON(sig_num != 1);
-		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
-			     CLEAR_CMD_POOL_SIGNAL);
+	if (!IS_TEC_IRQ(status) || IS_SIGNAL_IRQ(status)) {
+		aipu_job_manager_irq_upper_half(partition, GET_INTR_TYPE(status), &info);
+		if (IS_SIGNAL_IRQ(status)) {
+			WARN_ON(sig_num != 1);
+			aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
+				     CLEAR_CMD_POOL_SIGNAL);
+		}
+		aipu_irq_schedulework(partition->irq_obj);
 	}
 
-	aipu_irq_schedulework(partition->irq_obj);
 	return IRQ_HANDLED;
 }
 

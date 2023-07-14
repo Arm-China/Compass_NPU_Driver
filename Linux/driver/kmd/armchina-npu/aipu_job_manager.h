@@ -162,6 +162,7 @@ struct command_pool {
  * @asid_base:       base address of ASID 0
  * @exit_tcb:        buffer descriptor of the exit_TCB
  * @tick_counter:    atomic lock for tick counter
+ * @dbg_do_destroy:  do destroy flag (enabled after a debug-dispatch job ends)
  */
 struct aipu_job_manager {
 	int version;
@@ -184,6 +185,7 @@ struct aipu_job_manager {
 	struct aipu_buf_desc exit_tcb;
 	atomic_t tick_counter;
 	atomic_t is_suspend;
+	bool dbg_do_destroy;
 };
 
 int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_manager *mm,

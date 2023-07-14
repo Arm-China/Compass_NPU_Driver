@@ -941,6 +941,9 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 			if (curr->desc.exec_flag & AIPU_JOB_EXEC_FLAG_SRAM_MUTEX)
 				manager->exec_flag &= ~AIPU_JOB_EXEC_FLAG_SRAM_MUTEX;
 
+			if (manager->pools->debug)
+				manager->dbg_do_destroy = true;
+
 			handled = 1;
 			break;
 		}
@@ -1033,8 +1036,10 @@ void aipu_job_manager_irq_bottom_half(struct aipu_partition *core)
 	    !is_grid_end(manager->mm, manager->pools->qlist[AIPU_JOB_QOS_FAST].curr_tail))
 		do_destroy = false;
 
-	if (manager->pools->debug)
+	if (manager->dbg_do_destroy) {
 		do_destroy = true;
+		manager->dbg_do_destroy = false;
+	}
 
 	if (do_destroy) {
 		aipu_job_manager_destroy_command_pool_no_lock(manager, core);
