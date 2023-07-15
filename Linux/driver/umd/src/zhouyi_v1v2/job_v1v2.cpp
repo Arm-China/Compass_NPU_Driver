@@ -315,6 +315,7 @@ aipu_status_t aipudrv::JobV12::specify_io_buffer(uint32_t type, uint32_t index,
     buffer_pa = dma_buf.pa + offset;
     bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
     (*iobuffer_vec)[index].set_dmabuf_info(fd, dma_buf.bytes, offset);
+    LOG(LOG_DEBUG, "specify_io_buffer: pa=%lx, size=%lx\n", buffer_pa, bufferDesc->size);
 
     if (update_ro)
     {

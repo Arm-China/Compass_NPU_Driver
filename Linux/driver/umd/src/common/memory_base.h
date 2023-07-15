@@ -219,14 +219,14 @@ protected:
         return floor((double)pa/AIPU_PAGE_SIZE);
     }
 
-    void add_tracking(DEV_PA_64 pa, uint64_t size, MemOperation op,
-        const char* str, bool is_32_op, uint32_t data) const;
     int mem_read(uint64_t addr, void *dest, size_t size) const;
     int mem_write(uint64_t addr, const void *src, size_t size);
     std::map<aipudrv::DEV_PA_64, aipudrv::Buffer>::iterator
         get_allocated_buffer(std::map<DEV_PA_64, Buffer> *buffer_pool, uint64_t addr) const;
 
 public:
+    void add_tracking(DEV_PA_64 pa, uint64_t size, MemOperation op,
+        const char* str, bool is_32_op, uint32_t data) const;
     void dump_tracking_log_start() const;
     void dump_tracking_log_end() const;
     void write_line(const char* log) const;

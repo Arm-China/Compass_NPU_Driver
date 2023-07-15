@@ -112,9 +112,11 @@ aipu_status_t aipudrv::JobBase::load_tensor(uint32_t tensor, const void* data)
         return AIPU_STATUS_ERROR_INVALID_OP;
 
     if (m_inputs[tensor].dmabuf_fd < 0)
+    {
         m_mem->write(m_inputs[tensor].pa, (const char*)data, m_inputs[tensor].size);
-    else
+    } else {
         readwrite_dma_buf(m_inputs[tensor], (char *)data, false); // write dma_buf
+    }
 
     return AIPU_STATUS_SUCCESS;
 }
@@ -190,7 +192,7 @@ aipu_status_t aipudrv::JobBase::get_tensor(aipu_tensor_type_t type, uint32_t ten
     {
         m_mem->read(pa, (char*)data, size);
     } else {
-       readwrite_dma_buf(iobuffer_vec->at(tensor), data, true); // read dma_buf
+        readwrite_dma_buf(iobuffer_vec->at(tensor), data, true); // read dma_buf
     }
 
     return AIPU_STATUS_SUCCESS;

@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/poll.h>
+#include <sys/mman.h>
 #include "aipu.h"
 #include "ukmemory.h"
 #include "job_base.h"
@@ -306,6 +307,54 @@ aipu_ll_status_t aipudrv::Aipu::poll_status(std::vector<aipu_job_status_desc>& j
     return ret;
 }
 
+#define WRITE_DMABUF 1
+aipu_ll_status_t readwrite_dmabuf_helper(int devfd, aipu_dmabuf_op_t *dmabuf_op, bool write)
+{
+    aipu_ll_status_t ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+    struct aipu_dma_buf dma_buf = {0};
+    char *va = nullptr;
+    int kret = 0;
+
+    dma_buf.fd = dmabuf_op->dmabuf_fd;
+    if (dmabuf_op->data == nullptr)
+    {
+        LOG(LOG_ERR, "dmabuf_op: dma_buf is null");
+        goto out;
+    }
+
+    kret = ioctl(devfd, AIPU_IOCTL_GET_DMA_BUF_INFO, &dma_buf);
+    if (kret < 0)
+    {
+        LOG(LOG_ERR, "dmabuf_op: query dma_buf [fail]");
+        goto out;
+    }
+
+    if (dmabuf_op->offset_in_dmabuf + dmabuf_op->size > dma_buf.bytes)
+    {
+        LOG(LOG_ERR, "dmabuf_op: access beyond dma_buf scope");
+        goto out;
+    }
+
+    va = (char *)mmap(NULL, dma_buf.bytes, PROT_READ|PROT_WRITE, MAP_SHARED,
+        dmabuf_op->dmabuf_fd, 0);
+    if (va == MAP_FAILED)
+    {
+        LOG(LOG_ERR, "dmabuf_op: mmap dmabuf [fail]");
+        goto out;
+    }
+
+    if (write)
+        memcpy(va + dmabuf_op->offset_in_dmabuf, dmabuf_op->data, dmabuf_op->size);
+    else
+        memcpy(dmabuf_op->data, va + dmabuf_op->offset_in_dmabuf, dmabuf_op->size);
+
+    munmap(va, dma_buf.bytes);
+    ret = AIPU_LL_STATUS_SUCCESS;
+
+out:
+    return ret;
+}
+
 aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
 {
     aipu_ll_status_t ret = AIPU_LL_STATUS_SUCCESS;
@@ -358,20 +407,50 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             break;
 
         case AIPU_IOCTL_ALLOC_DMABUF:
-            kret = ioctl(m_fd, AIPU_IOCTL_ALLOC_DMA_BUF, arg);
+            {
+            struct aipu_dma_buf_request *dmabuf_reg = (struct aipu_dma_buf_request *)arg;
+            struct aipu_dma_buf dma_buf = {0};
+            std::string name;
+
+            kret = ioctl(m_fd, AIPU_IOCTL_ALLOC_DMA_BUF, dmabuf_reg);
             if (kret < 0)
             {
                 LOG(LOG_ERR, "alloc dma_buf [fail]");
                 ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
             }
+
+            dma_buf.fd = dmabuf_reg->fd;
+            kret = ioctl(m_fd, AIPU_IOCTL_GET_DMA_BUF_INFO, &dma_buf);
+            if (kret < 0)
+            {
+                LOG(LOG_ERR, "get dma_buf [fail]");
+                ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+            }
+            name = "dmabuf_fd_" + std::to_string(dma_buf.fd);
+            m_dma_buf_map[dma_buf.fd] = dma_buf;
+            m_dram->add_tracking(dma_buf.pa, dma_buf.bytes,
+                MemOperationAlloc, name.c_str(), false, 0);
+            }
             break;
 
         case AIPU_IOCTL_FREE_DMABUF:
-            kret = ioctl(m_fd, AIPU_IOCTL_FREE_DMA_BUF, *(uint64_t *)arg);
+            {
+            int dma_buf_fd = *(int *)arg;
+            kret = ioctl(m_fd, AIPU_IOCTL_FREE_DMA_BUF, &dma_buf_fd);
             if (kret < 0)
             {
-                LOG(LOG_ERR, "free dma_buf [fail]");
+                LOG(LOG_ERR, "free dma_buf [fail], fd=%d", dma_buf_fd);
                 ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+            }
+
+            if (m_dma_buf_map.count(dma_buf_fd) == 1)
+            {
+                struct aipu_dma_buf dma_buf = m_dma_buf_map[dma_buf_fd];
+                std::string name = "dmabuf_fd_" + std::to_string(dma_buf.fd);
+                m_dram->add_tracking(dma_buf.pa, dma_buf.bytes,
+                    MemOperationFree, name.c_str(), false, 0);
+                m_dma_buf_map.erase(dma_buf_fd);
+            }
             }
             break;
 
@@ -382,6 +461,14 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
                 LOG(LOG_ERR, "get dma_buf [fail]");
                 ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
             }
+            break;
+
+        case AIPU_IOCTL_WRITE_DMABUF:
+            ret = readwrite_dmabuf_helper(m_fd, (aipu_dmabuf_op_t *)arg, WRITE_DMABUF);
+            break;
+
+        case AIPU_IOCTL_READ_DMABUF:
+            ret = readwrite_dmabuf_helper(m_fd, (aipu_dmabuf_op_t *)arg, !WRITE_DMABUF);
             break;
 
         default:

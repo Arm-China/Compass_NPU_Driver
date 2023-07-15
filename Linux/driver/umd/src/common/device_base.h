@@ -129,6 +129,7 @@ protected:
     uint32_t m_cluster_cnt = 0;
     uint32_t m_core_cnt = 1;
     std::atomic_int m_ref_cnt{0};
+    std::map<int, struct aipu_dma_buf> m_dma_buf_map;
 
 public:
     virtual bool has_target(uint32_t arch, uint32_t version, uint32_t config, uint32_t rev) = 0;

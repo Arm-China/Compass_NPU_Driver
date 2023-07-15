@@ -286,6 +286,20 @@ typedef struct aipu_shared_tensor_info {
 } aipu_shared_tensor_info_t;
 
 /**
+ * @struct aipu_dmabuf_op
+ *
+ * @brief fill data to dma_buf or get data from dma_buf through this struct
+ *
+ */
+typedef struct aipu_dmabuf_op
+{
+    int dmabuf_fd;               /**< the fd corresponding to shared buffer from dma_buf allocator */
+    uint32_t offset_in_dmabuf;   /**< the shared address offset in dma_buf which is specified by 'fd' */
+    uint32_t size;               /**< the data size: filled data size or fetched data size */
+    char *data;                  /**< The data buffer: fill to or fetch from */
+} aipu_dmabuf_op_t;
+
+/**
  * @brief ioctl commands to operate shared tensor buffer for KMD
  */
 typedef enum {
@@ -294,6 +308,8 @@ typedef enum {
     AIPU_IOCTL_SET_PROFILE,
     AIPU_IOCTL_ALLOC_DMABUF,
     AIPU_IOCTL_FREE_DMABUF,
+    AIPU_IOCTL_WRITE_DMABUF,
+    AIPU_IOCTL_READ_DMABUF
 } aipu_ioctl_cmd_t;
 
 /**
