@@ -197,7 +197,7 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 fail:
 	if (priv)
 		devm_kfree(mm->dev, priv);
-	aipu_mm_free(mm, &inter_req.desc, NULL);
+	aipu_mm_free(mm, &inter_req.desc, NULL, true);
 	return ret;
 }
 
@@ -222,7 +222,7 @@ int aipu_free_dma_buf(struct aipu_memory_manager *mm, int fd)
 	buf.bytes = priv->bytes;
 	buf.region = AIPU_BUF_REGION_DEFAULT;
 	buf.asid = AIPU_BUF_ASID_0;
-	ret = aipu_mm_free(mm, &buf, NULL);
+	ret = aipu_mm_free(mm, &buf, NULL, true);
 
 	if (priv->sgt) {
 		devm_kfree(mm->dev, priv->sgt);

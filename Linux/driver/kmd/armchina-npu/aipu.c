@@ -98,7 +98,7 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 	case AIPU_IOCTL_FREE_BUF:
 		if (!copy_from_user(&desc, (struct buf_desc __user *)arg, sizeof(desc)))
-			ret = aipu_mm_free(&aipu->mm, &desc, filp);
+			ret = aipu_mm_free(&aipu->mm, &desc, filp, true);
 		else
 			ret = -EINVAL;
 		break;

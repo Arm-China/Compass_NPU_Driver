@@ -204,15 +204,16 @@ static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_d
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_INFO_REG, (u16)udesc->job_id);
 
 	if (trigger_type == ZHOUYI_V3_TRIGGER_TYPE_DEBUG_DISPATCH) {
-		dev_dbg(partition->dev, "debug-dispatch user job 0x%llx", udesc->job_id);
 		aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
 			     TSM_DBG_DISPATCH_CMD_POOL(partition->id, get_qos(udesc->exec_flag),
 						       udesc->core_id));
+		dev_dbg(partition->dev, "debug-dispatch user job 0x%llx", udesc->job_id);
 	} else {
 		aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
 			     TSM_DISPATCH_CMD_POOL(partition->id, get_qos(udesc->exec_flag)));
 		dev_dbg(partition->dev, "dispatch user job 0x%llx (0x%llx - 0x%llx, tcbp 0x%llx)",
-			udesc->job_id, udesc->head_tcb_pa, udesc->tail_tcb_pa, udesc->last_task_tcb_pa);
+			udesc->job_id, udesc->head_tcb_pa, udesc->tail_tcb_pa,
+			udesc->last_task_tcb_pa);
 	}
 
 	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
@@ -230,12 +231,12 @@ int zhouyi_v3_exit_dispatch(struct aipu_partition *partition, u32 job_flag, u64 
 		     TSM_DISPATCH_CMD_POOL(partition->id, get_qos(job_flag)));
 
 	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {
-		dev_err(partition->dev, "dispatch command (exit) failed: job tail 0x%llx\n",
+		dev_err(partition->dev, "dispatch init TCB failed: job tail 0x%llx\n",
 			tcb_pa);
 		return -EFAULT;
 	}
 
-	dev_dbg(partition->dev, "[Job 0x%x] scheduler: exit TCB head 0x%llx\n", 0, tcb_pa);
+	dev_dbg(partition->dev, "dispatch init TCB head 0x%llx\n", tcb_pa);
 	return 0;
 }
 
@@ -309,12 +310,7 @@ static int partition_upper_half(struct aipu_partition *partition)
 	struct job_irq_info info;
 	u32 status = 0;
 	u32 tag_id = 0;
-	u16 sig_num = GET_IRQ_SIGNAL_NUM(aipu_read32(&aipu->reg,
-		CMD_POOL_IRQ_SIG_REG(partition->id)));
-	info.tail_tcbp = aipu_read32(&aipu->reg, CMD_POOL_INTR_TCB_PTR_REG(partition->id));
-	info.sig_flag = aipu_read32(&aipu->reg, CMD_POOL_IRQ_SIGNAL_FLAG_REG(partition->id));
-	info.tick_counter = ((u64)aipu_read32(&aipu->reg, TICK_COUNTER_HIGH_REG) << 32) +
-		aipu_read32(&aipu->reg, TICK_COUNTER_LOW_REG);
+	u16 sig_num = 0;
 
 	for (i = 0; i < aipu->partition_cnt; i++) {
 		partition = &aipu->partitions[i];
@@ -323,6 +319,14 @@ static int partition_upper_half(struct aipu_partition *partition)
 			break;
 	}
 
+	if (!IS_IRQ_TO_HANDLE(status))
+		return IRQ_HANDLED;
+
+	sig_num = GET_IRQ_SIGNAL_NUM(aipu_read32(&aipu->reg, CMD_POOL_IRQ_SIG_REG(partition->id)));
+	info.tail_tcbp = aipu_read32(&aipu->reg, CMD_POOL_INTR_TCB_PTR_REG(partition->id));
+	info.sig_flag = aipu_read32(&aipu->reg, CMD_POOL_IRQ_SIGNAL_FLAG_REG(partition->id));
+	info.tick_counter = ((u64)aipu_read32(&aipu->reg, TICK_COUNTER_HIGH_REG) << 32) +
+		aipu_read32(&aipu->reg, TICK_COUNTER_LOW_REG);
 	info.cluster_id = GET_INTR_CLUSTER_ID(status);
 	info.core_id = GET_INTR_CORE_ID(status);
 	info.tec_id = GET_INTR_TEC_ID(status);
@@ -335,10 +339,13 @@ static int partition_upper_half(struct aipu_partition *partition)
 		info.tag_id = 0;
 	}
 
-	/* check fault first because it comes in prior to a done intr if any */
 	if (IS_FAULT_IRQ(status)) {
+		/* fault & done come in together */
 		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
 			     CLEAR_CMD_POOL_FAULT);
+		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
+			     CLEAR_CMD_POOL_DONE);
+		status &= ~CLEAR_CMD_POOL_FAULT;
 	} else if (IS_DONE_IRQ(status)) {
 		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
 			     CLEAR_CMD_POOL_DONE);
@@ -348,6 +355,8 @@ static int partition_upper_half(struct aipu_partition *partition)
 	} else if (IS_EXCEPTION_IRQ(status)) {
 		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
 			     CLEAR_CMD_POOL_EXCEPTION);
+	} else {
+		return IRQ_HANDLED;
 	}
 
 	if (!IS_TEC_IRQ(status) || IS_SIGNAL_IRQ(status)) {

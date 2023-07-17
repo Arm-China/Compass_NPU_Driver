@@ -6,7 +6,7 @@
 
 bool is_grid_end(struct aipu_memory_manager *mm, u64 tail)
 {
-	struct aipu_tcb *tcb = aipu_mm_get_tcb_va(mm, tail);
+	struct aipu_tcb *tcb = (struct aipu_tcb *)aipu_mm_get_va(mm, tail);
 
 	if (!tcb)
 		return true;
@@ -40,7 +40,7 @@ static struct aipu_tcb *get_next_group_tcb(struct aipu_tcb *head, struct aipu_tc
 
 int print_core_id(struct aipu_memory_manager *mm, u64 head, u64 tail)
 {
-	struct aipu_tcb *head_tcb = aipu_mm_get_tcb_va(mm, head);
+	struct aipu_tcb *head_tcb = (struct aipu_tcb *)aipu_mm_get_va(mm, head);
 	struct aipu_tcb *tail_tcb = (struct aipu_tcb *)((unsigned long)head_tcb + tail - head);
 	struct aipu_tcb *tcb;
 

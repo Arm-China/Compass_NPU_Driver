@@ -323,6 +323,7 @@
 #define IS_ABNORMAL(status_32)                      (((status_32) >> 2) & 0x7)
 #define IS_SERIOUS_ERR(status_32)                   (((status_32) >> 3) & 0x3) /* error or fault */
 #define GET_INTR_TYPE(status_32)                    ((status_32) & 0x3F)
+#define IS_IRQ_TO_HANDLE(status_32)                 ((status_32) & 0xF1F)
 
 #define CMD_POOL_INTR_STATUS_REG(id)                (_GET_CMD_POOL_OFFSET(id) + 0xC)
 

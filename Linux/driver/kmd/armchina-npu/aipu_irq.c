@@ -57,10 +57,15 @@ struct aipu_irq_object *aipu_create_irq_object(struct device *dev, u32 irqnum, v
 
 	INIT_WORK(&irq_obj->work, aipu_irq_handler_bottom_half);
 
-	ret = request_irq(irqnum, aipu_irq_handler_upper_half, IRQF_SHARED,
+	/**
+	 * Flag IRQF_ONESHOT is used when sharing interrupts with other devices using thread_irq.
+	 * Remove it if you have no such a usage scenario.
+	 */
+	ret = request_irq(irqnum, aipu_irq_handler_upper_half,
+			  IRQF_ONESHOT | IRQF_SHARED | IRQF_PROBE_SHARED,
 			  description, irq_obj->dev);
 	if (ret) {
-		dev_err(dev, "request_irq failed: irqnum %u", irqnum);
+		dev_err(dev, "request_irq failed: irqnum %u, ret %d", irqnum, ret);
 		goto err_handle;
 	}
 

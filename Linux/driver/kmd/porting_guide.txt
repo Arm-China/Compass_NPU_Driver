@@ -273,7 +273,7 @@ for V2 (X1).
 
 The regions can be reserved in any sequence.
 
-An example:
+Example 1:
 
     reserved-memory {
         #address-cells = <2>;
@@ -319,6 +319,26 @@ An example:
     aipu0@64000000 {
         /* other attributes */
         memory-region = <&aipu_res_0 &aipu_res_1 &aipu_res_2 &aipu_res_3 &aipu_res_4>;
+    };
+
+Example 2:
+
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+
+        aipu_res_0: memory@A0000000 {
+            compatible = "shared-dma-pool";
+            reusable;
+            reg = <0x0 0xA0000000 0x0 0x20000000>;
+            asid = <0 1>;     /* this region is shared by ASID #0 and ASID #1 */
+        };
+    };
+
+    aipu0@64000000 {
+        /* other attributes */
+        memory-region = <&aipu_res_0>;
     };
 
 3.1.4.1 Without A SMMU
@@ -386,46 +406,29 @@ This attribute is mandatory if AIPU is not behind a SMMU.
 3.1.4.2 With A SMMU
 -------------------
 When a SMMU presents, AIPU uses IOVAs instead of pure device DMA addresses. Those IOVAs are mapped from
-system managed physically discontiguous regions, or from a physically contiguous DMA region if there is
-a DMA/CMA reservation at the same time.
+system managed physically discontiguous regions. Currently, AIPU driver supports Arm SMMU-v3. You may bind
+it as followed:
 
-Currently, AIPU driver supports SMMU-401. You may bind it as followed:
-
-    smmu401: smmu@12C0100000 {
-        compatible = "arm,mmu-401";
-        reg = <0x12 0xC0100000 0x0 0x10000>;
+    smmuv3: npu-smmu@60000000 {
+        compatible = "arm,smmu-v3";
+        reg = <0x0 0x60000000 0x0 0xF00000>;
+        interrupts = <GIC_SPI 170 IRQ_TYPE_EDGE_RISING>;
+        interrupt-names = "combined";
+        #global-interrupts = <1>;
         #iommu-cells = <1>;
         status = "okay";
-        #global-interrupts = <1>;
-        interrupt-parent = <&gic>;
-        interrupts = <0 90 1>,
-            <0 90 1>, <0 90 1>, <0 90 1>, <0 90 1>,
-            <0 90 1>, <0 90 1>, <0 90 1>, <0 90 1>,
-            <0 90 1>, <0 90 1>, <0 90 1>, <0 90 1>,
-            <0 90 1>, <0 90 1>, <0 90 1>, <0 90 1>;
     };
 
-    aipu@1280010000 {
+    aipu@64000000 {
+        #address-cells = <2>;
+        #size-cells = <1>;
+
         compatible = "armchina,zhouyi";
-        iommus = <&smmu401 0x0>;
+        iommus = <&smmuv3 0x0>;
+        dma-ranges = <0x0 0x0 0x0 0x0 0xC0000000>;
         /* other attributes */
         /* ... */
-    };
-
-To use a physically contiguous DMA region behind, you may reserve it as followed and enable the config
-option AIPU_CONFIG_FORCE_CONTIGUOUS in config.h:
-
-in dts:
-    aipu@1280010000 {
-        compatible = "armchina,zhouyi";
-        memory-region = <&aipu_res_0>;
-        iommus = <&smmu401 0x0>;
-        /* other attributes */
-        /* ... */
-    };
-
-in config.h:
-    #define AIPU_CONFIG_FORCE_CONTIGUOUS        1
+    };      1
 
 3.1.4.3 SoC SRAM
 ----------------

@@ -320,7 +320,7 @@ static int config_exit_tcb(struct aipu_job_manager *manager, struct aipu_buf_des
 	int i = 0;
 	struct aipu_tcb *tcb = NULL;
 
-	tcb = aipu_mm_get_tcb_va(manager->mm, desc->pa);
+	tcb = (struct aipu_tcb *)aipu_mm_get_va(manager->mm, desc->pa);
 	if (!tcb) {
 		dev_err(manager->dev, "buffer for exit TCB not found (0x%llx)\n", desc->pa);
 		return -EINVAL;
@@ -355,8 +355,11 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 	struct qos *qlist = NULL;
 
 	ret = aipu_mm_set_tcb_tail(manager->mm, job->desc.tail_tcb_pa);
-	if (ret)
+	if (ret) {
+		dev_err(partition->dev, "job set TCB tail failed: 0x%llx\n",
+			job->desc.tail_tcb_pa);
 		return ret;
+	}
 
 	if (job->desc.exec_flag & AIPU_JOB_EXEC_FLAG_QOS_SLOW)
 		qlist = &pool->qlist[AIPU_JOB_QOS_SLOW];
@@ -397,8 +400,11 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 		if (trigger_type != ZHOUYI_V3_TRIGGER_TYPE_CREATE) {
 			ret = aipu_mm_link_tcb(manager->mm, qlist->curr_tail,
 					       manager->exit_tcb.pa, 0);
-			if (ret)
+			if (ret) {
+				dev_err(partition->dev, "link TCB 0x%llx to 0x%llx failed (step 1)",
+					job->desc.head_tcb_pa, qlist->curr_tail);
 				return ret;
+			}
 		}
 
 		ret = partition->ops->exit_dispatch(partition, job->desc.exec_flag,
@@ -411,10 +417,14 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 
 		qlist->curr_tail = manager->exit_tcb.pa;
 
-		if (trigger_type != ZHOUYI_V3_TRIGGER_TYPE_CREATE) {
-			ret = aipu_mm_unlink_tcb(manager->mm, job->desc.tail_tcb_pa);
-			if (ret)
+		if (trigger_type != ZHOUYI_V3_TRIGGER_TYPE_CREATE &&
+		    job->desc.tail_tcb_pa) {
+			ret = aipu_mm_unlink_tcb(manager->mm, job->desc.tail_tcb_pa, false);
+			if (ret) {
+				dev_err(partition->dev, "unlink TCB from 0x%llx failed",
+					job->desc.tail_tcb_pa);
 				return ret;
+			}
 		}
 	}
 
@@ -424,8 +434,11 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 	} else {
 		ret = aipu_mm_link_tcb(manager->mm, qlist->curr_tail,
 				       job->desc.head_tcb_pa, job->desc.job_id);
-		if (ret)
+		if (ret) {
+			dev_err(partition->dev, "link TCB 0x%llx to 0x%llx failed (step 2)",
+				job->desc.head_tcb_pa, qlist->curr_tail);
 			return ret;
+		}
 
 		job->prev_tail_tcb = qlist->curr_tail;
 	}
@@ -657,7 +670,7 @@ void deinit_aipu_job_manager(struct aipu_job_manager *manager)
 	manager->prof_cache = NULL;
 	manager->is_init = 0;
 	if (manager->exit_tcb.bytes)
-		aipu_mm_free(manager->mm, &manager->exit_tcb, NULL);
+		aipu_mm_unlink_tcb(manager->mm, manager->exit_tcb.pa, true);
 }
 
 /**
@@ -728,7 +741,7 @@ static void aipu_job_manager_real_time_printk(struct aipu_job_manager *manager,
 
 	if (GET_PRINF_SIZE(info->sig_flag)) {
 		/* here: tail TCBP is the exact TCB sending a printf signal */
-		tcb = aipu_mm_get_tcb_va(manager->mm, info->tail_tcbp);
+		tcb = (struct aipu_tcb *)aipu_mm_get_va(manager->mm, info->tail_tcbp);
 		if (!tcb)
 			dev_dbg(partition->dev, "real time printk: no TCB found (0x%x)\n",
 				info->tail_tcbp);
@@ -817,6 +830,9 @@ static void aipu_job_manager_dump_pdata(struct aipu_job_manager *manager,
 	struct file *f = NULL;
 
 	WARN_ON(!manager || !job);
+
+	if (!job->prof_filp)
+		return;
 
 	if (job->prof_head) {
 		f = job->prof_filp;
@@ -976,7 +992,8 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 }
 
 static void aipu_job_manager_destroy_command_pool_no_lock(struct aipu_job_manager *manager,
-							  struct aipu_partition *partition)
+							  struct aipu_partition *partition,
+							  bool free_tcb)
 {
 	struct command_pool *pool;
 
@@ -985,6 +1002,15 @@ static void aipu_job_manager_destroy_command_pool_no_lock(struct aipu_job_manage
 
 	pool = manager->pools;
 	if (pool && pool->created) {
+		u64 q_slow_tail = pool->qlist[AIPU_JOB_QOS_SLOW].curr_tail;
+		u64 q_fast_tail = pool->qlist[AIPU_JOB_QOS_FAST].curr_tail;
+
+		if (q_slow_tail)
+			aipu_mm_unlink_tcb(manager->mm, q_slow_tail, free_tcb);
+
+		if (q_fast_tail)
+			aipu_mm_unlink_tcb(manager->mm, q_fast_tail, free_tcb);
+
 		partition->ops->destroy_command_pool(partition);
 		memset(pool->qlist, 0, sizeof(*pool->qlist) * AIPU_JOB_QOS_MAX);
 		pool->created = false;
@@ -1020,7 +1046,7 @@ void aipu_job_manager_irq_bottom_half(struct aipu_partition *core)
 
 			if (curr->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3 &&
 			    curr->prev_tail_tcb)
-				aipu_mm_unlink_tcb(manager->mm, curr->prev_tail_tcb);
+				aipu_mm_unlink_tcb(manager->mm, curr->prev_tail_tcb, false);
 		}
 
 		/* destroy the v3 command pool if all jobs are done */
@@ -1038,10 +1064,15 @@ void aipu_job_manager_irq_bottom_half(struct aipu_partition *core)
 	}
 
 	if (do_destroy) {
-		aipu_job_manager_destroy_command_pool_no_lock(manager, core);
+		aipu_job_manager_destroy_command_pool_no_lock(manager, core, false);
 	} else {
-		aipu_mm_pin_tcb(manager->mm, manager->pools->qlist[AIPU_JOB_QOS_SLOW].curr_tail);
-		aipu_mm_pin_tcb(manager->mm, manager->pools->qlist[AIPU_JOB_QOS_FAST].curr_tail);
+		u64 q_slow_tail = manager->pools->qlist[AIPU_JOB_QOS_SLOW].curr_tail;
+		u64 q_fast_tail = manager->pools->qlist[AIPU_JOB_QOS_FAST].curr_tail;
+
+		if (q_slow_tail)
+			aipu_mm_pin_tcb(manager->mm, q_slow_tail);
+		if (q_fast_tail)
+			aipu_mm_pin_tcb(manager->mm, q_fast_tail);
 	}
 
 	list_for_each_entry_safe(curr, next, &manager->scheduled_head->node, node) {
@@ -1103,7 +1134,6 @@ int aipu_job_manager_cancel_jobs(struct aipu_job_manager *manager, struct file *
 	struct aipu_thread_wait_queue *next_wq = NULL;
 	struct aipu_partition *par = NULL;
 	bool multi_process = false;
-	int id = 0;
 
 	if (!manager || !filp)
 		return -EINVAL;
@@ -1122,14 +1152,13 @@ int aipu_job_manager_cancel_jobs(struct aipu_job_manager *manager, struct file *
 			multi_process = true;
 		}
 	}
+	spin_unlock_irqrestore(&manager->lock, flags);
 
 	if (!multi_process && manager->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
-		for (id = 0; id < manager->partition_cnt; id++)
-			aipu_job_manager_destroy_command_pool_no_lock(manager,
-								      &manager->partitions[id]);
+		aipu_job_manager_destroy_command_pool_no_lock(manager,
+							      &manager->partitions[0],
+							      true);
 	}
-
-	spin_unlock_irqrestore(&manager->lock, flags);
 
 	mutex_lock(&manager->wq_lock);
 	list_for_each_entry_safe(curr_wq, next_wq, &manager->wait_queue_head->node, node) {

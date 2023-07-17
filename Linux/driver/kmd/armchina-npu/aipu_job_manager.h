@@ -159,9 +159,10 @@ struct command_pool {
  * @exec_flag:       execution flags propagated to all jobs
  * @mm:              reference to memory manager
  * @priv:            pointer to aipu_priv struct
- * @asid_base:       base address of ASID 0
+ * @asid0_base:      base address of ASID 0
  * @exit_tcb:        buffer descriptor of the exit_TCB
  * @tick_counter:    atomic lock for tick counter
+ * @is_suspend:      is suspended or not
  * @dbg_do_destroy:  do destroy flag (enabled after a debug-dispatch job ends)
  */
 struct aipu_job_manager {
