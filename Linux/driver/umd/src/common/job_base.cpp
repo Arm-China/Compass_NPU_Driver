@@ -440,7 +440,8 @@ int aipudrv::JobBase::readwrite_dma_buf(struct JobIOBuffer &iobuf, void *data, b
     char *va = nullptr;
     int ret = 0;
 
-    va = (char *)mmap(NULL, iobuf.dmabuf_size, PROT_READ | PROT_WRITE, MAP_SHARED, iobuf.dmabuf_fd, 0);
+    va = (char *)mmap(NULL, iobuf.dmabuf_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+        iobuf.dmabuf_fd, 0);
     if (MAP_FAILED == va)
     {
         ret = -1;
@@ -449,9 +450,9 @@ int aipudrv::JobBase::readwrite_dma_buf(struct JobIOBuffer &iobuf, void *data, b
     }
 
     if (read)
-        memcpy(data, va, iobuf.size);
+        memcpy(data, va + iobuf.offset_in_dmabuf, iobuf.size);
     else
-        memcpy(va, data, iobuf.size);
+        memcpy(va + iobuf.offset_in_dmabuf, data, iobuf.size);
 
     munmap(va, iobuf.dmabuf_size);
 out:
