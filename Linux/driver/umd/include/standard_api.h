@@ -171,7 +171,12 @@ typedef struct {
  *
  * @retval 0 for successfully calling, other value for abnormally calling
  */
+#if defined(BUILD_PYTHON_API)
+#include <functional>
+typedef std::function<int(uint64_t, aipu_job_status_t)> aipu_job_callback_func_t;
+#else
 typedef int (*aipu_job_callback_func_t)(uint64_t job_id, aipu_job_status_t job_state);
+#endif
 
 /**
  * @brief AIPU core info struct; returned by UMD API for AIPU debugger to use

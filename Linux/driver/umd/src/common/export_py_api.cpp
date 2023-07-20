@@ -1129,12 +1129,11 @@ class NPU
      * @retval AIPU_STATUS_ERROR_INVALID_OP
      *
      */
-    aipu_status_t aipu_flush_job_py(uint64_t job_id)
+    aipu_status_t aipu_flush_job_py(uint64_t job_id, aipu_job_callback_func_t py_cb)
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         const char *status_msg = nullptr;
-
-        ret = aipu_flush_job(m_ctx, job_id, nullptr);
+        ret = aipu_flush_job(m_ctx, job_id, py_cb);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(m_ctx, ret, &status_msg);
@@ -1174,7 +1173,7 @@ class NPU
         const char *status_msg = nullptr;
 
         ret = aipu_get_job_status(m_ctx, job_id, &status, timeout);
-        if (ret != AIPU_STATUS_SUCCESS)
+
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(m_ctx, ret, &status_msg);
@@ -1515,6 +1514,7 @@ class NPU
     aipu_global_config_hw_t m_global_config_hw = {0};
     aipu_global_config_simulation_t m_global_config_simulation = {0};
 };
+
 
 /**
  * Decare entry module: libaipudriv

@@ -99,6 +99,7 @@ endif
 ifeq ($(BUILD_UMD_API_TYPE), python_api)
     SRCS += $(SRC_COMMON)/export_py_api.cpp
     CXXFLAGS += -fwrapv -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2
+    CXXFLAGS += -DBUILD_PYTHON_API
     INCD += -I$(CONFIG_DRV_RTENVAR_PY_INCD_PATH) -I./3rdparty/pybind11/include/
 endif
 
