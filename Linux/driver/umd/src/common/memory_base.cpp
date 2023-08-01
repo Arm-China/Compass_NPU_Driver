@@ -16,6 +16,7 @@
 
 aipudrv::MemoryBase::MemoryBase()
 {
+    const char *mem_log_file = getenv("UMD_MEM_LOG_FILE");
     const char *mem_op_env = getenv("UMD_MEM_OP");
     const char *gm_enable = getenv("UMD_GM_ENABLE");
     int32_t mem_op_idx = 0;
@@ -32,6 +33,10 @@ aipudrv::MemoryBase::MemoryBase()
 
     if (m_enable_mem_dump)
     {
+        if (mem_log_file != nullptr)
+            m_file_name = mem_log_file;
+
+        LOG(LOG_ALERT, "memory log file: %s", m_file_name.c_str());
         mem_dump.open(m_file_name.c_str(), std::ofstream::out | std::ofstream::trunc);
         mem_dump.close();
     }
