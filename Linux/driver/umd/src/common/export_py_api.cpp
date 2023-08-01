@@ -29,6 +29,11 @@
 
 namespace py = pybind11;
 
+typedef enum {
+    AIPU_IOCTL_EN_TICK_COUNTER = 0,
+    AIPU_IOCTL_DI_TICK_COUNTER
+} aipu_ioctl_tickcounter_t;
+
 #if ORIG_VERSION
 class Graph
 {
@@ -1495,6 +1500,14 @@ class NPU
 
         switch (cmd)
         {
+            case AIPU_IOCTL_EN_TICK_COUNTER:
+                cmd = AIPU_IOCTL_ENABLE_TICK_COUNTER;
+                break;
+
+            case AIPU_IOCTL_DI_TICK_COUNTER:
+                cmd = AIPU_IOCTL_DISABLE_TICK_COUNTER;
+                break;
+
             case AIPU_IOCTL_MARK_SHARED_TENSOR:
             case AIPU_IOCTL_SET_SHARED_TENSOR:
                 {
@@ -1640,7 +1653,7 @@ class NPU
             goto finish;
         }
 
-        p = malloc(sizeof(aipu_dmabuf_op_t));
+        p = (aipu_dmabuf_op_t *)malloc(sizeof(aipu_dmabuf_op_t));
         memset(p, 0, sizeof(aipu_dmabuf_op_t));
         if (py_arg.count(str_key[0]) == 1)
             p->dmabuf_fd = (int)py_arg[str_key[0]];
@@ -1901,6 +1914,10 @@ PYBIND11_MODULE(libaipudrv, m) {
         .value("AIPU_IOCTL_READ_DMABUF", aipu_ioctl_cmd_t::AIPU_IOCTL_READ_DMABUF)
         .export_values();
 
+    py::enum_<aipu_ioctl_tickcounter_t>(m, "aipu_ioctl_tickcounter_t")
+        .value("AIPU_IOCTL_EN_TICK_COUNTER", aipu_ioctl_tickcounter_t::AIPU_IOCTL_EN_TICK_COUNTER)
+        .value("AIPU_IOCTL_DI_TICK_COUNTER", aipu_ioctl_tickcounter_t::AIPU_IOCTL_DI_TICK_COUNTER)
+        .export_values();
 
     py::enum_<aipu_status_t>(m, "aipu_status_t")
         .value("AIPU_STATUS_SUCCESS", aipu_status_t::AIPU_STATUS_SUCCESS)
