@@ -79,10 +79,11 @@ note:
 note:
 - These cases will cover both UMD and KMD part.
 - Add the path of UMD library to LD_LIBRARY_PATH.
-- When using dma_buf mechanism, it has to ensure the input&output buffer as independed one,
-  they can't be reused with other intermidiate buffers on building model binary. To generate
-  independed input or output tensor buffer in model binary, it needs NN Compiler's specific
-  parameters, '--disable_input_buffer_reuse' and '--disable_output_buffer_reuse'.
+- When utilizing dma_buf mechanism, it has to confirm the input or output tensor buffer
+  as independent one, they can't be shared with other intermidiate tensor buffers
+  on generating model binary. To get independent input or output tensor buffer in
+  model binary, it needs to specify specific parameters: '--disable_input_buffer_reuse'
+  and '--disable_output_buffer_reuse' to NN Compiler graph builder(aipugb).
 
   Example 1: generate independent input tensor buffer in model binary
   aipugb graph.def -w weight.bin --disable_input_buffer_reuse --target X2_1204 -o aipu.bin

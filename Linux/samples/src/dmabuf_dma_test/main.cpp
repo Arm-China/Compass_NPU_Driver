@@ -14,8 +14,8 @@
  *
  * @note  it has to ensure that the input/output buffers can't be shared with
  *        other intermidiate buffers. when generating model binary with NN
- *        Compiler(aipugb), it has to append parameters
- *        '--disable_input_buffer_reuse' or '--disable_output_buffer_reuse.'
+ *        Compiler graph builder(aipugb), it has to append parameters
+ *        '--disable_input_buffer_reuse' or '--disable_output_buffer_reuse'.
  *        please reference the detailed command in sample/README.md.
  *
  */
