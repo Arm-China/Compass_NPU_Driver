@@ -1459,7 +1459,7 @@ class NPU
         unsigned char *out_data = nullptr;
         aipu_tensor_desc_t desc;
 
-        ret = aipu_get_tensor_descriptor(m_ctx, job_id, AIPU_TENSOR_TYPE_OUTPUT, tensor, &desc);
+        ret = aipu_get_tensor_descriptor(m_ctx, job_id, type, tensor, &desc);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(m_ctx, ret, &status_msg);
@@ -1470,7 +1470,7 @@ class NPU
         }
 
         out_data = new unsigned char[desc.size];
-        ret = aipu_get_tensor(m_ctx, job_id, AIPU_TENSOR_TYPE_OUTPUT, tensor, out_data);
+        ret = aipu_get_tensor(m_ctx, job_id, type, tensor, out_data);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(m_ctx, ret, &status_msg);
