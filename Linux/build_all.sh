@@ -11,7 +11,6 @@ BUILD_KERNEL_VERSION=no
 BUILD_TEST=
 BUILD_BASIC_TEST_ONLY=0
 BUILD_UMD_API_TYPE=standard_api
-BUILD_WITH_NUMPY=no
 MAKE_JOBS_NUM=-j32
 
 set -e
@@ -40,7 +39,6 @@ build_help() {
     echo "-a, --api         Build UMD API type (optional, by default standard api):"
     echo "                    - standard_api"
     echo "                    - python_api"
-    echo "--np              Build NumPy in Python API UMD (optional)"
     echo "-s, --set         Set UMD and KMD version number"
     echo "                  format: umd_major,umd_minor,kmd_version"
     echo "                  eg: 5,2.0,3.3.0 umd: 5.2.0; kmd: 3.3.0"
@@ -112,9 +110,6 @@ do
         BUILD_UMD_API_TYPE="$2"
         shift
         ;;
-    --np)
-        BUILD_WITH_NUMPY=yes
-        ;;
     -t|--test)
         BUILD_TEST="$2"
         shift
@@ -168,10 +163,6 @@ if [ "$BUILD_UMD_API_TYPE"x != "standard_api"x ] &&
     exit 3
 fi
 export BUILD_UMD_API_TYPE=$BUILD_UMD_API_TYPE
-
-if [ "$BUILD_UMD_API_TYPE"x = "python_api"x ]; then
-    export BUILD_WITH_NUMPY=$BUILD_WITH_NUMPY
-fi
 
 ### export toolchain/kpath env variables of your supported platform(s)
 if [ "$BUILD_TARGET_PLATFORM"x = "sim"x ]; then
@@ -250,7 +241,7 @@ cd $COMPASS_DRV_BTENVAR_UMD_DIR
 cd -
 echo -e "$COMPASS_DRV_BRENVAR_INFO Build UMD done: binaries are in $BUILD_AIPU_DRV_ODIR"
 
-if [ "$BUILD_UMD_API_TYPE"x = "python_api"x ]; then
+if [ "$BUILD_UMD_API_TYPE"x == "python_api"x ]; then
     exit 0
 fi
 

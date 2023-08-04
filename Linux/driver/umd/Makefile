@@ -103,12 +103,6 @@ ifeq ($(BUILD_UMD_API_TYPE), python_api)
     INCD += -I$(CONFIG_DRV_RTENVAR_PY_INCD_PATH) -I./3rdparty/pybind11/include/
 endif
 
-ifeq ($(BUILD_WITH_NUMPY), yes)
-    INCD += -I$(CONFIG_DRV_RTENVAR_NUMPY_INCD_PATH)
-    CXXFLAGS += -DBUILD_WITH_NUMPY
-    SWIGFLAGS += -DBUILD_WITH_NUMPY
-endif
-
 ifneq ($(BUILD_ANDROID_NDK), )
     LDFLAGS += -pthread
     CXXFLAGS += $(ANDROIDCXXFLAGS)
