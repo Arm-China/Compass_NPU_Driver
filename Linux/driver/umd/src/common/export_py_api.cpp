@@ -72,11 +72,11 @@ class NPU
      *
      * @retval error mesage
      */
-    std::string aipu_get_error_message_py(aipu_status_t status)
+    std::string aipu_get_error_message_py(uint64_t status)
     {
         const char *status_msg = nullptr;
 
-        aipu_get_error_message(m_ctx, status, (const char**)&status_msg);
+        aipu_get_error_message(m_ctx, (aipu_status_t)status, (const char**)&status_msg);
         return std::string(status_msg);
     }
 
