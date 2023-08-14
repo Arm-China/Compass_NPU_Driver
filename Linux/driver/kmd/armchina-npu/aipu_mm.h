@@ -93,6 +93,7 @@ struct tcb_buf {
  * @pages: page array
  * @bitmap: region bitmap
  * @count: bitmap bit count/page count
+ * @host_aipu_offset: address space offset between host CPU and AIPU
  * @dev: region specific device (for multiple DMA/CMA regions)
  * @attrs: attributes for DMA API
  * @tcb_buf_head: TCB buffer list
@@ -110,6 +111,7 @@ struct aipu_mem_region {
 	struct aipu_virt_page **pages;
 	unsigned long *bitmap;
 	unsigned long count;
+	u64 host_aipu_offset;
 	struct device *dev;
 	unsigned long attrs;
 	struct tcb_buf *tcb_buf_head;

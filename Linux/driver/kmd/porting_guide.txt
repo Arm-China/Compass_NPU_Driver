@@ -523,6 +523,35 @@ followed:
 
 This attribute is optional and by default this value in driver is 0 if not activated in DTS.
 
+Alternatively, the zhouyi driver also supports to configure the offset between buses
+(npu-mem vs. cpu-mem) by using an attribute called "host-aipu-offset". For example,
+when specifying the offset to be 0x80000000, it means that dma_addr = cpu_pa - 0x80000000.
+
+    /* case 3 */
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+
+        aipu_res_0: memory@A0000000 {
+            compatible = "shared-dma-pool";
+            no-map;
+            reg = <0x0 0xA0000000 0x0 0x10000000>;
+            host-aipu-offset = <0x0 0x80000000>;
+            asid = <0 1>;
+        };
+    };
+
+    aipu0@64000000 {
+        #address-cells = <2>;
+        #size-cells = <1>;
+
+        compatible = "armchina,zhouyi";
+        memory-region=<&aipu_res_0>;
+
+        /* other attributes... */
+    };
+
 3.1.5 ASID Region Base & Size
 -----------------------------
 Zhouyi V2 & V3 NPUs support 4 groups of ASID regions, which are used to direct different types

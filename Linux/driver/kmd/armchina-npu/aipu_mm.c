@@ -125,7 +125,8 @@ static void aipu_mm_deinit_mem_region(struct aipu_memory_manager *mm, struct aip
 
 	/* release allocation to system */
 	if (reg->base_va) {
-		dma_free_attrs(reg->dev, reg->bytes, reg->base_va, reg->base_iova, reg->attrs);
+		dma_free_attrs(reg->dev, reg->bytes, reg->base_va,
+			       reg->base_iova + reg->host_aipu_offset, reg->attrs);
 		reg->base_va = NULL;
 		reg->base_iova = 0;
 	}
@@ -153,8 +154,8 @@ static void aipu_mm_deinit_mem_region(struct aipu_memory_manager *mm, struct aip
 
 static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager *mm,
 						     enum aipu_mem_region_type type,
-						     u64 addr, u64 size, u32 idx,
-						     bool reserved)
+						     u64 addr, u64 size, u64 offset,
+						     u32 idx, bool reserved)
 {
 	int ret = 0;
 	void *va = NULL;
@@ -169,6 +170,7 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 
 	reg->base_pa = addr;
 	reg->bytes = size;
+	reg->host_aipu_offset = offset;
 
 	reg->dev = aipu_mm_create_child_dev(mm->dev, idx);
 
@@ -209,6 +211,7 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 		ret = -EINVAL;
 		goto err;
 	}
+	reg->base_iova -= reg->host_aipu_offset;
 	reg->base_va = va;
 
 	ret = aipu_mm_init_pages(mm, reg);
@@ -532,6 +535,7 @@ static int aipu_mm_add_reserved_regions(struct aipu_memory_manager *mm)
 	bool asid_set = false;
 	u32 dtcm_cnt = 0;
 	u32 reg_cnt = 0;
+	u64 offset = 0;
 
 	do {
 		u64 size = 0;
@@ -583,7 +587,10 @@ static int aipu_mm_add_reserved_regions(struct aipu_memory_manager *mm)
 			size = ZHOUYI_V2_DTCM_MAX_BYTES;
 		}
 
-		reg = aipu_mm_create_region(mm, type, res.start, size, idx, true);
+		if (of_property_read_u64(np, "host-aipu-offset", &offset))
+			offset = 0;
+
+		reg = aipu_mm_create_region(mm, type, res.start, size, offset, idx, true);
 		if (IS_ERR(reg)) {
 			dev_err(mm->dev, "create new region failed (ret = %ld)", PTR_ERR(reg));
 			continue;
@@ -634,7 +641,7 @@ static int aipu_mm_add_iommu_region(struct aipu_memory_manager *mm)
 
 	/* this feature is to be updated */
 	reg = aipu_mm_create_region(mm, AIPU_MEM_REGION_TYPE_MEMORY,
-				    0, AIPU_CONFIG_DEFAULT_MEM_SIZE, 0, false);
+				    0, AIPU_CONFIG_DEFAULT_MEM_SIZE, 0, 0, false);
 	if (IS_ERR(reg)) {
 		dev_err(mm->dev, "create new smmu region failed (ret = %ld)", PTR_ERR(reg));
 		return PTR_ERR(reg);
@@ -1151,7 +1158,8 @@ int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 	vma->vm_flags |= VM_IO;
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
-	ret = dma_mmap_attrs(reg->dev, vma, reg->base_va, reg->base_iova, reg->bytes, reg->attrs);
+	ret = dma_mmap_attrs(reg->dev, vma, reg->base_va, reg->base_iova + reg->host_aipu_offset,
+			     reg->bytes, reg->attrs);
 	if (!ret)
 		first_page->map_num++;
 	else
