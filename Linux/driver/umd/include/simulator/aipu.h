@@ -45,7 +45,7 @@ namespace sim_aipu
         void enable_profiling(bool en);
 
     private:
-        std::unique_ptr<struct AipuImpl> impl_;
+        std::unique_ptr<class AipuImpl> impl_;
     };
 } //!sim_aipu
 

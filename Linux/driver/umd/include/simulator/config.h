@@ -47,7 +47,7 @@ namespace sim_aipu
         enum
         {
             X2_1204 = 1,
-            X2_1204MP3
+            X2_1204MP3,
         };
         int code;
         bool enable_avx;
@@ -62,6 +62,8 @@ namespace sim_aipu
         aiff_log_ctl_t aiff_log;
         aiff_dump_ctl_t aiff_dump;
         bool en_eval = 0;
+        bool en_probe = 0;
+        bool en_fast_perf = 0;
         uint32_t gm_size;
         std::string plugin_filename;
         std::string json_filename;
