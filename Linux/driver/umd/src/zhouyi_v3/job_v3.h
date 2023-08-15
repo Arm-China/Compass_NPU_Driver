@@ -133,6 +133,15 @@ private:
     BufferDesc m_top_priv_buf;
     BufferDesc m_top_reuse_buf;
 
+    /**
+     * the buffer for storing exit instruction machine code.
+     * this exit instruction is run as a standalone task TCB
+     * which is for passing the next new TCB via TCB appending
+     * method. this avoids the data non-conherence issue due to
+     * cache writeback operation of NPU side.
+     */
+    BufferDesc exit_inst_encode;
+
 public:
     GraphV3& get_graph()
     {
@@ -153,6 +162,8 @@ private:
     aipu_status_t setup_rodata_sg(uint32_t sg_id, const std::vector<struct GraphParamMapLoadDesc>& param_map,
         std::vector<BufferDesc>& reuse_buf, std::vector<BufferDesc>& static_buf,
         std::set<uint32_t> *dma_buf_idx = nullptr);
+    aipu_status_t setup_placehold_tcb_task(uint32_t sg_id, uint32_t grid_id, uint32_t core_id, uint32_t task_id,
+        tcb_t *prev);
     aipu_status_t setup_tcb_task(uint32_t sg_id, uint32_t grid_id, uint32_t core_id, uint32_t task_id);
     aipu_status_t setup_tcb_sg(uint32_t sg_id, uint32_t grid_id, uint32_t core_id);
     void          set_job_params(uint32_t sg_cnt, uint32_t task_per_sg, uint32_t remap, uint32_t core_cnt);

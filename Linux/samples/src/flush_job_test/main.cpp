@@ -40,7 +40,7 @@ int main(int argc, char* argv[])
     vector<aipu_tensor_desc_t> input_desc;
     vector<char*> input_data; /* multi-jobs use the same input vector */
     vector<aipu_tensor_desc_t> output_desc;
-    vector< vector<char*> > job_outputs;
+    vector< vector<std::shared_ptr<char> > > job_outputs;
     vector<char*> gt;
     cmd_opt_t opt;
     aipu_job_status_t status[PIPELINE_JOB_CNT] = { AIPU_JOB_STATUS_NO_STATUS };
@@ -155,7 +155,7 @@ int main(int argc, char* argv[])
             AIPU_ERR()("aipu_create_job: %s\n", msg);
             goto unload_graph;
         }
-        AIPU_INFO()("create job %lu success\n", job_id[job]);
+        AIPU_INFO()("create job %lx success\n", job_id[job]);
     }
 
     if (opt.inputs.size() != input_cnt)
@@ -166,10 +166,10 @@ int main(int argc, char* argv[])
 
     for (uint32_t job = 0; job < PIPELINE_JOB_CNT; job++)
     {
-        vector<char*> outputs;
+        vector<std::shared_ptr<char> > outputs;
         for (uint32_t i = 0; i < output_cnt; i++)
         {
-            char* output = new char[output_desc[i].size];
+            std::shared_ptr<char> output(new char[output_desc[i].size], std::default_delete<char[]>());
             outputs.push_back(output);
         }
         job_outputs.push_back(outputs);
@@ -197,7 +197,7 @@ int main(int argc, char* argv[])
                     AIPU_ERR()("aipu_load_tensor: %s\n", msg);
                     goto clean_job;
                 }
-                AIPU_INFO()("load job %lu input tensor %d from %s (%u/%u)\n",
+                AIPU_INFO()("load job %lx input tensor %d from %s (%u/%u)\n",
                     job_id[job], i, opt.input_files[i].c_str(), i+1, input_cnt);
             }
 
@@ -209,7 +209,7 @@ int main(int argc, char* argv[])
                 pass = -1;
                 goto clean_job;
             }
-            AIPU_INFO()("flush job %lu success\n", job_id[job]);
+            AIPU_INFO()("flush job %lx success\n", job_id[job]);
         }
 
         for (uint32_t job = 0; job < PIPELINE_JOB_CNT; job++)
@@ -229,23 +229,23 @@ int main(int argc, char* argv[])
                     pass = -1;
                     goto clean_job;
                 }
-                AIPU_INFO()("job %lu still running...\n", job_id[job]);
+                AIPU_INFO()("job %lx still running...\n", job_id[job]);
             }
 
             if (status[job] == AIPU_JOB_STATUS_DONE)
             {
-                AIPU_INFO()("job %lu done\n", job_id[job]);
+                AIPU_INFO()("job %lx done\n", job_id[job]);
             }
             else
             {
-                fprintf(stdout, "[TEST ERROR] job %lu exception\n", job_id[job]);
+                fprintf(stdout, "[TEST ERROR] job %lx exception\n", job_id[job]);
                 goto clean_job;
             }
 
             for (uint32_t i = 0; i < output_cnt; i++)
             {
-                memset(job_outputs[job][i], 0, output_desc[i].size);
-                ret = aipu_get_tensor(ctx, job_id[job], AIPU_TENSOR_TYPE_OUTPUT, i, job_outputs[job][i]);
+                memset(job_outputs[job][i].get(), 0, output_desc[i].size);
+                ret = aipu_get_tensor(ctx, job_id[job], AIPU_TENSOR_TYPE_OUTPUT, i, job_outputs[job][i].get());
                 if (ret != AIPU_STATUS_SUCCESS)
                 {
                     aipu_get_error_message(ctx, ret, &msg);
@@ -256,7 +256,7 @@ int main(int argc, char* argv[])
                     i, i+1, output_cnt);
             }
 
-            pass = check_result_helper(job_outputs[job], output_desc, opt.gts[0], opt.gts_size[0]);
+            pass = check_result(job_outputs[job], output_desc, opt.gts[0], opt.gts_size[0]);
             status[job] = AIPU_JOB_STATUS_NO_STATUS;
         }
     }
@@ -271,7 +271,7 @@ clean_job:
             AIPU_ERR()("aipu_clean_job: %s\n", msg);
             goto unload_graph;
         }
-        AIPU_INFO()("clean job %lu success\n", job_id[job]);
+        AIPU_INFO()("clean job %lx success\n", job_id[job]);
     }
 
 unload_graph:
@@ -296,16 +296,8 @@ deinit_ctx:
 
 finish:
     if (AIPU_STATUS_SUCCESS != ret)
-    {
         pass = -1;
-    }
-    for (uint32_t job = 0; job < PIPELINE_JOB_CNT; job++)
-    {
-        for (uint32_t i = 0; i < job_outputs[job].size(); i++)
-        {
-            delete[] job_outputs[job][i];
-        }
-    }
+
     deinit_test_bench(&opt);
     return pass;
 }

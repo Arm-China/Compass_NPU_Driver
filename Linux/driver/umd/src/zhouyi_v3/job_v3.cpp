@@ -30,6 +30,7 @@ aipudrv::JobV3::JobV3(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_
     m_tcbs.reset();
     m_init_tcb.init(0);
     m_sgt_allocated.clear();
+    exit_inst_encode.reset();
 
 #if defined(SIMULATION)
     /**
@@ -927,6 +928,12 @@ aipu_status_t aipudrv::JobV3::free_job_buffers()
         m_tcbs.reset();
     }
 
+    if (exit_inst_encode.size > 0)
+    {
+        m_mem->free(&exit_inst_encode, "exit_inst_mc");
+        exit_inst_encode.reset();
+    }
+
     if (m_pprint.size != 0)
     {
         m_mem->free(&m_pprint, "printf");
@@ -947,6 +954,61 @@ aipu_status_t aipudrv::JobV3::free_job_buffers()
     m_profiler.clear();
     m_printf.clear();
     m_layer_counter.clear();
+
+    return ret;
+}
+
+aipu_status_t aipudrv::JobV3::setup_placehold_tcb_task(uint32_t sg_id, uint32_t grid_id,
+    uint32_t core_id, uint32_t task_id, tcb_t *prev)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    tcb_t *tcb = nullptr;
+    DEV_PA_64 next_tcb_pa = 0;
+
+    /* {exit; nop; nop; nop} */
+    unsigned char exit_encode[] = {
+        0x00,0x80,0x4f,0x01,
+        0xff,0x7f,0x0c,0x40,
+        0xff,0x7f,0x0c,0x40,
+        0xff,0x7f,0x0c,0x40 };
+
+    ret = m_mem->malloc(1024, 0, &exit_inst_encode, "exit_inst_mc");
+    if (AIPU_STATUS_SUCCESS != ret)
+    {
+        LOG(LOG_ERR, "alloc exit inst buffer [fail]");
+        return ret;
+    }
+    m_mem->write(exit_inst_encode.pa, (const char*)exit_encode, 16);
+
+    tcb = new tcb_t;
+    memset(tcb, 0, sizeof(tcb_t));
+    next_tcb_pa = m_sg_job[sg_id].tasks[task_id].tcb.pa + sizeof(tcb_t);
+    prev->next = get_low_32(next_tcb_pa);
+
+    tcb->flag = TCB_FLAG_TASK_TYPE_TASK;
+    tcb->flag |= TCB_FLAG_END_TYPE_GROUP_END;
+    tcb->next = 0;
+
+    tcb->spc = get_low_32(exit_inst_encode.align_asid_pa);
+    tcb->gridid = (uint16_t)grid_id;
+    tcb->groupid = (uint16_t)core_id;
+    tcb->taskid = (uint16_t)task_id;
+    tcb->grid_dim_x = 1;
+    tcb->grid_dim_y = 1;
+    tcb->grid_dim_z = 1;
+    tcb->group_dim_x = m_task_per_sg;
+    tcb->group_dim_y = 1;
+    tcb->group_dim_z = 1;
+    tcb->group_id_x = 1;
+    tcb->group_id_y = 0;
+    tcb->group_id_z = 0;
+    tcb->task_id_x = (uint16_t)task_id;
+    tcb->task_id_y = 0;
+    tcb->task_id_z = 0;
+    tcb->tcbp = get_low_32(next_tcb_pa - m_tcbs.asid_base);
+
+    m_mem->write(next_tcb_pa, (const char*)tcb, sizeof(*tcb));
+    delete tcb;
 
     return ret;
 }
@@ -1054,9 +1116,22 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
         tcb->interrupt |= EN_INTERRUPT_TEC;
     }
 
+    #ifndef SIMULATION
+    /* config placehold task tcb for recording last dispatched tcb */
+    if (next_tcb == nullptr)
+    {
+        ret = setup_placehold_tcb_task(sg_id, grid_id, core_id, task_id, tcb);
+        if (ret != AIPU_STATUS_SUCCESS)
+            goto out;
+    }
+    #endif
+
     /* flush TCB to AIPU mem */
     m_mem->write(task.tcb.pa, (const char*)tcb, sizeof(*tcb));
 
+#ifndef SIMULATION
+out:
+#endif
     delete tcb;
     return ret;
 }
@@ -1322,7 +1397,7 @@ aipu_status_t aipudrv::JobV3::schedule()
     #endif
 
     desc.kdesc.last_task_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa;
-    desc.kdesc.tail_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa;
+    desc.kdesc.tail_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa + sizeof(tcb_t);
 
     /* for HW and Simulation if need syncing from GM to DDR */
     if (m_gm->gm_need_sync_out())
@@ -1679,7 +1754,11 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     }
 
     /* TCBs */
+    #ifndef SIMULATION
+    for (uint32_t i = 1; i < m_tot_tcb_cnt; i++)
+    #else
     for (uint32_t i = 1; i < m_tot_tcb_cnt - 1; i++)
+    #endif
     {
         m_mem->read(m_init_tcb.pa + sizeof(tcb) * i, &tcb, sizeof(tcb));
         ofsmt << "\n***TCB " << std::dec << i - 1 << "***\n";
