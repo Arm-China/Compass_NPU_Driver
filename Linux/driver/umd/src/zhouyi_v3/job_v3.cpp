@@ -76,9 +76,9 @@ void aipudrv::JobV3::set_job_params(uint32_t sg_cnt, uint32_t task_per_sg,
     m_remap_flag = remap;
 
     /**
-     * currently: 1 init-tcb + n task-tcb + 1 gm_to_ddr sync-tcb
+     * currently: 1 init-tcb + n task-tcb + 1 placehold task tcb
      *
-     * - if output buffer exists in GM, the last gm_to_ddr sync-tcb is needed.
+     * - the placehold task tcb is needed for appending new tcb chain.
      * - if using SegMMU, m_tot_tcb_cnt will be extended accordingly.
      */
     m_segmmu_tcb_num = core_cnt;
@@ -1271,7 +1271,7 @@ aipu_status_t aipudrv::JobV3::setup_tcbs()
             core_id = 0;
     }
 
-    setup_gm_sync_to_ddr(tcb);
+    // setup_gm_sync_to_ddr(tcb);
     m_status = AIPU_JOB_STATUS_INIT;
 
 finish:
@@ -1398,13 +1398,6 @@ aipu_status_t aipudrv::JobV3::schedule()
 
     desc.kdesc.last_task_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa;
     desc.kdesc.tail_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa + sizeof(tcb_t);
-
-    /* for HW and Simulation if need syncing from GM to DDR */
-    if (m_gm->gm_need_sync_out())
-    {
-        desc.tcb_tail = m_init_tcb.pa + sizeof(tcb_t) * (m_tot_tcb_cnt - 1);
-        desc.kdesc.tail_tcb_pa = m_init_tcb.pa + sizeof(tcb_t) * (m_tot_tcb_cnt - 1);
-    }
 
     /* for debugger */
     desc.kdesc.is_defer_run = m_is_defer_run;
@@ -1804,30 +1797,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
         ofsmt << "dsize: 0x" << tcb.dsize << "\n";
     }
 
-    if (m_gm->m_gm_buf_map_size[EM_GM_BUF_OUTPUT] != 0 && m_mem->is_gm_enable())
-    {
-        m_mem->read(m_init_tcb.pa + sizeof(tcb) * (m_tot_tcb_cnt - 1), &tcb, sizeof(tcb));
-        ofsmt << "\n***INIT Sync TCB***\n";
-        ofsmt << "flag: 0x" << std::hex << tcb.flag << "\n";
-        ofsmt << "next: 0x" << tcb.next << "\n";
-
-        ofsmt << "GM_CTRL: 0x" << tcb.gm_ctl << "\n";
-        ofsmt << "grid_id: " << std::dec << tcb.igrid_id << "\n";
-        ofsmt << "GM0_CTRL: 0x" << std::hex << tcb.gm_rgnx_ctrl[0] << "\n";
-        ofsmt << "GM1_CTRL: 0x" << tcb.gm_rgnx_ctrl[1] << "\n";
-        ofsmt << "GM0_LO: 0x" << tcb.gm_rgnx_addr[0].v32.lo << "\n";
-        ofsmt << "GM0_HI: 0x" << tcb.gm_rgnx_addr[0].v32.hi << "\n";
-        ofsmt << "GM1_LO: 0x" << tcb.gm_rgnx_addr[1].v32.lo << "\n";
-        ofsmt << "GM1_HI: 0x" << tcb.gm_rgnx_addr[1].v32.hi << "\n";
-        for (int i = 0; i < 4; i++)
-        {
-            ofsmt << "ASID" << std::dec << i << "_LO: 0x" << std::hex << tcb.asids[i].v32.lo << "\n";
-            ofsmt << "ASID" << std::dec << i << "_HI: 0x" << std::hex << tcb.asids[i].v32.hi << "\n";
-        }
-    }
-
     ofsmt << "\n***IO Tensors***\n";
-
     for (uint32_t i = 0; i < m_inputs.size(); i++)
     {
         dump_pa   = m_inputs[i].pa;

@@ -214,6 +214,7 @@ void aipudrv::GM_V3::get_valid_sync_region(uint32_t sg_id, uint32_t idx, uint32_
             }
         }
 
+        #if 0
         for (auto desc : m_graph.get_subgraph(sg_id).io.outputs)
         {
             /**
@@ -241,6 +242,7 @@ void aipudrv::GM_V3::get_valid_sync_region(uint32_t sg_id, uint32_t idx, uint32_
                 }
             }
         }
+        #endif
     } else {
         region.valid_sync_buf[EM_GM_BUF_INPUT].sync_pa = buf.pa;
         region.valid_sync_buf[EM_GM_BUF_INPUT].sync_size = buf.size;
