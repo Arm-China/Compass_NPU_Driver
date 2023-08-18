@@ -204,13 +204,15 @@ static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_d
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_INFO_REG, (u16)udesc->job_id);
 
 	if (trigger_type == ZHOUYI_V3_TRIGGER_TYPE_DEBUG_DISPATCH) {
-		dev_info(partition->dev, "debug-dispatch user job 0x%llx", udesc->job_id);
+		dev_dbg(partition->dev, "debug-dispatch user job 0x%llx", udesc->job_id);
 		aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
 			     TSM_DBG_DISPATCH_CMD_POOL(partition->id, get_qos(udesc->exec_flag),
 						       udesc->core_id));
 	} else {
 		aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
 			     TSM_DISPATCH_CMD_POOL(partition->id, get_qos(udesc->exec_flag)));
+		dev_dbg(partition->dev, "dispatch user job 0x%llx (0x%llx - 0x%llx, tcbp 0x%llx)",
+			udesc->job_id, udesc->head_tcb_pa, udesc->tail_tcb_pa, udesc->last_task_tcb_pa);
 	}
 
 	if (IS_CMD_FAIL(aipu_read32(partition->reg, TSM_STATUS_REG))) {

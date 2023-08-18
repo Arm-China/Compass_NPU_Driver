@@ -1021,10 +1021,6 @@ void aipu_job_manager_irq_bottom_half(struct aipu_partition *core)
 			if (curr->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3 &&
 			    curr->prev_tail_tcb)
 				aipu_mm_unlink_tcb(manager->mm, curr->prev_tail_tcb);
-
-			spin_unlock_irqrestore(&manager->lock, flags);
-			aipu_job_manager_dump_pdata(manager, curr);
-			spin_lock_irqsave(&manager->lock, flags);
 		}
 
 		/* destroy the v3 command pool if all jobs are done */
@@ -1192,6 +1188,7 @@ int aipu_job_manager_get_job_status(struct aipu_job_manager *manager,
 	struct aipu_job_status_desc *status = NULL;
 	struct aipu_job *curr = NULL;
 	struct aipu_job *next = NULL;
+	struct aipu_job **done_jobs = NULL;
 	int poll_iter = 0;
 	unsigned long flags;
 
@@ -1201,6 +1198,12 @@ int aipu_job_manager_get_job_status(struct aipu_job_manager *manager,
 	status = kcalloc(job_status->max_cnt, sizeof(*status), GFP_KERNEL);
 	if (!status)
 		return -ENOMEM;
+
+	done_jobs = kcalloc(job_status->max_cnt, sizeof(*done_jobs), GFP_KERNEL);
+	if (!done_jobs) {
+		kfree(status);
+		return -ENOMEM;
+	}
 
 	job_status->poll_cnt = 0;
 	spin_lock_irqsave(&manager->lock, flags);
@@ -1223,19 +1226,26 @@ int aipu_job_manager_get_job_status(struct aipu_job_manager *manager,
 			if (curr->desc.enable_prof || curr->pdata.tick_counter)
 				status[poll_iter].pdata = curr->pdata;
 
-			remove_aipu_job(manager, curr);
-			curr = NULL;
-
+			done_jobs[poll_iter] = curr;
 			job_status->poll_cnt++;
 			poll_iter++;
 		}
 	}
 	spin_unlock_irqrestore(&manager->lock, flags);
 
+	for (poll_iter = 0; poll_iter < job_status->poll_cnt; poll_iter++)
+		aipu_job_manager_dump_pdata(manager, done_jobs[poll_iter]);
+
+	spin_lock_irqsave(&manager->lock, flags);
+	for (poll_iter = 0; poll_iter < job_status->poll_cnt; poll_iter++)
+		remove_aipu_job(manager, done_jobs[poll_iter]);
+	spin_unlock_irqrestore(&manager->lock, flags);
+
 	ret = copy_to_user((struct job_status_desc __user *)job_status->status, status,
 			   job_status->poll_cnt * sizeof(*status));
 
 	kfree(status);
+	kfree(done_jobs);
 	return ret;
 }
 
