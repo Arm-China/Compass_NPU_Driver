@@ -433,7 +433,7 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
     SubGraphTask sg;
     uint32_t priv_buf_total_size = 0;
     uint32_t reuse_buf_total_size = 0;
-    uint32_t offset = 0;
+    uint32_t priv_offset = 0, offset = 0;
     int retval = 0;
 
     m_top_priv_buf.reset();
@@ -506,9 +506,9 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
 
             if (section_desc.size != 0)
             {
-                bufferDesc.init(m_top_priv_buf.asid_base, m_top_priv_buf.pa + offset,
+                bufferDesc.init(m_top_priv_buf.asid_base, m_top_priv_buf.pa + priv_offset,
                     ALIGN_PAGE(section_desc.size), section_desc.size);
-                offset += ALIGN_PAGE(section_desc.size);
+                priv_offset += ALIGN_PAGE(section_desc.size);
             }
 
             if (m_dump_reuse)
@@ -518,7 +518,6 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
         }
 
         /* allocate reuse buffers, all subgraphs share one copy of reuse buffers */
-        offset = 0;
         if (sg.id == 0)
         {
             for (uint32_t k = 0; k < get_graph().m_subgraphs[0].reuse_sections.size(); k++)
