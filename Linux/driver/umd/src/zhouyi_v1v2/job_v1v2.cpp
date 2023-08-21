@@ -349,6 +349,9 @@ aipu_status_t aipudrv::JobV12::free_job_buffers()
         m_stack.reset();
     }
 
+    if (m_top_reuse_buf.size > 0)
+        m_mem->free(&m_top_reuse_buf);
+
     for (uint32_t i = 0; i < m_reuses.size(); i++)
         m_mem->free(&m_reuses[i]);
 
