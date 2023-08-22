@@ -87,6 +87,12 @@ void aipudrv::JobV3::set_job_params(uint32_t sg_cnt, uint32_t task_per_sg,
         m_tot_tcb_cnt += (m_segmmu_tcb_num + 1) / 2;
 
     m_backup_tcb.reset(new char[m_tot_tcb_cnt * sizeof(tcb_t)]);
+
+    /**
+     * case: only diable GM for multiple core NPU when multiple small models
+     *       parallel to run on separate core.
+     */
+    m_gm->gm_dynamic_switch(core_cnt);
 }
 
 void aipudrv::JobV3::setup_gm_sync_from_ddr(tcb_t *tcb)
@@ -1366,8 +1372,7 @@ aipu_status_t aipudrv::JobV3::schedule()
     /* for HW */
     desc.kdesc.exec_flag = (m_qos == AIPU_JOB_QOS_HIGH)
         ? AIPU_JOB_EXEC_FLAG_QOS_FAST : AIPU_JOB_EXEC_FLAG_QOS_SLOW;
-    desc.kdesc.exec_flag |= (m_sg_cnt == 1)
-        ? AIPU_JOB_EXEC_FLAG_SINGLE_GROUP : AIPU_JOB_EXEC_FLAG_MULTI_GROUP;
+
     if (m_dbg_dispatch)
     {
         desc.kdesc.exec_flag |= AIPU_JOB_EXEC_FLAG_DBG_DISPATCH;
@@ -1391,8 +1396,13 @@ aipu_status_t aipudrv::JobV3::schedule()
 
     /* small model share one common init-tcb on HW, skip the head init-tcb */
     #ifndef SIMULATION
-    if ((m_sg_cnt == 1) && (m_segmmu_num == 0) && m_same_asid)
-        desc.kdesc.head_tcb_pa = m_init_tcb.pa + sizeof(tcb_t);
+    if (m_core_cnt > 1)
+    {
+        desc.kdesc.exec_flag |= (m_sg_cnt == 1)
+            ? AIPU_JOB_EXEC_FLAG_SINGLE_GROUP : AIPU_JOB_EXEC_FLAG_MULTI_GROUP;
+        if ((m_sg_cnt == 1) && (m_segmmu_num == 0) && m_same_asid)
+            desc.kdesc.head_tcb_pa = m_init_tcb.pa + sizeof(tcb_t);
+    }
     #endif
 
     desc.kdesc.last_task_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa;

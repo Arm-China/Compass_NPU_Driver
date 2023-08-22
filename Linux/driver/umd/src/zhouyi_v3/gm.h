@@ -54,6 +54,7 @@ class GM_V3
     public:
     aipu_status_t gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t buf_type,
         std::string &buf_name, BufferDesc &buf);
+    void gm_dynamic_switch(uint32_t core_cnt);
     bool gm_is_gm_buffer(uint32_t idx, uint32_t buf_type);
     void get_valid_sync_region(uint32_t sg_id, uint32_t idx, uint32_t buf_type,
         BufferDesc &buf, ValidSyncBuffer &region);

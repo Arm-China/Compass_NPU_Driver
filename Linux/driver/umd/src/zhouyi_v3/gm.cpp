@@ -14,19 +14,6 @@
 
 aipudrv::GM_V3::GM_V3(JobV3 &_job) : m_job(_job), m_graph(m_job.get_graph())
 {
-    /**
-     * set this env variable as true(y/Y), small model containing only
-     * one subgraph can use GM. but if hope multiple small models
-     * parallel to run, it has to be set as false(n/N).
-     */
-    const char *gm_allow_small_model = getenv("UMD_GM_ASM");
-
-    if (gm_allow_small_model != nullptr)
-    {
-        if (gm_allow_small_model[0] == 'y' || gm_allow_small_model[0] == 'Y')
-            m_gm_asm = true;
-    }
-
     for (uint32_t type = GM_BUF_TYPE_REUSE; type < GM_BUF_TYPE_MAX; type++)
     {
         if (m_graph.m_gm_info[GM_BUF_TYPE_REUSE].size() > 0)
@@ -41,6 +28,27 @@ aipudrv::GM_V3::~GM_V3()
 {
     for (auto buf : m_gm_free_buffer)
         m_job.m_mem->free(buf);
+}
+
+void aipudrv::GM_V3::gm_dynamic_switch(uint32_t core_cnt)
+{
+    /**
+     * set this env variable as true(y/Y), small model containing only
+     * one subgraph can use GM. but if hope multiple small models
+     * parallel to run, it has to be set as false(n/N).
+     */
+    const char *gm_allow_small_model = getenv("UMD_GM_ASM");
+
+    if (gm_allow_small_model != nullptr)
+    {
+        if (gm_allow_small_model[0] == 'y' || gm_allow_small_model[0] == 'Y')
+            m_gm_asm = true;
+    } else {
+        if (core_cnt > 1)
+            m_gm_asm = false;
+        else if (core_cnt == 1)
+            m_gm_asm = true;
+    }
 }
 
 aipu_status_t aipudrv::GM_V3::gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t buf_type,
@@ -139,7 +147,7 @@ bool aipudrv::GM_V3::gm_is_gm_buffer(uint32_t idx, uint32_t buf_type)
     if (m_job.m_qos == AIPU_JOB_QOS_HIGH && !m_job.m_mem->is_both_gm_region_enable())
         goto out;
 
-    if(m_job.m_gm_info[buf_type].count(idx) != 1)
+    if (m_job.m_gm_info[buf_type].count(idx) != 1)
         goto out;
 
     if (!m_gm_asm && m_job.m_sg_cnt == 1)
