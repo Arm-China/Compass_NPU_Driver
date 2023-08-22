@@ -68,7 +68,7 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
     if (AIPU_STATUS_SUCCESS != ret)
     {
         retval = -1;
-        LOG(LOG_WARN, "optmize alloc reuse buffer, size: 0x%x [fail], try scatter alloc\n",
+        LOG(LOG_DEBUG, "optmize alloc reuse buffer, size: 0x%x [fail], try scatter alloc\n",
             reuse_buf_total_size);
         goto opt_alloc_fail;
     }

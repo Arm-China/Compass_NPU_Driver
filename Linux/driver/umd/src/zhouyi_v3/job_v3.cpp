@@ -484,7 +484,7 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
         if (AIPU_STATUS_SUCCESS != ret)
         {
             retval = -1;
-            LOG(LOG_WARN, "optmize alloc private buffer, size: 0x%x [fail], try scatter alloc\n",
+            LOG(LOG_DEBUG, "optmize alloc private buffer, size: 0x%x [fail], try scatter alloc\n",
                 priv_buf_total_size);
             goto opt_alloc_fail;
         }
@@ -494,7 +494,7 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
     if (AIPU_STATUS_SUCCESS != ret)
     {
         retval = -1;
-        LOG(LOG_WARN, "optmize alloc reuse buffer, size: 0x%x [fail], try scatter alloc\n",
+        LOG(LOG_DEBUG, "optmize alloc reuse buffer, size: 0x%x [fail], try scatter alloc\n",
             reuse_buf_total_size);
         goto opt_alloc_fail;
     }
