@@ -401,7 +401,7 @@ static int zhouyi_v3_sysfs_show(struct aipu_partition *partition, char *buf)
 	ret += zhouyi_print_reg_info(partition->reg, tmp, "Cluster config",
 				     CLUSTER_CONFIG_REG(0));
 	strcat(buf, tmp);
-	ret += zhouyi_print_reg_info(partition->reg, tmp, "Cluster ctrl",
+	ret += zhouyi_print_reg_info(partition->reg, tmp, "Cluster control",
 				     CLUSTER_CONTROL_REG(0));
 	strcat(buf, tmp);
 	ret += zhouyi_print_reg_info(partition->reg, tmp, "TSM schedule ctrl handle",
@@ -437,7 +437,7 @@ static int zhouyi_v3_sysfs_show(struct aipu_partition *partition, char *buf)
 	ret += zhouyi_print_reg_info(partition->reg, tmp, "Tick counter low",
 				     TICK_COUNTER_LOW_REG);
 	strcat(buf, tmp);
-	ret += zhouyi_print_reg_info(partition->reg, tmp, "Tick counter ctrl",
+	ret += zhouyi_print_reg_info(partition->reg, tmp, "Tick counter control",
 				     TICK_COUNTER_CONTROL_STATUS_REG);
 	strcat(buf, tmp);
 	ret += zhouyi_print_reg_info(partition->reg, tmp, "CMD pool config",
@@ -446,13 +446,16 @@ static int zhouyi_v3_sysfs_show(struct aipu_partition *partition, char *buf)
 	ret += zhouyi_print_reg_info(partition->reg, tmp, "CMD pool status",
 				     CMD_POOL_STATUS_REG(0));
 	strcat(buf, tmp);
-	ret += zhouyi_print_reg_info(partition->reg, tmp, "CMD pool intr status",
+	ret += zhouyi_print_reg_info(partition->reg, tmp, "CMD pool intr control",
 				     CMD_POOL_INTR_CTRL_REG(0));
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(partition->reg, tmp, "CMD pool intr status",
+				     CMD_POOL_INTR_STATUS_REG(0));
 	strcat(buf, tmp);
 	ret += zhouyi_print_reg_info(partition->reg, tmp, "CMD pool signal",
 				     CMD_POOL_IRQ_SIG_REG(0));
 	strcat(buf, tmp);
-	ret += zhouyi_print_reg_info(partition->reg, tmp, "CMD pool gignal flag",
+	ret += zhouyi_print_reg_info(partition->reg, tmp, "CMD pool signal flag",
 				     CMD_POOL_IRQ_SIGNAL_FLAG_REG(0));
 	strcat(buf, tmp);
 	ret += zhouyi_print_reg_info(partition->reg, tmp, "CMD pool TCBP",
