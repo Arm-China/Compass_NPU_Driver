@@ -506,7 +506,8 @@ int aipu_mm_free_in_region(struct aipu_memory_manager *mm, struct aipu_buf_desc 
 
 	alloc_nr = page->contiguous_alloc_len;
 	if (!alloc_nr) {
-		dev_err(reg->dev, "free in region failed: zero alloc_nr is invalid");
+		dev_err(reg->dev, "free in region failed: zero alloc_nr is invalid, 0x%llx\n",
+			buf->pa);
 		return -EINVAL;
 	}
 
@@ -1434,7 +1435,7 @@ unlock:
 	if (!ret && free_tcb) {
 		memset(&buf, 0, sizeof(buf));
 		buf.pa = tbuf->head;
-		aipu_mm_free(mm, &buf, NULL, true);
+		aipu_mm_free(mm, &buf, NULL, false);
 	}
 	return ret;
 }
