@@ -487,7 +487,7 @@ u64 get_gm_size(u32 val)
 {
 	u64 _val = _GET_GM_SIZE(val);
 
-	return _val ? 512 * SZ_1K : (SZ_1M << (_val - 1));
+	return _val ? (SZ_1M << (_val - 1)) : 512 * SZ_1K;
 }
 
 static struct aipu_operations zhouyi_v3_ops = {
