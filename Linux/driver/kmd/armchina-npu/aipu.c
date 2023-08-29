@@ -267,7 +267,8 @@ int armchina_aipu_probe(struct platform_device *p_dev, struct aipu_soc *soc,
 		if (!aipu)
 			return -ENOMEM;
 
-		dev_info(dev, "AIPU KMD probe start...\n");
+		dev_info(dev, "AIPU KMD (v%s) probe start...\n", KMD_VERSION);
+
 		ret = init_aipu_priv(aipu, p_dev, &aipu_fops, soc, ops);
 		if (ret)
 			return ret;
