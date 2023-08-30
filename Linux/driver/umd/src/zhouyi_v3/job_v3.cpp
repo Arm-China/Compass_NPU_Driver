@@ -89,7 +89,7 @@ void aipudrv::JobV3::set_job_params(uint32_t sg_cnt, uint32_t task_per_sg,
     m_backup_tcb.reset(new char[m_tot_tcb_cnt * sizeof(tcb_t)]);
 
     /**
-     * case: only diable GM for multiple core NPU when multiple small models
+     * case: only disable GM for multiple core NPU when multiple small models
      *       parallel to run on separate core.
      */
     m_gm->gm_dynamic_switch(core_cnt);

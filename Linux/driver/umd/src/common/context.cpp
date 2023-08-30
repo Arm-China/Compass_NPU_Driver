@@ -96,6 +96,8 @@ aipu_status_t aipudrv::MainContext::init()
         m_dram = m_dev->get_mem();
     #endif
 
+    m_umd_version = MACRO_UMD_VERSION;
+
     return ret;
 }
 
@@ -910,58 +912,71 @@ out:
 
 aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
 {
-    aipu_status_t ret= AIPU_STATUS_SUCCESS;
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
     aipudrv::JobBase* job = nullptr;
     GraphBase* p_gobj = nullptr;
 
+    if (nullptr == arg)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
     if (cmd >= AIPU_IOCTL_MARK_SHARED_TENSOR && cmd <= AIPU_IOCTL_SET_PROFILE)
     {
-        aipu_shared_tensor_info_t *shared_tensor_info;
-
-        if (nullptr == arg)
-            return AIPU_STATUS_ERROR_NULL_PTR;
-
-        shared_tensor_info = (aipu_shared_tensor_info_t *)arg;
-
-        switch (cmd)
+        if (cmd >= AIPU_IOCTL_MARK_SHARED_TENSOR && cmd <= AIPU_IOCTL_SET_SHARED_TENSOR)
         {
-            case AIPU_IOCTL_MARK_SHARED_TENSOR:
-                if (!aipudrv::valid_job_id(shared_tensor_info->id))
-                    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+            aipu_shared_tensor_info_t *shared_tensor_info;
+            shared_tensor_info = (aipu_shared_tensor_info_t *)arg;
 
-                job = get_job_object(shared_tensor_info->id);
-                if (nullptr == job)
-                    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+            switch (cmd)
+            {
+                case AIPU_IOCTL_MARK_SHARED_TENSOR:
+                    if (!aipudrv::valid_job_id(shared_tensor_info->id))
+                        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
 
-                ret = job->mark_shared_tensor(shared_tensor_info->type,
-                        shared_tensor_info->tensor_idx, shared_tensor_info->pa);
-                if (ret != AIPU_STATUS_SUCCESS)
-                    return ret;
-                break;
+                    job = get_job_object(shared_tensor_info->id);
+                    if (nullptr == job)
+                        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
 
-            case AIPU_IOCTL_SET_SHARED_TENSOR:
-                if (!aipudrv::valid_graph_id(shared_tensor_info->id))
-                    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+                    ret = job->mark_shared_tensor(shared_tensor_info->type,
+                            shared_tensor_info->tensor_idx, shared_tensor_info->pa);
+                    if (ret != AIPU_STATUS_SUCCESS)
+                        return ret;
+                    break;
 
-                p_gobj = get_graph_object(shared_tensor_info->id);
-                if (nullptr == p_gobj)
-                    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+                case AIPU_IOCTL_SET_SHARED_TENSOR:
+                    if (!aipudrv::valid_graph_id(shared_tensor_info->id))
+                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
-                ret = p_gobj->assign_shared_tensor(shared_tensor_info->type,
-                        shared_tensor_info->tensor_idx, shared_tensor_info->pa);
-                if (ret != AIPU_STATUS_SUCCESS)
-                    return ret;
+                    p_gobj = get_graph_object(shared_tensor_info->id);
+                    if (nullptr == p_gobj)
+                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
-                break;
+                    ret = p_gobj->assign_shared_tensor(shared_tensor_info->type,
+                            shared_tensor_info->tensor_idx, shared_tensor_info->pa);
+                    if (ret != AIPU_STATUS_SUCCESS)
+                        return ret;
 
-            case AIPU_IOCTL_SET_PROFILE:
-                m_dev->enable_profiling((*(int *)arg) != 0);
-                break;
+                    break;
+                }
+        } else if (cmd == AIPU_IOCTL_SET_PROFILE) {
+            m_dev->enable_profiling((*(int *)arg) != 0);
         }
     } else {
         #ifndef SIMULATION
         ret = convert_ll_status(m_dev->ioctl_cmd(cmd, arg));
         #endif
+
+        if (ret == AIPU_STATUS_SUCCESS)
+        {
+            switch (cmd)
+            {
+                case AIPU_IOCTL_GET_VERSION:
+                    aipu_driver_version_t *drv_ver = (aipu_driver_version_t *)arg;
+                    strncpy(drv_ver->umd_version, m_umd_version.c_str(),
+                        m_umd_version.length());
+                    break;
+            }
+        }
     }
+
    return ret;
 }

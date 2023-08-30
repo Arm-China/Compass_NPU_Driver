@@ -45,6 +45,9 @@ private:
     aipu_global_config_hw_t m_hw_cfg;
 
 private:
+    std::string m_umd_version;
+
+private:
     uint64_t create_unique_graph_id_inner() const;
     aipu_status_t create_graph_object(std::istream& gbin, uint32_t size, uint64_t id, GraphBase** gobj);
     aipu_status_t destroy_graph_object(GraphBase** gobj);

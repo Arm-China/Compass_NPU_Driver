@@ -471,6 +471,19 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             ret = readwrite_dmabuf_helper(m_fd, (aipu_dmabuf_op_t *)arg, !WRITE_DMABUF);
             break;
 
+        case AIPU_IOCTL_GET_VERSION:
+            {
+                aipu_driver_version_t *drv_ver = (aipu_driver_version_t *)arg;
+
+                kret = ioctl(m_fd, AIPU_IOCTL_GET_DRIVER_VERSION, drv_ver->kmd_version);
+                if (kret < 0)
+                {
+                    LOG(LOG_ERR, "get kmd version [fail]");
+                    ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+                }
+            }
+            break;
+
         default:
             LOG(LOG_ERR, "AIPU can't support cmd: %d\n", cmd);
             ret = AIPU_LL_STATUS_ERROR_OPERATION_UNSUPPORTED;

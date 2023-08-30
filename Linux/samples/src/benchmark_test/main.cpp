@@ -45,6 +45,7 @@ int main(int argc, char* argv[])
     struct aipu_config_clusters config_cluster;
     config_cluster.clusters[0].en_core_cnt = 2;
     bool en_config = false;
+    aipu_driver_version_t drv_ver = {0};
 
     if(init_test_bench(argc, argv, &opt, "benchmark_test"))
     {
@@ -60,6 +61,18 @@ int main(int argc, char* argv[])
         goto finish;
     }
     AIPU_INFO()("aipu_init_context success\n");
+
+    // get driver's UMD and KMD version
+    memset(drv_ver.umd_version, 0, sizeof(drv_ver.umd_version));
+    memset(drv_ver.kmd_version, 0, sizeof(drv_ver.kmd_version));
+    ret = aipu_ioctl(ctx, AIPU_IOCTL_GET_VERSION, &drv_ver);
+    if (ret != AIPU_STATUS_SUCCESS)
+    {
+        aipu_get_error_message(ctx, ret, &msg);
+        AIPU_ERR()("aipu_ioctl: %s\n", msg);
+        goto deinit_ctx;
+    }
+    AIPU_INFO()("Driver UMD: %s, KMD: %s\n", drv_ver.umd_version, drv_ver.kmd_version);
 
     ret = aipu_load_graph(ctx, opt.bin_file_name, &graph_id);
     if (ret != AIPU_STATUS_SUCCESS)

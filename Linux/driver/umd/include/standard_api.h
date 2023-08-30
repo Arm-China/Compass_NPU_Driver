@@ -305,6 +305,21 @@ typedef struct aipu_dmabuf_op
 } aipu_dmabuf_op_t;
 
 /**
+ * @struct aipu_driver_version
+ *
+ * @brief get version number of UMD & KMD
+ *
+ * @note the version number is determined in compiling phase,
+ *       currently both version numbers is identical. the max
+ *       buffer space is 16 bytes.
+ */
+typedef struct aipu_driver_version
+{
+    char umd_version[16]; /**< the buffer for storing UMD version string */
+    char kmd_version[16]; /**< the buffer for storing KMD version string */
+} aipu_driver_version_t;
+
+/**
  * @brief ioctl commands to operate shared tensor buffer for KMD
  */
 typedef enum {
@@ -314,7 +329,8 @@ typedef enum {
     AIPU_IOCTL_ALLOC_DMABUF,
     AIPU_IOCTL_FREE_DMABUF,
     AIPU_IOCTL_WRITE_DMABUF,
-    AIPU_IOCTL_READ_DMABUF
+    AIPU_IOCTL_READ_DMABUF,
+    AIPU_IOCTL_GET_VERSION
 } aipu_ioctl_cmd_t;
 
 /**
