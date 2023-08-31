@@ -582,5 +582,14 @@ struct aipu_hw_status {
  *   aipu_dma_buf->bytes: filled by KMD
  */
 #define AIPU_IOCTL_GET_DMA_BUF_INFO _IOWR(AIPU_IOCTL_MAGIC, 17, struct aipu_dma_buf)
+/**
+ * DOC: AIPU_IOCTL_GET_DRIVER_VERSION
+ *
+ * @Description
+ *
+ * ioctl to get the kmd version: major.minor.patch
+ * the char buffer size from UMD should be at least 16 characters.
+ */
+#define AIPU_IOCTL_GET_DRIVER_VERSION _IOR(AIPU_IOCTL_MAGIC, 18, char*)
 
 #endif /* __UAPI_MISC_ARMCHINA_AIPU_H__ */

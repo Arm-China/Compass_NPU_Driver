@@ -191,6 +191,10 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			ret = -EINVAL;
 		}
 		break;
+	case AIPU_IOCTL_GET_DRIVER_VERSION:
+		ret = copy_to_user((struct aipu_dma_buf __user *)arg, KMD_VERSION,
+				   sizeof(KMD_VERSION));
+		break;
 	default:
 		ret = -ENOTTY;
 		break;
