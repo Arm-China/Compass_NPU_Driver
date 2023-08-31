@@ -208,8 +208,19 @@ inline bool is_job_version_match(struct aipu_partition *core, struct aipu_job_de
 
 inline bool is_job_ok_for_core(struct aipu_partition *core, struct aipu_job_desc *user_job)
 {
-	return is_job_version_match(core, user_job) && (core->dtcm_size >> 10) >=
-		user_job->dtcm_size_kb;
+	if (!is_job_version_match(core, user_job)) {
+		dev_err(core->dev, "invalid specified arch %d or version %d or configuration %d\n",
+			core->arch, core->version, core->config);
+		return false;
+	}
+
+	if (user_job->dtcm_size_kb > (core->dtcm_size >> 10)) {
+		dev_err(core->dev, "the requested dtcm size (%dKB) > total dtcm size (%dKB)\n",
+			user_job->dtcm_size_kb, core->dtcm_size >> 10);
+		return false;
+	}
+
+	return true;
 }
 
 static bool is_user_job_valid(struct aipu_job_manager *manager, struct aipu_job_desc *user_job)
@@ -264,8 +275,6 @@ static bool is_user_job_valid(struct aipu_job_manager *manager, struct aipu_job_
 			return true;
 	}
 
-	dev_err(partition->dev, "no matching core found to execute user job 0x%llx",
-		user_job->job_id);
 	return false;
 }
 

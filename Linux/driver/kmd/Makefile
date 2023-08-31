@@ -5,7 +5,7 @@ MODULE_NAME := aipu
 SRC_DIR := .
 EXTRA_CFLAGS += -DKMD_VERSION=\"$(COMPASS_DRV_BTENVAR_KMD_VERSION)\" \
                    -I$(PWD)/armchina-npu/ -I$(PWD)/armchina-npu/include -I$(PWD)/armchina-npu/zhouyi \
-                   -D$(BUILD_AIPU_VERSION_KMD)
+                   -D$(BUILD_AIPU_VERSION_KMD) #-g
 
 COMM_OBJ := $(SRC_DIR)/armchina-npu/aipu.o \
             $(SRC_DIR)/armchina-npu/aipu_common.o \

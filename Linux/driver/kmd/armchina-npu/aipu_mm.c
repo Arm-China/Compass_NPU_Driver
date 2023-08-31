@@ -224,6 +224,7 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 	if (!reg)
 		return NULL;
 
+	reg->type = type;
 	reg->bytes = size;
 	reg->host_aipu_offset = offset;
 	reg->reserved = reserved;
@@ -1070,10 +1071,11 @@ tcb_handle:
 			"failed in allocating for: bytes 0x%llx, page align %d, type %d\n",
 			buf_req->bytes, buf_req->align_in_page, buf_req->data_type);
 	} else {
-		dev_dbg(mm->dev, "allocate done (%s): iova 0x%llx, type %d, bytes 0x%llx (%d)\n",
+		dev_dbg(mm->dev,
+			"allocate done (%s): iova 0x%llx, type %d, bytes 0x%llx (al %d, rg %d)\n",
 			fall_back ? "fall back to memory" : "as requested",
 			buf_req->desc.pa, buf_req->data_type, buf_req->bytes,
-			buf_req->align_in_page);
+			buf_req->align_in_page, buf_req->desc.region);
 	}
 	return ret;
 }
