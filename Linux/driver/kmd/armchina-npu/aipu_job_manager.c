@@ -419,6 +419,13 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 	if (job->desc.exec_flag & AIPU_JOB_EXEC_FLAG_DBG_DISPATCH)
 		trigger_type = ZHOUYI_V3_TRIGGER_TYPE_DEBUG_DISPATCH;
 
+	if ((pool->last_exec_flag & AIPU_JOB_EXEC_FLAG_MULTI_GROUP) &&
+	    (job->desc.exec_flag & AIPU_JOB_EXEC_FLAG_SINGLE_GROUP) &&
+	    partition->clusters[0].core_cnt != 1) {
+		job->desc.head_tcb_pa -= sizeof(struct aipu_tcb);
+		WARN_ON(!aipu_mm_get_va(manager->mm, job->desc.head_tcb_pa));
+	}
+
 	/* Driver will clean related TCBs in the list as soon as the job is done.
 	 * If userspace schedules a TCB chain already in the list end, it means that
 	 * an exit dispatch should be done before these TCBs can be resued.
@@ -478,6 +485,7 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 
 	qlist->curr_head = job->desc.head_tcb_pa;
 	qlist->curr_tail = job->desc.tail_tcb_pa;
+	pool->last_exec_flag = job->desc.exec_flag;
 
 	ret = partition->ops->reserve(partition, &job->desc, trigger_type);
 	if (!ret) {

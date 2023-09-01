@@ -131,6 +131,7 @@ struct qos {
  * @created: is this command pool created
  * @aborted: is this command pool aborted
  * @debug:   is this command pool for debug dispatch
+ * @last_exec_flag: execution flag of the last job in this command pool
  */
 struct command_pool {
 	u32 id;
@@ -138,6 +139,7 @@ struct command_pool {
 	bool created;
 	bool aborted;
 	bool debug;
+	u32  last_exec_flag;
 };
 
 /**
