@@ -164,6 +164,7 @@ struct command_pool {
  * @tick_counter:    atomic lock for tick counter
  * @is_suspend:      is suspended or not
  * @dbg_do_destroy:  do destroy flag (enabled after a debug-dispatch job ends)
+ * @tec_intr_en:     is TEC interrupts enabled or not
  */
 struct aipu_job_manager {
 	int version;
@@ -187,6 +188,7 @@ struct aipu_job_manager {
 	atomic_t tick_counter;
 	atomic_t is_suspend;
 	bool dbg_do_destroy;
+	bool tec_intr_en;
 };
 
 int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_manager *mm,

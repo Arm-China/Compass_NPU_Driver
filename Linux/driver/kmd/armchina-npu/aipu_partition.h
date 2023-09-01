@@ -42,7 +42,7 @@ struct aipu_priv;
  */
 struct aipu_operations {
 	int (*get_config)(struct aipu_partition *aipu);
-	void (*enable_interrupt)(struct aipu_partition *aipu);
+	void (*enable_interrupt)(struct aipu_partition *aipu, bool en_tec_intr);
 	void (*disable_interrupt)(struct aipu_partition *aipu);
 	void (*trigger)(struct aipu_partition *aipu);
 	int (*reserve)(struct aipu_partition *aipu, struct aipu_job_desc *udesc,

@@ -354,6 +354,28 @@ static int config_exit_tcb(struct aipu_job_manager *manager, struct aipu_buf_des
 	return 0;
 }
 
+static void check_enable_tec_interrupts(struct aipu_job_manager *manager, struct aipu_job *job)
+{
+	struct aipu_tcb *tcb = NULL;
+
+	if (!manager || !job || manager->tec_intr_en)
+		return;
+
+	if (job->desc.profile_fd > 0)
+		goto enable_tec_intr;
+
+	tcb = (struct aipu_tcb *)aipu_mm_get_va(manager->mm, job->desc.tail_tcb_pa);
+	if (!tcb && tcb->pprint)
+		goto enable_tec_intr;
+	else
+		return;
+
+enable_tec_intr:
+	manager->partitions[0].ops->enable_interrupt(&manager->partitions[0], true);
+	manager->tec_intr_en = true;
+	dev_info(manager->dev, "TEC interrupts are enabled");
+}
+
 static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu_job *job)
 {
 	int ret = 0;
@@ -381,6 +403,8 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 		trigger_type = ZHOUYI_V3_TRIGGER_TYPE_UPDATE_DISPATCH;
 	else
 		trigger_type = ZHOUYI_V3_TRIGGER_TYPE_DISPATCH;
+
+	check_enable_tec_interrupts(manager, job);
 
 	/**
 	 * 1. debug-dispatch tasks cannot be linked to any existing command pool.
@@ -1002,7 +1026,7 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 
 static void aipu_job_manager_destroy_command_pool_no_lock(struct aipu_job_manager *manager,
 							  struct aipu_partition *partition,
-							  bool free_tcb)
+							  bool unlink)
 {
 	struct command_pool *pool;
 
@@ -1011,19 +1035,23 @@ static void aipu_job_manager_destroy_command_pool_no_lock(struct aipu_job_manage
 
 	pool = manager->pools;
 	if (pool && pool->created) {
-		u64 q_slow_tail = pool->qlist[AIPU_JOB_QOS_SLOW].curr_tail;
-		u64 q_fast_tail = pool->qlist[AIPU_JOB_QOS_FAST].curr_tail;
+		if (unlink) {
+			/* only do unlink without free */
+			u64 q_slow_tail = pool->qlist[AIPU_JOB_QOS_SLOW].curr_tail;
+			u64 q_fast_tail = pool->qlist[AIPU_JOB_QOS_FAST].curr_tail;
 
-		if (q_slow_tail)
-			aipu_mm_unlink_tcb(manager->mm, q_slow_tail, free_tcb);
+			if (q_slow_tail)
+				aipu_mm_unlink_tcb(manager->mm, q_slow_tail, false);
 
-		if (q_fast_tail)
-			aipu_mm_unlink_tcb(manager->mm, q_fast_tail, free_tcb);
+			if (q_fast_tail)
+				aipu_mm_unlink_tcb(manager->mm, q_fast_tail, false);
+		}
 
 		partition->ops->destroy_command_pool(partition);
 		memset(pool->qlist, 0, sizeof(*pool->qlist) * AIPU_JOB_QOS_MAX);
 		pool->created = false;
 		pool->debug = false;
+		manager->tec_intr_en = false;
 	}
 }
 
@@ -1073,7 +1101,7 @@ void aipu_job_manager_irq_bottom_half(struct aipu_partition *core)
 	}
 
 	if (do_destroy) {
-		aipu_job_manager_destroy_command_pool_no_lock(manager, core, false);
+		aipu_job_manager_destroy_command_pool_no_lock(manager, core, true);
 	} else {
 		u64 q_slow_tail = manager->pools->qlist[AIPU_JOB_QOS_SLOW].curr_tail;
 		u64 q_fast_tail = manager->pools->qlist[AIPU_JOB_QOS_FAST].curr_tail;
@@ -1143,6 +1171,10 @@ int aipu_job_manager_cancel_jobs(struct aipu_job_manager *manager, struct file *
 	struct aipu_thread_wait_queue *next_wq = NULL;
 	struct aipu_partition *par = NULL;
 	bool multi_process = false;
+	bool do_destroy = false;
+	u64 q_slow_tail = 0;
+	u64 q_fast_tail = 0;
+	struct command_pool *pool;
 
 	if (!manager || !filp)
 		return -EINVAL;
@@ -1161,12 +1193,28 @@ int aipu_job_manager_cancel_jobs(struct aipu_job_manager *manager, struct file *
 			multi_process = true;
 		}
 	}
-	spin_unlock_irqrestore(&manager->lock, flags);
+
+	pool = manager->pools;
+	if (pool && pool->created) {
+		q_slow_tail = pool->qlist[AIPU_JOB_QOS_SLOW].curr_tail;
+		q_fast_tail = pool->qlist[AIPU_JOB_QOS_FAST].curr_tail;
+	}
 
 	if (!multi_process && manager->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+		do_destroy = true;
 		aipu_job_manager_destroy_command_pool_no_lock(manager,
 							      &manager->partitions[0],
-							      true);
+							      false);
+	}
+	spin_unlock_irqrestore(&manager->lock, flags);
+
+	if (do_destroy) {
+		/* free buffers out of spinlock */
+		if (q_slow_tail)
+			aipu_mm_unlink_tcb(manager->mm, q_slow_tail, true);
+
+		if (q_fast_tail)
+			aipu_mm_unlink_tcb(manager->mm, q_fast_tail, true);
 	}
 
 	mutex_lock(&manager->wq_lock);

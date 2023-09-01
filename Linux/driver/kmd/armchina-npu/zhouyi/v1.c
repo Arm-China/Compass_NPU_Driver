@@ -16,7 +16,7 @@ static int zhouyi_v1_get_hw_config_number(struct aipu_partition *core)
 	return 0;
 }
 
-static void zhouyi_v1_enable_interrupt(struct aipu_partition *core)
+static void zhouyi_v1_enable_interrupt(struct aipu_partition *core, bool en_tec_intr)
 {
 	if (likely(core))
 		aipu_write32(core->reg, ZHOUYI_CTRL_REG_OFFSET,
@@ -205,7 +205,7 @@ static int zhouyi_v1_sysfs_show(struct aipu_partition *core, char *buf)
 
 static void zhouyi_v1_initialize(struct aipu_partition *core)
 {
-	core->ops->enable_interrupt(core);
+	core->ops->enable_interrupt(core, false);
 }
 
 static int zhouyi_v1_soft_reset(struct aipu_partition *core, bool init_regs)

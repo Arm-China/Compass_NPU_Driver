@@ -37,12 +37,15 @@ static void zhouyi_v3_enable_core_cnt(struct aipu_partition *partition, u32 clus
 		 cluster_id, en_core_cnt, config);
 }
 
-static void zhouyi_v3_enable_interrupt(struct aipu_partition *partition)
+static void zhouyi_v3_enable_interrupt(struct aipu_partition *partition, bool en_tec_intr)
 {
 	u32 cmd_pool_id = partition->id;
+	u32 flag = EN_CORE_INTR | EN_CLUSTER_INTR | EN_ALL_TYPE_INTRS;
 
-	aipu_write32(partition->reg, CMD_POOL_INTR_CTRL_REG(cmd_pool_id),
-		     EN_TEC_INTR | EN_CORE_INTR | EN_CLUSTER_INTR | EN_ALL_TYPE_INTRS);
+	if (en_tec_intr)
+		flag |= EN_TEC_INTR;
+
+	aipu_write32(partition->reg, CMD_POOL_INTR_CTRL_REG(cmd_pool_id), flag);
 }
 
 static void zhouyi_v3_config_partition_cmd_pool(struct aipu_partition *partition)
@@ -163,6 +166,8 @@ static void zhouyi_v3_destroy_command_pool(struct aipu_partition *partition)
 			aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
 	}
 
+	/* disable tec interrupts by default */
+	zhouyi_v3_enable_interrupt(partition, false);
 	dev_dbg(partition->dev, "command pool #%d was destroyed\n", partition->id);
 }
 
@@ -299,7 +304,7 @@ static void zhouyi_v3_initialize(struct aipu_partition *partition)
 		zhouyi_v3_set_partition(partition, partition->clusters[iter].id);
 
 	zhouyi_v3_config_partition_cmd_pool(partition);
-	zhouyi_v3_enable_interrupt(partition);
+	zhouyi_v3_enable_interrupt(partition, false);
 	zhouyi_v3_disable_tick_counter(partition);
 }
 

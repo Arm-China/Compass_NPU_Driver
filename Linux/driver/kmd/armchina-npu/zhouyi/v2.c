@@ -18,7 +18,7 @@ static int zhouyi_v2_get_hw_config_number(struct aipu_partition *core)
 	return 0;
 }
 
-static void zhouyi_v2_enable_interrupt(struct aipu_partition *core)
+static void zhouyi_v2_enable_interrupt(struct aipu_partition *core, bool en_tec_intr)
 {
 	if (likely(core))
 		aipu_write32(core->reg, ZHOUYI_CTRL_REG_OFFSET, ZHOUYI_V2_IRQ_ENABLE_FLAG);
@@ -208,7 +208,7 @@ static int zhouyi_v2_io_rw(struct aipu_partition *core, struct aipu_io_req *io_r
 
 static void zhouyi_v2_initialize(struct aipu_partition *core)
 {
-	core->ops->enable_interrupt(core);
+	core->ops->enable_interrupt(core, false);
 
 	if (core->dtcm_size > 0 && core->version == AIPU_ISA_VERSION_ZHOUYI_V2_2) {
 		aipu_write32(core->reg, ZHOUYI_V2_DTCM_CTRL, core->dtcm_size >> 20);
