@@ -409,8 +409,9 @@ static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
 			return -ENOMEM;
 	}
 
+	alloc_nr = ALIGN(buf_req->bytes, PAGE_SIZE) >> PAGE_SHIFT;
+	dev_size = alloc_nr * PAGE_SIZE;
 	if (reg->reserved) {
-		alloc_nr = ALIGN(buf_req->bytes, PAGE_SIZE) >> PAGE_SHIFT;
 		bitmap_no = get_free_bitmap_no(mm, reg, buf_req);
 		if (bitmap_no >= reg->count) {
 			dev_dbg(reg->dev, "alloc in region failed: no free buffer");
@@ -433,10 +434,8 @@ static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
 		bitmap_set(reg->bitmap, bitmap_no, alloc_nr);
 
 		dev_pa = reg->base_iova + (bitmap_no << PAGE_SHIFT);
-		dev_size = alloc_nr * PAGE_SIZE;
 	} else {
 		dev_pa = reg->base_iova;
-		dev_size = reg->bytes;
 	}
 
 	if (tbuf) {

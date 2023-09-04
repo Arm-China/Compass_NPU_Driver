@@ -186,7 +186,7 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 	exp.priv = priv;
 
 	dmabuf = dma_buf_export(&exp);
-	if (!dmabuf) {
+	if (IS_ERR(dmabuf)) {
 		ret = -EINVAL;
 		goto fail;
 	}
