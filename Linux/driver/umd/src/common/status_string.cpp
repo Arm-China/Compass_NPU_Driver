@@ -85,6 +85,8 @@ std::map<uint32_t, std::string> aipudrv::MainContext::umd_status_string =
         "Mark shared tensor: no tensor" },
     { AIPU_STATUS_ERROR_SET_SHARED_TENSOR,
         "Setting shared tensor: no tensor" },
+    { AIPU_STATUS_ERROR_DMABUF_SHARED_IO,
+        "Specify dma_buf: not expect input&output buffer shared" },
     { AIPU_STATUS_MAX,
         "Status Max value which should not be returned to application." },
     /* AIPU layer library runtime error code */

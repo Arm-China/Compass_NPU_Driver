@@ -839,11 +839,32 @@ aipu_status_t aipudrv::JobV3::specify_io_buffer(uint32_t type, uint32_t index,
         goto out;
     }
 
-    /* free io buffer allocated internally,replace it with new buffer */
+    /**
+      * first check whether the input and output buffers are share one buffer,
+      * if such condition occurs, return an error code to up layer, and try the
+      * original calling flow other than dma_buf scheme.
+      */
     reuse_index = (*iobuffer_vec)[index].ref_section_iter;
+    if (type == AIPU_TENSOR_TYPE_INPUT)
+    {
+        for (uint32_t i = 0; i < get_graph().get_subgraph(0).io.outputs.size(); i++)
+        {
+            auto &idtensor_desc = get_graph().get_subgraph(0).io.outputs[i];
+            if (idtensor_desc.ref_section_iter == reuse_index)
+                return AIPU_STATUS_ERROR_DMABUF_SHARED_IO;
+        }
+    } else {
+        for (uint32_t i = 0; i < get_graph().get_subgraph(0).io.inputs.size(); i++)
+        {
+            auto &idtensor_desc = get_graph().get_subgraph(0).io.inputs[i];
+            if (idtensor_desc.ref_section_iter == reuse_index)
+                return AIPU_STATUS_ERROR_DMABUF_SHARED_IO;
+        }
+    }
+
+    /* free io buffer allocated internally,replace it with new buffer */
     bufferDesc = &m_sg_job[0].reuses[reuse_index];
     m_sg_job[0].dma_buf_idx.insert(reuse_index);
-
     if (!m_optimized_reuse_alloc)
     {
         ret = m_mem->free(bufferDesc, str);

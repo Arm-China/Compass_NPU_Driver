@@ -379,8 +379,9 @@ typedef enum {
     AIPU_STATUS_ERROR_TIMEOUT              = 0x23,
     AIPU_STATUS_ERROR_NO_BATCH_QUEUE       = 0x24,
     AIPU_STATUS_ERROR_MARK_SHARED_TENSOR   = 0x25,
-    AIPU_STATUS_ERROR_SET_SHARED_TENSOR     = 0x26,
-    AIPU_STATUS_MAX                        = 0x27,
+    AIPU_STATUS_ERROR_SET_SHARED_TENSOR    = 0x26,
+    AIPU_STATUS_ERROR_DMABUF_SHARED_IO     = 0x27,
+    AIPU_STATUS_MAX                        = 0x28,
     /* AIPU layer library runtime error code */
     AIPU_STATUS_ERROR_UNKNOWN_ERROR        = 0x200,
     AIPU_STATUS_ERROR_KEYBOARD_INTERRUPT   = 0x300,
