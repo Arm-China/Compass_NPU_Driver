@@ -736,6 +736,7 @@ aipu_status_t aipu_config_job(const aipu_ctx_handle_t* ctx, uint64_t job, uint64
  * @retval AIPU_STATUS_ERROR_NULL_PTR
  * @retval AIPU_STATUS_ERROR_INVALID_CTX
  * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
+ * @retval AIPU_STATUS_ERROR_DMABUF_SHARED_IO
  *
  * @note this API is just used on HW
  */
