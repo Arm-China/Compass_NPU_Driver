@@ -31,6 +31,7 @@ RUNTIME_HEADER_PATH   :=
 RUNTIMR_TEST_SECTION += $(foreach VAR, $(TEST_UNIT), $(wildcard $(RUNTIME_TEST_SRC_PATH)/$(VAR)/*.cpp))
 RUNTIMR_TEST_HEADER_PATH += -I.
 RUNTIMR_SRCS_SECTION += $(foreach VAR, $(SRC_UNIT), $(wildcard $(RUNTIME_SRC_PATH)/$(VAR)/*.cpp))
+RUNTIMR_SRCS_SECTION := $(filter-out ../driver/umd/src/common/export_py_api.cpp, $(RUNTIMR_SRCS_SECTION))
 RUNTIME_HEADER_PATH += $(foreach VAR, $(SRC_UNIT), -I$(RUNTIME_SRC_PATH)/$(VAR))
 RUNTIME_HEADER_PATH += -I../driver/umd/src
 RUNTIME_HEADER_PATH += -I../driver/umd/include
@@ -57,6 +58,8 @@ SRCS += $(RUNTIMR_TEST_SECTION)
 OBJS := $(patsubst %cpp, %o, $(SRCS))
 LDFLAGS += -lpthread
 CXXFLAGS := -g -Wall  -std=c++14  ${RUNTIME_HEADER_PATH}  ${RUNTIMR_TEST_HEADER_PATH}
+CXXFLAGS += -DMACRO_UMD_VERSION=\"$(COMPASS_DRV_BTENVAR_UMD_V_MAJOR).$(COMPASS_DRV_BTENVAR_UMD_V_MINOR)\"
+
 
 all: $(TARGET)
 $(TARGET): $(OBJS)
