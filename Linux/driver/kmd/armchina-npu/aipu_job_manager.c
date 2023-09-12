@@ -364,8 +364,8 @@ static void check_enable_tec_interrupts(struct aipu_job_manager *manager, struct
 	if (job->desc.profile_fd > 0)
 		goto enable_tec_intr;
 
-	tcb = (struct aipu_tcb *)aipu_mm_get_va(manager->mm, job->desc.tail_tcb_pa);
-	if (!tcb && tcb->pprint)
+	tcb = (struct aipu_tcb *)aipu_mm_get_va(manager->mm, job->desc.last_task_tcb_pa);
+	if (tcb && tcb->pprint)
 		goto enable_tec_intr;
 	else
 		return;
@@ -373,7 +373,7 @@ static void check_enable_tec_interrupts(struct aipu_job_manager *manager, struct
 enable_tec_intr:
 	manager->partitions[0].ops->enable_interrupt(&manager->partitions[0], true);
 	manager->tec_intr_en = true;
-	dev_info(manager->dev, "TEC interrupts are enabled");
+	dev_info(manager->dev, "TEC interrupts are enabled\n");
 }
 
 static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu_job *job)
@@ -782,16 +782,19 @@ static void aipu_job_manager_real_time_printk(struct aipu_job_manager *manager,
 
 	if (GET_PRINF_SIZE(info->sig_flag)) {
 		/* here: tail TCBP is the exact TCB sending a printf signal */
-		tcb = (struct aipu_tcb *)aipu_mm_get_va(manager->mm, info->tail_tcbp);
-		if (!tcb)
-			dev_dbg(partition->dev, "real time printk: no TCB found (0x%x)\n",
+		tcb = (struct aipu_tcb *)aipu_mm_get_va(manager->mm, manager->asid0_base +
+							info->tail_tcbp);
+		if (!tcb) {
+			dev_err(partition->dev, "real time printk: no TCB found (0x%x)\n",
 				info->tail_tcbp);
+			return;
+		}
 
 		buf = aipu_mm_get_va(manager->mm, manager->asid0_base + tcb->pprint);
 		if (buf)
 			dev_info(partition->dev, "[real-time printk 0x%x] %s", tcb->pprint, buf);
 		else
-			dev_dbg(partition->dev, "real time printk: no pbuf found (0x%x)\n",
+			dev_err(partition->dev, "real time printk: no pbuf found (0x%x)\n",
 				tcb->pprint);
 	}
 }
@@ -964,8 +967,8 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 		} else if (IS_PROFILER_SIGNAL(info->sig_flag)) {
 			pr_info("profiler signal intr...\n");
 			aipu_job_manager_real_time_get_pdata(manager, info);
-			return;
 		}
+		return;
 	}
 
 	spin_lock(&manager->lock);

@@ -45,6 +45,7 @@ static void zhouyi_v3_enable_interrupt(struct aipu_partition *partition, bool en
 	if (en_tec_intr)
 		flag |= EN_TEC_INTR;
 
+	dev_dbg(partition->dev, "configure interrupt flag 0x%x\n", flag);
 	aipu_write32(partition->reg, CMD_POOL_INTR_CTRL_REG(cmd_pool_id), flag);
 }
 
@@ -360,8 +361,6 @@ static int partition_upper_half(struct aipu_partition *partition)
 	} else if (IS_EXCEPTION_IRQ(status)) {
 		aipu_write32(partition->reg, CMD_POOL_STATUS_REG(partition->id),
 			     CLEAR_CMD_POOL_EXCEPTION);
-	} else {
-		return IRQ_HANDLED;
 	}
 
 	if (!IS_TEC_IRQ(status) || IS_SIGNAL_IRQ(status)) {
