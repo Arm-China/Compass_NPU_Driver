@@ -324,16 +324,12 @@ static void reserve_core_for_job_no_lock(struct aipu_job_manager *manager, struc
 			job->desc.job_id, job->uthread_id);
 }
 
-static int config_exit_tcb(struct aipu_job_manager *manager, struct aipu_buf_desc *desc)
+static int config_exit_tcb(struct aipu_job_manager *manager, struct aipu_tcb *tcb)
 {
 	int i = 0;
-	struct aipu_tcb *tcb = NULL;
 
-	tcb = (struct aipu_tcb *)aipu_mm_get_va(manager->mm, desc->pa);
-	if (!tcb) {
-		dev_err(manager->dev, "buffer for exit TCB not found (0x%llx)\n", desc->pa);
+	if (!tcb)
 		return -EINVAL;
-	}
 
 	memset(tcb, 0, sizeof(*tcb));
 
@@ -364,10 +360,13 @@ static void check_enable_tec_interrupts(struct aipu_job_manager *manager, struct
 	if (job->desc.profile_fd > 0)
 		goto enable_tec_intr;
 
-	tcb = (struct aipu_tcb *)aipu_mm_get_va(manager->mm, job->desc.last_task_tcb_pa);
-	if (tcb && tcb->pprint)
-		goto enable_tec_intr;
-	else
+	tcb = aipu_mm_get_tcb(manager->mm, job->desc.last_task_tcb_pa);
+	if (!tcb) {
+		dev_err(manager->dev, "get TCB va failed: 0x%llx\n", job->desc.last_task_tcb_pa);
+		return;
+	}
+
+	if (!tcb->pprint)
 		return;
 
 enable_tec_intr:
@@ -384,12 +383,13 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 	struct aipu_partition *partition = &manager->partitions[partition_id];
 	struct command_pool *pool = &manager->pools[partition_id];
 	struct qos *qlist = NULL;
+	struct aipu_tcb *tail_tcb = NULL;
 
-	ret = aipu_mm_set_tcb_tail(manager->mm, job->desc.tail_tcb_pa);
-	if (ret) {
-		dev_err(partition->dev, "job set TCB tail failed: 0x%llx\n",
-			job->desc.tail_tcb_pa);
-		return ret;
+	tail_tcb = aipu_mm_set_tcb_tail(manager->mm, job->desc.tail_tcb_pa);
+	if (!tail_tcb) {
+		dev_err(partition->dev, "[%d] get tail TCB failed: 0x%llx\n",
+			task_pid_nr(current), job->desc.tail_tcb_pa);
+		return -EINVAL;
 	}
 
 	if (job->desc.exec_flag & AIPU_JOB_EXEC_FLAG_QOS_SLOW)
@@ -421,10 +421,8 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 
 	if ((pool->last_exec_flag & AIPU_JOB_EXEC_FLAG_MULTI_GROUP) &&
 	    (job->desc.exec_flag & AIPU_JOB_EXEC_FLAG_SINGLE_GROUP) &&
-	    partition->clusters[0].core_cnt != 1) {
+	    partition->clusters[0].core_cnt != 1)
 		job->desc.head_tcb_pa -= sizeof(struct aipu_tcb);
-		WARN_ON(!aipu_mm_get_va(manager->mm, job->desc.head_tcb_pa));
-	}
 
 	/* Driver will clean related TCBs in the list as soon as the job is done.
 	 * If userspace schedules a TCB chain already in the list end, it means that
@@ -433,13 +431,13 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 	if ((job->desc.tail_tcb_pa == qlist->curr_tail && !pool->aborted) ||
 	    (trigger_type == ZHOUYI_V3_TRIGGER_TYPE_CREATE &&
 	     (job->desc.exec_flag & AIPU_JOB_EXEC_FLAG_SINGLE_GROUP))) {
-		ret = config_exit_tcb(manager, &manager->exit_tcb);
+		ret = config_exit_tcb(manager, manager->exit_tcb);
 		if (ret)
 			return ret;
 
 		if (trigger_type != ZHOUYI_V3_TRIGGER_TYPE_CREATE) {
 			ret = aipu_mm_link_tcb(manager->mm, qlist->curr_tail,
-					       manager->exit_tcb.pa, 0);
+					       manager->exit_tcb_desc.pa, 0);
 			if (ret) {
 				dev_err(partition->dev, "link TCB 0x%llx to 0x%llx failed (step 1)",
 					job->desc.head_tcb_pa, qlist->curr_tail);
@@ -448,14 +446,14 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 		}
 
 		ret = partition->ops->exit_dispatch(partition, job->desc.exec_flag,
-						    manager->exit_tcb.pa);
+						    manager->exit_tcb_desc.pa);
 		if (ret) {
 			dev_err(partition->dev, "exit dispatch failed: job ID 0x%llx",
 				job->desc.job_id);
 			return ret;
 		}
 
-		qlist->curr_tail = manager->exit_tcb.pa;
+		qlist->curr_tail = manager->exit_tcb_desc.pa;
 
 		if (trigger_type != ZHOUYI_V3_TRIGGER_TYPE_CREATE &&
 		    job->desc.tail_tcb_pa) {
@@ -485,6 +483,7 @@ static int schedule_v3_job_no_lock(struct aipu_job_manager *manager, struct aipu
 
 	qlist->curr_head = job->desc.head_tcb_pa;
 	qlist->curr_tail = job->desc.tail_tcb_pa;
+	qlist->tail_tcb  = tail_tcb;
 	pool->last_exec_flag = job->desc.exec_flag;
 
 	ret = partition->ops->reserve(partition, &job->desc, trigger_type);
@@ -672,19 +671,20 @@ int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_m
 			return ret;
 		}
 
-		manager->exit_tcb = buf.desc;
-		ret = config_exit_tcb(manager, &buf.desc);
+		manager->exit_tcb_desc = buf.desc;
+		manager->exit_tcb = aipu_mm_set_tcb_tail(manager->mm, manager->exit_tcb_desc.pa);
+		if (!manager->exit_tcb) {
+			dev_err(manager->dev, "init job manager failed: get tail TCB failed");
+			return -EINVAL;
+		}
+
+		ret = config_exit_tcb(manager, manager->exit_tcb);
 		if (ret) {
 			dev_err(manager->dev, "init job manager failed: config exit TCB failed");
 			return ret;
 		}
-		ret = aipu_mm_set_tcb_tail(manager->mm, manager->exit_tcb.pa);
-		if (ret) {
-			dev_err(manager->dev, "init job manager failed: set TCB tail failed");
-			return ret;
-		}
 	} else {
-		memset(&manager->exit_tcb, 0, sizeof(manager->exit_tcb));
+		memset(&manager->exit_tcb_desc, 0, sizeof(manager->exit_tcb_desc));
 	}
 
 	manager->is_init = 1;
@@ -710,8 +710,8 @@ void deinit_aipu_job_manager(struct aipu_job_manager *manager)
 	kmem_cache_destroy(manager->prof_cache);
 	manager->prof_cache = NULL;
 	manager->is_init = 0;
-	if (manager->exit_tcb.bytes)
-		aipu_mm_unlink_tcb(manager->mm, manager->exit_tcb.pa, true);
+	if (manager->exit_tcb_desc.bytes)
+		aipu_mm_unlink_tcb(manager->mm, manager->exit_tcb_desc.pa, true);
 }
 
 /**
@@ -782,8 +782,7 @@ static void aipu_job_manager_real_time_printk(struct aipu_job_manager *manager,
 
 	if (GET_PRINF_SIZE(info->sig_flag)) {
 		/* here: tail TCBP is the exact TCB sending a printf signal */
-		tcb = (struct aipu_tcb *)aipu_mm_get_va(manager->mm, manager->asid0_base +
-							info->tail_tcbp);
+		tcb = aipu_mm_get_tcb(manager->mm, manager->asid0_base + info->tail_tcbp);
 		if (!tcb) {
 			dev_err(partition->dev, "real time printk: no TCB found (0x%x)\n",
 				info->tail_tcbp);
@@ -1102,8 +1101,8 @@ void aipu_job_manager_irq_bottom_half(struct aipu_partition *core)
 			do_destroy = false;
 	}
 
-	if (!is_grid_end(manager->mm, manager->pools->qlist[AIPU_JOB_QOS_SLOW].curr_tail) ||
-	    !is_grid_end(manager->mm, manager->pools->qlist[AIPU_JOB_QOS_FAST].curr_tail))
+	if (!is_grid_end(manager->pools->qlist[AIPU_JOB_QOS_SLOW].tail_tcb) ||
+	    !is_grid_end(manager->pools->qlist[AIPU_JOB_QOS_FAST].tail_tcb))
 		do_destroy = false;
 
 	if (manager->dbg_do_destroy) {

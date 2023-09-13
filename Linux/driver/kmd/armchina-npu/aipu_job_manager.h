@@ -117,11 +117,13 @@ enum aipu_job_qos {
  * @pool_head: address of the head of this queue
  * @curr_head: address of the head of the last enqueued TCB lists
  * @curr_tail: address of the tail of the last enqueued TCB lists (i.e. tail of the queue)
+ * @tail_tcb:  kernel virtual address of the tail TCB buffer
  */
 struct qos {
 	u64 pool_head;
 	u64 curr_head;
 	u64 curr_tail;
+	struct aipu_tcb *tail_tcb;
 };
 
 /**
@@ -162,7 +164,8 @@ struct command_pool {
  * @mm:              reference to memory manager
  * @priv:            pointer to aipu_priv struct
  * @asid0_base:      base address of ASID 0
- * @exit_tcb:        buffer descriptor of the exit_TCB
+ * @exit_tcb_desc:   buffer descriptor of the exit_TCB
+ * @exit_tcb:        buffer of the exit_TCB
  * @tick_counter:    atomic lock for tick counter
  * @is_suspend:      is suspended or not
  * @dbg_do_destroy:  do destroy flag (enabled after a debug-dispatch job ends)
@@ -186,7 +189,8 @@ struct aipu_job_manager {
 	struct aipu_memory_manager *mm;
 	void *priv;
 	u64 asid0_base;
-	struct aipu_buf_desc exit_tcb;
+	struct aipu_buf_desc exit_tcb_desc;
+	struct aipu_tcb *exit_tcb;
 	atomic_t tick_counter;
 	atomic_t is_suspend;
 	bool dbg_do_destroy;

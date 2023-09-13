@@ -229,9 +229,10 @@ int aipu_mm_gm_policy_switch(struct aipu_memory_manager *mm, enum aipu_gm_policy
 void aipu_mm_get_gm(struct aipu_memory_manager *mm, struct aipu_cap *cap);
 void get_dtcm(struct aipu_memory_manager *mm, u64 *base, u32 *size);
 
-bool is_grid_end(struct aipu_memory_manager *mm, u64 tail);
+bool is_grid_end(struct aipu_tcb *tcb);
 int print_core_id(struct aipu_memory_manager *mm, u64 head, u64 tail);
-int aipu_mm_set_tcb_tail(struct aipu_memory_manager *mm, u64 tail);
+struct aipu_tcb *aipu_mm_get_tcb(struct aipu_memory_manager *mm, u64 pa);
+struct aipu_tcb *aipu_mm_set_tcb_tail(struct aipu_memory_manager *mm, u64 tail);
 int aipu_mm_link_tcb(struct aipu_memory_manager *mm, u64 prev_tail, u32 next_head_32,
 		     int next_job_id);
 int aipu_mm_unlink_tcb(struct aipu_memory_manager *mm, u64 prev_tail, bool free_tcb);

@@ -4,10 +4,8 @@
 #include "aipu_tcb.h"
 #include "aipu_mm.h"
 
-bool is_grid_end(struct aipu_memory_manager *mm, u64 tail)
+bool is_grid_end(struct aipu_tcb *tcb)
 {
-	struct aipu_tcb *tcb = (struct aipu_tcb *)aipu_mm_get_va(mm, tail);
-
 	if (!tcb)
 		return true;
 	return IS_GRID_END(tcb->flag);

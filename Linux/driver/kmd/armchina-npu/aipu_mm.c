@@ -1322,29 +1322,55 @@ char *aipu_mm_get_va(struct aipu_memory_manager *mm, u64 dev_pa)
 }
 
 /**
+ * @aipu_mm_get_tcb() - get the pointer to the TCB of a TCB list.
+ * @mm: pointer to memory manager struct initialized in aipu_init_mm()
+ * @pa: address of the TCB
+ *
+ * Return: tcb va on success or NULL otherwise.
+ */
+struct aipu_tcb *aipu_mm_get_tcb(struct aipu_memory_manager *mm, u64 pa)
+{
+	struct aipu_mem_region *reg = NULL;
+	struct aipu_tcb_buf *tbuf = NULL;
+	unsigned long flags;
+	struct aipu_tcb *tcb = NULL;
+
+	spin_lock_irqsave(&mm->slock, flags);
+	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, pa, "get_tcb");
+	if (!tbuf)
+		goto unlock;
+
+	reg = tbuf->reg;
+	tcb = (struct aipu_tcb *)((char *)(reg->base_va) + pa - reg->base_iova);
+
+unlock:
+	spin_unlock_irqrestore(&mm->slock, flags);
+	return tcb;
+}
+
+/**
  * @aipu_mm_set_tcb_tail() - set the pointer to the tail TCB of a TCB list.
  * @mm:   pointer to memory manager struct initialized in aipu_init_mm()
  * @tail: address of the tail TCB of a TCB list
  *
  * Return: 0 on success and error code otherwise.
  */
-int aipu_mm_set_tcb_tail(struct aipu_memory_manager *mm, u64 tail)
+struct aipu_tcb *aipu_mm_set_tcb_tail(struct aipu_memory_manager *mm, u64 tail)
 {
 	struct aipu_mem_region *reg = NULL;
-	struct aipu_tcb_buf *tcb = NULL;
+	struct aipu_tcb_buf *tbuf = NULL;
 	unsigned long flags;
-	int ret = 0;
+	struct aipu_tcb *ret = NULL;
 
 	spin_lock_irqsave(&mm->slock, flags);
-	tcb = aipu_mm_find_tcb_buf_no_lock(mm, tail, "set_tail");
-	if (!tcb) {
-		ret = -EFAULT;
+	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, tail, "set_tail");
+	if (!tbuf)
 		goto unlock;
-	}
 
-	reg = tcb->reg;
-	tcb->tail = tail;
-	tcb->tail_tcb = (struct aipu_tcb *)((char *)(reg->base_va) + tail - reg->base_iova);
+	reg = tbuf->reg;
+	tbuf->tail = tail;
+	tbuf->tail_tcb = (struct aipu_tcb *)((char *)(reg->base_va) + tail - reg->base_iova);
+	ret = tbuf->tail_tcb;
 
 unlock:
 	spin_unlock_irqrestore(&mm->slock, flags);
