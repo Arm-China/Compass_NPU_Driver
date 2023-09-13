@@ -38,6 +38,7 @@ private:
     uint32_t m_bind_core_id = 0;
     uint32_t m_fm_mem_region = AIPU_BUF_REGION_DEFAULT;
     BufferDesc m_top_reuse_buf;
+    std::set<uint32_t> m_top_reuse_idx;
 
 public:
     /**

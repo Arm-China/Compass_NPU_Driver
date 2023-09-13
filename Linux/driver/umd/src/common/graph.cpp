@@ -221,7 +221,10 @@ aipu_status_t aipudrv::Graph::unload()
         m_weights.clear();
     } else {
         for (uint32_t i = 0; i < m_weights.size(); i++)
+        {
             m_mem->free(&m_weights[i]);
+            m_weights[i].reset();
+        }
 
         m_weights.clear();
     }

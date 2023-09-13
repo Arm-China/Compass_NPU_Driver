@@ -62,9 +62,11 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
         LOG(LOG_DEBUG, "buf %d: align total size: %x, buf align size: %x\n",
             i, reuse_buf_total_size, ALIGN_PAGE(section_desc.size));
         reuse_buf_total_size += ALIGN_PAGE(section_desc.size);
+        m_top_reuse_idx.insert(i);
     }
 
-    ret = m_mem->malloc(reuse_buf_total_size, max_align_in_page, &m_top_reuse_buf, "tot_reuse");
+    ret = m_mem->malloc(reuse_buf_total_size, max_align_in_page, &m_top_reuse_buf,
+        "tot_reuse", m_fm_mem_region);
     if (AIPU_STATUS_SUCCESS != ret)
     {
         retval = -1;
@@ -111,6 +113,14 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
     return retval;
 
 opt_alloc_fail:
+    if (m_top_reuse_buf.size > 0)
+    {
+        m_mem->free(&m_top_reuse_buf);
+        m_top_reuse_buf.reset();
+    }
+
+    m_top_reuse_idx.clear();
+
     return retval;
 }
 
@@ -360,11 +370,13 @@ aipu_status_t aipudrv::JobV12::free_job_buffers()
         m_mem->free(&m_rodata);
         m_rodata.reset();
     }
+
     if (m_descriptor.size != 0)
     {
         m_mem->free(&m_descriptor);
         m_descriptor.reset();
     }
+
     if (m_stack.size != 0)
     {
         m_mem->free(&m_stack);
@@ -372,10 +384,23 @@ aipu_status_t aipudrv::JobV12::free_job_buffers()
     }
 
     if (m_top_reuse_buf.size > 0)
+    {
         m_mem->free(&m_top_reuse_buf);
+        m_top_reuse_buf.reset();
+    }
 
     for (uint32_t i = 0; i < m_reuses.size(); i++)
+    {
+        if (m_top_reuse_idx.count(i) == 1)
+        {
+            m_reuses[i].reset();
+            continue;
+        }
+
         m_mem->free(&m_reuses[i]);
+        m_reuses[i].reset();
+    }
+    m_top_reuse_idx.clear();
 
     m_reuses.clear();
     m_weights.clear();

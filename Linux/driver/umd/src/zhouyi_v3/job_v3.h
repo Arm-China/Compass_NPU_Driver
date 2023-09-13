@@ -132,6 +132,8 @@ private:
      */
     BufferDesc m_top_priv_buf;
     BufferDesc m_top_reuse_buf;
+    std::set<uint32_t> m_top_reuse_idx;
+    bool m_top_priv_buf_freed = false;
 
     /**
      * the buffer for storing exit instruction machine code.
@@ -177,7 +179,7 @@ private:
     void setup_gm_sync_from_ddr(tcb_t *tcb);
     void setup_gm_sync_to_ddr(tcb_t *tcb);
     aipu_status_t setup_segmmu(SubGraphTask &sg);
-    void free_sg_buffers(const SubGraphTask& sg);
+    void free_sg_buffers(SubGraphTask& sg);
     aipu_status_t dump_for_emulation();
     aipu_status_t specify_io_buffer(uint32_t in_type, uint32_t index,
         uint64_t offset, int fd = -1, bool update_ro = true);

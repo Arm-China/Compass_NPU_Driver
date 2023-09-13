@@ -473,6 +473,7 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
 
                 const GraphSectionDesc &section_desc = get_graph().m_subgraphs[0].reuse_sections[k];
                 reuse_buf_total_size += ALIGN_PAGE(section_desc.size);
+                m_top_reuse_idx.insert(k);
             }
         }
     }
@@ -631,6 +632,8 @@ opt_alloc_fail:
         m_mem->free(&m_top_reuse_buf);
         m_top_reuse_buf.reset();
     }
+
+    m_top_reuse_idx.clear();
 
 out:
     return retval;
@@ -894,10 +897,29 @@ out:
     return ret;
 }
 
-void aipudrv::JobV3::free_sg_buffers(const SubGraphTask& sg)
+void aipudrv::JobV3::free_sg_buffers(SubGraphTask& sg)
 {
-    for (uint32_t i = 0; i < sg.reuse_priv_buffers.size(); i++)
-        m_mem->free(&sg.reuse_priv_buffers[i]);
+    if (m_top_priv_buf.size > 0)
+    {
+        m_mem->free(&m_top_priv_buf);
+        m_top_priv_buf.reset();
+        m_top_priv_buf_freed = true;
+    }
+
+    if (!m_top_priv_buf_freed)
+    {
+        for (uint32_t i = 0; i < sg.reuse_priv_buffers.size(); i++)
+        {
+            m_mem->free(&sg.reuse_priv_buffers[i]);
+            sg.reuse_priv_buffers[i].reset();
+        }
+        sg.reuse_priv_buffers.clear();
+    } else {
+        for (uint32_t i = 0; i < sg.reuse_priv_buffers.size(); i++)
+            sg.reuse_priv_buffers[i].reset();
+
+        sg.reuse_priv_buffers.clear();
+    }
 
     /**
      * just exist one copy of reuse buffers for all subgraphs,
@@ -905,11 +927,11 @@ void aipudrv::JobV3::free_sg_buffers(const SubGraphTask& sg)
      */
     if (sg.id == 0)
     {
-        if (m_top_priv_buf.size > 0)
-            m_mem->free(&m_top_priv_buf);
-
         if (m_top_reuse_buf.size > 0)
+        {
             m_mem->free(&m_top_reuse_buf);
+            m_top_reuse_buf.reset();
+        }
 
         for (uint32_t i = 0; i < sg.reuses.size(); i++)
         {
@@ -917,18 +939,34 @@ void aipudrv::JobV3::free_sg_buffers(const SubGraphTask& sg)
             if (sg.dma_buf_idx.count(i) == 1)
                 continue;
 
+            if (m_top_reuse_idx.count(i) == 1)
+            {
+                sg.reuses[i].reset();
+                continue;
+            }
+
             if (sg.reuses[i].size != 0)
+            {
                 m_mem->free(&sg.reuses[i]);
+                sg.reuses[i].reset();
+            }
         }
+        m_top_reuse_idx.clear();
     }
 
     for (uint32_t i = 0; i < sg.tasks.size(); i++)
     {
         if (sg.tasks[i].stack.size != 0)
+        {
             m_mem->free(&sg.tasks[i].stack);
+            sg.tasks[i].stack.reset();
+        }
 
         if (sg.tasks[i].private_data.size != 0)
+        {
             m_mem->free(&sg.tasks[i].private_data);
+            sg.tasks[i].private_data.reset();
+        }
     }
 }
 
