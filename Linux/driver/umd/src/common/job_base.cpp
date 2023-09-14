@@ -14,16 +14,27 @@
 #include "job_base.h"
 #include "utils/helper.h"
 
+#define DUMP_RO_ENTRY 0
+
 aipudrv::JobBase::JobBase(MainContext* ctx, GraphBase& graph, DeviceBase* dev):
     m_ctx(ctx), m_graph(graph), m_dev(dev)
 {
     m_mem = m_dev->get_mem();
     m_rodata.reset();
     m_descriptor.reset();
+    #if DUMP_RO_ENTRY
+    char log[1024] = {0};
+    m_ro_entry_dump.open((m_dump_dir + "/" + m_ro_entry_name).c_str(), std::ofstream::out | std::ofstream::trunc);
+    snprintf(log, 1024, "     Idx: Tp: <   Ro_sz,    De_sz>, <  Buf_idx,  Sec_off>, <   Et_Off,       Addr>\n");
+    m_ro_entry_dump << log;
+    #endif
 }
 
 aipudrv::JobBase::~JobBase()
 {
+    #if DUMP_RO_ENTRY
+    m_ro_entry_dump.close();
+    #endif
 }
 
 aipu_status_t aipudrv::JobBase::get_status(aipu_job_status_t* status)
@@ -242,6 +253,9 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     char* ro_va = nullptr;
     char* dcr_va = nullptr;
+    #if DUMP_RO_ENTRY
+    char log[1024] = {0};
+    #endif
 
     m_mem->pa_to_va(rodata.pa, rodata.size, &ro_va);
     if (dcr.size != 0)
@@ -256,6 +270,7 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
         uint32_t sec_offset = param_map[i].sub_section_offset;
         uint32_t sub_sec_pa_32 = 0;
         uint32_t offset_in_map = param_map[i].offset_in_map;
+        uint32_t entry_offset = 0;
 
         /**
          * if io buffers is allocated through dma_buf,only need handling for them.
@@ -264,21 +279,37 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
                 (param_map[i].load_type != PARAM_MAP_LOAD_TYPE_REUSE)))
             continue;
 
-        if (param_map[i].load_type == PARAM_MAP_LOAD_TYPE_REUSE)
+        if (offset_in_map < rodata.req_size)
         {
-            LOG(LOG_INFO, "%3u: type=%d: <%lx, %lx>, < %x, 0x%x>", i, param_map[i].load_type,
-                rodata.req_size, dcr.req_size, offset_in_map,
-                get_low_32(reuse_buf[ref_iter].align_asid_pa) + sec_offset);
+            entry = ro_va + offset_in_map;
+            entry_offset = offset_in_map;
         } else {
-            LOG(LOG_INFO, "%3u: type=%d: <%lx, %lx>, < %x, 0x%x>", i, param_map[i].load_type,
-                rodata.req_size, dcr.req_size, offset_in_map,
-                get_low_32(static_buf[ref_iter].align_asid_pa) + sec_offset);
+            entry = dcr_va + offset_in_map - rodata.req_size;
+            entry_offset = offset_in_map - rodata.req_size;
         }
 
-        if (offset_in_map < rodata.req_size)
-            entry = ro_va + offset_in_map;
-        else
-            entry = dcr_va + offset_in_map - rodata.req_size;
+        if (param_map[i].load_type == PARAM_MAP_LOAD_TYPE_REUSE)
+        {
+            LOG(LOG_INFO, "%8u: re: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
+                rodata.req_size, dcr.req_size, ref_iter, sec_offset, entry_offset,
+                get_low_32(reuse_buf[ref_iter].align_asid_pa) + sec_offset);
+            #if DUMP_RO_ENTRY
+            snprintf(log, 1024, "%8u: re: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
+                rodata.req_size, dcr.req_size, ref_iter, sec_offset, entry_offset,
+                get_low_32(reuse_buf[ref_iter].align_asid_pa) + sec_offset);
+            m_ro_entry_dump << log << std::endl;
+            #endif
+        } else {
+            LOG(LOG_INFO, "%8u: wt: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
+                rodata.req_size, dcr.req_size, ref_iter, sec_offset, entry_offset,
+                get_low_32(static_buf[ref_iter].align_asid_pa) + sec_offset);
+            #if DUMP_RO_ENTRY
+            snprintf(log, 1024, "%8u: wt: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
+                rodata.req_size, dcr.req_size, ref_iter, sec_offset, entry_offset,
+                get_low_32(static_buf[ref_iter].align_asid_pa) + sec_offset);
+            m_ro_entry_dump << log << std::endl;
+            #endif
+        }
 
         if (param_map[i].load_type == PARAM_MAP_LOAD_TYPE_REUSE)
         {

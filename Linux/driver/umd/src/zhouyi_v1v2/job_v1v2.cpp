@@ -59,8 +59,9 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
         const GraphSectionDesc &section_desc = get_graph().m_reuse_sections[i];
         reuse_buf_total_size = (reuse_buf_total_size + ((align_in_page << 12) - 1)) &
                                 ~((align_in_page << 12) - 1);
-        LOG(LOG_DEBUG, "buf %d: align total size: %x, buf align size: %x\n",
-            i, reuse_buf_total_size, ALIGN_PAGE(section_desc.size));
+
+        LOG(LOG_DEBUG, "buf %d: align total size: %x, buf align size: %x, align_in_page:%d\n",
+            i, reuse_buf_total_size, ALIGN_PAGE(section_desc.size), align_in_page);
         reuse_buf_total_size += ALIGN_PAGE(section_desc.size);
         m_top_reuse_idx.insert(i);
     }
@@ -95,10 +96,11 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
             bufferDesc.reset();
             if (size != 0)
             {
+                offset = (offset + ((align_in_page << 12) - 1)) &
+                    ~((align_in_page << 12) - 1);
+                LOG(LOG_DEBUG, "buf %d: off: %x, pa: %lx\n", i, offset, m_top_reuse_buf.pa + offset);
                 bufferDesc.init(m_top_reuse_buf.asid_base, m_top_reuse_buf.pa + offset,
                     ALIGN_PAGE(size), size);
-                offset = (offset + ((align_in_page << 12) - 1)) &
-                        ~((align_in_page << 12) - 1);
                 offset += ALIGN_PAGE(size);
             }
         }
@@ -152,6 +154,8 @@ aipu_status_t aipudrv::JobV12::alloc_reuse_buffer()
                 ret = m_mem->malloc(size, align_in_page, &bufferDesc, str.c_str(), m_fm_mem_region);
                 if (AIPU_STATUS_SUCCESS != ret)
                     goto finish;
+                printf("buf %d: align_in_page: %d, sz: %lx, req_sz: %lx, pa: %lx\n", i, align_in_page,
+                    bufferDesc.req_size, bufferDesc.size, bufferDesc.pa);
             }
         }
 

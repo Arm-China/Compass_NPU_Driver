@@ -128,6 +128,10 @@ protected:
     const aipu_global_config_simulation_t* m_cfg;
     const aipu_global_config_hw_t* m_hw_cfg;
 
+protected:
+    std::ofstream m_ro_entry_dump;
+    std::string m_ro_entry_name = "./ro_entry.txt";
+
 private:
     DEV_PA_64 get_base_pa(int sec_type, BufferDesc& rodata,
         BufferDesc& descriptor, bool align_asid);
