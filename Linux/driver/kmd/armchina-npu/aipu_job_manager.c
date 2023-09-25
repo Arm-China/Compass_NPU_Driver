@@ -235,7 +235,7 @@ static bool is_user_job_valid(struct aipu_job_manager *manager, struct aipu_job_
 	if (user_job->aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3) {
 		if (manager->version != AIPU_ISA_VERSION_ZHOUYI_V3 ||
 		    partition_id >= manager->partition_cnt) {
-			dev_err(partition->dev, "invalid version number (%d) or partition ID (%d)",
+			dev_err(manager->dev, "invalid version number (%d) or partition ID (%d)",
 				user_job->aipu_version, partition_id);
 			return false;
 		}
