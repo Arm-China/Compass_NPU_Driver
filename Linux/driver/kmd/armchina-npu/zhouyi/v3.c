@@ -21,7 +21,7 @@ static void zhouyi_v3_set_partition(struct aipu_partition *partition, u32 cluste
 static void zhouyi_v3_enable_core_cnt(struct aipu_partition *partition, u32 cluster_id,
 				      u32 en_core_cnt)
 {
-	u32 nums = GET_NUMS(aipu_read32(partition->reg, CLUSTER_CONTROL_REG(cluster_id)));
+	u32 nums = GET_NUMS(aipu_read32(partition->reg, CLUSTER_CONFIG_REG(cluster_id)));
 	u32 en_aiff_cnt = GET_AIFF_NUM(nums);
 	u32 en_tec_cnt = GET_TEC_NUM(nums);
 	u32 config = CONFIG_CLUSTER(partition->id, en_core_cnt, en_aiff_cnt, en_tec_cnt);
