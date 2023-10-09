@@ -652,8 +652,7 @@ aipu_status_t aipu_specify_iobuf(const aipu_ctx_handle_t* ctx, uint64_t job_id,
     if (AIPU_STATUS_SUCCESS != ret)
         return ret;
 
-    ret = job->specify_io_buffer(tensor_info->type, tensor_info->tensor_idx,
-        tensor_info->offset_in_dmabuf, tensor_info->dmabuf_fd);
+    ret = job->specify_io_buffer(*tensor_info);
     return ret;
 }
 

@@ -72,8 +72,7 @@ public:
         const aipu_global_config_hw_t* hw_cfg);
     virtual aipu_status_t schedule();
     virtual aipu_status_t destroy();
-    virtual aipu_status_t specify_io_buffer(uint32_t type, uint32_t index,
-        uint64_t offset, int fd = -1, bool update_ro = true);
+    virtual aipu_status_t specify_io_buffer(aipu_shared_tensor_info_t &tensor_info);
     aipu_status_t config_simulation(uint64_t types, const aipu_job_config_simulation_t* config);
     aipu_status_t bind_core(uint32_t core_id);
     aipu_status_t debugger_run();

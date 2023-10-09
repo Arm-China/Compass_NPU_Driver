@@ -807,15 +807,20 @@ finish:
     return ret;
 }
 
-aipu_status_t aipudrv::JobV3::specify_io_buffer(uint32_t type, uint32_t index,
-    uint64_t offset, int fd, bool update_ro)
+aipu_status_t aipudrv::JobV3::specify_io_buffer(aipu_shared_tensor_info_t &tensor_info)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     const std::vector<struct GraphIOTensorDesc> *iobuffer_vec = nullptr;
     BufferDesc *bufferDesc = nullptr;
     const char *str = "free_input";
     uint32_t reuse_index = 0;
-    uint64_t buffer_pa = 0;
+    uint32_t type = tensor_info.type;
+    uint32_t index = tensor_info.tensor_idx;
+    uint64_t offset = tensor_info.offset_in_dmabuf;
+    int fd = tensor_info.dmabuf_fd;
+    bool update_ro = true;
+    int share_case_type = tensor_info.shared_case_type;
+    uint64_t buffer_pa = tensor_info.pa;
     struct aipu_dma_buf dma_buf{fd, 0, 0};
 
     switch (type)
@@ -875,14 +880,21 @@ aipu_status_t aipudrv::JobV3::specify_io_buffer(uint32_t type, uint32_t index,
             goto out;
     }
 
-    ret = convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_GET_DMA_BUF_INFO, &dma_buf));
-    if (ret != AIPU_STATUS_SUCCESS)
-        goto out;
+    if (share_case_type == AIPU_SHARE_BUF_CUSTOMED)
+    {
+        bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
+        (*iobuffer_vec)[index].set_dump_ignore_flag(true);
+    } else {
+        ret = convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_GET_DMA_BUF_INFO, &dma_buf));
+        if (ret != AIPU_STATUS_SUCCESS)
+            goto out;
 
-    buffer_pa = dma_buf.pa + offset;
-    bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
-    (*iobuffer_vec)[index].set_dmabuf_info(fd, dma_buf.bytes, offset);
-    LOG(LOG_DEBUG, "specify_io_buffer: pa=%lx, size=%lx\n", buffer_pa, bufferDesc->size);
+        buffer_pa = dma_buf.pa + offset;
+        bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
+        (*iobuffer_vec)[index].set_dmabuf_info(fd, dma_buf.bytes, offset);
+    }
+    LOG(LOG_DEBUG, "specify_io_buffer: pa=%lx, size=%lx, share_case_type=%d\n",
+        buffer_pa, bufferDesc->size, share_case_type);
 
     if (update_ro)
     {
@@ -1734,6 +1746,9 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     /* dump temp.input[n] */
     for (uint32_t i = 0; i < m_inputs.size(); i++)
     {
+        if (m_inputs[i].dump_ignore_flag)
+            continue;
+
         dump_pa   = m_inputs[i].pa;
         dump_size = m_inputs[i].size;
         snprintf(dump_name, 128, "%s/%s.input%d", m_dump_dir.c_str(), m_dump_prefix.c_str(), i);
@@ -1766,6 +1781,9 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
 
     for (uint32_t i = 0; i < m_outputs.size(); i++)
     {
+        if (m_outputs[i].dump_ignore_flag)
+            continue;
+
         dump_pa   = m_outputs[i].pa;
         dump_size = m_outputs[i].size;
 

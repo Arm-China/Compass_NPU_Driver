@@ -395,7 +395,7 @@ void aipudrv::JobBase::create_io_buffers(std::vector<struct JobIOBuffer>& bufs,
         JobIOBuffer iobuf;
 
         iobuf.init(desc[i].id, desc[i].size, AIPU_JOB_BUFFER_INTERNAL, pa, align_asid_pa,
-            desc[i].dmabuf_fd, desc[i].dmabuf_size, desc[i].offset_in_dmabuf);
+            desc[i].dmabuf_fd, desc[i].dmabuf_size, desc[i].offset_in_dmabuf, desc[i].dump_ignore_flag);
         bufs.push_back(iobuf);
     }
 }

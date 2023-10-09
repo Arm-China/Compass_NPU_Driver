@@ -196,11 +196,22 @@ struct GraphIOTensorDesc {
     mutable uint32_t dmabuf_size; // total size of dma_buf which specified by fd
     mutable int offset_in_dmabuf; // the offset from which this IO buffer starts
 
+    /**
+     * if this buffer is managed by user self, it can't dump its data since it can't
+     * get its mapped address.
+     */
+    mutable bool dump_ignore_flag;
+
     const void set_dmabuf_info(int _fd, uint32_t _dmabuf_size, int _offset_in_dmabuf) const
     {
         dmabuf_fd = _fd;
         dmabuf_size = _dmabuf_size;
         offset_in_dmabuf = _offset_in_dmabuf;
+    }
+
+    const void set_dump_ignore_flag(bool _dump_ignore_flag) const
+    {
+        dump_ignore_flag = _dump_ignore_flag;
     }
 };
 

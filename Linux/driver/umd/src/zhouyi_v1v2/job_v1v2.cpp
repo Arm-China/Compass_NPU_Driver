@@ -154,7 +154,7 @@ aipu_status_t aipudrv::JobV12::alloc_reuse_buffer()
                 ret = m_mem->malloc(size, align_in_page, &bufferDesc, str.c_str(), m_fm_mem_region);
                 if (AIPU_STATUS_SUCCESS != ret)
                     goto finish;
-                printf("buf %d: align_in_page: %d, sz: %lx, req_sz: %lx, pa: %lx\n", i, align_in_page,
+                LOG(LOG_DEBUG, "buf %d: align_in_page: %d, sz: %lx, req_sz: %lx, pa: %lx\n", i, align_in_page,
                     bufferDesc.req_size, bufferDesc.size, bufferDesc.pa);
             }
         }
@@ -275,8 +275,7 @@ finish:
     return ret;
 }
 
-aipu_status_t aipudrv::JobV12::specify_io_buffer(uint32_t type, uint32_t index,
-    uint64_t offset, int fd, bool update_ro)
+aipu_status_t aipudrv::JobV12::specify_io_buffer(aipu_shared_tensor_info_t &tensor_info)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     const std::vector<struct GraphIOTensorDesc> *iobuffer_vec = nullptr;
@@ -284,6 +283,11 @@ aipu_status_t aipudrv::JobV12::specify_io_buffer(uint32_t type, uint32_t index,
     const char *str = "free_input";
     uint32_t reuse_index = 0;
     uint64_t buffer_pa = 0;
+    uint32_t type = tensor_info.type;
+    uint32_t index = tensor_info.tensor_idx;
+    uint64_t offset = tensor_info.offset_in_dmabuf;
+    int fd = tensor_info.dmabuf_fd;
+    bool update_ro = true;
     struct aipu_dma_buf dma_buf{fd, 0, 0};
 
     switch (type)

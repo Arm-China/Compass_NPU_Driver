@@ -181,8 +181,7 @@ private:
     aipu_status_t setup_segmmu(SubGraphTask &sg);
     void free_sg_buffers(SubGraphTask& sg);
     aipu_status_t dump_for_emulation();
-    aipu_status_t specify_io_buffer(uint32_t in_type, uint32_t index,
-        uint64_t offset, int fd = -1, bool update_ro = true);
+    aipu_status_t specify_io_buffer(aipu_shared_tensor_info_t &tensor_info);
 
 public:
     aipu_status_t init(const aipu_global_config_simulation_t* cfg,

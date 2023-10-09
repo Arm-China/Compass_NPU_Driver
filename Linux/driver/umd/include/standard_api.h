@@ -258,6 +258,12 @@ typedef struct aipu_create_job_cfg {
     int32_t wt_idxes_cnt;   /**< the emement number in wt_idxes */
 } aipu_create_job_cfg_t;
 
+typedef enum {
+    AIPU_SHARE_BUF_IN_ONE_PROCESS = 0x0,
+    AIPU_SHARE_BUF_DMABUF = 0x1,
+    AIPU_SHARE_BUF_CUSTOMED = 0x2,
+} aipu_share_case_type_t;
+
 /**
  * @struct aipu_shared_tensor
  *
@@ -265,15 +271,26 @@ typedef struct aipu_create_job_cfg {
  *
  * @brief case2: describe a shared buffer based on dma_buf mechanism.(among multiple processes)
  *
+ * @brief case3: specify a shared buffer allocated in external memory manager(not original NPU driver)
+ *
  * @note for case1:
  *       the share action is based on one process contex, not among multiple processes.
  *       1, mark a tensor buffer as shared in one graph and get its base physical address;
+ *       need parameters: {id (job id), type, tensor_idx, &pa}
+ *
  *       2, assign the shared tensor buffer to other graphs and as input or output.
  *       need parameters: {id (job/graph id), type, tensor_idx, pa}
  *
  * @note for case2:
  *       share a common buffer via dma_buf framework among multiple modules/processes
  *       need paramsters: {id (job id), type, tensor_idx, fd, offset}
+ *
+ * @note for case3:
+ *       specify a shared buffer allocated in customed memory manager. it has to set
+ *       'shared_case_type' as AIPU_SHARE_BUF_CUSTOMED. in addition, since the buffer
+ *       is not allocated by original NPU driver, it has to confirm the buffer matches
+ *       the ASID constraint.
+ *       need parameters: {id (job id), type, tensor_idx, pa, shared_case_type}
  */
 typedef struct aipu_shared_tensor_info {
     aipu_tensor_type_t type;     /**< the shared tensor's type: input/output */
@@ -288,6 +305,12 @@ typedef struct aipu_shared_tensor_info {
     /* the below fields only for dma_buf share, recommended */
     int dmabuf_fd;               /**< the fd corresponding to shared buffer from dma_buf allocator */
     uint32_t offset_in_dmabuf;   /**< the shared address offset in dma_buf which is specified by 'fd' */
+
+    /**
+     * if the shared buffer is allocated in customed memory manager(case3), it has to set this
+     * parameter as 'AIPU_SHARE_BUF_CUSTOMED', for other cases, this parameter can be ignored.
+     */
+    int shared_case_type;
 } aipu_shared_tensor_info_t;
 
 /**

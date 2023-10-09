@@ -46,9 +46,15 @@ struct JobIOBuffer
     uint32_t dmabuf_size;
     uint32_t offset_in_dmabuf;
 
+    /**
+     * if this buffer is managed by user self, it can't dump its data since UMD can't
+     * get its mapped address.
+     */
+    bool dump_ignore_flag;
+
     void init(uint32_t _id, uint32_t _size, JOBIOBufferType _type, DEV_PA_64 _pa,
         DEV_PA_64 _align_asid_pa = 0, int _dmabuf_fd = -1, uint32_t _dmabuf_size = 0,
-        uint32_t _offset_in_dmabuf = 0)
+        uint32_t _offset_in_dmabuf = 0, bool _dump_ignore_flag = false)
     {
         id   = _id;
         size = _size;
@@ -58,6 +64,7 @@ struct JobIOBuffer
         dmabuf_fd   = _dmabuf_fd;
         dmabuf_size = _dmabuf_size;
         offset_in_dmabuf = _offset_in_dmabuf;
+        dump_ignore_flag = _dump_ignore_flag;
     }
 };
 
@@ -181,8 +188,7 @@ public:
     virtual aipu_status_t get_status_blocking(aipu_job_status_t* status, int32_t time_out);
     aipu_status_t config_mem_dump(uint64_t types, const aipu_job_config_dump_t* config);
     virtual void dumpcfg_alljob() {}
-    virtual aipu_status_t specify_io_buffer(uint32_t type, uint32_t index,
-        uint64_t offset, int fd = -1, bool update_ro = true)
+    virtual aipu_status_t specify_io_buffer(aipu_shared_tensor_info_t &tensor_info)
     {
         return AIPU_STATUS_SUCCESS;
     }
