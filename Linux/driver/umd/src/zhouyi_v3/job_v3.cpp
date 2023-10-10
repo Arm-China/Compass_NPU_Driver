@@ -1463,19 +1463,14 @@ aipu_status_t aipudrv::JobV3::schedule()
     desc.kdesc.aipu_version = get_graph().m_hw_version;
     desc.kdesc.partition_id = m_partition_id;
 
+    desc.kdesc.exec_flag |= (m_segmmu_num > 0) ?
+        AIPU_JOB_EXEC_FLAG_SEG_MMU : 0;
+
+    desc.kdesc.exec_flag |= (m_sg_cnt == 1) ?
+        AIPU_JOB_EXEC_FLAG_SINGLE_GROUP : AIPU_JOB_EXEC_FLAG_MULTI_GROUP;
+
     desc.kdesc.head_tcb_pa = m_init_tcb.pa;
-
-    /* small model share one common init-tcb on HW, skip the head init-tcb */
-    #ifndef SIMULATION
-    if (m_core_cnt > 1)
-    {
-        desc.kdesc.exec_flag |= (m_sg_cnt == 1)
-            ? AIPU_JOB_EXEC_FLAG_SINGLE_GROUP : AIPU_JOB_EXEC_FLAG_MULTI_GROUP;
-        if ((m_sg_cnt == 1) && (m_segmmu_num == 0) && m_same_asid)
-            desc.kdesc.head_tcb_pa = m_init_tcb.pa + sizeof(tcb_t);
-    }
-    #endif
-
+    desc.kdesc.first_task_tcb_pa = m_sg_job[0].tasks[0].tcb.pa;
     desc.kdesc.last_task_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa;
     desc.kdesc.tail_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa + sizeof(tcb_t);
 
