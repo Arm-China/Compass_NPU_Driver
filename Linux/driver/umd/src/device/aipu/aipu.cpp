@@ -117,7 +117,7 @@ aipu_ll_status_t aipudrv::Aipu::init()
     } else {
         m_partition_cnt = cap.partition_cnt;
 
-        /* defaut get the below count from cluster0 in partition0 */
+        /* default get the below count from cluster0 in partition0 */
         m_cluster_cnt = m_part_caps.at(0).cluster_cnt;
         m_core_cnt = m_part_caps.at(0).clusters[0].core_cnt;
     }
@@ -139,6 +139,58 @@ void aipudrv::Aipu::deinit()
         close(m_fd);
         m_fd = 0;
     }
+}
+
+aipu_ll_status_t aipudrv::Aipu::update_hw_info()
+{
+    aipu_ll_status_t ret = AIPU_LL_STATUS_SUCCESS;
+    int kret = -1;
+    aipu_cap cap;
+    aipu_partition_cap *part_caps = NULL;
+
+    kret = ioctl(m_fd, AIPU_IOCTL_QUERY_CAP, &cap);
+    if (kret || (0 == cap.partition_cnt))
+    {
+        LOG(LOG_ERR, "query capability [fail]");
+        ret = AIPU_LL_STATUS_ERROR_IOCTL_QUERY_CAP_FAIL;
+        goto out;
+    }
+
+    part_caps = new aipu_partition_cap[cap.partition_cnt];
+    kret = ioctl(m_fd, AIPU_IOCTL_QUERY_PARTITION_CAP, part_caps);
+    if (kret)
+    {
+        LOG(LOG_ERR, "query partition [fail]");
+        delete[] part_caps;
+        ret = AIPU_LL_STATUS_ERROR_IOCTL_QUERY_CORE_CAP_FAIL;
+        goto out;
+    }
+
+    m_part_caps.clear();
+    for (uint32_t i = 0; i < cap.partition_cnt; i++)
+        m_part_caps.push_back(part_caps[i]);
+
+    delete[] part_caps;
+
+    /* success */
+    if ((m_part_caps.at(0).version >= AIPU_ISA_VERSION_ZHOUYI_V1)
+        && (m_part_caps.at(0).version <= AIPU_ISA_VERSION_ZHOUYI_V2_2))
+    {
+        m_partition_cnt = 0;
+        m_cluster_cnt = 0;
+
+        /* indicate core count for aipu v1/v2 */
+        m_core_cnt = cap.partition_cnt;
+    } else {
+        m_partition_cnt = cap.partition_cnt;
+
+        /* default get the below count from cluster0 in partition0 */
+        m_cluster_cnt = m_part_caps.at(0).cluster_cnt;
+        m_core_cnt = m_part_caps.at(0).clusters[0].core_cnt;
+    }
+
+out:
+    return ret;
 }
 
 bool aipudrv::Aipu::has_target(uint32_t arch, uint32_t version, uint32_t config, uint32_t rev)
@@ -403,7 +455,9 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             {
                 LOG(LOG_ERR, "config cluster [fail]");
                 ret = AIPU_LL_STATUS_ERROR_CONFIG_CLUSTER;
+                goto out;
             }
+            ret = update_hw_info();
             break;
 
         case AIPU_IOCTL_ALLOC_DMABUF:
@@ -417,6 +471,7 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             {
                 LOG(LOG_ERR, "alloc dma_buf [fail]");
                 ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+                goto out;
             }
 
             dma_buf.fd = dmabuf_reg->fd;
@@ -425,6 +480,7 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             {
                 LOG(LOG_ERR, "get dma_buf [fail]");
                 ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+                goto out;
             }
             name = "dmabuf_fd_" + std::to_string(dma_buf.fd);
             m_dma_buf_map[dma_buf.fd] = dma_buf;
@@ -441,6 +497,7 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             {
                 LOG(LOG_ERR, "free dma_buf [fail], fd=%d", dma_buf_fd);
                 ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+                goto out;
             }
 
             if (m_dma_buf_map.count(dma_buf_fd) == 1)
@@ -489,5 +546,6 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             ret = AIPU_LL_STATUS_ERROR_OPERATION_UNSUPPORTED;
     }
 
+out:
     return ret;
 }

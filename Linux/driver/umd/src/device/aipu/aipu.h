@@ -82,6 +82,9 @@ private:
     aipu_ll_status_t init();
     void deinit();
 
+protected:
+    aipu_ll_status_t update_hw_info();
+
 public:
     virtual bool has_target(uint32_t arch, uint32_t version, uint32_t config, uint32_t rev);
     virtual aipu_status_t schedule(const JobDesc& job);
