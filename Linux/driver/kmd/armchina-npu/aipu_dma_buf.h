@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2023 Arm Technology (China) Co. Ltd. All rights reserved. */
+/* Copyright (c) 2023 Arm Technology (China) Co. Ltd. */
 
 #ifndef __AIPU_DMA_BUF_H__
 #define __AIPU_DMA_BUF_H__

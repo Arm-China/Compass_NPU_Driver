@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
-# Copyright (C) 2023 Arm Technology (China) Co. Ltd. All rights reserved.
+# Copyright (C) 2023 Arm Technology (China) Co. Ltd.
 
 MODULE_NAME := aipu
 SRC_DIR := .
