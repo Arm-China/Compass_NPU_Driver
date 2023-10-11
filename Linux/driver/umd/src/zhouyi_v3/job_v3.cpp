@@ -1347,6 +1347,9 @@ aipu_status_t aipudrv::JobV3::setup_tcbs()
             core_id = 0;
     }
 
+    /* store RO base at tail of text buffer for debugger */
+    m_mem->write(get_graph().m_text.pa + get_graph().m_btext.size, &m_rodata.align_asid_pa, 4);
+
     // setup_gm_sync_to_ddr(tcb);
     m_status = AIPU_JOB_STATUS_INIT;
 

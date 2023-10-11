@@ -48,7 +48,11 @@ aipu_status_t aipudrv::Graph::load(std::istream& gbin, uint32_t size, bool ver_c
     /* alloc and load text buffer */
     if (m_btext.size != 0)
     {
-        ret = m_mem->malloc(m_btext.size, 0, &m_text, "text");
+        /**
+         * expand 16 bytes more to export RO base for debugger.
+         * there is no effect for text self.
+         */
+        ret = m_mem->malloc(m_btext.size + 16, 0, &m_text, "text");
         if (AIPU_STATUS_SUCCESS != ret)
             goto finish;
         m_mem->write(m_text.pa, m_btext.va, m_btext.size);
