@@ -186,7 +186,7 @@ aipu_ll_status_t aipudrv::Aipu::update_hw_info()
 
         /* default get the below count from cluster0 in partition0 */
         m_cluster_cnt = m_part_caps.at(0).cluster_cnt;
-        m_core_cnt = m_part_caps.at(0).clusters[0].core_cnt;
+        m_core_cnt = m_part_caps.at(0).clusters[0].cfg_segmmu_cnt;
     }
 
 out:
