@@ -31,6 +31,7 @@ struct aipu_priv_operations {
 /**
  * struct aipu_priv - AIPU private struct contains all AIPU info and shared resources
  * @version:       AIPU hardware version
+ * @revision:      AIPU hardware revision number
  * @partition_cnt: AIPU partition/core count in system
  * @cluster_cnt:   total cluster count (v3 only)
  * @max_partition_cnt: maximun partition count of this arch (v3 only)
@@ -51,6 +52,7 @@ struct aipu_priv_operations {
  */
 struct aipu_priv {
 	int version;
+	int revision;
 	u32 partition_cnt;
 	u32 cluster_cnt;
 	u32 max_partition_cnt;

@@ -46,6 +46,7 @@ int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,
 	int ret = 0;
 	int version = 0;
 	int config = 0;
+	int revision = 0;
 
 	if (!aipu || !p_dev || !fops)
 		return -EINVAL;
@@ -71,9 +72,10 @@ int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,
 	aipu->reg.size = 0;
 	aipu->ops = NULL;
 
-	zhouyi_detect_aipu_version(p_dev, &version, &config);
+	zhouyi_detect_aipu_version(p_dev, &version, &config, &revision);
 	dev_dbg(aipu->dev, "AIPU core0 ISA version %d, configuration %d\n", version, config);
 	aipu->version = version;
+	aipu->revision = revision;
 
 #ifdef CONFIG_ARMCHINA_NPU_ARCH_V3
 	if (version == AIPU_ISA_VERSION_ZHOUYI_V3)
@@ -173,6 +175,9 @@ int aipu_priv_query_partition_capability(struct aipu_priv *aipu, struct aipu_par
 	int id = 0;
 	struct aipu_partition *partition = NULL;
 	int iter = 0;
+	u32 core_cnt = 0;
+	u32 en_core_cnt = 0;
+	u32 cfg_segmmu_cnt = 0;
 
 	if (unlikely(!aipu && !cap))
 		return -EINVAL;
@@ -186,7 +191,14 @@ int aipu_priv_query_partition_capability(struct aipu_priv *aipu, struct aipu_par
 		cap[id].info.reg_base = partition->reg->phys;
 		cap[id].cluster_cnt = partition->cluster_cnt;
 		for (iter = 0; iter < partition->cluster_cnt; iter++) {
-			cap[id].clusters[iter].core_cnt = partition->clusters[iter].core_cnt;
+			core_cnt = partition->clusters[iter].core_cnt;
+			en_core_cnt = atomic_read(&partition->clusters[iter].en_core_cnt);
+			cfg_segmmu_cnt = (aipu->revision == ZHOUYI_V3_REVISION_ID_R0P2) ?
+				core_cnt : en_core_cnt;
+
+			cap[id].clusters[iter].core_cnt = core_cnt;
+			cap[id].clusters[iter].en_core_cnt = en_core_cnt;
+			cap[id].clusters[iter].cfg_segmmu_cnt = cfg_segmmu_cnt;
 			cap[id].clusters[iter].tec_cnt = partition->clusters[iter].tec_cnt;
 		}
 	}

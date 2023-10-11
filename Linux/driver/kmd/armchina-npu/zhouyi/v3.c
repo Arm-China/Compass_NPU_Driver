@@ -33,6 +33,7 @@ static void zhouyi_v3_enable_core_cnt(struct aipu_partition *partition, u32 clus
 	if (!en_core_cnt && IS_CMD_FAIL(status))
 		aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
 
+	atomic_set(&partition->clusters[cluster_id].en_core_cnt, en_core_cnt);
 	dev_info(partition->dev, "configure cluster #%u done: en_core_cnt %u (0x%x)\n",
 		 cluster_id, en_core_cnt, config);
 }

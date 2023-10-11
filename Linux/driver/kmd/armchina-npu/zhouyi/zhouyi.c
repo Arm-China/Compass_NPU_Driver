@@ -36,11 +36,12 @@ void zhouyi_io_rw(struct io_region *io, struct aipu_io_req *io_req)
 		aipu_write32(io, io_req->offset, io_req->value);
 }
 
-int zhouyi_detect_aipu_version(struct platform_device *p_dev, int *version, int *config)
+int zhouyi_detect_aipu_version(struct platform_device *p_dev, int *version, int *config, int *rev)
 {
 	struct resource *res = NULL;
 	struct io_region io;
 
+	/* rev == NULL is allowed */
 	if (!p_dev || !version || !config)
 		return -EINVAL;
 
@@ -55,7 +56,7 @@ int zhouyi_detect_aipu_version(struct platform_device *p_dev, int *version, int 
 		return -EINVAL;
 	}
 
-	*version = zhouyi_get_hw_version_number(&io);
+	*version = zhouyi_get_hw_version_number(&io, rev);
 	if (*version > 0 && *version < AIPU_ISA_VERSION_ZHOUYI_V3)
 		*config = zhouyi_get_hw_config_number(&io);
 	else
@@ -103,14 +104,17 @@ int zhouyi_sysfs_show(struct io_region *io, char *buf)
 }
 #endif
 
-int zhouyi_get_hw_version_number(struct io_region *io)
+int zhouyi_get_hw_version_number(struct io_region *io, int *rev)
 {
 	int revision_id = 0;
 
+	/* rev == NULL is allowed */
 	if (!io)
 		return 0;
 
 	revision_id = aipu_read32(io, ZHOUYI_REVISION_ID_REG_OFFSET);
+	if (rev)
+		*rev = revision_id;
 
 	switch (revision_id) {
 	case ZHOUYI_V1_REVISION_ID:

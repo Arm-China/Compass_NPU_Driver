@@ -71,12 +71,14 @@ struct aipu_operations {
  * @core_cnt: core count in this cluster
  * @tec_cnt:  TEC count in per core of this cluster
  * @gm_bytes: GM region size in bytes of this cluster
+ * @en_core_cnt: enabled core count in this cluster
  */
 struct cluster_info {
 	u32 id;
 	u32 core_cnt;
 	u32 tec_cnt;
 	u32 gm_bytes;
+	atomic_t en_core_cnt;
 };
 
 /**

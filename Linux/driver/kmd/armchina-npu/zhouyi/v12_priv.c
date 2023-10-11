@@ -165,7 +165,7 @@ static struct aipu_partition *v12_create_partitions(struct aipu_priv *aipu,
 	if (!partition)
 		return ERR_PTR(-ENOMEM);
 
-	zhouyi_detect_aipu_version(p_dev, &version, &config);
+	zhouyi_detect_aipu_version(p_dev, &version, &config, NULL);
 	if (version == AIPU_ISA_VERSION_ZHOUYI_V1)
 		dev_info(&p_dev->dev, "AIPU core #%d detected: zhouyi-v1 (z%d-%04d)\n",
 			 id, version, config);

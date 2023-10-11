@@ -73,12 +73,12 @@ void zhouyi_clear_qempty_interrupt(struct io_region *io);
 void zhouyi_clear_done_interrupt(struct io_region *io);
 void zhouyi_clear_excep_interrupt(struct io_region *io);
 void zhouyi_io_rw(struct io_region *io, struct aipu_io_req *io_req);
-int zhouyi_detect_aipu_version(struct platform_device *p_dev, int *version, int *config);
+int zhouyi_detect_aipu_version(struct platform_device *p_dev, int *version, int *config, int *rev);
 #ifdef CONFIG_SYSFS
 int zhouyi_print_reg_info(struct io_region *io, char *buf, const char *name, int offset);
 int zhouyi_sysfs_show(struct io_region *io, char *buf);
 #endif
-int zhouyi_get_hw_version_number(struct io_region *io);
+int zhouyi_get_hw_version_number(struct io_region *io, int *rev);
 int zhouyi_get_hw_config_number(struct io_region *io);
 int zhouyi_soft_reset(struct io_region *io, int offset, int delay_us);
 

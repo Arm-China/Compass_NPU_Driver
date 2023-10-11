@@ -46,6 +46,7 @@ static int init_aipu_partition(struct aipu_partition *partition, u32 *clusters, 
 			partition->clusters[cluster_cnt - 1].id = clusters[2 * iter];
 			val = aipu_read32(partition->reg, CLUSTER_CONFIG_REG(clusters[2 * iter]));
 			partition->clusters[cluster_cnt - 1].core_cnt = GET_AIPU_CORE_NUM(val);
+			atomic_set(&partition->clusters[cluster_cnt - 1].en_core_cnt, GET_AIPU_CORE_NUM(val));
 			partition->clusters[cluster_cnt - 1].tec_cnt = GET_TEC_NUM(val);
 
 			aipu_write32(partition->reg, DEBUG_PAGE_SELECTION_REG,
@@ -89,7 +90,7 @@ static struct aipu_partition *v3_create_partitions(struct aipu_priv *aipu,
 	if (!aipu || !p_dev)
 		return ERR_PTR(-EINVAL);
 
-	zhouyi_detect_aipu_version(p_dev, &version, &config);
+	zhouyi_detect_aipu_version(p_dev, &version, &config, NULL);
 	dev_info(&p_dev->dev, "AIPU detected: zhouyi-v3\n");
 
 	WARN_ON(!aipu->is_init);
