@@ -741,13 +741,13 @@ static void aipu_mm_set_asid_base(struct aipu_memory_manager *mm)
 	for (asid = AIPU_BUF_ASID_0; asid < ZHOUYI_ASID_COUNT; asid++) {
 		u64 first_base = 0;
 		u64 asid_base = 0;
-		u32 range = 0;
-		u32 high = 0;
-		u32 end  = 0;
+		u64 range = 0;
+		u64 high = 0;
+		u64 end  = 0;
 
 		list_for_each_entry(obj, &mm->ase[asid].head->list, list) {
 			reg = obj->reg;
-			end = (u32)reg->base_iova + reg->bytes;
+			end = reg->base_iova + reg->bytes;
 
 			if (!range) {
 				high = end;
@@ -777,7 +777,7 @@ static void aipu_mm_set_asid_base(struct aipu_memory_manager *mm)
 		if (range) {
 			mm->ase[asid].base = asid_base;
 			mm->ase[asid].range = range;
-			dev_info(mm->dev, "set ASID %d done: base: 0x%llx, range 0x%x\n",
+			dev_info(mm->dev, "set ASID %d done: base: 0x%llx, range 0x%llx\n",
 				 asid, asid_base, range);
 		}
 	}

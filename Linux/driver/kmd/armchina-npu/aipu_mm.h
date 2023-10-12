@@ -147,7 +147,7 @@ struct aipu_mem_region_list {
 	int cnt;
 	int valid_cnt;
 	dma_addr_t base;
-	u32 range;
+	u64 range;
 };
 
 /**
