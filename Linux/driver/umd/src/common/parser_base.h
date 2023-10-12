@@ -202,14 +202,14 @@ struct GraphIOTensorDesc {
      */
     mutable bool dump_ignore_flag;
 
-    const void set_dmabuf_info(int _fd, uint32_t _dmabuf_size, int _offset_in_dmabuf) const
+    void set_dmabuf_info(int _fd, uint32_t _dmabuf_size, int _offset_in_dmabuf) const
     {
         dmabuf_fd = _fd;
         dmabuf_size = _dmabuf_size;
         offset_in_dmabuf = _offset_in_dmabuf;
     }
 
-    const void set_dump_ignore_flag(bool _dump_ignore_flag) const
+    void set_dump_ignore_flag(bool _dump_ignore_flag) const
     {
         dump_ignore_flag = _dump_ignore_flag;
     }
