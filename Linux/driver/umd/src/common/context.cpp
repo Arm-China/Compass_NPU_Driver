@@ -919,7 +919,7 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
     if (nullptr == arg)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
-    if (cmd >= AIPU_IOCTL_MARK_SHARED_TENSOR && cmd <= AIPU_IOCTL_SET_PROFILE)
+    if (cmd >= AIPU_IOCTL_MARK_SHARED_TENSOR && cmd <= AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION)
     {
         if (cmd >= AIPU_IOCTL_MARK_SHARED_TENSOR && cmd <= AIPU_IOCTL_SET_SHARED_TENSOR)
         {
@@ -959,6 +959,17 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
                 }
         } else if (cmd == AIPU_IOCTL_SET_PROFILE) {
             m_dev->enable_profiling((*(int *)arg) != 0);
+        } else if (cmd == AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION) {
+            aipu_bin_buildversion_t *buildver = (aipu_bin_buildversion_t *)arg;
+
+            if (!aipudrv::valid_graph_id(buildver->graph_id))
+                return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+            p_gobj = get_graph_object(buildver->graph_id);
+            if (nullptr == p_gobj)
+                return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+            buildver->aipubin_buildversion = p_gobj->get_buildversion();
         }
     } else {
         #ifndef SIMULATION

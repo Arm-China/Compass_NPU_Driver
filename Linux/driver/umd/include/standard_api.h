@@ -343,12 +343,26 @@ typedef struct aipu_driver_version
 } aipu_driver_version_t;
 
 /**
+ * @struct aipu_bin_buildversion
+ *
+ * @brief get build version number of model binary
+ *
+ * @note the version number is determined by NN compiler.
+ */
+typedef struct aipu_bin_buildversion
+{
+    uint64_t graph_id; /**< the graph id to be searched */
+    uint32_t aipubin_buildversion; /**< the build version of searched graph */
+} aipu_bin_buildversion_t;
+
+/**
  * @brief ioctl commands to operate shared tensor buffer for KMD
  */
 typedef enum {
     AIPU_IOCTL_MARK_SHARED_TENSOR = 0x255,
     AIPU_IOCTL_SET_SHARED_TENSOR,
     AIPU_IOCTL_SET_PROFILE,
+    AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION,
     AIPU_IOCTL_ALLOC_DMABUF,
     AIPU_IOCTL_FREE_DMABUF,
     AIPU_IOCTL_WRITE_DMABUF,
@@ -1084,6 +1098,11 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
  *           aipu_dma_buf_request->fd: fd corresponding to dma_buf (filled by KMD)
  *      AIPU_IOCTL_FREE_DMABUF
  *           free a dma_buf with its fd. arg { fd }
+ *      AIPU_IOCTL_GET_VERSION
+ *           get UMD and KMD release version. arg { &aipu_driver_version_t }
+ *
+ *      AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION
+ *           get model binary's build version. arg { &aipu_bin_buildversion_t }
  */
 aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd, void *arg = nullptr);
 

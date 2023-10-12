@@ -347,6 +347,7 @@ aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size,
     {
         memcpy((void *)&m_aipu_compile_msg, sections[ELFSectionCompilerMsg].va,
             sections[ELFSectionCompilerMsg].size);
+        gobj.set_buildversion(m_aipu_compile_msg.build_version);
         gobj.set_arch(AIPU_ARCH(m_aipu_compile_msg.device));
         gobj.set_hw_version(AIPU_VERSION(m_aipu_compile_msg.device));
         gobj.set_hw_config(AIPU_CONFIG(m_aipu_compile_msg.device));

@@ -46,6 +46,7 @@ int main(int argc, char* argv[])
     config_cluster.clusters[0].en_core_cnt = 2;
     bool en_config = false;
     aipu_driver_version_t drv_ver = {0};
+    aipu_bin_buildversion_t buildver = {0};
 
     if(init_test_bench(argc, argv, &opt, "benchmark_test"))
     {
@@ -83,6 +84,16 @@ int main(int argc, char* argv[])
         goto deinit_ctx;
     }
     AIPU_INFO()("aipu_load_graph_helper success: %s\n", opt.bin_file_name);
+
+    buildver.graph_id = graph_id;
+    ret = aipu_ioctl(ctx, AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION, &buildver);
+    if (ret != AIPU_STATUS_SUCCESS)
+    {
+        aipu_get_error_message(ctx, ret, &msg);
+        AIPU_ERR()("aipu_ioctl: %s\n", msg);
+        goto deinit_ctx;
+    }
+    AIPU_INFO()("AIPU BIN buildversion: %x\n", buildver.aipubin_buildversion);
 
     ret = aipu_get_tensor_count(ctx, graph_id, AIPU_TENSOR_TYPE_INPUT, &input_cnt);
     if (ret != AIPU_STATUS_SUCCESS)

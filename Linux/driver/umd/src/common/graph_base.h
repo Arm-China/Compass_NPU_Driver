@@ -70,6 +70,7 @@ protected:
     uint32_t m_hw_version = 0;
     uint32_t m_hw_config = 0;
     uint32_t m_hw_revision = 0;
+    uint32_t m_aipubin_buildversion = 0;
     uint32_t m_asid_flag = 0;
     uint32_t m_remap_flag = 0;
     uint32_t m_sram_flag = 0;
@@ -103,7 +104,6 @@ public:
     } batch_set_t;
     std::map<uint32_t, batch_set_t> m_batch_queue;
     pthread_rwlock_t m_batch_queue_lock;
-
 
 public:
     virtual void print_parse_info() = 0;
@@ -175,6 +175,10 @@ public:
     {
         m_remap_flag = flag;
     }
+    void set_buildversion(uint32_t buildversion)
+    {
+        m_aipubin_buildversion = buildversion;
+    }
 
     /* Get functions */
     uint32_t get_gversion()
@@ -188,6 +192,10 @@ public:
     uint32_t get_config()
     {
         return m_hw_config;
+    }
+    uint32_t get_buildversion()
+    {
+        return m_aipubin_buildversion;
     }
 
     void set_weight_region(uint32_t mem_region)

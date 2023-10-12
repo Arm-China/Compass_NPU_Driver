@@ -43,6 +43,8 @@ int main(int argc, char* argv[])
     int pass = 0, loop = 0, total_loop = 1;
     uint64_t cfg_types = 0;
     aipu_create_job_cfg create_job_cfg = {0};
+    aipu_driver_version_t drv_ver = {0};
+    aipu_bin_buildversion_t buildver = {0};
 
     AIPU_CRIT() << "usage: ./aipu_simulation_test -b aipu.bin -i input0.bin -c output.bin -d ./\n";
 
@@ -96,6 +98,18 @@ int main(int argc, char* argv[])
         }
         AIPU_INFO()("aipu_init_context success\n");
 
+        // get driver's UMD and KMD version
+        memset(drv_ver.umd_version, 0, sizeof(drv_ver.umd_version));
+        memset(drv_ver.kmd_version, 0, sizeof(drv_ver.kmd_version));
+        ret = aipu_ioctl(ctx, AIPU_IOCTL_GET_VERSION, &drv_ver);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(ctx, ret, &msg);
+            AIPU_ERR()("aipu_ioctl: %s\n", msg);
+            goto deinit_ctx;
+        }
+        AIPU_INFO()("Driver UMD: %s\n", drv_ver.umd_version);
+
         ret = aipu_config_global(ctx, AIPU_CONFIG_TYPE_SIMULATION, &sim_glb_config);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -114,6 +128,16 @@ int main(int argc, char* argv[])
             goto deinit_ctx;
         }
         AIPU_INFO()("aipu_load_graph_helper success: %s\n", opt.bin_file_name);
+
+        buildver.graph_id = graph_id;
+        ret = aipu_ioctl(ctx, AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION, &buildver);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(ctx, ret, &msg);
+            AIPU_ERR()("aipu_ioctl: %s\n", msg);
+            goto deinit_ctx;
+        }
+        AIPU_INFO()("AIPU BIN buildversion: %x\n", buildver.aipubin_buildversion);
 
         ret = aipu_get_cluster_count(ctx, 0, &cluster_cnt);
         if (ret != AIPU_STATUS_SUCCESS)

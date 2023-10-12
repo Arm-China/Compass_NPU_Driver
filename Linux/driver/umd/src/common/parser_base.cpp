@@ -367,6 +367,7 @@ aipu_status_t aipudrv::ParserBase::parse_graph_header_top(std::istream& gbin, ui
         goto finish;
     }
 
+    gobj.set_buildversion(header.build_version);
     gobj.set_gversion(GRAPH_VERSION(header.version));
     gobj.set_arch(AIPU_ARCH(header.device));
     gobj.set_hw_version(AIPU_VERSION(header.device));
