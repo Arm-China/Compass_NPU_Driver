@@ -194,83 +194,73 @@ bool umd_is_valid_ptr(const void* lower_bound, const void* upper_bound,
 
 void dump_stack(void)
 {
-    void *addrlist[30] = {0};
-    int addrlen = 0;
-    char **symbollist = nullptr;
-    size_t funcnamesize = 256;
-    char *funcname = nullptr;
+    void *address_array[40] = {0};
+    int address_len = 0;
+    char **sym_array = nullptr;
+    size_t func_name_sz = 256;
+    char *pfunc_name = nullptr;
 
 #ifndef __ANDROID__
     static std::mutex mtex;
-    addrlen = backtrace(addrlist, sizeof(addrlist) / sizeof(void*));
+    address_len = backtrace(address_array, sizeof(address_array) / sizeof(void*));
     fprintf(stderr, "\nStack backtrace:\n");
-    if (addrlen == 0) {
-        fprintf(stderr, "  <empty, possibly corrupt>\n");
+    if (address_len == 0) {
+        fprintf(stderr, "  <empty, stack corrupt>\n");
         return;
     }
 
-    symbollist = backtrace_symbols(addrlist, addrlen);
-    funcname = (char*)malloc(funcnamesize);
+    sym_array = backtrace_symbols(address_array, address_len);
+    pfunc_name = (char*)malloc(func_name_sz);
 
     std::lock_guard<std::mutex> _lock(mtex);
     /**
-     * iterate over the returned symbol lines. skip the first, it is the
-     * address of this function.
+     * ignore the first, as it is the address of this function.
      */
-    for (int i = 1; i < addrlen; i++)
+    for (int i = 1; i < address_len; i++)
     {
-        char *begin_name = nullptr, *begin_offset = nullptr, *end_offset = nullptr;
+        char *mangled_name_start = nullptr, *begin_offset = nullptr, *end_offset = nullptr;
 
         /**
-         * find parentheses and +address offset surrounding the mangled name:
-         * ./module(function+0x15c) [0x8048a6d]
+         * find parentheses and +address offset:
+         * ./object(function+0x200) [0x105426]
          */
-        for (char *p = symbollist[i]; *p; ++p)
+        for (char *ptr = sym_array[i]; *ptr; ++ptr)
         {
-            if (*p == '(')
-                begin_name = p;
-            else if (*p == '+')
-                begin_offset = p;
-            else if (*p == ')' && begin_offset) {
-                end_offset = p;
+            if (*ptr == '(')
+                mangled_name_start = ptr;
+            else if (*ptr == '+')
+                begin_offset = ptr;
+            else if (*ptr == ')' && begin_offset) {
+                end_offset = ptr;
                 break;
             }
         }
 
-        if (begin_name && begin_offset && end_offset
-            && begin_name < begin_offset)
+        if (mangled_name_start && begin_offset && end_offset
+            && mangled_name_start < begin_offset)
         {
-            *begin_name++ = '\0';
+            int status = -1;
+            char *start_name = nullptr;
+            *mangled_name_start++ = '\0';
             *begin_offset++ = '\0';
             *end_offset = '\0';
 
-            /**
-             * mangled name is now in [begin_name, begin_offset) and caller
-             * offset in [begin_offset, end_offset). now apply
-             * __cxa_demangle():
-             */
-            int status;
-            char* ret = abi::__cxa_demangle(begin_name,
-                            funcname, &funcnamesize, &status);
+            start_name = abi::__cxa_demangle(mangled_name_start,
+                    pfunc_name, &func_name_sz, &status);
             if (status == 0) {
-                funcname = ret; // use possibly realloc()-ed string
+                pfunc_name = start_name;
                 fprintf(stderr, "  %s : %s+%s\n",
-                    symbollist[i], funcname, begin_offset);
+                    sym_array[i], pfunc_name, begin_offset);
             } else {
-                /**
-                 * demangling failed. Output function name as a C function with
-                 * no arguments.
-                 */
                 fprintf(stderr, "  %s : %s()+%s\n",
-                    symbollist[i], begin_name, begin_offset);
+                    sym_array[i], mangled_name_start, begin_offset);
             }
         } else {
-            /* couldn't parse the line? print the whole line. */
-            fprintf(stderr, "  %s\n", symbollist[i]);
+            fprintf(stderr, "  %s\n", sym_array[i]);
         }
     }
 
-    free(funcname);
-    free(symbollist);
+    free(pfunc_name);
+    free(sym_array);
 #endif
 }
