@@ -1238,13 +1238,13 @@ aipu_status_t aipudrv::JobV3::config_smmu_tcb()
                     break;
                 }
             } else {
-                tcb->smmu.ctrl = segmmu.SegMMU_ctl;
-                tcb->smmu.remap = segmmu.SegMMU_remap;
+                tcb->next_core_smmu.ctrl = segmmu.SegMMU_ctl;
+                tcb->next_core_smmu.remap = segmmu.SegMMU_remap;
 
                 for (int j = 0; j < 4; j++)
                 {
-                    tcb->smmu.segs[j].ctrl0 = segmmu.seg[j].control[0];
-                    tcb->smmu.segs[j].ctrl1 = segmmu.seg[j].control[1];
+                    tcb->next_core_smmu.segs[j].ctrl0 = segmmu.seg[j].control[0];
+                    tcb->next_core_smmu.segs[j].ctrl1 = segmmu.seg[j].control[1];
                 }
 
                 m_mem->write(m_init_tcb.pa + (1 + i/2) * sizeof(tcb_t),
