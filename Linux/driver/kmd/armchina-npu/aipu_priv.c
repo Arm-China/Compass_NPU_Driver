@@ -177,7 +177,6 @@ int aipu_priv_query_partition_capability(struct aipu_priv *aipu, struct aipu_par
 	int iter = 0;
 	u32 core_cnt = 0;
 	u32 en_core_cnt = 0;
-	u32 cfg_segmmu_cnt = 0;
 
 	if (unlikely(!aipu && !cap))
 		return -EINVAL;
@@ -193,12 +192,9 @@ int aipu_priv_query_partition_capability(struct aipu_priv *aipu, struct aipu_par
 		for (iter = 0; iter < partition->cluster_cnt; iter++) {
 			core_cnt = partition->clusters[iter].core_cnt;
 			en_core_cnt = atomic_read(&partition->clusters[iter].en_core_cnt);
-			cfg_segmmu_cnt = (aipu->revision == ZHOUYI_V3_REVISION_ID_R0P2) ?
-				core_cnt : en_core_cnt;
 
 			cap[id].clusters[iter].core_cnt = core_cnt;
 			cap[id].clusters[iter].en_core_cnt = en_core_cnt;
-			cap[id].clusters[iter].cfg_segmmu_cnt = cfg_segmmu_cnt;
 			cap[id].clusters[iter].tec_cnt = partition->clusters[iter].tec_cnt;
 		}
 	}

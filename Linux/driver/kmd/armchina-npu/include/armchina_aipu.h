@@ -112,7 +112,6 @@ struct aipu_partition_cap {
 	struct aipu_cluster_cap {
 		__u32 core_cnt;    /* total core count in this cluster */
 		__u32 en_core_cnt; /* currently enabled core count */
-		__u32 cfg_segmmu_cnt; /* configure segmmu using this count */
 		__u32 tec_cnt;
 	} clusters[8]; /* every partition has at maximum 8 clusters */
 };
