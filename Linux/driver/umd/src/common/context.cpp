@@ -913,51 +913,14 @@ out:
 aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::JobBase* job = nullptr;
     GraphBase* p_gobj = nullptr;
 
     if (nullptr == arg)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
-    if (cmd >= AIPU_IOCTL_MARK_SHARED_TENSOR && cmd <= AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION)
+    if (cmd >= AIPU_IOCTL_SET_PROFILE && cmd <= AIPU_IOCTL_FREE_SHARE_BUF)
     {
-        if (cmd >= AIPU_IOCTL_MARK_SHARED_TENSOR && cmd <= AIPU_IOCTL_SET_SHARED_TENSOR)
-        {
-            aipu_shared_tensor_info_t *shared_tensor_info;
-            shared_tensor_info = (aipu_shared_tensor_info_t *)arg;
-
-            switch (cmd)
-            {
-                case AIPU_IOCTL_MARK_SHARED_TENSOR:
-                    if (!aipudrv::valid_job_id(shared_tensor_info->id))
-                        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
-
-                    job = get_job_object(shared_tensor_info->id);
-                    if (nullptr == job)
-                        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
-
-                    ret = job->mark_shared_tensor(shared_tensor_info->type,
-                            shared_tensor_info->tensor_idx, shared_tensor_info->pa);
-                    if (ret != AIPU_STATUS_SUCCESS)
-                        return ret;
-                    break;
-
-                case AIPU_IOCTL_SET_SHARED_TENSOR:
-                    if (!aipudrv::valid_graph_id(shared_tensor_info->id))
-                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-                    p_gobj = get_graph_object(shared_tensor_info->id);
-                    if (nullptr == p_gobj)
-                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-                    ret = p_gobj->assign_shared_tensor(shared_tensor_info->type,
-                            shared_tensor_info->tensor_idx, shared_tensor_info->pa);
-                    if (ret != AIPU_STATUS_SUCCESS)
-                        return ret;
-
-                    break;
-                }
-        } else if (cmd == AIPU_IOCTL_SET_PROFILE) {
+        if (cmd == AIPU_IOCTL_SET_PROFILE) {
             m_dev->enable_profiling((*(int *)arg) != 0);
         } else if (cmd == AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION) {
             aipu_bin_buildversion_t *buildver = (aipu_bin_buildversion_t *)arg;
@@ -970,6 +933,27 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
                 return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
             buildver->aipubin_buildversion = p_gobj->get_buildversion();
+        } else if (cmd == AIPU_IOCTL_ALLOC_SHARE_BUF) {
+            aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
+            BufferDesc buf;
+
+            ret = m_dram->malloc(share_buf->size, 1, &buf, "share");
+            if (ret != AIPU_STATUS_SUCCESS)
+                return ret;
+
+            if (m_dram->pa_to_va(buf.pa, buf.size, (char **)&share_buf->va) != 0)
+                return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
+            share_buf->pa = buf.pa;
+        } else if (cmd == AIPU_IOCTL_FREE_SHARE_BUF) {
+            aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
+            Buffer buffer;
+
+            if(m_dram->get_shared_buffer(share_buf->pa, share_buf->size, buffer) != 0)
+                return AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
+
+            ret = m_dram->free(&buffer.desc, "share");
+            if (ret != AIPU_STATUS_SUCCESS)
+                return ret;
         }
     } else {
         #ifndef SIMULATION

@@ -9,10 +9,6 @@
  *
  * @note
  *        1, run same model(eg: alexnet) with only one input tensor in loop-0 and loop-1
- *        2, loop == 0: mark one input tensor buffer of graph-0 as shared
- *           after aipu_create_job()
- *        3, loop == 1: assign the buffer marked shared in loop-0 to new graph-1
- *           after aipu_load_graph()
  */
 
 #include <stdio.h>
@@ -39,6 +35,12 @@ using namespace std;
 #define ON_SIMULATOR 1
 #define ON_HW  0
 
+/**
+ * the share buffer size, it should be set according to
+ * real tensor size which can be get via aipu_get_tensor_descriptor.
+ */
+#define SHARE_BUF_LEN 0x100000
+
 int main(int argc, char* argv[])
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
@@ -57,9 +59,9 @@ int main(int argc, char* argv[])
     int pass = 0, loop = 0, total_loop = 2;
     uint64_t cfg_types = 0;
     aipu_create_job_cfg create_job_cfg = {0};
-    aipu_shared_tensor_info_t mark_shared_tensor_info,
-        set_shared_tensor_info;
+    aipu_shared_tensor_info_t shared_tensor_info;
     int run_on_platform = ON_SIMULATOR;
+    aipu_share_buf_t share_buf = {0};
 
     AIPU_CRIT() << "usage: ./aipu_sharebuffer_test -b aipu.bin -i input0.bin -c output.bin -d ./\n";
 
@@ -98,7 +100,7 @@ int main(int argc, char* argv[])
 #endif
     }
     sim_glb_config.verbose = opt.verbose;
-    sim_glb_config.en_eval = true;
+    sim_glb_config.en_eval = false;
 
     sim_glb_config.simulator = opt.simulator;
     sim_job_config.data_dir = opt.dump_dir;
@@ -112,29 +114,20 @@ int main(int argc, char* argv[])
     }
     AIPU_INFO()("aipu_init_context success\n");
 
-    /**
-     * NOTE:
-     *
-     * loop = 0: mark the input buffer from current graph as shared
-     * loop = 1: assign the shared buffer to new graph as the input buffer
-     *
-     * note that this case loads the identical graph twice in different loops, so
-     * they have the same input tensor count and buffer size.
-     */
+    if (run_on_platform == ON_SIMULATOR)
+    {
+        ret = aipu_config_global(ctx, AIPU_CONFIG_TYPE_SIMULATION, &sim_glb_config);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(ctx, ret, &msg);
+            AIPU_ERR()("aipu_config_global: %s\n", msg);
+            goto deinit_ctx;
+        }
+        AIPU_INFO()("set global simulation config success\n");
+    }
+
     for (loop = 0; loop < total_loop; loop++)
     {
-        if (run_on_platform == ON_SIMULATOR)
-        {
-            ret = aipu_config_global(ctx, AIPU_CONFIG_TYPE_SIMULATION, &sim_glb_config);
-            if (ret != AIPU_STATUS_SUCCESS)
-            {
-                aipu_get_error_message(ctx, ret, &msg);
-                AIPU_ERR()("aipu_config_global: %s\n", msg);
-                goto deinit_ctx;
-            }
-            AIPU_INFO()("set global simulation config success\n");
-        }
-
         ret = aipu_load_graph(ctx, opt.bin_file_name, &graph_id);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -144,6 +137,23 @@ int main(int argc, char* argv[])
             goto deinit_ctx;
         }
         AIPU_INFO()("aipu_load_graph_helper success: %s\n", opt.bin_file_name);
+
+        /**
+         * allocate the share buffer only once
+         */
+        if (loop == 0)
+        {
+            share_buf.size = SHARE_BUF_LEN;
+            ret = aipu_ioctl(ctx, AIPU_IOCTL_ALLOC_SHARE_BUF, &share_buf);
+            if (ret != AIPU_STATUS_SUCCESS)
+            {
+                aipu_get_error_message(ctx, ret, &msg);
+                AIPU_ERR()("aipu_ioctl alloc on SIM: %s\n", msg);
+                goto unload_graph;
+            }
+            AIPU_INFO()("alloc shared buffer: pa: 0x%lx, va: 0x%lx\n", share_buf.pa, share_buf.va);
+        }
+        memset((void *)share_buf.va, 0x55, share_buf.size);
 
         ret = aipu_get_cluster_count(ctx, 0, &cluster_cnt);
         if (ret != AIPU_STATUS_SUCCESS)
@@ -210,27 +220,6 @@ int main(int argc, char* argv[])
         }
         //AIPU_INFO()("aipu_get_tensor_descriptor done\n");
 
-        /**
-         * NOTE:
-         *
-         * assign one shared buffer to 2nd graph,
-         */
-        if (loop == 1)
-        {
-            set_shared_tensor_info.id = graph_id; /* use graph id for assigning shared buffer */
-            set_shared_tensor_info.type = AIPU_TENSOR_TYPE_INPUT;
-            set_shared_tensor_info.tensor_idx = 0;
-            set_shared_tensor_info.pa = mark_shared_tensor_info.pa; /* pass shared buffer physical address to new graph */
-            ret = aipu_ioctl(ctx, AIPU_IOCTL_SET_SHARED_TENSOR, &set_shared_tensor_info);
-            if (ret != AIPU_STATUS_SUCCESS)
-            {
-                aipu_get_error_message(ctx, ret, &msg);
-                AIPU_ERR()("aipu_ioctl: %s\n", msg);
-                goto unload_graph;
-            }
-            AIPU_INFO()("set shared buffer: 0x%lx\n", set_shared_tensor_info.pa);
-        }
-
         ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -240,28 +229,20 @@ int main(int argc, char* argv[])
         }
         AIPU_INFO()("aipu_create_job success\n");
 
-        /**
-         * NOTE:
-         *
-         * mark one tensor buffer of 1st graph as shared
-         */
-        if (loop == 0)
+        shared_tensor_info.id = job_id;
+        shared_tensor_info.type = AIPU_TENSOR_TYPE_INPUT;
+        shared_tensor_info.tensor_idx = 0;
+        shared_tensor_info.pa = share_buf.pa;
+        shared_tensor_info.shared_case_type = AIPU_SHARE_BUF_IN_ONE_PROCESS;
+
+        ret = aipu_specify_iobuf(ctx, job_id, &shared_tensor_info);
+        if (ret != AIPU_STATUS_SUCCESS)
         {
-
-            mark_shared_tensor_info.id = job_id;
-            mark_shared_tensor_info.type = AIPU_TENSOR_TYPE_INPUT;
-            mark_shared_tensor_info.tensor_idx = 0;
-            mark_shared_tensor_info.pa = 0;
-
-            ret = aipu_ioctl(ctx, AIPU_IOCTL_MARK_SHARED_TENSOR, &mark_shared_tensor_info);
-            if (ret != AIPU_STATUS_SUCCESS)
-            {
-                aipu_get_error_message(ctx, ret, &msg);
-                AIPU_ERR()("aipu_ioctl: %s\n", msg);
-                goto unload_graph;
-            }
-            AIPU_INFO()("mark shared buffer: 0x%lx\n", mark_shared_tensor_info.pa);
+            aipu_get_error_message(ctx, ret, &msg);
+            AIPU_ERR()("aipu_specify_iobuf: %s\n", msg);
+            goto unload_graph;
         }
+        AIPU_INFO()("aipu_specify_iobuf: 0x%lx\n", shared_tensor_info.pa);
 
     #if ((defined RTDEBUG) && (RTDEBUG == 1))
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_TEXT  |
@@ -323,24 +304,15 @@ int main(int argc, char* argv[])
                     goto clean_job;
                 }
 
-                /**
-                 * NOTE:
-                 *
-                 * it doesn't load input tensor for the 2nd graph due to the 2nd graph
-                 * shares the same input tensor buffer with the 1st graph.
-                 */
-                if (loop == 0)
+                ret = aipu_load_tensor(ctx, job_id, i, opt.inputs[i]);
+                if (ret != AIPU_STATUS_SUCCESS)
                 {
-                    ret = aipu_load_tensor(ctx, job_id, i, opt.inputs[i]);
-                    if (ret != AIPU_STATUS_SUCCESS)
-                    {
-                        aipu_get_error_message(ctx, ret, &msg);
-                        AIPU_ERR()("aipu_load_tensor: %s\n", msg);
-                        goto clean_job;
-                    }
-                    AIPU_INFO()("load input tensor %d from %s (%u/%u)\n",
-                        i, opt.input_files[i].c_str(), i+1, input_cnt);
+                    aipu_get_error_message(ctx, ret, &msg);
+                    AIPU_ERR()("aipu_load_tensor: %s\n", msg);
+                    goto clean_job;
                 }
+                AIPU_INFO()("load input tensor %d from %s (%u/%u)\n",
+                    i, opt.input_files[i].c_str(), i+1, input_cnt);
             }
 
             ret = aipu_finish_job(ctx, job_id, -1);
@@ -398,6 +370,15 @@ int main(int argc, char* argv[])
     }
 
     deinit_ctx:
+        ret = aipu_ioctl(ctx, AIPU_IOCTL_FREE_SHARE_BUF, &share_buf);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(ctx, ret, &msg);
+            AIPU_ERR()("aipu_ioctl free: %s\n", msg);
+            goto finish;
+        }
+        AIPU_INFO()("aipu_ioctl free success\n");
+
         ret = aipu_deinit_context(ctx);
         if (ret != AIPU_STATUS_SUCCESS)
         {

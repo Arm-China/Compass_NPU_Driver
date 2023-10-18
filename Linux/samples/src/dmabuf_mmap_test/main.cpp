@@ -299,6 +299,7 @@ int main(int argc, char* argv[])
         share_tensor.offset_in_dmabuf = 0;
         share_tensor.tensor_idx = 0;
         share_tensor.type = AIPU_TENSOR_TYPE_INPUT;
+        share_tensor.shared_case_type = AIPU_SHARE_BUF_DMABUF;
         #else
         /**
          * method 2:
@@ -341,6 +342,7 @@ int main(int argc, char* argv[])
         share_tensor.offset_in_dmabuf = 0;
         share_tensor.tensor_idx = 0;
         share_tensor.type = AIPU_TENSOR_TYPE_INPUT;
+        share_tensor.shared_case_type = AIPU_SHARE_BUF_DMABUF;
         #endif
 
         ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);

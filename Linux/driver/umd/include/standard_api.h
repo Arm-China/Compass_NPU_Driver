@@ -275,40 +275,37 @@ typedef enum {
  *
  * @note for case1:
  *       the share action is based on one process contex, not among multiple processes.
- *       1, mark a tensor buffer as shared in one graph and get its base physical address;
- *       need parameters: {id (job id), type, tensor_idx, &pa}
- *
- *       2, assign the shared tensor buffer to other graphs and as input or output.
- *       need parameters: {id (job/graph id), type, tensor_idx, pa}
+ *       it has to set 'shared_case_type' as AIPU_SHARE_BUF_IN_ONE_PROCESS.
+ *       need parameters: {job id, type, tensor_idx, pa, shared_case_type}
  *
  * @note for case2:
- *       share a common buffer via dma_buf framework among multiple modules/processes
- *       need paramsters: {id (job id), type, tensor_idx, fd, offset}
+ *       share a common buffer via dma_buf framework among multiple modules/processes.
+ *       it has to set 'shared_case_type' as AIPU_SHARE_BUF_DMABUF.
+ *       need paramsters: {job id, type, tensor_idx, fd, offset, shared_case_type}
  *
  * @note for case3:
  *       specify a shared buffer allocated in customed memory manager. it has to set
  *       'shared_case_type' as AIPU_SHARE_BUF_CUSTOMED. in addition, since the buffer
  *       is not allocated by original NPU driver, it has to confirm the buffer matches
  *       the ASID constraint.
- *       need parameters: {id (job id), type, tensor_idx, pa, shared_case_type}
+ *       need parameters: {job id, type, tensor_idx, pa, shared_case_type}
  */
 typedef struct aipu_shared_tensor_info {
+    /* the common fields */
     aipu_tensor_type_t type;     /**< the shared tensor's type: input/output */
     uint32_t tensor_idx;         /**< the shared tensor's index */
 
-    /* the below fields only for original buf sharing in one process,not recommended */
+    /* fileds for case1 and case3, not recommended */
     uint64_t id;                 /**< pass job ID for marking one io buffer as shared
-                                      pass graph ID for sharing one shared buffer marked previously,
                                       ignored for dma_buf share */
     uint64_t pa;                 /**< the physical address of shared tensor, ignored for dma_buf share */
 
-    /* the below fields only for dma_buf share, recommended */
+    /* fields for case2, recommended */
     int dmabuf_fd;               /**< the fd corresponding to shared buffer from dma_buf allocator */
     uint32_t offset_in_dmabuf;   /**< the shared address offset in dma_buf which is specified by 'fd' */
 
     /**
-     * if the shared buffer is allocated in customed memory manager(case3), it has to set this
-     * parameter as 'AIPU_SHARE_BUF_CUSTOMED', for other cases, this parameter can be ignored.
+     * it has to set this type, indicates sharing is for which case.
      */
     int shared_case_type;
 } aipu_shared_tensor_info_t;
@@ -326,6 +323,19 @@ typedef struct aipu_dmabuf_op
     uint32_t size;               /**< the data size: filled data size or fetched data size */
     char *data;                  /**< The data buffer: fill to or fetch from */
 } aipu_dmabuf_op_t;
+
+/**
+ * @struct aipu_share_buf
+ *
+ * @brief request common share buffer, must specify 'size' field
+ *
+ */
+typedef struct aipu_share_buf
+{
+    uint64_t pa;    /**< buffer pa: filled by UMD */
+    uint64_t va;    /**< buffer va: filled by UMD */
+    uint32_t size;  /**< buffer size: filled by USER */
+} aipu_share_buf_t;
 
 /**
  * @struct aipu_driver_version
@@ -359,10 +369,10 @@ typedef struct aipu_bin_buildversion
  * @brief ioctl commands to operate shared tensor buffer for KMD
  */
 typedef enum {
-    AIPU_IOCTL_MARK_SHARED_TENSOR = 0x255,
-    AIPU_IOCTL_SET_SHARED_TENSOR,
-    AIPU_IOCTL_SET_PROFILE,
+    AIPU_IOCTL_SET_PROFILE = 255,
     AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION,
+    AIPU_IOCTL_ALLOC_SHARE_BUF,
+    AIPU_IOCTL_FREE_SHARE_BUF,
     AIPU_IOCTL_ALLOC_DMABUF,
     AIPU_IOCTL_FREE_DMABUF,
     AIPU_IOCTL_WRITE_DMABUF,
@@ -1074,35 +1084,31 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
  * @retval AIPU_STATUS_ERROR_DEV_ABNORMAL
  *
  * @note support commands currently
- *       AIPU_IOCTL_MARK_SHARED_TENSOR:
- *           mark a shared buffer from belonged job, arg {aipu_shared_tensor_info_t}
- *           the marked buffer isn't freed on destroying job and directly used by new job.
- *       AIPU_IOCTL_SET_SHARED_TENSOR:
- *           specify a marked shared buffer to new job, arg {aipu_shared_tensor_info_t}
- *           marking shared buffer and setting shared buffer to new job must be performed
- *           in same one process context.
+ *       AIPU_IOCTL_ALLOC_SHARE_BUF:
+ *           request a shared buffer, arg { aipu_share_buf_t* }
+ *       AIPU_IOCTL_FREE_SHARE_BUF:
+ *           free a shared buffer, arg { aipu_share_buf_t* }
  *       AIPU_IOCTL_ENABLE_TICK_COUNTER:
  *           enable performance counter, no arg
  *       AIPU_IOCTL_DISABLE_TICK_COUNTER:
  *           disable performance counter, no arg
  *       AIPU_IOCTL_CONFIG_CLUSTERS:
- *           config number of enabled cores in a cluster, arg {struct aipu_config_clusters}
+ *           config number of enabled cores in a cluster, arg { struct aipu_config_clusters* }
  *           it is used to disable some core's clock to reduce power consumption.
  *       AIPU_IOCTL_SET_PROFILE:
  *           dynamically enable/disable profiling feature of aipu v3 simulation. arg {1/0}
  *           1: enable profiling
  *           0: disable profiling
- *      AIPU_IOCTL_ALLOC_DMABUF
+ *       AIPU_IOCTL_ALLOC_DMABUF
  *           request dma_buf from KMD. arg {struct aipu_dma_buf_request}
  *           aipu_dma_buf_request->bytes: request size (filled by UMD)
  *           aipu_dma_buf_request->fd: fd corresponding to dma_buf (filled by KMD)
- *      AIPU_IOCTL_FREE_DMABUF
+ *       AIPU_IOCTL_FREE_DMABUF
  *           free a dma_buf with its fd. arg { fd }
- *      AIPU_IOCTL_GET_VERSION
- *           get UMD and KMD release version. arg { &aipu_driver_version_t }
- *
- *      AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION
- *           get model binary's build version. arg { &aipu_bin_buildversion_t }
+ *       AIPU_IOCTL_GET_VERSION
+ *           get UMD and KMD release version. arg { aipu_driver_version_t* } *
+ *       AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION
+ *           get model binary's build version. arg { aipu_bin_buildversion_t* }
  */
 aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd, void *arg = nullptr);
 

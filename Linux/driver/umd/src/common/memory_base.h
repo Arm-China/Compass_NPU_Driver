@@ -285,7 +285,6 @@ public:
 public:
     /* Interfaces */
     int pa_to_va(uint64_t addr, uint64_t size, char** va) const;
-    int mark_shared_buffer(uint64_t addr, uint64_t size);
     int get_shared_buffer(uint64_t addr, uint64_t size, Buffer &buffer);
     virtual aipu_status_t malloc(uint32_t size, uint32_t align, BufferDesc* buf,
         const char* str = nullptr, uint32_t asid_qos_cfg = 0) = 0;

@@ -323,41 +323,29 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                 const GraphSectionDesc &section_desc = get_graph().m_subgraphs[0].reuse_sections[k];
                 BufferDesc bufferDesc;
 
-                if (get_graph().m_shared_tensor_map.count(k) == 1)
+                bufferDesc.reset();
+                if (section_desc.size != 0)
                 {
-                    Buffer buffer;
-                    if(m_mem->get_shared_buffer(get_graph().m_shared_tensor_map[k], section_desc.size, buffer) != 0)
+                    std::string buf_name = "reuse_" + std::to_string(k);
+
+                    /* handle buffer if allocated from GM */
+                    if (m_gm->gm_is_gm_buffer(k, GM_BUF_TYPE_REUSE))
                     {
-                        ret = AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
-                        goto add_sg;
+                        buf_name = "gm_" + buf_name;
+                        ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, bufferDesc);
+                    } else {
+                        if (m_fm_idxes.count(k) == 1)
+                            ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
+                                buf_name.c_str(), m_fm_mem_region);
+                        else
+                            ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
+                                buf_name.c_str(), AIPU_MEM_REGION_DEFAULT);
                     }
-                    bufferDesc = buffer.desc;
-                } else {
-                    bufferDesc.reset();
 
-                    if (section_desc.size != 0)
+                    if (AIPU_STATUS_SUCCESS != ret)
                     {
-                        std::string buf_name = "reuse_" + std::to_string(k);
-
-                        /* handle buffer if allocated from GM */
-                        if (m_gm->gm_is_gm_buffer(k, GM_BUF_TYPE_REUSE))
-                        {
-                            buf_name = "gm_" + buf_name;
-                            ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, bufferDesc);
-                        } else {
-                            if (m_fm_idxes.count(k) == 1)
-                                ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
-                                    buf_name.c_str(), m_fm_mem_region);
-                            else
-                                ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
-                                    buf_name.c_str(), AIPU_MEM_REGION_DEFAULT);
-                        }
-
-                        if (AIPU_STATUS_SUCCESS != ret)
-                        {
-                            LOG(LOG_ERR, "alloc reuse buffer %d [fail]", k);
-                            goto add_sg;
-                        }
+                        LOG(LOG_ERR, "alloc reuse buffer %d [fail]", k);
+                        goto add_sg;
                     }
                 }
 
@@ -459,12 +447,9 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
             for (uint32_t k = 0; k < get_graph().m_subgraphs[0].reuse_sections.size(); k++)
             {
                 /**
-                 * the below three types buffer can't pass
+                 * the below two types buffer can't pass
                  * centralized memory allocation flow.
                  */
-                if (get_graph().m_shared_tensor_map.count(k) == 1)
-                    continue;
-
                 if (m_gm->gm_is_gm_buffer(k, GM_BUF_TYPE_REUSE))
                     continue;
 
@@ -532,52 +517,38 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
                 const GraphSectionDesc &section_desc = get_graph().m_subgraphs[0].reuse_sections[k];
                 BufferDesc bufferDesc;
 
-                if (get_graph().m_shared_tensor_map.count(k) == 1)
+
+                bufferDesc.reset();
+                if (section_desc.size != 0)
                 {
-                    Buffer buffer;
-                    if(m_mem->get_shared_buffer(get_graph().m_shared_tensor_map[k],
-                        section_desc.size, buffer) != 0)
-                    {
-                        ret = AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
-                        retval = -2;
-                        LOG(LOG_ERR, "get shared buffer %d [fail]", k);
-                        goto add_sg;
-                    }
-                    bufferDesc = buffer.desc;
-                } else {
-                    bufferDesc.reset();
+                    std::string buf_name = "reuse_" + std::to_string(k);
 
-                    if (section_desc.size != 0)
+                    /* handle buffer if allocated from GM */
+                    if (m_gm->gm_is_gm_buffer(k, GM_BUF_TYPE_REUSE))
                     {
-                        std::string buf_name = "reuse_" + std::to_string(k);
-
-                        /* handle buffer if allocated from GM */
-                        if (m_gm->gm_is_gm_buffer(k, GM_BUF_TYPE_REUSE))
+                        buf_name = "gm_" + buf_name;
+                        ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, bufferDesc);
+                        if (AIPU_STATUS_SUCCESS != ret)
                         {
-                            buf_name = "gm_" + buf_name;
-                            ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, bufferDesc);
+                            retval = -3;
+                            LOG(LOG_ERR, "alloc GM reuse buffer %d [fail]", k);
+                            goto add_sg;
+                        }
+                    } else {
+                        if (m_fm_idxes.count(k) == 1)
+                        {
+                            ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
+                                buf_name.c_str(), m_fm_mem_region);
                             if (AIPU_STATUS_SUCCESS != ret)
                             {
-                                retval = -3;
-                                LOG(LOG_ERR, "alloc GM reuse buffer %d [fail]", k);
+                                retval = -4;
+                                LOG(LOG_ERR, "alloc specified reuse buffer %d [fail]", k);
                                 goto add_sg;
                             }
                         } else {
-                            if (m_fm_idxes.count(k) == 1)
-                            {
-                                ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
-                                    buf_name.c_str(), m_fm_mem_region);
-                                if (AIPU_STATUS_SUCCESS != ret)
-                                {
-                                    retval = -4;
-                                    LOG(LOG_ERR, "alloc specified reuse buffer %d [fail]", k);
-                                    goto add_sg;
-                                }
-                            } else {
-                                bufferDesc.init(m_top_reuse_buf.asid_base, m_top_reuse_buf.pa + offset,
-                                    ALIGN_PAGE(section_desc.size), section_desc.size);
-                                offset += ALIGN_PAGE(section_desc.size);
-                            }
+                            bufferDesc.init(m_top_reuse_buf.asid_base, m_top_reuse_buf.pa + offset,
+                                ALIGN_PAGE(section_desc.size), section_desc.size);
+                            offset += ALIGN_PAGE(section_desc.size);
                         }
                     }
                 }
@@ -880,11 +851,13 @@ aipu_status_t aipudrv::JobV3::specify_io_buffer(aipu_shared_tensor_info_t &tenso
             goto out;
     }
 
-    if (share_case_type == AIPU_SHARE_BUF_CUSTOMED)
+    if (share_case_type == AIPU_SHARE_BUF_IN_ONE_PROCESS)
     {
         bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
+    } else if (share_case_type == AIPU_SHARE_BUF_CUSTOMED) {
+        bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
         (*iobuffer_vec)[index].set_dump_ignore_flag(true);
-    } else {
+    } else if (share_case_type == AIPU_SHARE_BUF_DMABUF) {
         ret = convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_GET_DMA_BUF_INFO, &dma_buf));
         if (ret != AIPU_STATUS_SUCCESS)
             goto out;
@@ -892,6 +865,9 @@ aipu_status_t aipudrv::JobV3::specify_io_buffer(aipu_shared_tensor_info_t &tenso
         buffer_pa = dma_buf.pa + offset;
         bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
         (*iobuffer_vec)[index].set_dmabuf_info(fd, dma_buf.bytes, offset);
+    } else {
+        ret = AIPU_STATUS_ERROR_INVALID_OP;
+        goto out;
     }
     LOG(LOG_DEBUG, "specify_io_buffer: pa=%lx, size=%lx, share_case_type=%d\n",
         buffer_pa, bufferDesc->size, share_case_type);

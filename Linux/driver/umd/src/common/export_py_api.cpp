@@ -909,32 +909,32 @@ class NPU
                 cmd = AIPU_IOCTL_DISABLE_TICK_COUNTER;
                 break;
 
-            case AIPU_IOCTL_MARK_SHARED_TENSOR:
-            case AIPU_IOCTL_SET_SHARED_TENSOR:
-                {
-                std::string str_key[] = {"type", "tensor_idx", "id", "pa", "dmabuf_fd", "offset_in_dmabuf"};
-                arg = malloc(sizeof(aipu_shared_tensor_info_t));
-                aipu_shared_tensor_info_t *p = (aipu_shared_tensor_info_t *)arg;
-                memset(p, 0, sizeof(aipu_shared_tensor_info_t));
-                if (py_arg.count(str_key[0]) == 1)
-                    p->type = (aipu_tensor_type_t)py_arg[str_key[0]];
+            // case AIPU_IOCTL_MARK_SHARED_TENSOR:
+            // case AIPU_IOCTL_SET_SHARED_TENSOR:
+            //     {
+            //     std::string str_key[] = {"type", "tensor_idx", "id", "pa", "dmabuf_fd", "offset_in_dmabuf"};
+            //     arg = malloc(sizeof(aipu_shared_tensor_info_t));
+            //     aipu_shared_tensor_info_t *p = (aipu_shared_tensor_info_t *)arg;
+            //     memset(p, 0, sizeof(aipu_shared_tensor_info_t));
+            //     if (py_arg.count(str_key[0]) == 1)
+            //         p->type = (aipu_tensor_type_t)py_arg[str_key[0]];
 
-                if (py_arg.count(str_key[1]) == 1)
-                    p->tensor_idx = (uint32_t)py_arg[str_key[1]];
+            //     if (py_arg.count(str_key[1]) == 1)
+            //         p->tensor_idx = (uint32_t)py_arg[str_key[1]];
 
-                if (py_arg.count(str_key[2]) == 1)
-                    p->id = (uint64_t)py_arg[str_key[2]];
+            //     if (py_arg.count(str_key[2]) == 1)
+            //         p->id = (uint64_t)py_arg[str_key[2]];
 
-                if (py_arg.count(str_key[3]) == 1)
-                    p->pa = (uint64_t)py_arg[str_key[3]];
+            //     if (py_arg.count(str_key[3]) == 1)
+            //         p->pa = (uint64_t)py_arg[str_key[3]];
 
-                if (py_arg.count(str_key[4]) == 1)
-                    p->dmabuf_fd = (int)py_arg[str_key[4]];
+            //     if (py_arg.count(str_key[4]) == 1)
+            //         p->dmabuf_fd = (int)py_arg[str_key[4]];
 
-                if (py_arg.count(str_key[5]) == 1)
-                    p->offset_in_dmabuf = (uint32_t)py_arg[str_key[5]];
-                }
-                break;
+            //     if (py_arg.count(str_key[5]) == 1)
+            //         p->offset_in_dmabuf = (uint32_t)py_arg[str_key[5]];
+            //     }
+            //     break;
 
             case AIPU_IOCTL_SET_PROFILE:
                 {
@@ -1022,11 +1022,11 @@ class NPU
             struct aipu_dma_buf_request *p = (struct aipu_dma_buf_request *)arg;
             retmap["data"].push_back((uint64_t)p->fd);
         }
-        else if (cmd == AIPU_IOCTL_MARK_SHARED_TENSOR)
-        {
-            aipu_shared_tensor_info_t *p = (aipu_shared_tensor_info_t *)arg;
-            retmap["data"].push_back(p->pa);
-        }
+        // else if (cmd == AIPU_IOCTL_MARK_SHARED_TENSOR)
+        // {
+        //     aipu_shared_tensor_info_t *p = (aipu_shared_tensor_info_t *)arg;
+        //     retmap["data"].push_back(p->pa);
+        // }
         else
         {
             retmap["data"] = {};
@@ -1306,8 +1306,8 @@ PYBIND11_MODULE(libaipudrv, m) {
         .def_readwrite("offset_in_dmabuf", &aipu_shared_tensor_info_t::offset_in_dmabuf);
 
     py::enum_<aipu_ioctl_cmd_t>(m, "aipu_ioctl_cmd_t")
-        .value("AIPU_IOCTL_MARK_SHARED_TENSOR", aipu_ioctl_cmd_t::AIPU_IOCTL_MARK_SHARED_TENSOR)
-        .value("AIPU_IOCTL_SET_SHARED_TENSOR", aipu_ioctl_cmd_t::AIPU_IOCTL_SET_SHARED_TENSOR)
+        // .value("AIPU_IOCTL_MARK_SHARED_TENSOR", aipu_ioctl_cmd_t::AIPU_IOCTL_MARK_SHARED_TENSOR)
+        // .value("AIPU_IOCTL_SET_SHARED_TENSOR", aipu_ioctl_cmd_t::AIPU_IOCTL_SET_SHARED_TENSOR)
         .value("AIPU_IOCTL_SET_PROFILE", aipu_ioctl_cmd_t::AIPU_IOCTL_SET_PROFILE)
         .value("AIPU_IOCTL_ALLOC_DMABUF", aipu_ioctl_cmd_t::AIPU_IOCTL_ALLOC_DMABUF)
         .value("AIPU_IOCTL_FREE_DMABUF", aipu_ioctl_cmd_t::AIPU_IOCTL_FREE_DMABUF)
