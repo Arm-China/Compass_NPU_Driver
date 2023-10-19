@@ -909,32 +909,35 @@ class NPU
                 cmd = AIPU_IOCTL_DISABLE_TICK_COUNTER;
                 break;
 
-            // case AIPU_IOCTL_MARK_SHARED_TENSOR:
-            // case AIPU_IOCTL_SET_SHARED_TENSOR:
-            //     {
-            //     std::string str_key[] = {"type", "tensor_idx", "id", "pa", "dmabuf_fd", "offset_in_dmabuf"};
-            //     arg = malloc(sizeof(aipu_shared_tensor_info_t));
-            //     aipu_shared_tensor_info_t *p = (aipu_shared_tensor_info_t *)arg;
-            //     memset(p, 0, sizeof(aipu_shared_tensor_info_t));
-            //     if (py_arg.count(str_key[0]) == 1)
-            //         p->type = (aipu_tensor_type_t)py_arg[str_key[0]];
+            case AIPU_IOCTL_FREE_SHARE_BUF:
+                {
+                std::string str_key[] = {"pa", "va", "size"};
+                arg = malloc(sizeof(aipu_share_buf_t));
+                aipu_share_buf_t *p = (aipu_share_buf_t *)arg;
+                memset(p, 0, sizeof(aipu_share_buf_t));
+                if (py_arg.count(str_key[0]) == 1)
+                    p->pa = (uint64_t)py_arg[str_key[0]];
 
-            //     if (py_arg.count(str_key[1]) == 1)
-            //         p->tensor_idx = (uint32_t)py_arg[str_key[1]];
+                if (py_arg.count(str_key[1]) == 1)
+                    p->va = (uint64_t)py_arg[str_key[1]];
 
-            //     if (py_arg.count(str_key[2]) == 1)
-            //         p->id = (uint64_t)py_arg[str_key[2]];
+                if (py_arg.count(str_key[2]) == 1)
+                    p->size = (uint32_t)py_arg[str_key[2]];
 
-            //     if (py_arg.count(str_key[3]) == 1)
-            //         p->pa = (uint64_t)py_arg[str_key[3]];
+                }
+                break;
 
-            //     if (py_arg.count(str_key[4]) == 1)
-            //         p->dmabuf_fd = (int)py_arg[str_key[4]];
+            case AIPU_IOCTL_ALLOC_SHARE_BUF:
+                {
+                std::string str_key[] = {"size"};
+                arg = malloc(sizeof(aipu_share_buf_t));
+                aipu_share_buf_t *p = (aipu_share_buf_t *)arg;
+                memset(p, 0, sizeof(aipu_share_buf_t));
+                if (py_arg.count(str_key[0]) == 1)
+                    p->size = (uint32_t)py_arg[str_key[0]];
 
-            //     if (py_arg.count(str_key[5]) == 1)
-            //         p->offset_in_dmabuf = (uint32_t)py_arg[str_key[5]];
-            //     }
-            //     break;
+                }
+                break;
 
             case AIPU_IOCTL_SET_PROFILE:
                 {
@@ -1022,11 +1025,12 @@ class NPU
             struct aipu_dma_buf_request *p = (struct aipu_dma_buf_request *)arg;
             retmap["data"].push_back((uint64_t)p->fd);
         }
-        // else if (cmd == AIPU_IOCTL_MARK_SHARED_TENSOR)
-        // {
-        //     aipu_shared_tensor_info_t *p = (aipu_shared_tensor_info_t *)arg;
-        //     retmap["data"].push_back(p->pa);
-        // }
+        else if (cmd == AIPU_IOCTL_ALLOC_SHARE_BUF)
+        {
+            aipu_share_buf_t *p = (aipu_share_buf_t *)arg;
+            retmap["data"].push_back(p->pa);
+            retmap["data"].push_back(p->va);
+        }
         else
         {
             retmap["data"] = {};
@@ -1090,7 +1094,7 @@ class NPU
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         const char *status_msg = nullptr;
-        std::string str_key[] = {"type", "tensor_idx", "id", "pa", "dmabuf_fd", "offset_in_dmabuf"};
+        std::string str_key[] = {"type", "tensor_idx", "id", "pa", "dmabuf_fd", "offset_in_dmabuf", "shared_case_type"};
         aipu_shared_tensor_info_t share_tensor;
         memset(&share_tensor, 0, sizeof(aipu_shared_tensor_info_t));
 
@@ -1111,6 +1115,9 @@ class NPU
 
         if (py_arg.count(str_key[5]) == 1)
             share_tensor.offset_in_dmabuf = (uint32_t)py_arg[str_key[5]];
+
+        if (py_arg.count(str_key[6]) == 1)
+            share_tensor.shared_case_type = (uint32_t)py_arg[str_key[6]];
 
         ret = aipu_specify_iobuf(m_ctx, job_id, &share_tensor);
         if (ret != AIPU_STATUS_SUCCESS)
@@ -1306,13 +1313,19 @@ PYBIND11_MODULE(libaipudrv, m) {
         .def_readwrite("offset_in_dmabuf", &aipu_shared_tensor_info_t::offset_in_dmabuf);
 
     py::enum_<aipu_ioctl_cmd_t>(m, "aipu_ioctl_cmd_t")
-        // .value("AIPU_IOCTL_MARK_SHARED_TENSOR", aipu_ioctl_cmd_t::AIPU_IOCTL_MARK_SHARED_TENSOR)
-        // .value("AIPU_IOCTL_SET_SHARED_TENSOR", aipu_ioctl_cmd_t::AIPU_IOCTL_SET_SHARED_TENSOR)
+        .value("AIPU_IOCTL_ALLOC_SHARE_BUF", aipu_ioctl_cmd_t::AIPU_IOCTL_ALLOC_SHARE_BUF)
+        .value("AIPU_IOCTL_FREE_SHARE_BUF", aipu_ioctl_cmd_t::AIPU_IOCTL_FREE_SHARE_BUF)
         .value("AIPU_IOCTL_SET_PROFILE", aipu_ioctl_cmd_t::AIPU_IOCTL_SET_PROFILE)
         .value("AIPU_IOCTL_ALLOC_DMABUF", aipu_ioctl_cmd_t::AIPU_IOCTL_ALLOC_DMABUF)
         .value("AIPU_IOCTL_FREE_DMABUF", aipu_ioctl_cmd_t::AIPU_IOCTL_FREE_DMABUF)
         .value("AIPU_IOCTL_WRITE_DMABUF", aipu_ioctl_cmd_t::AIPU_IOCTL_WRITE_DMABUF)
         .value("AIPU_IOCTL_READ_DMABUF", aipu_ioctl_cmd_t::AIPU_IOCTL_READ_DMABUF)
+        .export_values();
+
+    py::enum_<aipu_share_case_type_t>(m, "aipu_share_case_type_t")
+        .value("AIPU_SHARE_BUF_IN_ONE_PROCESS", aipu_share_case_type_t::AIPU_SHARE_BUF_IN_ONE_PROCESS)
+        .value("AIPU_SHARE_BUF_DMABUF", aipu_share_case_type_t::AIPU_SHARE_BUF_DMABUF)
+        .value("AIPU_SHARE_BUF_CUSTOMED", aipu_share_case_type_t::AIPU_SHARE_BUF_CUSTOMED)
         .export_values();
 
     py::enum_<aipu_ioctl_tickcounter_t>(m, "aipu_ioctl_tickcounter_t")
