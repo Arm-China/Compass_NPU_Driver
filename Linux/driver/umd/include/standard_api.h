@@ -335,6 +335,7 @@ typedef struct aipu_share_buf
     uint64_t pa;    /**< buffer pa: filled by UMD */
     uint64_t va;    /**< buffer va: filled by UMD */
     uint32_t size;  /**< buffer size: filled by USER */
+    uint32_t mem_type; /**< memory region type: AIPU_MEM_REGION_DEFAULT, AIPU_MEM_REGION_SRAM */
 } aipu_share_buf_t;
 
 /**

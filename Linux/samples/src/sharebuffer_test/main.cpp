@@ -144,6 +144,7 @@ int main(int argc, char* argv[])
         if (loop == 0)
         {
             share_buf.size = SHARE_BUF_LEN;
+            share_buf.mem_type = AIPU_MEM_REGION_DEFAULT;
             ret = aipu_ioctl(ctx, AIPU_IOCTL_ALLOC_SHARE_BUF, &share_buf);
             if (ret != AIPU_STATUS_SUCCESS)
             {

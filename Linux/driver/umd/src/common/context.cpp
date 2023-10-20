@@ -937,7 +937,7 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
             aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
             BufferDesc buf;
 
-            ret = m_dram->malloc(share_buf->size, 1, &buf, "share");
+            ret = m_dram->malloc(share_buf->size, 1, &buf, "share", share_buf->mem_type);
             if (ret != AIPU_STATUS_SUCCESS)
                 return ret;
 
