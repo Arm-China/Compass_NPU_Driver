@@ -13,6 +13,7 @@
 
 #include <map>
 #include <set>
+#include <mutex>
 #include <sstream>
 #include <pthread.h>
 #include "standard_api.h"
@@ -91,6 +92,7 @@ class SimulatorV3 : public DeviceBase
 {
 private:
     pthread_rwlock_t m_lock;
+    std::mutex m_poll_mtex;
     sim_aipu::config_t m_config;
     sim_aipu::Aipu *m_aipu = nullptr;
     uint32_t m_code = 0;
@@ -137,6 +139,17 @@ private:
      * 0: non-exist tcbchain
      */
     uint32_t m_cmdpool_bitmap = 0;
+
+    /* 1. buffer all jobs in this queue */
+    std::map< void *, JobDesc> m_buffer_queue;
+
+    /* 2. move jobs from buffer queue to this queue */
+    std::set< void * > m_commit_queue;
+
+    /* 3. move jobs from commit queue to this queue when cmdpool done ready */
+    std::set< void * > m_done_queue;
+
+    volatile bool m_cmdpool_busy = false;
 
 private:
     bool cmd_pool_created(uint32_t cmdpool_id)
@@ -348,6 +361,7 @@ public:
     bool has_target(uint32_t arch, uint32_t version, uint32_t config, uint32_t rev);
     aipu_status_t parse_config(uint32_t config, uint32_t &code);
     aipu_status_t schedule(const JobDesc& job);
+    aipu_status_t fill_commit_queue();
     aipu_ll_status_t get_status(std::vector<aipu_job_status_desc>& jobs_status,
         uint32_t max_cnt, void *jobbase = nullptr);
     aipu_ll_status_t poll_status(std::vector<aipu_job_status_desc>& jobs_status,

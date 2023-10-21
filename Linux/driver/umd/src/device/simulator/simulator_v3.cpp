@@ -206,6 +206,7 @@ unlock:
     return ret;
 }
 
+#if 0
 aipu_status_t aipudrv::SimulatorV3::schedule(const JobDesc& jobdesc)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
@@ -255,6 +256,138 @@ aipu_status_t aipudrv::SimulatorV3::schedule(const JobDesc& jobdesc)
 out:
     return ret;
 }
+#else
+aipu_status_t aipudrv::SimulatorV3::schedule(const JobDesc& jobdesc)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    JobV3 *job = static_cast<JobV3 *>(jobdesc.jobbase);
+    uint32_t part_id = job->get_part_id();
+    uint32_t cmd_pool_id = 0, value = 0;
+    uint32_t qos = job->get_qos();
+
+    if (part_id > m_partition_cnt)
+    {
+        ret = AIPU_STATUS_ERROR_INVALID_PARTITION_ID;
+        goto out;
+    }
+
+    if (m_aipu == nullptr)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
+    pthread_rwlock_wrlock(&m_lock);
+    if (job->m_bind_cmdpool_id == 0xffffffff)
+        cmd_pool_id= job->m_bind_cmdpool_id = get_cmdpool_id(part_id);
+    else
+        cmd_pool_id= job->m_bind_cmdpool_id;
+
+    m_buffer_queue[jobdesc.jobbase] = jobdesc;
+
+    if (!m_cmdpool_busy)
+    {
+        m_cmdpool_busy = true;
+        m_buffer_queue.erase(jobdesc.jobbase);
+        m_commit_queue.insert(jobdesc.jobbase);
+
+        if (!cmd_pool_created(cmd_pool_id))
+        {
+            cmd_pool_add_job(cmd_pool_id, job, jobdesc);
+            m_aipu->write_register(TSM_CMD_SCHED_ADDR_HI, get_high_32(jobdesc.tcb_head));
+            m_aipu->write_register(TSM_CMD_SCHED_ADDR_LO, get_low_32(jobdesc.tcb_head));
+
+            /* specify cmdpool number & QoS */
+            value = (cmd_pool_id << 16) | (qos << 8);
+            m_aipu->write_register(TSM_CMD_SCHED_CTRL, value | CREATE_CMD_POOL);
+
+            /* bind cmdpool to a partition */
+            m_aipu->read_register(TSM_CMD_POOL0_CONFIG + cmd_pool_id * 0x40, value);
+            value &= ~0xf;
+            value |= part_id & 0xf;
+            m_aipu->write_register(TSM_CMD_POOL0_CONFIG + cmd_pool_id * 0x40, value);
+
+            LOG(LOG_INFO, "triggering simulator...%lx", job->get_id());
+            m_aipu->write_register(TSM_CMD_SCHED_CTRL, DISPATCH_CMD_POOL);
+        } else {
+            cmd_pool_append_job(cmd_pool_id, job, jobdesc);
+            LOG(LOG_INFO, "append job...%lx\n", job->get_id());
+        }
+    }
+    pthread_rwlock_unlock(&m_lock);
+
+out:
+    return ret;
+}
+
+aipu_status_t aipudrv::SimulatorV3::fill_commit_queue()
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    uint32_t MAX = 3, max = 0, cnt = 0;
+
+    LOG(LOG_INFO, "Enter %s...", __FUNCTION__);
+
+    if (m_buffer_queue.size() >= MAX)
+        max = MAX;
+    else
+        max = m_buffer_queue.size();
+
+    for(auto iter=m_buffer_queue.begin(); iter!=m_buffer_queue.end();)
+    {
+        JobBase *jobbase = (JobBase *)iter->first;
+        JobDesc jobdesc = iter->second;
+        JobV3 *job = static_cast<JobV3 *>(jobbase);
+        uint32_t part_id = job->get_part_id();
+        uint32_t cmd_pool_id = 0, value = 0;
+        uint32_t qos = job->get_qos();
+
+        if (part_id > m_partition_cnt)
+        {
+            ret = AIPU_STATUS_ERROR_INVALID_PARTITION_ID;
+            goto out;
+        }
+
+        if (m_aipu == nullptr)
+            return AIPU_STATUS_ERROR_NULL_PTR;
+
+        if (job->m_bind_cmdpool_id == 0xffffffff)
+            cmd_pool_id= job->m_bind_cmdpool_id = get_cmdpool_id(part_id);
+        else
+            cmd_pool_id= job->m_bind_cmdpool_id;
+
+        m_buffer_queue.erase(iter++);
+        m_commit_queue.insert(jobbase);
+
+        if (!cmd_pool_created(cmd_pool_id))
+        {
+            m_cmdpool_busy = true;
+            cmd_pool_add_job(cmd_pool_id, job, jobdesc);
+            m_aipu->write_register(TSM_CMD_SCHED_ADDR_HI, get_high_32(jobdesc.tcb_head));
+            m_aipu->write_register(TSM_CMD_SCHED_ADDR_LO, get_low_32(jobdesc.tcb_head));
+
+            /* specify cmdpool number & QoS */
+            value = (cmd_pool_id << 16) | (qos << 8);
+            m_aipu->write_register(TSM_CMD_SCHED_CTRL, value | CREATE_CMD_POOL);
+
+            /* bind cmdpool to a partition */
+            m_aipu->read_register(TSM_CMD_POOL0_CONFIG + cmd_pool_id * 0x40, value);
+            value &= ~0xf;
+            value |= part_id & 0xf;
+            m_aipu->write_register(TSM_CMD_POOL0_CONFIG + cmd_pool_id * 0x40, value);
+
+            LOG(LOG_INFO, "triggering simulator...%lx", job->get_id());
+            m_aipu->write_register(TSM_CMD_SCHED_CTRL, DISPATCH_CMD_POOL);
+        } else {
+            cmd_pool_append_job(cmd_pool_id, job, jobdesc);
+            LOG(LOG_INFO, "append job...%lx\n", job->get_id());
+        }
+
+        if (++cnt == max)
+            break;
+    }
+
+out:
+    LOG(LOG_INFO, "Exit %s...", __FUNCTION__);
+    return ret;
+}
+#endif
 
 aipu_ll_status_t aipudrv::SimulatorV3::get_status(std::vector<aipu_job_status_desc>& jobs_status,
     uint32_t max_cnt, void *jobbase)
@@ -314,6 +447,7 @@ aipu_ll_status_t aipudrv::SimulatorV3::get_status(std::vector<aipu_job_status_de
     return AIPU_LL_STATUS_SUCCESS;
 }
 
+#if 0
 aipu_ll_status_t aipudrv::SimulatorV3::poll_status(std::vector<aipu_job_status_desc>& jobs_status,
     uint32_t max_cnt, int32_t time_out, bool of_this_thread, void *jobbase)
 {
@@ -357,3 +491,80 @@ aipu_ll_status_t aipudrv::SimulatorV3::poll_status(std::vector<aipu_job_status_d
     jobs_status.push_back(desc);
     return AIPU_LL_STATUS_SUCCESS;
 }
+#else
+aipu_ll_status_t aipudrv::SimulatorV3::poll_status(std::vector<aipu_job_status_desc>& jobs_status,
+    uint32_t max_cnt, int32_t time_out, bool of_this_thread, void *jobbase)
+{
+    uint32_t value = 0;
+    aipu_job_status_desc desc;
+    JobV3 *job = static_cast<JobV3 *>(jobbase);
+    uint32_t cmd_pool_id = job->m_bind_cmdpool_id;
+    uint32_t cmd_pool_status_reg = CMD_POOL0_STATUS + 0x40 * cmd_pool_id;
+
+    LOG(LOG_INFO, "Enter %s...", __FUNCTION__);
+
+    if (job->get_subgraph_cnt() == 0)
+    {
+        desc.state = AIPU_JOB_STATE_DONE;
+        jobs_status.push_back(desc);
+        return AIPU_LL_STATUS_SUCCESS;
+    }
+
+    while (1)
+    {
+        pthread_rwlock_wrlock(&m_lock);
+        if (m_done_queue.count(jobbase))
+        {
+            cmd_pool_erase_job(cmd_pool_id, job);
+            m_done_queue.erase(jobbase);
+            desc.state = AIPU_JOB_STATE_DONE;
+            jobs_status.push_back(desc);
+            pthread_rwlock_unlock(&m_lock);
+            break;
+        }
+        pthread_rwlock_unlock(&m_lock);
+
+        m_poll_mtex.lock();
+        if (m_commit_queue.count(jobbase))
+        {
+            while (m_aipu->read_register(cmd_pool_status_reg, value) > 0)
+            {
+                LOG(LOG_INFO, "wait for simulation execution, cmdpool sts=%x", value);
+                if (value & CMD_POOL0_IDLE)
+                {
+                    m_aipu->write_register(TSM_CMD_SCHED_CTRL, DESTROY_CMD_POOL);
+                    LOG(LOG_INFO, "simulation done.");
+                    break;
+                }
+                sleep(1);
+            }
+
+            pthread_rwlock_wrlock(&m_lock);
+            for(auto iter=m_commit_queue.begin(); iter!=m_commit_queue.end(); iter++)
+            {
+                m_done_queue.insert(*iter);
+            }
+            m_commit_queue.clear();
+            cmd_pool_destroy();
+            m_cmdpool_busy = false;
+            LOG(LOG_INFO, "cmd_pool_destroy...\n");
+
+            if (m_buffer_queue.size() > 0)
+            {
+                fill_commit_queue();
+
+                /**
+                 * dump a combination runtime.cfg for all jobs in one running period,
+                 * it doesn't allow to be used in multiple threads scenario.
+                 */
+                job->dumpcfg_alljob();
+            }
+            pthread_rwlock_unlock(&m_lock);
+        }
+        m_poll_mtex.unlock();
+    }
+    LOG(LOG_INFO, "Exit %s...", __FUNCTION__);
+
+    return AIPU_LL_STATUS_SUCCESS;
+}
+#endif

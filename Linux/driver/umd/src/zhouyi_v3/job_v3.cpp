@@ -1410,9 +1410,6 @@ aipu_status_t aipudrv::JobV3::schedule()
     dump_job_shared_buffers();
     dump_job_private_buffers(m_rodata, m_descriptor);
     dump_specific_buffers();
-    ret = dump_for_emulation();
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
 
     memset(&desc.kdesc, 0, sizeof(desc.kdesc));
 
@@ -1466,6 +1463,10 @@ aipu_status_t aipudrv::JobV3::schedule()
         LOG(LOG_WARN, "Graph text size is 0\n");
     else
         ret = m_dev->schedule(desc);
+
+    ret = dump_for_emulation();
+    if (ret != AIPU_STATUS_SUCCESS)
+        return ret;
 
     m_status = AIPU_JOB_STATUS_SCHED;
 
