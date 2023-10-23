@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
     vector<char*> output_data;
     vector<char*> gt;
     cmd_opt_t opt;
-    uint32_t frame_cnt = 5;
+    uint32_t frame_cnt = 1;
     int pass = -1;
 
     AIPU_CRIT() << "usage: ./aipu_profiler_test -b aipu.bin -i input0.bin -c output.bin -d ./\n";

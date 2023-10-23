@@ -32,7 +32,7 @@ int main(int argc, char* argv[])
     const char* msg = nullptr;
     uint32_t cluster_cnt, core_cnt;
     uint64_t graph_id, job_id;
-    uint32_t input_cnt, output_cnt;
+    uint32_t profile_cnt, input_cnt, output_cnt;
     vector<aipu_tensor_desc_t> input_desc;
     vector<char*> input_data;
     vector<aipu_tensor_desc_t> output_desc;
@@ -81,7 +81,6 @@ int main(int argc, char* argv[])
     }
     sim_glb_config.verbose = opt.verbose;
     sim_glb_config.en_eval = true;
-
     sim_glb_config.simulator = opt.simulator;
     sim_job_config.data_dir     = opt.dump_dir;
     if (!opt.x2_arch_desc.empty())
@@ -129,6 +128,9 @@ int main(int argc, char* argv[])
         }
         AIPU_INFO()("aipu_load_graph_helper success: %s\n", opt.bin_file_name);
 
+        /**
+         * get AIPU binary's build version
+         */
         buildver.graph_id = graph_id;
         ret = aipu_ioctl(ctx, AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION, &buildver);
         if (ret != AIPU_STATUS_SUCCESS)
@@ -138,6 +140,29 @@ int main(int argc, char* argv[])
             goto deinit_ctx;
         }
         AIPU_INFO()("AIPU BIN buildversion: %x\n", buildver.aipubin_buildversion);
+
+        /**
+         * dynamically config profiling feature, it must specify simulation target
+         * (eg: X2_1204 or X2_1204MP3) first via aipu_config_global().
+         */
+        ret = aipu_get_tensor_count(ctx, graph_id, AIPU_TENSOR_TYPE_PROFILER, &profile_cnt);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(ctx, ret, &msg);
+            AIPU_ERR()("aipu_get_tensor_count: %s\n", msg);
+            goto unload_graph;
+        }
+
+        if (profile_cnt > 0)
+        {
+            int enable = 1;
+            aipu_ioctl(ctx, AIPU_IOCTL_SET_PROFILE, &enable);
+            AIPU_INFO()("enable profiling on simulation\n");
+        } else {
+            int enable = 0;
+            aipu_ioctl(ctx, AIPU_IOCTL_SET_PROFILE, &enable);
+            AIPU_INFO()("disable profiling on simulation\n");
+        }
 
         ret = aipu_get_cluster_count(ctx, 0, &cluster_cnt);
         if (ret != AIPU_STATUS_SUCCESS)
