@@ -1549,10 +1549,8 @@ int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes, int cluster_id)
 	struct aipu_buf_request buf_req;
 	struct aipu_mem_region *gm = NULL;
 
-	if (!mm || !bytes || mm->gm_policy == AIPU_GM_POLICY_NONE) {
-		dev_err(mm->dev, "invalid GM initialization");
+	if (!mm || !bytes || mm->gm_policy == AIPU_GM_POLICY_NONE)
 		return -EINVAL;
-	}
 
 	buf_req.align_in_page = 1;
 	buf_req.data_type = AIPU_MM_DATA_TYPE_NONE;

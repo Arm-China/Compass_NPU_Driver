@@ -490,7 +490,7 @@ int zhouyi_v3_soft_reset(struct aipu_partition *partition, bool init_regs)
 
 u64 get_gm_size(u32 val)
 {
-	u64 _val = _GET_GM_SIZE(val);
+	u8 _val = _GET_GM_SIZE(val);
 
 	return _val ? (SZ_1M << (_val - 1)) : 512 * SZ_1K;
 }

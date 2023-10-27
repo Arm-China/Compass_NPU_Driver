@@ -210,7 +210,7 @@ struct device_attribute *aipu_common_create_attr(struct device *dev,
 	if (!dev || !attr || !name)
 		return ERR_PTR(-EINVAL);
 
-	*attr = kzalloc(sizeof(*attr), GFP_KERNEL);
+	*attr = kzalloc(sizeof(**attr), GFP_KERNEL);
 	if (!*attr)
 		return ERR_PTR(-ENOMEM);
 

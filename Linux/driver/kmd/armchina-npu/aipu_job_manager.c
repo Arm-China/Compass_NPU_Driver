@@ -102,9 +102,7 @@ static int init_aipu_job(struct aipu_job_manager *manager, struct aipu_job *job,
 	job->prev_tail_tcb = 0;
 	job->prof_filp = NULL;
 #if AIPU_CONFIG_ENABLE_INTR_PROFILING
-	job->prof_head = kmem_cache_alloc(manager->prof_cache, GFP_KERNEL);
-	job->prof_head->data = NULL;
-	job->prof_head->size = 0;
+	job->prof_head = kmem_cache_zalloc(manager->prof_cache, GFP_KERNEL);
 	INIT_LIST_HEAD(&job->prof_head->node);
 #else
 	job->prof_head = NULL;
@@ -157,7 +155,7 @@ static struct aipu_job *create_aipu_job(struct aipu_job_manager *manager,
 	int ret = 0;
 	struct aipu_job *new_aipu_job = NULL;
 
-	new_aipu_job = kmem_cache_alloc(manager->job_cache, GFP_KERNEL);
+	new_aipu_job = kmem_cache_zalloc(manager->job_cache, GFP_KERNEL);
 	if (unlikely(!new_aipu_job))
 		return ERR_PTR(-ENOMEM);
 
@@ -868,7 +866,7 @@ static void aipu_job_manager_real_time_get_pdata(struct aipu_job_manager *manage
 	spin_unlock(&manager->lock);
 
 	if (curr && f) {
-		prof = kmem_cache_alloc(manager->prof_cache, GFP_ATOMIC);
+		prof = kmem_cache_zalloc(manager->prof_cache, GFP_ATOMIC);
 		if (!prof) {
 			dev_err(manager->dev, "allocate struct profiler failed\n");
 			return;
