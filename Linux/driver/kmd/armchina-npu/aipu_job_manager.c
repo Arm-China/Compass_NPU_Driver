@@ -101,10 +101,14 @@ static int init_aipu_job(struct aipu_job_manager *manager, struct aipu_job *job,
 	job->wake_up = 0;
 	job->prev_tail_tcb = 0;
 	job->prof_filp = NULL;
+#if AIPU_CONFIG_ENABLE_INTR_PROFILING
 	job->prof_head = kmem_cache_alloc(manager->prof_cache, GFP_KERNEL);
 	job->prof_head->data = NULL;
 	job->prof_head->size = 0;
 	INIT_LIST_HEAD(&job->prof_head->node);
+#else
+	job->prof_head = NULL;
+#endif
 
 	return 0;
 }
@@ -112,27 +116,30 @@ static int init_aipu_job(struct aipu_job_manager *manager, struct aipu_job *job,
 static void destroy_aipu_job(struct aipu_job_manager *manager, struct aipu_job *job)
 {
 	struct aipu_thread_wait_queue *job_aipu_wait_queue = NULL;
-	struct profiler *curr = NULL;
-	struct profiler *next = NULL;
 
 	WARN_ON(!job);
 
+#if AIPU_CONFIG_ENABLE_INTR_PROFILING
 	if (job->prof_filp) {
 		fput(job->prof_filp);
 		job->prof_filp = NULL;
 	}
 
-	list_for_each_entry_safe(curr, next, &job->prof_head->node, node) {
-		kfree(curr->data);
-		curr->data = NULL;
-		curr->size = 0;
-		kmem_cache_free(manager->prof_cache, curr);
-	}
-
 	if (job->prof_head) {
+		struct profiler *curr = NULL;
+		struct profiler *next = NULL;
+
+		list_for_each_entry_safe(curr, next, &job->prof_head->node, node) {
+			kfree(curr->data);
+			curr->data = NULL;
+			curr->size = 0;
+			kmem_cache_free(manager->prof_cache, curr);
+		}
+
 		kmem_cache_free(manager->prof_cache, job->prof_head);
 		job->prof_head = NULL;
 	}
+#endif
 
 	if (likely(job->thread_queue)) {
 		job_aipu_wait_queue =
@@ -161,6 +168,7 @@ static struct aipu_job *create_aipu_job(struct aipu_job_manager *manager,
 		return ERR_PTR(ret);
 	}
 
+#if AIPU_CONFIG_ENABLE_INTR_PROFILING
 	if (desc && desc->profile_fd) {
 		new_aipu_job->prof_filp = fget(desc->profile_fd);
 		if (IS_ERR(new_aipu_job->prof_filp)) {
@@ -169,6 +177,7 @@ static struct aipu_job *create_aipu_job(struct aipu_job_manager *manager,
 			new_aipu_job->prof_filp = NULL;
 		}
 	}
+#endif
 
 	if (queue)
 		queue->ref_cnt++;
@@ -357,8 +366,10 @@ static void check_enable_tec_interrupts(struct aipu_job_manager *manager, struct
 	if (!manager || !job || manager->tec_intr_en)
 		return;
 
+#if AIPU_CONFIG_ENABLE_INTR_PROFILING
 	if (job->desc.profile_fd > 0)
 		goto enable_tec_intr;
+#endif
 
 	tcb = aipu_mm_get_tcb(manager->mm, job->desc.last_task_tcb_pa);
 	if (!tcb) {
@@ -369,7 +380,9 @@ static void check_enable_tec_interrupts(struct aipu_job_manager *manager, struct
 	if (!tcb->pprint)
 		return;
 
+#if AIPU_CONFIG_ENABLE_INTR_PROFILING
 enable_tec_intr:
+#endif
 	manager->partitions[0].ops->enable_interrupt(&manager->partitions[0], true);
 	manager->tec_intr_en = true;
 	dev_info(manager->dev, "TEC interrupts are enabled\n");
@@ -645,8 +658,12 @@ int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_m
 	manager->idle_bmap = NULL;
 	manager->job_cache =
 		kmem_cache_create("aipu_job_cache", sizeof(struct aipu_job), 0, SLAB_PANIC, NULL);
+#if AIPU_CONFIG_ENABLE_INTR_PROFILING
 	manager->prof_cache =
 		kmem_cache_create("aipu_prof_cache", sizeof(struct profiler), 0, SLAB_PANIC, NULL);
+#else
+	manager->prof_cache = NULL;
+#endif
 	manager->scheduled_head = create_aipu_job(manager, NULL, NULL, NULL);
 	INIT_LIST_HEAD(&manager->scheduled_head->node);
 	spin_lock_init(&manager->lock);
@@ -710,8 +727,10 @@ void deinit_aipu_job_manager(struct aipu_job_manager *manager)
 	mutex_destroy(&manager->wq_lock);
 	kmem_cache_destroy(manager->job_cache);
 	manager->job_cache = NULL;
+#if AIPU_CONFIG_ENABLE_INTR_PROFILING
 	kmem_cache_destroy(manager->prof_cache);
 	manager->prof_cache = NULL;
+#endif
 	manager->is_init = 0;
 	if (manager->exit_tcb_desc.bytes)
 		aipu_mm_unlink_tcb(manager->mm, manager->exit_tcb_desc.pa, true);
@@ -801,6 +820,7 @@ static void aipu_job_manager_real_time_printk(struct aipu_job_manager *manager,
 	}
 }
 
+#if AIPU_CONFIG_ENABLE_INTR_PROFILING
 static void aipu_job_manager_real_time_get_pdata(struct aipu_job_manager *manager,
 						 struct job_irq_info *info)
 {
@@ -909,6 +929,7 @@ static void aipu_job_manager_dump_pdata(struct aipu_job_manager *manager,
 	ret = kernel_write(job->prof_filp, data_va, data_size, &job->prof_filp->f_pos);
 	dev_info(manager->dev, "(old) write profiler data size: %u\n", ret);
 }
+#endif
 
 static bool is_v3_job_done_or_excep(struct aipu_job *job, struct job_irq_info *info,
 				    u64 asid_base, int flag)
@@ -966,10 +987,14 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 	if (IS_SIGNAL_IRQ(flag)) {
 		if (IS_PRINTF_SIGNAL(info->sig_flag)) {
 			aipu_job_manager_real_time_printk(manager, partition, info);
-		} else if (IS_PROFILER_SIGNAL(info->sig_flag)) {
+		}
+
+#if AIPU_CONFIG_ENABLE_INTR_PROFILING
+		if (IS_PROFILER_SIGNAL(info->sig_flag)) {
 			pr_info("profiler signal intr...\n");
 			aipu_job_manager_real_time_get_pdata(manager, info);
 		}
+#endif
 		return;
 	}
 
@@ -1330,12 +1355,16 @@ int aipu_job_manager_get_job_status(struct aipu_job_manager *manager,
 			poll_iter++;
 		}
 	}
+
+#if AIPU_CONFIG_ENABLE_INTR_PROFILING
 	spin_unlock_irqrestore(&manager->lock, flags);
 
 	for (poll_iter = 0; poll_iter < job_status->poll_cnt; poll_iter++)
 		aipu_job_manager_dump_pdata(manager, done_jobs[poll_iter]);
 
 	spin_lock_irqsave(&manager->lock, flags);
+#endif
+
 	for (poll_iter = 0; poll_iter < job_status->poll_cnt; poll_iter++)
 		remove_aipu_job(manager, done_jobs[poll_iter]);
 	spin_unlock_irqrestore(&manager->lock, flags);

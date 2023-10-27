@@ -959,13 +959,25 @@ To disbale/enable AIPU core #0, execute:
 
 This feature only works for V1/V2.
 
-7. User Space Driver (UMD)
+7. Configurations in KMD
+========================
+KMD supports a set of configuration options in armchina-aipu/config.h.
+
+7.1. Profiling in interrupts
+----------------------------
+Zhouyi V3 KMD supports to dump the profiling data in signal interrupt handlers.
+To enable this feature, the driver user should enable the option by setting the option as followed
+in the config.h file before the compilation.
+
+    #define AIPU_CONFIG_ENABLE_INTR_PROFILING   1
+
+8. User Space Driver (UMD)
 ==========================
 To ensure that your tasks are scheduled and executed correctly, you shall use the exact UMD and KMD
 in the same package we released to you. For specification of UMD, please refer to the Zhouyi Software
 Programming Guide (Chapter of Driver).
 
-8. Coding Style
+9. Coding Style
 ===============
 To check the coding style of Zhouyi NPU KMD, you can execute:
 
@@ -973,9 +985,9 @@ To check the coding style of Zhouyi NPU KMD, you can execute:
 
 This script uses Linux kernel checkpatch scripts.
 
-9. Compatibility
-================
-Zhouyi NPU KMD supports Linux kernel version > 5.0. Specifically, we tested the code on
+10. Compatibility
+=================
+Zhouyi NPU KMD supports multiple Linux kernel versions. Specifically, we have verfied our code on
 the following Linux kernel versions:
 
     5.4.66
@@ -992,6 +1004,6 @@ the following Linux kernel versions:
 If you find that KMD has compatibility issues with any kernel version (> 5.0), please contact us
 and report the issues. Thanks.
 
-10. License
+11. License
 ===========
 GNU GPL v2
