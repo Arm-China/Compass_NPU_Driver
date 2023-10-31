@@ -277,6 +277,7 @@ if [ "$BUILD_TEST"x = "sample"x ]; then
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dmabuf_mmap_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dmabuf_vmap_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dmabuf_dma_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dmabuf_producer_consumer_test
     fi
     cd -
 fi

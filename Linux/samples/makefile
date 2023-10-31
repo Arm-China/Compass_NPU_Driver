@@ -56,21 +56,59 @@ else
     LDFLAGS += -lpthread
 endif
 
-SRCS += $(wildcard $(SRC_ROOT)/$(BUILD_TEST_CASE)/*.cpp) \
-        $(wildcard $(SRC_ROOT)/common/cmd_line_parsing.cpp) \
+SRCS += $(wildcard $(SRC_ROOT)/common/cmd_line_parsing.cpp) \
         $(wildcard $(SRC_ROOT)/common/helper.cpp)
+
+ifeq ($(BUILD_TEST_CASE), dmabuf_producer_consumer_test)
+SRC_DIRS := $(SRC_ROOT)/common $(SRC_ROOT)/$(BUILD_TEST_CASE)
+SRC_DIRS := $(patsubst $(SRC_ROOT)/%, %, $(SRC_DIRS))
+
+SRCS += $(SRC_ROOT)/$(BUILD_TEST_CASE)/common.cpp
+SRCS_MAIN = $(SRCS)
+SRCS_MAIN += $(SRC_ROOT)/$(BUILD_TEST_CASE)/dmabuf_producer_consumer.cpp
+OBJS_MAIN = $(patsubst $(SRC_ROOT)/%.cpp, $(COMPASS_DRV_BTENVAR_TEST_BUILD_DIR)/%.o, $(SRCS_MAIN))
+TARGET_MAIN = $(BUILD_AIPU_DRV_ODIR)/aipu_dmabuf_producer_consumer_test
+
+SRCS_PRODUCER = $(SRCS)
+SRCS_PRODUCER += $(SRC_ROOT)/$(BUILD_TEST_CASE)/producer.cpp
+OBJS_PRODUCER = $(patsubst $(SRC_ROOT)/%.cpp, $(COMPASS_DRV_BTENVAR_TEST_BUILD_DIR)/%.o, $(SRCS_PRODUCER))
+TARGET_PRODUCER = $(BUILD_AIPU_DRV_ODIR)/aipu_dmabuf_producer
+
+SRCS_CONSUMER = $(SRCS)
+SRCS_CONSUMER += $(SRC_ROOT)/$(BUILD_TEST_CASE)/consumer.cpp
+OBJS_CONSUMER = $(patsubst $(SRC_ROOT)/%.cpp, $(COMPASS_DRV_BTENVAR_TEST_BUILD_DIR)/%.o, $(SRCS_CONSUMER))
+TARGET_CONSUMER = $(BUILD_AIPU_DRV_ODIR)/aipu_dmabuf_consumer
+
+all: build-repo $(TARGET_PRODUCER) $(TARGET_CONSUMER) $(TARGET_MAIN)
+else
+SRCS += $(wildcard $(SRC_ROOT)/$(BUILD_TEST_CASE)/*.cpp)
 SRC_DIRS := $(SRC_ROOT)/common $(SRC_ROOT)/$(BUILD_TEST_CASE)
 SRC_DIRS := $(patsubst $(SRC_ROOT)/%, %, $(SRC_DIRS))
 OBJS = $(patsubst $(SRC_ROOT)/%.cpp, $(COMPASS_DRV_BTENVAR_TEST_BUILD_DIR)/%.o, $(SRCS))
 
 all: build-repo $(TARGET)
+endif
 
 $(COMPASS_DRV_BTENVAR_TEST_BUILD_DIR)/%.o: $(SRC_ROOT)/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+ifeq ($(BUILD_TEST_CASE), dmabuf_producer_consumer_test)
+$(TARGET_PRODUCER): $(OBJS_PRODUCER)
+	$(CXX) $^ $(LDFLAGS) -o $@
+	$(RM) $(OBJS_PRODUCER)
+
+$(TARGET_CONSUMER): $(OBJS_CONSUMER)
+	$(CXX) $^ $(LDFLAGS) -o $@
+	$(RM) $(OBJS_CONSUMER)
+
+$(TARGET_MAIN): $(OBJS_MAIN)
+	$(CXX) $^ $(LDFLAGS) -o $@
+	$(RM) $(OBJS_MAIN)
+else
 $(TARGET): $(OBJS)
 	$(CXX) $^ $(LDFLAGS) -o $@
 	$(RM) $(OBJS)
+endif
 
 build-repo:
 	@$(call make-repo)
