@@ -94,7 +94,7 @@ aipu_status_t aipudrv::GraphV3::extract_gm_info(int sg_id)
     }
 
     gm_buffer_cnt = gmconfig->GM_control & 0xf;
-    if (gm_buffer_cnt < 1 && gm_buffer_cnt > 2)
+    if (gm_buffer_cnt < 1 || gm_buffer_cnt > 2)
     {
         LOG(LOG_WARN, "no need config GM\n");
         ret = AIPU_STATUS_ERROR_INVALID_GM;

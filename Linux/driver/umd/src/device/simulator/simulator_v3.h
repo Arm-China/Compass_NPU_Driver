@@ -437,9 +437,9 @@ private:
 };
 
 inline sim_aipu::config_t sim_create_config(int code, uint32_t log_level = 0,
-    std::string log_path = "./sim.log", bool verbose = false,
+    const std::string &log_path = "./sim.log", bool verbose = false,
     bool enable_avx = false, bool en_eval = 0, uint32_t gm_size = 4 * MB_SIZE,
-    std::string plugin_filename = "", std::string json_filename = "")
+    const std::string &plugin_filename = "", const std::string &json_filename = "")
 {
     sim_aipu::config_t config = {0};
 

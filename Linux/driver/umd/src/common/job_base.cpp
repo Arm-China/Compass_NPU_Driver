@@ -22,6 +22,7 @@ aipudrv::JobBase::JobBase(MainContext* ctx, GraphBase& graph, DeviceBase* dev):
     m_mem = m_dev->get_mem();
     m_rodata.reset();
     m_descriptor.reset();
+    m_pprint.reset();
     #if DUMP_RO_ENTRY
     char log[1024] = {0};
     m_ro_entry_dump.open((m_dump_dir + "/" + m_ro_entry_name).c_str(), std::ofstream::out | std::ofstream::trunc);

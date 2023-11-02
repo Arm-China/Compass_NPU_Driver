@@ -38,7 +38,7 @@ private:
 private:
     static std::map<uint32_t, std::string> umd_status_string;
     aipu_status_t m_last_err = AIPU_STATUS_SUCCESS;
-    char          m_last_err_msg[2048];
+    char m_last_err_msg[2048] = {0};
 
 private:
     aipu_global_config_simulation_t m_sim_cfg;

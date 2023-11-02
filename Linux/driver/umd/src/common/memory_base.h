@@ -156,7 +156,7 @@ struct MemTracking
         log = std::string(str);
     }
     void init(DEV_PA_64 _pa, uint64_t _size, MemOperation _op,
-        std::string str)
+        const std::string &str)
     {
         pa = _pa;
         size = _size;

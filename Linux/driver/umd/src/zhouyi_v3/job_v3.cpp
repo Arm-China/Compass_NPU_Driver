@@ -517,7 +517,6 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
                 const GraphSectionDesc &section_desc = get_graph().m_subgraphs[0].reuse_sections[k];
                 BufferDesc bufferDesc;
 
-
                 bufferDesc.reset();
                 if (section_desc.size != 0)
                 {
@@ -1731,7 +1730,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
 
         dump_pa   = m_inputs[i].pa;
         dump_size = m_inputs[i].size;
-        snprintf(dump_name, 128, "%s/%s.input%d", m_dump_dir.c_str(), m_dump_prefix.c_str(), i);
+        snprintf(dump_name, 128, "%s/%s.input%u", m_dump_dir.c_str(), m_dump_prefix.c_str(), i);
 
         if (m_inputs[i].dmabuf_fd < 0)
             m_mem->dump_file(dump_pa, dump_name, dump_size);
@@ -1771,7 +1770,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
         {
             ofs << "FILE" << std::dec << i
                 << "=" << m_dump_output_prefix << ".output" << i << "\n";
-            snprintf(dump_name, 128, "%s/%s.output%d", m_dump_dir.c_str(), m_dump_prefix.c_str(), i);
+            snprintf(dump_name, 128, "%s/%s.output%u", m_dump_dir.c_str(), m_dump_prefix.c_str(), i);
             m_dumpcfg_output.push_back({dump_name, dump_pa, dump_size});
         } else {
             if (0 == i)
