@@ -170,8 +170,8 @@ aipudrv::MemoryBase::get_allocated_buffer(std::map<DEV_PA_64, Buffer> *buffer_po
 
     for (iter = buffer_pool->begin(); iter != buffer_pool->end(); iter++)
     {
-        if ((addr >= iter->second.desc.pa) &&
-            (addr < (iter->second.desc.pa + iter->second.desc.size)))
+        if ((addr >= iter->second.desc->pa) &&
+            (addr < (iter->second.desc->pa + iter->second.desc->size)))
             return iter;
     }
     return buffer_pool->end();
@@ -230,7 +230,7 @@ int aipudrv::MemoryBase::pa_to_va(uint64_t addr, uint64_t size, char** va) const
     }
 
     /* found the buffer in m_allocated/m_reserved */
-    if ((addr + size) > (iter->second.desc.pa + iter->second.desc.size))
+    if ((addr + size) > (iter->second.desc->pa + iter->second.desc->size))
     {
         ret = -2;
         LOG(LOG_ERR, "invalid pa addr 0x%lx/size 0x%lx is used: out of range\n", addr, size);
@@ -238,7 +238,7 @@ int aipudrv::MemoryBase::pa_to_va(uint64_t addr, uint64_t size, char** va) const
         goto unlock;
     }
 
-    *va = iter->second.va + addr - iter->second.desc.pa;
+    *va = iter->second.va + addr - iter->second.desc->pa;
 
 unlock:
     pthread_rwlock_unlock(&m_lock);

@@ -34,16 +34,16 @@ struct TCB
 struct Task
 {
     TCB        tcb;
-    BufferDesc stack;
-    BufferDesc private_data;
+    BufferDesc *stack;
+    BufferDesc *private_data;
 };
 
 struct SubGraphTask
 {
     uint32_t id;
-    std::vector<BufferDesc> reuses;
-    std::vector<BufferDesc> reuse_priv_buffers;
-    std::vector<BufferDesc> weights;
+    std::vector<BufferDesc*> reuses;
+    std::vector<BufferDesc*> reuse_priv_buffers;
+    std::vector<BufferDesc*> weights;
     std::vector<Task>       tasks;
 
     /**
@@ -155,14 +155,14 @@ public:
         return get_graph().get_subgraph_cnt();
     }
 
-    const std::vector<BufferDesc> & get_reuse() override
+    const std::vector<BufferDesc *> & get_reuse() override
     {
-        return static_cast< std::vector<BufferDesc>& >(m_sg_job[0].reuses);
+        return static_cast< std::vector<BufferDesc *>& >(m_sg_job[0].reuses);
     }
 
 private:
     aipu_status_t setup_rodata_sg(uint32_t sg_id, const std::vector<struct GraphParamMapLoadDesc>& param_map,
-        std::vector<BufferDesc>& reuse_buf, std::vector<BufferDesc>& static_buf,
+        std::vector<BufferDesc*>& reuse_buf, std::vector<BufferDesc*>& static_buf,
         std::set<uint32_t> *dma_buf_idx = nullptr);
     aipu_status_t setup_placehold_tcb_task(uint32_t sg_id, uint32_t grid_id, uint32_t core_id, uint32_t task_id,
         tcb_t *prev);

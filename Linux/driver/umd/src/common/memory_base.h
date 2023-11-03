@@ -77,12 +77,12 @@ struct Buffer
 {
     std::atomic_int refcnt{0};
     char* va;
-    BufferDesc desc;
+    BufferDesc *desc;
 
     Buffer()
     {
         va = nullptr;
-        desc.reset();
+        desc = nullptr;
         refcnt = 0;
     }
 
@@ -95,7 +95,7 @@ struct Buffer
         return *this;
     }
 
-    void init(char* _va, BufferDesc _desc)
+    void init(char* _va, BufferDesc *_desc)
     {
         va = _va;
         desc = _desc;
@@ -105,7 +105,7 @@ struct Buffer
     void reset()
     {
         va = nullptr;
-        desc.reset();
+        desc = nullptr;
         refcnt = 0;
     }
 
@@ -117,7 +117,7 @@ struct Buffer
     void ref_put()
     {
         refcnt--;
-        LOG(LOG_INFO, "Buffer.refcnt=%d, buffer_pa=%lx", refcnt.load(), this->desc.pa);
+        LOG(LOG_INFO, "Buffer.refcnt=%d, buffer_pa=%lx", refcnt.load(), this->desc->pa);
     }
 
     int get_Buffer_refcnt()

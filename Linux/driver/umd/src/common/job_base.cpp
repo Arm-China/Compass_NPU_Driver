@@ -212,8 +212,8 @@ aipu_status_t aipudrv::JobBase::get_tensor(aipu_tensor_type_t type, uint32_t ten
 
 aipu_status_t aipudrv::JobBase::setup_rodata(
     const std::vector<struct GraphParamMapLoadDesc>& param_map,
-    const std::vector<BufferDesc>& reuse_buf,
-    const std::vector<BufferDesc>& static_buf,
+    const std::vector<BufferDesc*>& reuse_buf,
+    const std::vector<BufferDesc*>& static_buf,
     BufferDesc rodata, BufferDesc dcr,
     std::set<uint32_t> *dma_buf_idx)
 {
@@ -259,21 +259,21 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
         {
             LOG(LOG_INFO, "%8u: re: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
                 rodata.req_size, dcr.req_size, ref_iter, sec_offset, entry_offset,
-                get_low_32(reuse_buf[ref_iter].align_asid_pa) + sec_offset);
+                get_low_32(reuse_buf[ref_iter]->align_asid_pa) + sec_offset);
             #if DUMP_RO_ENTRY
             snprintf(log, 1024, "%8u: re: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
                 rodata.req_size, dcr.req_size, ref_iter, sec_offset, entry_offset,
-                get_low_32(reuse_buf[ref_iter].align_asid_pa) + sec_offset);
+                get_low_32(reuse_buf[ref_iter]->align_asid_pa) + sec_offset);
             m_ro_entry_dump << log << std::endl;
             #endif
         } else {
             LOG(LOG_INFO, "%8u: wt: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
                 rodata.req_size, dcr.req_size, ref_iter, sec_offset, entry_offset,
-                get_low_32(static_buf[ref_iter].align_asid_pa) + sec_offset);
+                get_low_32(static_buf[ref_iter]->align_asid_pa) + sec_offset);
             #if DUMP_RO_ENTRY
             snprintf(log, 1024, "%8u: wt: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
                 rodata.req_size, dcr.req_size, ref_iter, sec_offset, entry_offset,
-                get_low_32(static_buf[ref_iter].align_asid_pa) + sec_offset);
+                get_low_32(static_buf[ref_iter]->align_asid_pa) + sec_offset);
             m_ro_entry_dump << log << std::endl;
             #endif
         }
@@ -285,7 +285,7 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
                 ret = AIPU_STATUS_ERROR_INVALID_SIZE;
                 goto finish;
             }
-            sub_sec_pa_32 = get_low_32(reuse_buf[ref_iter].align_asid_pa) + sec_offset;
+            sub_sec_pa_32 = get_low_32(reuse_buf[ref_iter]->align_asid_pa) + sec_offset;
         }
         else if (param_map[i].load_type == PARAM_MAP_LOAD_TYPE_STATIC)
         {
@@ -294,7 +294,7 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
                 ret = AIPU_STATUS_ERROR_INVALID_SIZE;
                 goto finish;
             }
-            sub_sec_pa_32 = get_low_32(static_buf[ref_iter].align_asid_pa + sec_offset);
+            sub_sec_pa_32 = get_low_32(static_buf[ref_iter]->align_asid_pa + sec_offset);
         }
 
         memcpy(&init_val, entry, 4);
@@ -350,15 +350,15 @@ void aipudrv::JobBase::setup_remap(BufferDesc& rodata, BufferDesc& descriptor)
 
 void aipudrv::JobBase::create_io_buffers(std::vector<struct JobIOBuffer>& bufs,
         const std::vector<GraphIOTensorDesc>& desc,
-        const std::vector<BufferDesc>& reuses)
+        const std::vector<BufferDesc*>& reuses)
 {
     uint32_t cnt = desc.size();
 
     for (uint32_t i = 0; i < cnt; i++)
     {
         uint32_t sec_iter = desc[i].ref_section_iter;
-        DEV_PA_64 pa = reuses[sec_iter].pa + desc[i].offset_in_section;
-        DEV_PA_64 align_asid_pa = reuses[sec_iter].align_asid_pa + desc[i].offset_in_section;
+        DEV_PA_64 pa = reuses[sec_iter]->pa + desc[i].offset_in_section;
+        DEV_PA_64 align_asid_pa = reuses[sec_iter]->align_asid_pa + desc[i].offset_in_section;
         JobIOBuffer iobuf;
 
         iobuf.init(desc[i].id, desc[i].size, AIPU_JOB_BUFFER_INTERNAL, pa, align_asid_pa,
@@ -368,7 +368,7 @@ void aipudrv::JobBase::create_io_buffers(std::vector<struct JobIOBuffer>& bufs,
 }
 
 void aipudrv::JobBase::create_io_buffers(const struct GraphIOTensors& io,
-    const std::vector<BufferDesc>& reuses)
+    const std::vector<BufferDesc*>& reuses)
 {
     create_io_buffers(m_inputs, io.inputs, reuses);
     create_io_buffers(m_outputs, io.outputs, reuses);
@@ -381,7 +381,7 @@ void aipudrv::JobBase::create_io_buffers(const struct GraphIOTensors& io,
 }
 
 void aipudrv::JobBase::update_io_buffers(const struct GraphIOTensors& io,
-    const std::vector<BufferDesc>& reuses)
+    const std::vector<BufferDesc*>& reuses)
 {
     m_inputs.clear();
     m_outputs.clear();
@@ -645,12 +645,12 @@ void aipudrv::JobBase::dump_job_private_buffers_after_run(BufferDesc& rodata, Bu
     {
         if ((m_dev->get_dev_type() == DEV_TYPE_AIPU) || (m_dev->get_dev_type() == DEV_TYPE_SIMULATOR_V3))
         {
-            std::vector<BufferDesc> m_job_reuses = get_reuse();
+            std::vector<BufferDesc*> m_job_reuses = get_reuse();
             for (uint32_t i = 0; i < m_job_reuses.size(); i++)
             {
                 char name[32];
-                dump_pa   = m_job_reuses[i].pa;
-                dump_size = m_job_reuses[i].size;
+                dump_pa   = m_job_reuses[i]->pa;
+                dump_size = m_job_reuses[i]->size;
                 snprintf(name, 32, "AfRun_Reuse%u", i);
                 if (dump_size != 0)
                     dump_buffer(dump_pa, nullptr, dump_size, name);

@@ -114,7 +114,7 @@ protected:
     BufferDesc m_zerocpy_const;
 
     /* weight in split buffer case */
-    std::vector<BufferDesc> m_weights;
+    std::vector<BufferDesc*> m_weights;
 
     bool m_do_vcheck = true;
 

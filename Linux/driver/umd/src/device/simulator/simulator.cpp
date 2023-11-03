@@ -90,7 +90,7 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
             char inter_fix[32] = {0};
             snprintf(inter_fix, 32, "Weight%u", i);
             ret = create_simulation_input_file(fname, inter_fix, job.kdesc.job_id,
-                job.weights[i].pa, job.weights[i].size, job);
+                job.weights[i]->pa, job.weights[i]->size, job);
             if (ret != AIPU_STATUS_SUCCESS)
                 goto finish;
 
@@ -145,7 +145,7 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
         char inter_fix[32] = {0};
         snprintf(inter_fix, 32, "Reuse%u", i);
         ret = create_simulation_input_file(fname, inter_fix, job.kdesc.job_id,
-            job.reuses[i].pa, job.reuses[i].size, job);
+            job.reuses[i]->pa, job.reuses[i]->size, job);
         if (ret != AIPU_STATUS_SUCCESS)
             goto finish;
 
@@ -153,7 +153,7 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
 
         snprintf(inter_fix, 32, "AfRun_Reuse%u", i);
         ret = create_simulation_input_file(fname, inter_fix, job.kdesc.job_id,
-            job.reuses[i].pa, job.reuses[i].size, job);
+            job.reuses[i]->pa, job.reuses[i]->size, job);
         if (ret != AIPU_STATUS_SUCCESS)
             goto finish;
 
@@ -280,7 +280,7 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
         for(uint32_t i = 0; i < job.weights.size(); i++)
         {
             ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx + i <<  "=" << ctx.weights[i] << "\n";
-            ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx + i <<  "=0x" << std::hex << job.weights[i].pa << "\n";
+            ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx + i <<  "=0x" << std::hex << job.weights[i]->pa << "\n";
         }
         input_file_idx += job.weights.size();
     }
@@ -295,7 +295,7 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
     for(uint32_t i = 0; i < job.reuses.size(); i++)
     {
         ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx + i <<  "=" << ctx.reuses[i] << "\n";
-        ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx + i <<  "=0x" << std::hex << job.reuses[i].pa << "\n";
+        ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx + i <<  "=0x" << std::hex << job.reuses[i]->pa << "\n";
     }
 
     ofs << "\n";
@@ -336,8 +336,8 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
         for (uint32_t i = 0; i < reuse_outputs.size(); i++)
         {
             ofs << "OUTPUT_DATA_FILE" << std::dec << output_idx << "=" << reuse_outputs[i] << "\n";
-            ofs << "OUTPUT_DATA_BASE" << std::dec << output_idx << "=0x" << std::hex << job.reuses[i].pa << "\n";
-            ofs << "OUTPUT_DATA_SIZE" << std::dec << output_idx << "=0x" << std::hex << job.reuses[i].size << "\n";
+            ofs << "OUTPUT_DATA_BASE" << std::dec << output_idx << "=0x" << std::hex << job.reuses[i]->pa << "\n";
+            ofs << "OUTPUT_DATA_SIZE" << std::dec << output_idx << "=0x" << std::hex << job.reuses[i]->size << "\n";
             output_idx++;
         }
     }

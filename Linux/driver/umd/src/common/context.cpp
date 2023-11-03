@@ -935,15 +935,15 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
             buildver->aipubin_buildversion = p_gobj->get_buildversion();
         } else if (cmd == AIPU_IOCTL_ALLOC_SHARE_BUF) {
             aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
-            BufferDesc buf;
+            BufferDesc *buf = new BufferDesc;
 
-            ret = m_dram->malloc(share_buf->size, 1, &buf, "share", share_buf->mem_type);
+            ret = m_dram->malloc(share_buf->size, 1, buf, "share", share_buf->mem_type);
             if (ret != AIPU_STATUS_SUCCESS)
                 return ret;
 
-            if (m_dram->pa_to_va(buf.pa, buf.size, (char **)&share_buf->va) != 0)
+            if (m_dram->pa_to_va(buf->pa, buf->size, (char **)&share_buf->va) != 0)
                 return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
-            share_buf->pa = buf.pa;
+            share_buf->pa = buf->pa;
         } else if (cmd == AIPU_IOCTL_FREE_SHARE_BUF) {
             aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
             Buffer buffer;
@@ -951,9 +951,10 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
             if(m_dram->get_shared_buffer(share_buf->pa, share_buf->size, buffer) != 0)
                 return AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
 
-            ret = m_dram->free(&buffer.desc, "share");
+            ret = m_dram->free(buffer.desc, "share");
             if (ret != AIPU_STATUS_SUCCESS)
                 return ret;
+            delete buffer.desc;
         }
     } else {
         #ifndef SIMULATION

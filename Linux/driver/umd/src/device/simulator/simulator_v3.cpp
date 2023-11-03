@@ -110,7 +110,7 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
 {
     aipu_partition_cap aipu_cap = {0};
     uint32_t reg_val = 0, sim_code = 0;
-    BufferDesc *desc = new BufferDesc;
+    BufferDesc *desc = nullptr;
     bool ret = false;
     char *umd_asid_base = getenv("UMD_ASID_BASE");
     uint64_t umd_asid_base_pa = 0;
@@ -166,6 +166,7 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
     m_dram->set_asid_base(3, umd_asid_base_pa);
 
     /* reserve 4KB for debug */
+    desc = new BufferDesc;
     m_dram->reserve_mem(0xC1000000, AIPU_PAGE_SIZE, desc, "rsv");
     m_reserve_mem.push_back(desc);
 

@@ -87,7 +87,7 @@ aipu_status_t aipudrv::UKMemory::malloc(uint32_t size, uint32_t align, BufferDes
         buf_req.desc.bytes, size, buf_req.desc.dev_offset,
         buf_req.desc.region, buf_req.desc.gm_base);
 
-    buf.init(ptr, *desc);
+    buf.init(ptr, desc);
     pthread_rwlock_wrlock(&m_lock);
     m_allocated[buf_req.desc.pa] = buf;
     pthread_rwlock_unlock(&m_lock);
@@ -110,7 +110,7 @@ aipu_status_t aipudrv::UKMemory::free(const BufferDesc* desc, const char* str)
     pthread_rwlock_wrlock(&m_lock);
     iter = m_allocated.find(desc->pa);
     if ((iter == m_allocated.end()) ||
-        (iter->second.desc.size != desc->size))
+        (iter->second.desc->size != desc->size))
     {
         ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
         goto unlock;
@@ -130,7 +130,7 @@ aipu_status_t aipudrv::UKMemory::free(const BufferDesc* desc, const char* str)
             goto unlock;
         }
 
-        LOG(LOG_INFO, "free buffer_pa=%lx\n", iter->second.desc.pa);
+        LOG(LOG_INFO, "free buffer_pa=%lx\n", iter->second.desc->pa);
         m_allocated.erase(desc->pa);
     }
 
@@ -158,7 +158,7 @@ aipu_status_t aipudrv::UKMemory::free_all(void)
     pthread_rwlock_wrlock(&m_lock);
     for (auto iter = m_allocated.begin(); iter != m_allocated.end(); iter++)
     {
-        desc = &iter->second.desc;
+        desc = iter->second.desc;
         kdesc.pa = desc->pa;
         kdesc.bytes = desc->size;
         munmap(iter->second.va, kdesc.bytes);

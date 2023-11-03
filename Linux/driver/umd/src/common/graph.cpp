@@ -134,21 +134,21 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
 
         for (uint32_t i = 0; i < static_sections.size(); i++)
         {
-            BufferDesc buf;
+            BufferDesc *buf = new BufferDesc;
             static_section = &static_sections[i];
 
             if (static_section->type == SECTION_TYPE_ZEROCPY_CONSTANT)
             {
                 m_mem->write(m_zerocpy_const.pa + static_section->relative_addr,
                     m_bweight.va + static_section->offset_in_file, static_section->size);
-                buf.init(m_zerocpy_const.asid_base, m_zerocpy_const.pa + static_section->relative_addr,
+                buf->init(m_zerocpy_const.asid_base, m_zerocpy_const.pa + static_section->relative_addr,
                     static_section->size, static_section->size);
                 LOG(LOG_INFO, "zerocpy %d, pa=%lx, a_b=%lx, asid_pa=%lx, relative_addr=%x\n", i,
-                    buf.pa, buf.asid_base, buf.align_asid_pa, static_section->relative_addr);
+                    buf->pa, buf->asid_base, buf->align_asid_pa, static_section->relative_addr);
             } else {
                 m_mem->write(m_weight.pa + static_section->relative_addr,
                     m_bweight.va + static_section->offset_in_file, static_section->size);
-                buf.init(m_weight.asid_base, m_weight.pa + static_section->relative_addr,
+                buf->init(m_weight.asid_base, m_weight.pa + static_section->relative_addr,
                     static_section->size, static_section->size, 0, asid << 8);
             }
 
@@ -159,16 +159,16 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
         {
             if (m_weights.size() != static_sections.size())
             {
-                BufferDesc buf;
+                BufferDesc *buf = new BufferDesc;
                 std::string str = "static_" + std::to_string(i);
                 static_section = &static_sections[i];
 
-                buf.reset();
+                buf->reset();
                 if (m_wt_idxes.count(i) == 1)
-                    ret = m_mem->malloc(static_section->size, static_section->align_in_page, &buf, str.c_str(),
+                    ret = m_mem->malloc(static_section->size, static_section->align_in_page, buf, str.c_str(),
                         get_weight_region());
                 else
-                    ret = m_mem->malloc(static_section->size, static_section->align_in_page, &buf, str.c_str(),
+                    ret = m_mem->malloc(static_section->size, static_section->align_in_page, buf, str.c_str(),
                         AIPU_MEM_REGION_DEFAULT);
 
                 if (AIPU_STATUS_SUCCESS != ret)
@@ -177,7 +177,7 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
                     goto finish;
                 }
 
-                m_mem->write(buf.pa, (char *)static_section->load_src, static_section->size);
+                m_mem->write(buf->pa, (char *)static_section->load_src, static_section->size);
                 m_weights.push_back(buf);
             }
         }
@@ -222,12 +222,19 @@ aipu_status_t aipudrv::Graph::unload()
             m_zerocpy_const.reset();
         }
 
+        for (uint32_t i = 0; i < m_weights.size(); i++)
+        {
+            m_weights[i]->reset();
+            delete m_weights[i];
+        }
+
         m_weights.clear();
     } else {
         for (uint32_t i = 0; i < m_weights.size(); i++)
         {
-            m_mem->free(&m_weights[i]);
-            m_weights[i].reset();
+            m_mem->free(m_weights[i]);
+            m_weights[i]->reset();
+            delete m_weights[i];
         }
 
         m_weights.clear();

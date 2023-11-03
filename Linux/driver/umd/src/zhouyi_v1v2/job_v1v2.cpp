@@ -76,21 +76,21 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
     {
         uint32_t size = get_graph().m_reuse_sections[i].size;
         uint32_t align_in_page = get_graph().m_reuse_sections[i].align_in_page;
-        BufferDesc bufferDesc;
+        BufferDesc *bufferDesc = new BufferDesc;
 
-        bufferDesc.reset();
+        bufferDesc->reset();
         if (size != 0)
         {
             offset = (offset + ((align_in_page << 12) - 1)) &
                 ~((align_in_page << 12) - 1);
             LOG(LOG_DEBUG, "buf %d: off: %x, pa: %lx\n", i, offset, m_top_reuse_buf.pa + offset);
-            bufferDesc.init(m_top_reuse_buf.asid_base, m_top_reuse_buf.pa + offset,
+            bufferDesc->init(m_top_reuse_buf.asid_base, m_top_reuse_buf.pa + offset,
                 ALIGN_PAGE(size), size);
             offset += ALIGN_PAGE(size);
         }
 
         if (m_dump_reuse)
-            m_mem->mem_bzero(bufferDesc.pa, bufferDesc.size);
+            m_mem->mem_bzero(bufferDesc->pa, bufferDesc->size);
 
         m_reuses.push_back(bufferDesc);
     }
@@ -119,21 +119,21 @@ aipu_status_t aipudrv::JobV12::alloc_reuse_buffer()
     {
         uint32_t size = get_graph().m_reuse_sections[i].size;
         uint32_t align_in_page = get_graph().m_reuse_sections[i].align_in_page;
-        BufferDesc bufferDesc;
+        BufferDesc *bufferDesc = new BufferDesc;
 
-        bufferDesc.reset();
+        bufferDesc->reset();
         if (size != 0)
         {
             std::string str = "reuse_" + std::to_string(i);
-            ret = m_mem->malloc(size, align_in_page, &bufferDesc, str.c_str(), m_fm_mem_region);
+            ret = m_mem->malloc(size, align_in_page, bufferDesc, str.c_str(), m_fm_mem_region);
             if (AIPU_STATUS_SUCCESS != ret)
                 goto finish;
             LOG(LOG_DEBUG, "buf %d: align_in_page: %d, sz: %lx, req_sz: %lx, pa: %lx\n", i, align_in_page,
-                bufferDesc.req_size, bufferDesc.size, bufferDesc.pa);
+                bufferDesc->req_size, bufferDesc->size, bufferDesc->pa);
         }
 
         if (m_dump_reuse)
-            m_mem->mem_bzero(bufferDesc.pa, bufferDesc.size);
+            m_mem->mem_bzero(bufferDesc->pa, bufferDesc->size);
 
         m_reuses.push_back(bufferDesc);
     }
@@ -312,7 +312,7 @@ aipu_status_t aipudrv::JobV12::specify_io_buffer(aipu_shared_tensor_info_t &tens
     }
 
     /* free io buffer allocated internally,replace it with new buffer */
-    bufferDesc = &m_reuses[reuse_index];
+    bufferDesc = m_reuses[reuse_index];
     m_dma_buf_idx.insert(reuse_index);
 
     if (!m_optimized_reuse_alloc)
@@ -384,12 +384,14 @@ aipu_status_t aipudrv::JobV12::free_job_buffers()
     {
         if (m_top_reuse_idx.count(i) == 1)
         {
-            m_reuses[i].reset();
+            m_reuses[i]->reset();
+            delete m_reuses[i];
             continue;
         }
 
-        m_mem->free(&m_reuses[i]);
-        m_reuses[i].reset();
+        m_mem->free(m_reuses[i]);
+        m_reuses[i]->reset();
+        delete m_reuses[i];
     }
     m_top_reuse_idx.clear();
 

@@ -181,7 +181,7 @@ aipu_status_t aipudrv::UMemory::malloc_internal(uint32_t size, uint32_t align, B
         {
             desc->init(get_asid_base(asid), m_memblock[asid][mem_region].base + i * AIPU_PAGE_SIZE,
                 malloc_size, size, 0, (asid << 8) | mem_region, m_memblock[asid][mem_region].base);
-            buf.init(new char[malloc_size], *desc);
+            buf.init(new char[malloc_size], desc);
             memset(buf.va, 0, malloc_size);
             m_allocated[desc->pa] = buf;
             LOG(LOG_INFO, "m_allocated.size=%ld, buffer_pa=%lx", m_allocated.size(), desc->pa);
@@ -256,12 +256,12 @@ aipu_status_t aipudrv::UMemory::free(const BufferDesc* desc, const char* str)
     {
         int mem_region = desc->ram_region;
         int asid = desc->asid;
-        b_start = (iter->second.desc.pa - m_memblock[asid][mem_region].base) / AIPU_PAGE_SIZE;
-        b_end = b_start + iter->second.desc.size / AIPU_PAGE_SIZE;
+        b_start = (iter->second.desc->pa - m_memblock[asid][mem_region].base) / AIPU_PAGE_SIZE;
+        b_end = b_start + iter->second.desc->size / AIPU_PAGE_SIZE;
         for (uint64_t i = b_start; i < b_end; i++)
             m_memblock[asid][mem_region].bitmap[i] = true;
 
-        LOG(LOG_INFO, "free buffer_pa=%lx\n", iter->second.desc.pa);
+        LOG(LOG_INFO, "free buffer_pa=%lx\n", iter->second.desc->pa);
         delete []iter->second.va;
         iter->second.va = nullptr;
         if (!reserve_mem_flag)
@@ -311,7 +311,7 @@ aipu_status_t aipudrv::UMemory::reserve_mem(DEV_PA_32 addr, uint32_t size,
         return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
 
     desc->init(get_asid_base(asid), addr, malloc_size, size, 0, (asid << 8) | mem_region);
-    buf.desc = *desc;
+    buf.desc = desc;
     buf.va = new char[size];
     memset(buf.va, 0, size);
     buf.ref_get();
@@ -372,8 +372,8 @@ bool aipudrv::UMemory::get_info(uint64_t addr, uint64_t &base, uint32_t &size) c
     {
         return false;
     } else {
-        base = iter->second.desc.pa;
-        size = iter->second.desc.size;
+        base = iter->second.desc->pa;
+        size = iter->second.desc->size;
         return true;
     }
 }
@@ -389,9 +389,15 @@ aipu_status_t aipudrv::UMemory::free_all(void)
     {
         for (auto iter = mem_map->begin(); iter != mem_map->end(); iter++)
         {
-            BufferDesc *desc = &iter->second.desc;
+            BufferDesc *desc = iter->second.desc;
             int mem_region = desc->ram_region;
             int asid = desc->asid;
+
+            if (desc->size == 0)
+            {
+                LOG(LOG_ALERT, "this buffer size=0, check it\n");
+                continue;
+            }
 
             b_start = (desc->pa - m_memblock[asid][mem_region].base) / AIPU_PAGE_SIZE;
             b_end = b_start + desc->size / AIPU_PAGE_SIZE;

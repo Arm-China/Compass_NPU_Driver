@@ -26,8 +26,8 @@ private:
     DEV_PA_64 m_spc = 0;
     DEV_PA_64 m_intr_pc = 0;
     BufferDesc m_stack;
-    std::vector<BufferDesc> m_reuses;
-    std::vector<BufferDesc> m_weights; /* Do NOT free me in this class */
+    std::vector<BufferDesc*> m_reuses;
+    std::vector<BufferDesc*> m_weights; /* Do NOT free me in this class */
     std::string m_sim;
     uint32_t m_log_level = 0;
     bool m_en_eval = false;
@@ -58,9 +58,9 @@ private:
         return 1;
     }
 
-    const std::vector<BufferDesc> & get_reuse() override
+    const std::vector<BufferDesc*> & get_reuse() override
     {
-        return static_cast< std::vector<BufferDesc>& >(m_reuses);
+        return static_cast< std::vector<BufferDesc*>& >(m_reuses);
     }
     aipu_status_t free_job_buffers();
     aipu_status_t setup_rodata_v12(std::set<uint32_t> *dma_buf_idx = nullptr);
