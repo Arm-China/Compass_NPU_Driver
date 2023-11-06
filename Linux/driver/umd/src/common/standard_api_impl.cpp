@@ -61,7 +61,7 @@ aipu_status_t aipu_get_error_message(const aipu_ctx_handle_t* ctx, aipu_status_t
     aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
     aipudrv::MainContext* p_ctx = nullptr;
 
-    if ((nullptr == msg) || (nullptr == *msg))
+    if (nullptr == msg)
     {
         LOG(LOG_ALERT, "message pointer is null\n");
         ret = AIPU_STATUS_ERROR_NULL_PTR;
