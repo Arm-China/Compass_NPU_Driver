@@ -119,10 +119,10 @@ public:
     void gm_init(uint32_t gm_size_idx);
     aipu_status_t malloc_internal(uint32_t size, uint32_t align, BufferDesc* desc,
         const char* str, uint32_t asid_mem_cfg = 0);
-    virtual aipu_status_t malloc(uint32_t size, uint32_t align, BufferDesc* desc,
+    virtual aipu_status_t malloc(uint32_t size, uint32_t align, BufferDesc** desc,
         const char* str = nullptr, uint32_t asid_mem_cfg = 0);
-    virtual aipu_status_t free(const BufferDesc* desc, const char* str = nullptr);
-    aipu_status_t reserve_mem(DEV_PA_32 addr, uint32_t size, BufferDesc* desc, const char* str = nullptr);
+    virtual aipu_status_t free(BufferDesc* desc, const char* str = nullptr);
+    aipu_status_t reserve_mem(DEV_PA_32 addr, uint32_t size, BufferDesc** desc, const char* str = nullptr);
     aipu_status_t free_all(void);
     virtual bool invalid(uint64_t addr) const;
     virtual bool get_info(uint64_t addr, uint64_t &base, uint32_t &size) const;

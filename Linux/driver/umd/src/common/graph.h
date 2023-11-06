@@ -106,12 +106,12 @@ protected:
 
 protected:
     /* Buffers in memory for AIPU's access */
-    BufferDesc m_text;
-    BufferDesc m_crodata;
+    BufferDesc *m_text = nullptr;
+    BufferDesc *m_crodata = nullptr;
 
     /* weight in a whole buffer case */
-    BufferDesc m_weight;
-    BufferDesc m_zerocpy_const;
+    BufferDesc *m_weight = nullptr;
+    BufferDesc *m_zerocpy_const = nullptr;
 
     /* weight in split buffer case */
     std::vector<BufferDesc*> m_weights;
@@ -195,7 +195,7 @@ public:
     }
     virtual DEV_PA_64 debugger_get_instr_base()
     {
-        return m_text.pa;
+        return m_text->pa;
     }
 
     uint32_t get_zerocpy_const_size()

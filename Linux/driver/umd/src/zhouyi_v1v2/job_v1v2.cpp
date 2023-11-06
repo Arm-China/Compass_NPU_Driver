@@ -16,8 +16,6 @@ aipudrv::JobV12::JobV12(MainContext* ctx, GraphBase& graph,
     DeviceBase* dev, aipu_create_job_cfg_t *config):
     JobBase(ctx, graph, dev)
 {
-    m_stack.reset();
-
     if (config != nullptr)
     {
         m_fm_mem_region = config->fm_mem_region;
@@ -34,7 +32,7 @@ aipu_status_t aipudrv::JobV12::setup_rodata_v12(std::set<uint32_t> *dma_buf_idx)
     const std::vector<struct GraphParamMapLoadDesc>& param_map =
         get_graph().m_param_map;
 
-    return setup_rodata(param_map, m_reuses, m_weights, m_rodata, m_descriptor, dma_buf_idx);
+    return setup_rodata(param_map, m_reuses, *m_weights, *m_rodata, *m_descriptor, dma_buf_idx);
 }
 
 int aipudrv::JobV12::alloc_reuse_buffer_optimized()
@@ -44,8 +42,6 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
     uint32_t offset = 0;
     uint32_t max_align_in_page = 0;
     int retval = 0;
-
-    m_top_reuse_buf.reset();
 
     for (uint32_t i = 0; i < get_graph().m_reuse_sections.size(); i++)
     {
@@ -83,8 +79,8 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
         {
             offset = (offset + ((align_in_page << 12) - 1)) &
                 ~((align_in_page << 12) - 1);
-            LOG(LOG_DEBUG, "buf %d: off: %x, pa: %lx\n", i, offset, m_top_reuse_buf.pa + offset);
-            bufferDesc->init(m_top_reuse_buf.asid_base, m_top_reuse_buf.pa + offset,
+            LOG(LOG_DEBUG, "buf %d: off: %x, pa: %lx\n", i, offset, m_top_reuse_buf->pa + offset);
+            bufferDesc->init(m_top_reuse_buf->asid_base, m_top_reuse_buf->pa + offset,
                 ALIGN_PAGE(size), size);
             offset += ALIGN_PAGE(size);
         }
@@ -99,11 +95,8 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
     return retval;
 
 opt_alloc_fail:
-    if (m_top_reuse_buf.size > 0)
-    {
-        m_mem->free(&m_top_reuse_buf);
-        m_top_reuse_buf.reset();
-    }
+    if (m_top_reuse_buf->size > 0)
+        m_mem->free(m_top_reuse_buf);
 
     m_top_reuse_idx.clear();
 
@@ -119,13 +112,12 @@ aipu_status_t aipudrv::JobV12::alloc_reuse_buffer()
     {
         uint32_t size = get_graph().m_reuse_sections[i].size;
         uint32_t align_in_page = get_graph().m_reuse_sections[i].align_in_page;
-        BufferDesc *bufferDesc = new BufferDesc;
+        BufferDesc *bufferDesc = nullptr;
 
-        bufferDesc->reset();
         if (size != 0)
         {
             std::string str = "reuse_" + std::to_string(i);
-            ret = m_mem->malloc(size, align_in_page, bufferDesc, str.c_str(), m_fm_mem_region);
+            ret = m_mem->malloc(size, align_in_page, &bufferDesc, str.c_str(), m_fm_mem_region);
             if (AIPU_STATUS_SUCCESS != ret)
                 goto finish;
             LOG(LOG_DEBUG, "buf %d: align_in_page: %d, sz: %lx, req_sz: %lx, pa: %lx\n", i, align_in_page,
@@ -178,7 +170,7 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
     if (AIPU_STATUS_SUCCESS != ret)
         goto finish;
 
-    m_mem->write(m_rodata.pa, get_graph().m_brodata.va, get_graph().m_brodata.size);
+    m_mem->write(m_rodata->pa, get_graph().m_brodata.va, get_graph().m_brodata.size);
 
     /* 2. allocate and load job descriptor */
     if (get_graph().m_bdesc.size != 0)
@@ -187,7 +179,7 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
         if (AIPU_STATUS_SUCCESS != ret)
             goto finish;
 
-        m_mem->write(m_descriptor.pa, get_graph().m_bdesc.va, get_graph().m_bdesc.size);
+        m_mem->write(m_descriptor->pa, get_graph().m_bdesc.va, get_graph().m_bdesc.size);
     }
 
     /* 3. allocate task stack */
@@ -214,7 +206,7 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
     if ((ret = get_graph().alloc_weight_buffer(get_graph().m_static_sections)) != AIPU_STATUS_SUCCESS)
         goto finish;
 
-    m_weights.assign(get_graph().m_weights.begin(), get_graph().m_weights.end());
+    m_weights = &get_graph().m_weights;
 
     /* 6. update rodata & dcr */
     ret = setup_rodata_v12();
@@ -222,7 +214,7 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
         goto finish;
 
     /* 7. setup remap */
-    setup_remap(m_rodata, m_descriptor);
+    setup_remap(*m_rodata, *m_descriptor);
 
     /* 8. get IO buffer address */
     create_io_buffers(get_graph().m_io, m_reuses);
@@ -235,8 +227,8 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
     }
 
     /* 10. others */
-    m_spc = get_graph().m_text.pa + get_graph().m_entry;
-    m_intr_pc = get_graph().m_text.pa + 0x10;
+    m_spc = get_graph().m_text->pa + get_graph().m_entry;
+    m_intr_pc = get_graph().m_text->pa + 0x10;
 
     /* success */
     m_status = AIPU_JOB_STATUS_INIT;
@@ -356,47 +348,32 @@ aipu_status_t aipudrv::JobV12::free_job_buffers()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    if (m_rodata.size != 0)
-    {
-        m_mem->free(&m_rodata);
-        m_rodata.reset();
-    }
+    if (m_rodata->size != 0)
+        m_mem->free(m_rodata);
 
-    if (m_descriptor.size != 0)
-    {
-        m_mem->free(&m_descriptor);
-        m_descriptor.reset();
-    }
+    if (m_descriptor->size != 0)
+        m_mem->free(m_descriptor);
 
-    if (m_stack.size != 0)
-    {
-        m_mem->free(&m_stack);
-        m_stack.reset();
-    }
+    if (m_stack->size != 0)
+        m_mem->free(m_stack);
 
-    if (m_top_reuse_buf.size > 0)
-    {
-        m_mem->free(&m_top_reuse_buf);
-        m_top_reuse_buf.reset();
-    }
+    if (m_top_reuse_buf != nullptr && m_top_reuse_buf->size > 0)
+        m_mem->free(m_top_reuse_buf);
 
     for (uint32_t i = 0; i < m_reuses.size(); i++)
     {
         if (m_top_reuse_idx.count(i) == 1)
         {
-            m_reuses[i]->reset();
-            delete m_reuses[i];
+            m_mem->free_bufferdesc(m_reuses[i]);
             continue;
         }
 
         m_mem->free(m_reuses[i]);
-        m_reuses[i]->reset();
-        delete m_reuses[i];
     }
     m_top_reuse_idx.clear();
 
+    m_weights = nullptr;
     m_reuses.clear();
-    m_weights.clear();
     m_inputs.clear();
     m_outputs.clear();
     m_inter_dumps.clear();
@@ -417,7 +394,7 @@ aipu_status_t aipudrv::JobV12::schedule()
         return ret;
 
     dump_job_shared_buffers();
-    dump_job_private_buffers(m_rodata, m_descriptor);
+    dump_job_private_buffers(*m_rodata, *m_descriptor);
 
     /* initialize error code buffer */
     for (uint32_t i = 0; i < m_err_code.size(); i++)
@@ -433,7 +410,7 @@ aipu_status_t aipudrv::JobV12::schedule()
     desc.kdesc.aipu_version = get_graph().m_hw_version;
     desc.kdesc.aipu_config = get_graph().m_hw_config;
     desc.aipu_revision = get_graph().m_hw_revision;
-    desc.instruction_base_pa = get_graph().m_text.pa;
+    desc.instruction_base_pa = get_graph().m_text->pa;
 
     /**
      * note: on simulation, it's true align_asid_pa == pa.
@@ -442,13 +419,13 @@ aipu_status_t aipudrv::JobV12::schedule()
     {
         desc.kdesc.start_pc_addr = m_spc;
         desc.kdesc.intr_handler_addr = m_intr_pc;
-        desc.kdesc.data_0_addr = m_rodata.pa;
-        desc.kdesc.data_1_addr = m_stack.pa;
+        desc.kdesc.data_0_addr = m_rodata->pa;
+        desc.kdesc.data_1_addr = m_stack->pa;
     } else {
-        desc.kdesc.start_pc_addr = m_spc - get_graph().m_text.asid_base;
-        desc.kdesc.intr_handler_addr = m_intr_pc - get_graph().m_text.asid_base;
-        desc.kdesc.data_0_addr = m_rodata.align_asid_pa;
-        desc.kdesc.data_1_addr = m_stack.align_asid_pa;
+        desc.kdesc.start_pc_addr = m_spc - get_graph().m_text->asid_base;
+        desc.kdesc.intr_handler_addr = m_intr_pc - get_graph().m_text->asid_base;
+        desc.kdesc.data_0_addr = m_rodata->align_asid_pa;
+        desc.kdesc.data_1_addr = m_stack->align_asid_pa;
     }
 
     desc.kdesc.enable_prof = 0;
@@ -456,14 +433,22 @@ aipu_status_t aipudrv::JobV12::schedule()
     desc.kdesc.dtcm_size_kb = get_graph().m_dtcm_size;
     desc.kdesc.enable_poll_opt = !m_hw_cfg->poll_in_commit_thread;
     desc.text_size = get_graph().m_btext.size;
-    desc.weight_pa = get_graph().m_weight.pa;
-    desc.weight_size = get_graph().m_weight.req_size;
-    desc.zerocpy_const_pa = get_graph().m_zerocpy_const.pa;
-    desc.zerocpy_const_size = get_graph().m_zerocpy_const.req_size;
-    desc.rodata_size = m_rodata.req_size;
-    desc.dcr_pa = m_descriptor.pa;
-    desc.dcr_size = m_descriptor.req_size;
-    desc.stack_size = m_stack.req_size;
+    desc.weight_pa = get_graph().m_weight->pa;
+    desc.weight_size = get_graph().m_weight->req_size;
+
+    if (get_graph().m_zerocpy_const != nullptr)
+    {
+        desc.zerocpy_const_pa = get_graph().m_zerocpy_const->pa;
+        desc.zerocpy_const_size = get_graph().m_zerocpy_const->req_size;
+    } else {
+        desc.zerocpy_const_pa = 0;
+        desc.zerocpy_const_size = 0;
+    }
+
+    desc.rodata_size = m_rodata->req_size;
+    desc.dcr_pa = m_descriptor->pa;
+    desc.dcr_size = m_descriptor->req_size;
+    desc.stack_size = m_stack->req_size;
     desc.reuses = m_reuses;
     desc.weights = m_weights;
     desc.dump_reuse = !!m_dump_reuse;

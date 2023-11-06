@@ -550,7 +550,7 @@ aipu_status_t aipudrv::MainContext::config_hw(uint64_t types, aipu_global_config
 aipu_status_t aipudrv::MainContext::debugger_malloc(uint32_t size, void** va)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    BufferDesc buf;
+    BufferDesc *buf = nullptr;
     char* alloc_va = nullptr;
     uint32_t core_cnt = 0;
 
@@ -561,7 +561,7 @@ aipu_status_t aipudrv::MainContext::debugger_malloc(uint32_t size, void** va)
     if (ret != AIPU_STATUS_SUCCESS)
         return ret;
 
-    if (m_dram->pa_to_va(buf.pa, buf.size, &alloc_va) != 0)
+    if (m_dram->pa_to_va(buf->pa, buf->size, &alloc_va) != 0)
         return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
 
     /**
@@ -575,12 +575,12 @@ aipu_status_t aipudrv::MainContext::debugger_malloc(uint32_t size, void** va)
     m_dev->get_core_count(0, 0, &core_cnt);
     if (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3)
     {
-        m_dev->write_reg(0, 0x0c, buf.pa);
+        m_dev->write_reg(0, 0x0c, buf->pa);
         m_dev->write_reg(0, 0x08, 0x1248FFA5);
     } else {
         for (uint32_t id = 0; id < core_cnt; id++)
         {
-            m_dev->write_reg(id, 0x14, buf.pa);
+            m_dev->write_reg(id, 0x14, buf->pa);
             m_dev->write_reg(id, 0x18, 0x1248FFA5);
         }
     }
@@ -600,7 +600,7 @@ aipu_status_t aipudrv::MainContext::debugger_free(void* va)
     if (m_dbg_buffers.count(va) == 0)
         return AIPU_STATUS_ERROR_BUF_FREE_FAIL;
 
-    ret = m_dram->free(&m_dbg_buffers[va], "dbg");
+    ret = m_dram->free(m_dbg_buffers[va], "dbg");
     if (ret != AIPU_STATUS_SUCCESS)
         return ret;
 
@@ -935,9 +935,9 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
             buildver->aipubin_buildversion = p_gobj->get_buildversion();
         } else if (cmd == AIPU_IOCTL_ALLOC_SHARE_BUF) {
             aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
-            BufferDesc *buf = new BufferDesc;
+            BufferDesc *buf = nullptr;// new BufferDesc;
 
-            ret = m_dram->malloc(share_buf->size, 1, buf, "share", share_buf->mem_type);
+            ret = m_dram->malloc(share_buf->size, 1, &buf, "share", share_buf->mem_type);
             if (ret != AIPU_STATUS_SUCCESS)
                 return ret;
 
@@ -954,7 +954,7 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
             ret = m_dram->free(buffer.desc, "share");
             if (ret != AIPU_STATUS_SUCCESS)
                 return ret;
-            delete buffer.desc;
+            // delete buffer.desc;
         }
     } else {
         #ifndef SIMULATION

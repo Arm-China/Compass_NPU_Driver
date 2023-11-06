@@ -100,7 +100,7 @@ struct JobDesc
     uint32_t dcr_size;
     uint32_t stack_size;
     std::vector<BufferDesc*> reuses;
-    std::vector<BufferDesc*> weights;
+    std::vector<BufferDesc*> *weights;
     std::vector<BufferDesc> outputs;
     std::vector<BufferDesc> profile;
     std::map<std::string, BufferDesc> misc_outputs;

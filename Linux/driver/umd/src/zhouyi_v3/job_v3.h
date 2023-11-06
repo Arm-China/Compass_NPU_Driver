@@ -43,7 +43,7 @@ struct SubGraphTask
     uint32_t id;
     std::vector<BufferDesc*> reuses;
     std::vector<BufferDesc*> reuse_priv_buffers;
-    std::vector<BufferDesc*> weights;
+    std::vector<BufferDesc*> *weights;
     std::vector<Task>       tasks;
 
     /**
@@ -55,7 +55,7 @@ struct SubGraphTask
     {
         id = _id;
         reuses.clear();
-        weights.clear();
+        weights = nullptr;
         reuse_priv_buffers.clear();
         tasks.clear();
         dma_buf_idx.clear();
@@ -99,7 +99,7 @@ private:
     bool        m_do_trigger = false;
 
 private:
-    BufferDesc m_tcbs;
+    BufferDesc *m_tcbs = nullptr;
     TCB m_init_tcb;
     std::unique_ptr<char []> m_backup_tcb;
     bool m_backup_tcb_used = false;
@@ -130,8 +130,8 @@ private:
      * optimize reuse and priv_buffer allocation,
      * reduce calling times of allocation interface.
      */
-    BufferDesc m_top_priv_buf;
-    BufferDesc m_top_reuse_buf;
+    BufferDesc *m_top_priv_buf = nullptr;
+    BufferDesc *m_top_reuse_buf = nullptr;
     std::set<uint32_t> m_top_reuse_idx;
     bool m_top_priv_buf_freed = false;
 
@@ -142,7 +142,7 @@ private:
      * method. this avoids the data non-conherence issue due to
      * cache writeback operation of NPU side.
      */
-    BufferDesc exit_inst_encode;
+    BufferDesc *m_exit_inst_encode = nullptr;
 
 public:
     GraphV3& get_graph()

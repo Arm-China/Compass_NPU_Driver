@@ -286,10 +286,11 @@ public:
     /* Interfaces */
     int pa_to_va(uint64_t addr, uint64_t size, char** va) const;
     int get_shared_buffer(uint64_t addr, uint64_t size, Buffer &buffer);
-    virtual aipu_status_t malloc(uint32_t size, uint32_t align, BufferDesc* buf,
+    virtual aipu_status_t malloc(uint32_t size, uint32_t align, BufferDesc** buf,
         const char* str = nullptr, uint32_t asid_qos_cfg = 0) = 0;
-    virtual aipu_status_t free(const BufferDesc* buf, const char* str = nullptr) = 0;
-    virtual aipu_status_t reserve_mem(DEV_PA_32 addr, uint32_t size, BufferDesc* desc, const char* str = nullptr) = 0;
+    virtual aipu_status_t free(BufferDesc* buf, const char* str = nullptr) = 0;
+    virtual void free_bufferdesc(BufferDesc* desc);
+    virtual aipu_status_t reserve_mem(DEV_PA_32 addr, uint32_t size, BufferDesc** desc, const char* str = nullptr) = 0;
     virtual int read(uint64_t addr, void *dest, size_t size) const = 0;
     virtual int write(uint64_t addr, const void *src, size_t size) = 0;
     virtual int zeroize(uint64_t addr, size_t size) = 0;

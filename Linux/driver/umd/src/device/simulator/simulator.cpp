@@ -85,18 +85,18 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
         ctx.weight = fname;
         weight_cnt = 1;
     } else {
-        for (uint32_t i = 0; i < job.weights.size(); i++)
+        for (uint32_t i = 0; i < job.weights->size(); i++)
         {
             char inter_fix[32] = {0};
             snprintf(inter_fix, 32, "Weight%u", i);
             ret = create_simulation_input_file(fname, inter_fix, job.kdesc.job_id,
-                job.weights[i]->pa, job.weights[i]->size, job);
+                (*job.weights)[i]->pa, (*job.weights)[i]->size, job);
             if (ret != AIPU_STATUS_SUCCESS)
                 goto finish;
 
             ctx.weights.push_back(fname);
         }
-        weight_cnt = job.weights.size();
+        weight_cnt = job.weights->size();
     }
 
     if (job.zerocpy_const_size != 0)
@@ -266,36 +266,46 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
     input_file_idx = 2;
     if (dcr_cnt == 1)
     {
-        ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx <<  "=" << ctx.dcr << "\n";
-        ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx <<  "=0x" << std::hex <<job.dcr_pa << "\n";
+        ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx
+            <<  "=" << ctx.dcr << "\n";
+        ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx
+            <<  "=0x" << std::hex <<job.dcr_pa << "\n";
         input_file_idx++;
     }
 
     if (weight_cnt == 1)
     {
-        ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx <<  "=" << ctx.weight << "\n";
-        ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx <<  "=0x" << std::hex << job.weight_pa << "\n";
+        ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx
+            <<  "=" << ctx.weight << "\n";
+        ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx
+            <<  "=0x" << std::hex << job.weight_pa << "\n";
         input_file_idx++;
     } else {
-        for(uint32_t i = 0; i < job.weights.size(); i++)
+        for(uint32_t i = 0; i < job.weights->size(); i++)
         {
-            ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx + i <<  "=" << ctx.weights[i] << "\n";
-            ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx + i <<  "=0x" << std::hex << job.weights[i]->pa << "\n";
+            ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx + i
+                <<  "=" << ctx.weights[i] << "\n";
+            ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx + i
+                <<  "=0x" << std::hex << (*job.weights)[i]->pa << "\n";
         }
-        input_file_idx += job.weights.size();
+        input_file_idx += job.weights->size();
     }
 
     if (zerocpy_const_cnt == 1)
     {
-        ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx <<  "=" << ctx.zerocpy_const << "\n";
-        ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx <<  "=0x" << std::hex << job.zerocpy_const_pa << "\n";
+        ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx
+            <<  "=" << ctx.zerocpy_const << "\n";
+        ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx
+            <<  "=0x" << std::hex << job.zerocpy_const_pa << "\n";
         input_file_idx++;
     }
 
     for(uint32_t i = 0; i < job.reuses.size(); i++)
     {
-        ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx + i <<  "=" << ctx.reuses[i] << "\n";
-        ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx + i <<  "=0x" << std::hex << job.reuses[i]->pa << "\n";
+        ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx + i
+            <<  "=" << ctx.reuses[i] << "\n";
+        ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx + i
+            <<  "=0x" << std::hex << job.reuses[i]->pa << "\n";
     }
 
     ofs << "\n";
@@ -335,16 +345,20 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
     {
         for (uint32_t i = 0; i < reuse_outputs.size(); i++)
         {
-            ofs << "OUTPUT_DATA_FILE" << std::dec << output_idx << "=" << reuse_outputs[i] << "\n";
-            ofs << "OUTPUT_DATA_BASE" << std::dec << output_idx << "=0x" << std::hex << job.reuses[i]->pa << "\n";
-            ofs << "OUTPUT_DATA_SIZE" << std::dec << output_idx << "=0x" << std::hex << job.reuses[i]->size << "\n";
+            ofs << "OUTPUT_DATA_FILE" << std::dec << output_idx
+                << "=" << reuse_outputs[i] << "\n";
+            ofs << "OUTPUT_DATA_BASE" << std::dec << output_idx
+                << "=0x" << std::hex << job.reuses[i]->pa << "\n";
+            ofs << "OUTPUT_DATA_SIZE" << std::dec << output_idx
+                << "=0x" << std::hex << job.reuses[i]->size << "\n";
             output_idx++;
         }
     }
 
     ofs << "RUN_DESCRIPTOR=BIN[0]" << "\n";
 
-    snprintf(ctx.simulation_cmd, sizeof(ctx.simulation_cmd), "%s %s", job.simulator.c_str(), cfg_fname.c_str());
+    snprintf(ctx.simulation_cmd, sizeof(ctx.simulation_cmd),
+        "%s %s", job.simulator.c_str(), cfg_fname.c_str());
 finish:
     return ret;
 }

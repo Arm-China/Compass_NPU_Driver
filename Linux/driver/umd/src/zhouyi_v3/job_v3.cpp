@@ -27,10 +27,8 @@ aipudrv::JobV3::JobV3(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_
     m_core_id(config->dbg_core_id)
 
 {
-    m_tcbs.reset();
     m_init_tcb.init(0);
     m_sgt_allocated.clear();
-    exit_inst_encode.reset();
 
 #if defined(SIMULATION)
     /**
@@ -275,8 +273,8 @@ aipu_status_t aipudrv::JobV3::setup_rodata_sg(uint32_t sg_id,
     // std::vector<BufferDesc>& reuse_buf  = m_sg_job[sg_id].reuses;
     // std::vector<BufferDesc>& static_buf = m_sg_job[sg_id].weights;
 
-    rodata.init(0, m_rodata.pa, m_rodata.size, m_rodata.req_size);
-    dcr.init(0, m_descriptor.pa, m_descriptor.size, m_descriptor.req_size);
+    rodata.init(0, m_rodata->pa, m_rodata->size, m_rodata->req_size);
+    dcr.init(0, m_descriptor->pa, m_descriptor->size, m_descriptor->req_size);
     return setup_rodata(param_map, reuse_buf, static_buf, rodata, dcr, dma_buf_idx);
 }
 
@@ -294,25 +292,24 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
         for (uint32_t k = 0; k < get_graph().m_subgraphs[sg_idx].private_buffers.size(); k++)
         {
             const GraphSectionDesc &section_desc = get_graph().m_subgraphs[sg_idx].private_buffers[k];
-            BufferDesc *buf = new BufferDesc;
-            buf->reset();
+            BufferDesc *buf = nullptr;
 
             if (section_desc.size != 0)
             {
                 std::string buf_name = "priv_" + std::to_string(sg_idx) + "_" + std::to_string(k);
 
-                ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, buf, buf_name.c_str());
+                ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &buf, buf_name.c_str());
                 if (AIPU_STATUS_SUCCESS != ret)
                 {
                     LOG(LOG_ERR, "alloc private buffer %d [fail]", k);
                     goto add_sg;
                 }
+
+                if (m_dump_reuse)
+                    m_mem->mem_bzero(buf->pa, buf->size);
+
+                sg.reuse_priv_buffers.push_back(buf);
             }
-
-            if (m_dump_reuse)
-                m_mem->mem_bzero(buf->pa, buf->size);
-
-            sg.reuse_priv_buffers.push_back(buf);
         }
 
         /* allocate reuse buffers, all subgraphs share one copy of reuse buffers */
@@ -321,9 +318,8 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
             for (uint32_t k = 0; k < get_graph().m_subgraphs[0].reuse_sections.size(); k++)
             {
                 const GraphSectionDesc &section_desc = get_graph().m_subgraphs[0].reuse_sections[k];
-                BufferDesc *bufferDesc = new BufferDesc;
+                BufferDesc *bufferDesc = nullptr;
 
-                bufferDesc->reset();
                 if (section_desc.size != 0)
                 {
                     std::string buf_name = "reuse_" + std::to_string(k);
@@ -332,13 +328,13 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                     if (m_gm->gm_is_gm_buffer(k, GM_BUF_TYPE_REUSE))
                     {
                         buf_name = "gm_" + buf_name;
-                        ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, *bufferDesc);
+                        ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, bufferDesc);
                     } else {
                         if (m_fm_idxes.count(k) == 1)
-                            ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, bufferDesc,
+                            ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
                                 buf_name.c_str(), m_fm_mem_region);
                         else
-                            ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, bufferDesc,
+                            ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
                                 buf_name.c_str(), AIPU_MEM_REGION_DEFAULT);
                     }
 
@@ -347,12 +343,14 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                         LOG(LOG_ERR, "alloc reuse buffer %d [fail]", k);
                         goto add_sg;
                     }
+
+                    if (m_dump_reuse)
+                        m_mem->mem_bzero(bufferDesc->pa, bufferDesc->size);
+
+                    sg.reuses.push_back(bufferDesc);
+                } else {
+                    LOG(LOG_WARN, "reuse %d: size == 0\n", k);
                 }
-
-                if (m_dump_reuse)
-                    m_mem->mem_bzero(bufferDesc->pa, bufferDesc->size);
-
-                sg.reuses.push_back(bufferDesc);
             }
 
             /* init task weights address */
@@ -390,14 +388,11 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                 sg.weights.push_back(buf);
             }
             #else
-            if (sg.weights.size() == 0)
-            {
-                ret = get_graph().alloc_weight_buffer(get_graph().m_subgraphs[0].static_sections);
-                if (ret != AIPU_STATUS_SUCCESS)
-                    goto add_sg;
+            ret = get_graph().alloc_weight_buffer(get_graph().m_subgraphs[0].static_sections);
+            if (ret != AIPU_STATUS_SUCCESS)
+                goto add_sg;
 
-                sg.weights.assign(get_graph().m_weights.begin(), get_graph().m_weights.end());
-            }
+            sg.weights = &get_graph().m_weights;
             #endif
         }
 
@@ -407,11 +402,10 @@ add_sg:
             goto out;
     }
 
-    if ((m_pprint.size == 0) && get_subgraph_cnt() > 0 &&
+    if ((m_pprint->size == 0) && get_subgraph_cnt() > 0 &&
         get_graph().m_subgraphs[0].printfifo_size > 0)
     {
         std::string buf_name = "printf";
-        m_pprint.reset();
         ret = m_mem->malloc(get_subgraph_cnt() * AIPU_PAGE_SIZE, 0, &m_pprint, buf_name.c_str());
         if (ret != AIPU_STATUS_SUCCESS)
             goto out;
@@ -429,9 +423,6 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
     uint32_t reuse_buf_total_size = 0;
     uint32_t priv_offset = 0, offset = 0;
     int retval = 0;
-
-    m_top_priv_buf.reset();
-    m_top_reuse_buf.reset();
 
     /* caculate the total size of each buffer type */
     for (uint32_t sg_idx = 0; sg_idx < m_sg_cnt; sg_idx++)
@@ -498,15 +489,17 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
 
             if (section_desc.size != 0)
             {
-                bufferDesc->init(m_top_priv_buf.asid_base, m_top_priv_buf.pa + priv_offset,
+                bufferDesc->init(m_top_priv_buf->asid_base, m_top_priv_buf->pa + priv_offset,
                     ALIGN_PAGE(section_desc.size), section_desc.size);
                 priv_offset += ALIGN_PAGE(section_desc.size);
+
+                if (m_dump_reuse)
+                    m_mem->mem_bzero(bufferDesc->pa, bufferDesc->size);
+
+                sg.reuse_priv_buffers.push_back(bufferDesc);
+            } else {
+                LOG(LOG_WARN, "opt priv %d: size == 0\n", k);
             }
-
-            if (m_dump_reuse)
-                m_mem->mem_bzero(bufferDesc->pa, bufferDesc->size);
-
-            sg.reuse_priv_buffers.push_back(bufferDesc);
         }
 
         /* allocate reuse buffers, all subgraphs share one copy of reuse buffers */
@@ -526,7 +519,7 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
                     if (m_gm->gm_is_gm_buffer(k, GM_BUF_TYPE_REUSE))
                     {
                         buf_name = "gm_" + buf_name;
-                        ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, *bufferDesc);
+                        ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, bufferDesc);
                         if (AIPU_STATUS_SUCCESS != ret)
                         {
                             retval = -3;
@@ -536,7 +529,7 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
                     } else {
                         if (m_fm_idxes.count(k) == 1)
                         {
-                            ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, bufferDesc,
+                            ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
                                 buf_name.c_str(), m_fm_mem_region);
                             if (AIPU_STATUS_SUCCESS != ret)
                             {
@@ -545,17 +538,19 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
                                 goto add_sg;
                             }
                         } else {
-                            bufferDesc->init(m_top_reuse_buf.asid_base, m_top_reuse_buf.pa + offset,
+                            bufferDesc->init(m_top_reuse_buf->asid_base, m_top_reuse_buf->pa + offset,
                                 ALIGN_PAGE(section_desc.size), section_desc.size);
                             offset += ALIGN_PAGE(section_desc.size);
                         }
                     }
+
+                    if (m_dump_reuse)
+                        m_mem->mem_bzero(bufferDesc->pa, bufferDesc->size);
+
+                    sg.reuses.push_back(bufferDesc);
+                } else {
+                    LOG(LOG_WARN, "opt reuse %d: size == 0\n", k);
                 }
-
-                if (m_dump_reuse)
-                    m_mem->mem_bzero(bufferDesc->pa, bufferDesc->size);
-
-                sg.reuses.push_back(bufferDesc);
             }
 
             /* init task weights address */
@@ -566,7 +561,7 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
                 goto add_sg;
             }
 
-            sg.weights.assign(get_graph().m_weights.begin(), get_graph().m_weights.end());
+            sg.weights = &get_graph().m_weights;
         }
 
 add_sg:
@@ -578,7 +573,6 @@ add_sg:
     if (get_subgraph_cnt() > 0 && get_graph().m_subgraphs[0].printfifo_size > 0)
     {
         std::string buf_name = "printf";
-        m_pprint.reset();
         ret = m_mem->malloc(get_subgraph_cnt() * AIPU_PAGE_SIZE, 0, &m_pprint, buf_name.c_str());
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -591,17 +585,11 @@ add_sg:
     return retval;
 
 opt_alloc_fail:
-    if (m_top_priv_buf.size > 0)
-    {
-        m_mem->free(&m_top_priv_buf);
-        m_top_priv_buf.reset();
-    }
+    if (m_top_priv_buf->size > 0)
+        m_mem->free(m_top_priv_buf);
 
-    if (m_top_reuse_buf.size > 0)
-    {
-        m_mem->free(&m_top_reuse_buf);
-        m_top_reuse_buf.reset();
-    }
+    if (m_top_reuse_buf->size > 0)
+        m_mem->free(m_top_reuse_buf);
 
     m_top_reuse_idx.clear();
 
@@ -639,7 +627,7 @@ aipu_status_t aipudrv::JobV3::init_per_task_data()
                     memset((void *)&task, 0, sizeof(task));
 
                     task = m_sgt_allocated[sg_idx]->tasks[j];
-                    task.tcb.init(m_tcbs.pa + (i * m_task_per_sg + j + 1 + segmmu_tcb_skip) * sizeof(tcb_t));
+                    task.tcb.init(m_tcbs->pa + (i * m_task_per_sg + j + 1 + segmmu_tcb_skip) * sizeof(tcb_t));
                     sg.tasks.push_back(task);
                 }
 
@@ -658,20 +646,22 @@ aipu_status_t aipudrv::JobV3::init_per_task_data()
                 memset((void *)&task, 0, sizeof(task));
 
                 /* 1.1. init task tcb */
-                task.tcb.init(m_tcbs.pa + (i * m_task_per_sg + j + 1 + segmmu_tcb_skip) * sizeof(tcb_t));
+                task.tcb.init(m_tcbs->pa + (i * m_task_per_sg + j + 1 + segmmu_tcb_skip) * sizeof(tcb_t));
 
                 /* 1.2. allocate task stack */
-                task.stack = new BufferDesc;
-                ret = m_mem->malloc(get_graph().m_subgraphs[0].stack_size, get_graph().m_subgraphs[0].stack_align_in_page,
-                    task.stack, "stack");
+                task.stack = nullptr;
+                ret = m_mem->malloc(get_graph().m_subgraphs[0].stack_size,
+                    get_graph().m_subgraphs[0].stack_align_in_page,
+                    &task.stack, "stack");
                 if (AIPU_STATUS_SUCCESS != ret)
                     goto out;
 
                 /* 1.3. allocate and load task dp */
                 if (get_graph().m_subgraphs[i].private_data_size != 0)
                 {
-                    task.private_data = new BufferDesc;
-                    ret = m_mem->malloc(get_graph().m_subgraphs[i].private_data_size, 0, task.private_data, "dp_data");
+                    task.private_data = nullptr;
+                    ret = m_mem->malloc(get_graph().m_subgraphs[i].private_data_size, 0,
+                        &task.private_data, "dp_data");
                     if (AIPU_STATUS_SUCCESS != ret)
                         goto out;
 
@@ -700,7 +690,7 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
         if (AIPU_STATUS_SUCCESS != ret)
             goto finish;
 
-        m_mem->write(m_rodata.pa, get_graph().m_brodata.va, get_graph().m_brodata.size);
+        m_mem->write(m_rodata->pa, get_graph().m_brodata.va, get_graph().m_brodata.size);
     }
 
     /* 2. allocate and load job descriptor */
@@ -710,7 +700,7 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
         if (AIPU_STATUS_SUCCESS != ret)
             goto finish;
 
-        m_mem->write(m_descriptor.pa, get_graph().m_bdesc.va, get_graph().m_bdesc.size);
+        m_mem->write(m_descriptor->pa, get_graph().m_bdesc.va, get_graph().m_bdesc.size);
     }
 
     /* 3. allocate and reset job TCBs */
@@ -718,8 +708,8 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
     if (AIPU_STATUS_SUCCESS != ret)
         goto finish;
 
-    m_mem->zeroize(m_tcbs.pa, m_tot_tcb_cnt * sizeof(tcb_t));
-    m_init_tcb.init(m_tcbs.pa);
+    m_mem->zeroize(m_tcbs->pa, m_tot_tcb_cnt * sizeof(tcb_t));
+    m_init_tcb.init(m_tcbs->pa);
 
     /* 4. allocate subgraph buffers */
     retval = alloc_subgraph_buffers_optimized();
@@ -744,7 +734,7 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
         goto finish;
 
     /* 7. setup rodata & dcr, update entry for all subgraphs in global RO/DCR section */
-    ret = setup_rodata_sg(0, get_graph().m_subgraphs[0].param_map, m_sg_job[0].reuses, m_sg_job[0].weights);
+    ret = setup_rodata_sg(0, get_graph().m_subgraphs[0].param_map, m_sg_job[0].reuses, *m_sg_job[0].weights);
     if (AIPU_STATUS_SUCCESS != ret)
         goto finish;
 
@@ -761,7 +751,7 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
     }
 
     /* 8. setup remap */
-    setup_remap(m_rodata, m_descriptor);
+    setup_remap(*m_rodata, *m_descriptor);
 
     /* 9. parse SegMMU config */
     ret = setup_segmmu(m_sg_job[0]);
@@ -877,7 +867,7 @@ aipu_status_t aipudrv::JobV3::specify_io_buffer(aipu_shared_tensor_info_t &tenso
     {
         update_io_buffers(get_graph().m_subgraphs[0].io, m_sg_job[0].reuses);
         ret = setup_rodata_sg(0, get_graph().m_subgraphs[0].param_map,
-            m_sg_job[0].reuses, m_sg_job[0].weights, &m_sg_job[0].dma_buf_idx);
+            m_sg_job[0].reuses, *m_sg_job[0].weights, &m_sg_job[0].dma_buf_idx);
         if (AIPU_STATUS_SUCCESS != ret)
             goto out;
     }
@@ -888,31 +878,21 @@ out:
 
 void aipudrv::JobV3::free_sg_buffers(SubGraphTask& sg)
 {
-    if (m_top_priv_buf.size > 0)
+    if (m_top_priv_buf != nullptr && m_top_priv_buf->size > 0)
     {
-        m_mem->free(&m_top_priv_buf);
-        m_top_priv_buf.reset();
+        m_mem->free(m_top_priv_buf, "tot_priv");
         m_top_priv_buf_freed = true;
     }
 
-    if (!m_top_priv_buf_freed)
+    if (m_top_priv_buf_freed)
     {
         for (uint32_t i = 0; i < sg.reuse_priv_buffers.size(); i++)
-        {
-            m_mem->free(sg.reuse_priv_buffers[i]);
-            sg.reuse_priv_buffers[i]->reset();
-            delete sg.reuse_priv_buffers[i];
-        }
-        sg.reuse_priv_buffers.clear();
+             m_mem->free_bufferdesc(sg.reuse_priv_buffers[i]);
     } else {
         for (uint32_t i = 0; i < sg.reuse_priv_buffers.size(); i++)
-        {
-            sg.reuse_priv_buffers[i]->reset();
-            delete sg.reuse_priv_buffers[i];
-        }
-
-        sg.reuse_priv_buffers.clear();
+            m_mem->free(sg.reuse_priv_buffers[i]);
     }
+    sg.reuse_priv_buffers.clear();
 
     /**
      * just exist one copy of reuse buffers for all subgraphs,
@@ -920,36 +900,32 @@ void aipudrv::JobV3::free_sg_buffers(SubGraphTask& sg)
      */
     if (sg.id == 0)
     {
-        if (m_top_reuse_buf.size > 0)
+        if (m_top_reuse_buf != nullptr && m_top_reuse_buf->size > 0)
         {
-            m_mem->free(&m_top_reuse_buf);
-            m_top_reuse_buf.reset();
-        }
-
-        for (uint32_t i = 0; i < sg.reuses.size(); i++)
-        {
-            /* free dma_buf externelly through dma_buf system */
-            if (sg.dma_buf_idx.count(i) == 1)
+            m_mem->free(m_top_reuse_buf, "tot_reuse");
+            for (uint32_t i = 0; i < sg.reuses.size(); i++)
             {
-                delete sg.reuses[i];
-                continue;
+                if (m_gm->gm_is_gm_buffer(i, GM_BUF_TYPE_REUSE))
+                    m_mem->free(sg.reuses[i]);
+                else
+                    m_mem->free_bufferdesc(sg.reuses[i]);
             }
-
-            if (m_top_reuse_idx.count(i) == 1)
+            m_top_reuse_idx.clear();
+        } else {
+            for (uint32_t i = 0; i < sg.reuses.size(); i++)
             {
-                sg.reuses[i]->reset();
-                delete sg.reuses[i];
-                continue;
-            }
+                if (sg.dma_buf_idx.count(i) == 1)
+                {
+                    m_mem->free_bufferdesc(sg.reuses[i]);
+                    continue;
+                }
 
-            if (sg.reuses[i]->size != 0)
-            {
                 m_mem->free(sg.reuses[i]);
-                sg.reuses[i]->reset();
-                delete sg.reuses[i];
             }
         }
-        m_top_reuse_idx.clear();
+
+        sg.reuses.clear();
+        sg.weights = nullptr;
     }
 
     for (uint32_t i = 0; i < m_sgt_allocated.size(); i++)
@@ -960,8 +936,6 @@ void aipudrv::JobV3::free_sg_buffers(SubGraphTask& sg)
             task = &m_sgt_allocated[i]->tasks[j];
             m_mem->free(task->stack);
             m_mem->free(task->private_data);
-            delete task->stack;
-            delete task->private_data;
         }
     }
     m_sgt_allocated.clear();
@@ -971,35 +945,23 @@ aipu_status_t aipudrv::JobV3::free_job_buffers()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    if (m_rodata.size != 0)
-    {
-        m_mem->free(&m_rodata);
-        m_rodata.reset();
-    }
+    if (m_rodata->size != 0)
+        m_mem->free(m_rodata, "rodata");
 
-    if (m_descriptor.size != 0)
-    {
-        m_mem->free(&m_descriptor);
-        m_descriptor.reset();
-    }
+    if (m_descriptor->size != 0)
+        m_mem->free(m_descriptor, "dcr");
 
-    if (m_tcbs.size != 0)
-    {
-        m_mem->free(&m_tcbs, "tcbs");
-        m_tcbs.reset();
-    }
+    if (m_tcbs->size != 0)
+        m_mem->free(m_tcbs, "tcbs");
 
-    if (exit_inst_encode.size > 0)
-    {
-        m_mem->free(&exit_inst_encode, "exit_inst_mc");
-        exit_inst_encode.reset();
-    }
+    #ifndef SIMULATION
+    if (m_exit_inst_encode->size > 0)
+        m_mem->free(m_exit_inst_encode, "exit_inst_mc");
+    #endif
 
-    if (m_pprint.size != 0)
-    {
-        m_mem->free(&m_pprint, "printf");
-        m_pprint.reset();
-    }
+    if (m_pprint->size != 0)
+        m_mem->free(m_pprint, "printf");
+
     m_init_tcb.init(0);
 
     for (uint32_t i = 0; i < m_sg_job.size(); i++)
@@ -1033,13 +995,13 @@ aipu_status_t aipudrv::JobV3::setup_placehold_tcb_task(uint32_t sg_id, uint32_t 
         0xff,0x7f,0x0c,0x40,
         0xff,0x7f,0x0c,0x40 };
 
-    ret = m_mem->malloc(1024, 0, &exit_inst_encode, "exit_inst_mc");
+    ret = m_mem->malloc(1024, 0, &m_exit_inst_encode, "exit_inst_mc");
     if (AIPU_STATUS_SUCCESS != ret)
     {
         LOG(LOG_ERR, "alloc exit inst buffer [fail]");
         return ret;
     }
-    m_mem->write(exit_inst_encode.pa, (const char*)exit_encode, 16);
+    m_mem->write(m_exit_inst_encode->pa, (const char*)exit_encode, 16);
 
     tcb = new tcb_t;
     memset(tcb, 0, sizeof(tcb_t));
@@ -1050,7 +1012,7 @@ aipu_status_t aipudrv::JobV3::setup_placehold_tcb_task(uint32_t sg_id, uint32_t 
     tcb->flag |= TCB_FLAG_END_TYPE_GROUP_END;
     tcb->next = 0;
 
-    tcb->spc = get_low_32(exit_inst_encode.align_asid_pa);
+    tcb->spc = get_low_32(m_exit_inst_encode->align_asid_pa);
     tcb->gridid = (uint16_t)grid_id;
     tcb->groupid = (uint16_t)core_id;
     tcb->taskid = (uint16_t)task_id;
@@ -1066,7 +1028,7 @@ aipu_status_t aipudrv::JobV3::setup_placehold_tcb_task(uint32_t sg_id, uint32_t 
     tcb->task_id_x = (uint16_t)task_id;
     tcb->task_id_y = 0;
     tcb->task_id_z = 0;
-    tcb->tcbp = get_low_32(next_tcb_pa - m_tcbs.asid_base);
+    tcb->tcbp = get_low_32(next_tcb_pa - m_tcbs->asid_base);
 
     m_mem->write(next_tcb_pa, (const char*)tcb, sizeof(*tcb));
     delete tcb;
@@ -1138,7 +1100,7 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
             tcb->flag &= ~TCB_FLAG_DEP_TYPE_PRE_ALL;
     }
 
-    tcb->spc = get_low_32(graph.m_text.align_asid_pa + graph.m_subgraphs[sg_id].text.offset);
+    tcb->spc = get_low_32(graph.m_text->align_asid_pa + graph.m_subgraphs[sg_id].text.offset);
     tcb->gridid = (uint16_t)grid_id;
     tcb->groupid = (uint16_t)core_id;
     tcb->taskid = (uint16_t)task_id;
@@ -1154,14 +1116,14 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
     tcb->task_id_x = (uint16_t)task_id;
     tcb->task_id_y = 0;
     tcb->task_id_z = 0;
-    tcb->tcbp = get_low_32(task.tcb.pa - m_tcbs.asid_base);
+    tcb->tcbp = get_low_32(task.tcb.pa - m_tcbs->asid_base);
     tcb->sp = get_low_32(task.stack->align_asid_pa);
-    tcb->pp = get_low_32(m_rodata.align_asid_pa + graph.m_subgraphs[sg_id].rodata.offset);
+    tcb->pp = get_low_32(m_rodata->align_asid_pa + graph.m_subgraphs[sg_id].rodata.offset);
     tcb->dp = get_low_32(task.private_data->align_asid_pa);
 
     /* const rodata */
-    if (graph.m_crodata.size > 0)
-        tcb->cp = get_low_32(graph.m_crodata.align_asid_pa);
+    if (graph.m_crodata != nullptr && graph.m_crodata->size > 0)
+        tcb->cp = get_low_32(graph.m_crodata->align_asid_pa);
 
     /* update profile buffer offset according to subgraph index */
     if (m_profiler.size() > 0)
@@ -1172,7 +1134,7 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
 
     if (graph.m_subgraphs[sg_id].printfifo_size > 0)
     {
-        uint32_t pa = m_pprint.align_asid_pa + AIPU_PAGE_SIZE * core_id + 1024 * task_id;
+        uint32_t pa = m_pprint->align_asid_pa + AIPU_PAGE_SIZE * core_id + 1024 * task_id;
         tcb->pprint = get_low_32(pa);
         tcb->interrupt |= EN_INTERRUPT_TEC;
     }
@@ -1335,10 +1297,10 @@ aipu_status_t aipudrv::JobV3::setup_tcbs()
     /**
      * store aligned TEXT and RO base at tail of text buffer for debugger
      */
-    m_mem->write(get_graph().m_text.pa + get_graph().m_btext.size,
-        &get_graph().m_text.align_asid_pa, 4);
-    m_mem->write(get_graph().m_text.pa + get_graph().m_btext.size + 4,
-        &m_rodata.align_asid_pa, 4);
+    m_mem->write(get_graph().m_text->pa + get_graph().m_btext.size,
+        &get_graph().m_text->align_asid_pa, 4);
+    m_mem->write(get_graph().m_text->pa + get_graph().m_btext.size + 4,
+        &m_rodata->align_asid_pa, 4);
 
     // setup_gm_sync_to_ddr(tcb);
     m_status = AIPU_JOB_STATUS_INIT;
@@ -1417,7 +1379,7 @@ aipu_status_t aipudrv::JobV3::schedule()
     m_backup_tcb_used = true;
 
     dump_job_shared_buffers();
-    dump_job_private_buffers(m_rodata, m_descriptor);
+    dump_job_private_buffers(*m_rodata, *m_descriptor);
     dump_specific_buffers();
 
     memset(&desc.kdesc, 0, sizeof(desc.kdesc));
@@ -1468,7 +1430,7 @@ aipu_status_t aipudrv::JobV3::schedule()
     desc.kdesc.is_defer_run = m_is_defer_run;
     desc.kdesc.do_trigger = m_do_trigger;
 
-    if (get_graph().m_text.size == 0)
+    if (get_graph().m_text->size == 0)
         LOG(LOG_WARN, "Graph text size is 0\n");
     else
         ret = m_dev->schedule(desc);
@@ -1494,7 +1456,7 @@ void aipudrv::JobV3::dump_specific_buffers()
 
     if (m_dump_tcb)
     {
-        dump_pa = m_tcbs.pa;
+        dump_pa = m_tcbs->pa;
         dump_size = m_tot_tcb_cnt * sizeof(tcb_t);
         if (dump_size != 0)
             dump_buffer(dump_pa, nullptr, dump_size, "TCBs");
@@ -1525,7 +1487,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     DEV_PA_64 dump_pa;
     uint32_t dump_size;
     char dump_name[4096];
-    int emu_input_cnt = INIT_NUM + m_inputs.size() + (m_descriptor.size != 0 ? 1 : 0);
+    int emu_input_cnt = INIT_NUM + m_inputs.size() + (m_descriptor->size != 0 ? 1 : 0);
     int emu_output_cnt = m_outputs.size();
     int file_id = -1;
     tcb_t tcb;
@@ -1619,19 +1581,19 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     ofs.dump_to_string(m_dumpcfg_header);
 
     /* runtime.cfg: [INPUT] */
-    if (get_graph().m_weight.size != 0)
+    if (get_graph().m_weight->size != 0)
     {
         emu_input_cnt += 1;
-        if (get_graph().m_zerocpy_const.size != 0)
+        if (get_graph().m_zerocpy_const->size != 0)
             emu_input_cnt += 1;
     } else
-        emu_input_cnt += m_sg_job[0].weights.size();
+        emu_input_cnt += m_sg_job[0].weights->size();
 
     ofs << "[INPUT]\n";
     ofs << "COUNT=" << emu_input_cnt << "\n";
 
     /* dump temp.text */
-    dump_pa = get_graph().m_text.pa;
+    dump_pa = get_graph().m_text->pa;
     dump_size = get_graph().m_btext.size;
     if (dump_size != 0)
     {
@@ -1644,8 +1606,8 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     }
 
     /* dump temp.weight */
-    dump_pa = get_graph().m_weight.pa;
-    dump_size = get_graph().m_weight.req_size;
+    dump_pa = get_graph().m_weight->pa;
+    dump_size = get_graph().m_weight->req_size;
     if (dump_size != 0)
     {
         snprintf(dump_name, 128, "%s/%s.weight", m_dump_dir.c_str(), m_dump_prefix.c_str());
@@ -1655,10 +1617,10 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
         ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
         m_dumpcfg_input.push_back({dump_name, dump_pa});
 
-        if (get_graph().m_zerocpy_const.size != 0)
+        if (get_graph().m_zerocpy_const->size != 0)
         {
-            dump_pa = get_graph().m_zerocpy_const.pa;
-            dump_size = get_graph().m_zerocpy_const.req_size;
+            dump_pa = get_graph().m_zerocpy_const->pa;
+            dump_size = get_graph().m_zerocpy_const->req_size;
             snprintf(dump_name, 128, "%s/%s.zerocpy_const", m_dump_dir.c_str(), m_dump_prefix.c_str());
             m_mem->dump_file(dump_pa, dump_name, dump_size);
 
@@ -1667,13 +1629,13 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
             m_dumpcfg_input.push_back({dump_name, dump_pa});
         }
     } else {
-        for (uint32_t i = 0; i < m_sg_job[0].weights.size(); i++)
+        for (uint32_t i = 0; i < m_sg_job[0].weights->size(); i++)
         {
             dumpcfg_input_desc input_desc;
             std::string name;
 
-            dump_pa = m_sg_job[0].weights[i]->pa;
-            dump_size = m_sg_job[0].weights[i]->size;
+            dump_pa = (*m_sg_job[0].weights)[i]->pa;
+            dump_size = (*m_sg_job[0].weights)[i]->size;
             // snprintf(dump_name, 128, "%s/%s.weight", m_dump_dir.c_str(), m_dump_prefix.c_str());
             name = m_dump_dir + "/" + m_dump_prefix + ".weight" + std::to_string(i);
             m_mem->dump_file(dump_pa, name.c_str(), dump_size);
@@ -1687,8 +1649,8 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     }
 
     /* dump temp.rodata */
-    dump_pa = m_rodata.pa;
-    dump_size = m_rodata.size;
+    dump_pa = m_rodata->pa;
+    dump_size = m_rodata->size;
     snprintf(dump_name, 128, "%s/%s.ro", m_dump_dir.c_str(), m_dump_prefix.c_str());
     m_mem->dump_file(dump_pa, dump_name, dump_size);
     ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".ro\n";
@@ -1696,10 +1658,10 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     m_dumpcfg_input.push_back({dump_name, dump_pa});
 
     /* dump temp.dcr */
-    if (m_descriptor.size != 0)
+    if (m_descriptor->size != 0)
     {
-        dump_pa = m_descriptor.pa;
-        dump_size = m_descriptor.size;
+        dump_pa = m_descriptor->pa;
+        dump_size = m_descriptor->size;
         snprintf(dump_name, 128, "%s/%s.dcr", m_dump_dir.c_str(), m_dump_prefix.c_str());
         m_mem->dump_file(dump_pa, dump_name, dump_size);
 
@@ -1709,7 +1671,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     }
 
     /* dump temp.tcb */
-    dump_pa = m_tcbs.pa;
+    dump_pa = m_tcbs->pa;
     dump_size = m_tot_tcb_cnt * sizeof(tcb_t);
     snprintf(dump_name, 128, "%s/%s.tcb", m_dump_dir.c_str(), m_dump_prefix.c_str());
     m_dump_tcb_info[0] = std::make_tuple(m_dump_dir + "/init.tcb", dump_pa,

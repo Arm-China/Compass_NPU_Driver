@@ -20,9 +20,6 @@ aipudrv::JobBase::JobBase(MainContext* ctx, GraphBase& graph, DeviceBase* dev):
     m_ctx(ctx), m_graph(graph), m_dev(dev)
 {
     m_mem = m_dev->get_mem();
-    m_rodata.reset();
-    m_descriptor.reset();
-    m_pprint.reset();
     #if DUMP_RO_ENTRY
     char log[1024] = {0};
     m_ro_entry_dump.open((m_dump_dir + "/" + m_ro_entry_name).c_str(), std::ofstream::out | std::ofstream::trunc);
@@ -61,7 +58,7 @@ aipu_status_t aipudrv::JobBase::get_status(aipu_job_status_t* status)
     if ((m_status == AIPU_JOB_STATUS_DONE) || (m_status == AIPU_JOB_STATUS_EXCEPTION))
     {
         *status = (aipu_job_status_t)m_status;
-        dump_job_private_buffers_after_run(m_rodata, m_descriptor);
+        dump_job_private_buffers_after_run(*m_rodata, *m_descriptor);
         dump_job_shared_buffers_after_run();
     } else {
         *status = AIPU_JOB_STATUS_NO_STATUS;
@@ -97,7 +94,7 @@ aipu_status_t aipudrv::JobBase::get_status_blocking(aipu_job_status_t* status, i
     if ((m_status == AIPU_JOB_STATUS_DONE) || (m_status == AIPU_JOB_STATUS_EXCEPTION))
     {
         *status = (aipu_job_status_t)m_status;
-        dump_job_private_buffers_after_run(m_rodata, m_descriptor);
+        dump_job_private_buffers_after_run(*m_rodata, *m_descriptor);
         dump_job_shared_buffers_after_run();
     } else {
         *status = AIPU_JOB_STATUS_NO_STATUS;
@@ -214,7 +211,7 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
     const std::vector<struct GraphParamMapLoadDesc>& param_map,
     const std::vector<BufferDesc*>& reuse_buf,
     const std::vector<BufferDesc*>& static_buf,
-    BufferDesc rodata, BufferDesc dcr,
+    BufferDesc &rodata, BufferDesc &dcr,
     std::set<uint32_t> *dma_buf_idx)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
@@ -329,8 +326,8 @@ aipudrv::DEV_PA_64 aipudrv::JobBase::get_base_pa(int sec_type, BufferDesc& rodat
         pa = descriptor.pa;
         align_asid_pa = pa - descriptor.asid_base;
     } else if (sec_type == SECTION_TYPE_TEXT) {
-        pa = get_graph().m_text.pa;
-        align_asid_pa = pa - get_graph().m_text.asid_base;
+        pa = get_graph().m_text->pa;
+        align_asid_pa = pa - get_graph().m_text->asid_base;
     }
 
     return (align_asid == false) ? pa : align_asid_pa;
@@ -504,28 +501,31 @@ void aipudrv::JobBase::dump_job_shared_buffers()
 
     if (m_dump_text)
     {
-        dump_pa = get_graph().m_text.pa;
+        dump_pa = get_graph().m_text->pa;
         bin_va = get_graph().m_btext.va;
         dump_size = get_graph().m_btext.size;
         dump_buffer(dump_pa, bin_va, dump_size, "Text_BeforeRun");
     }
 
-    if (m_dump_weight && get_graph().m_weight.size > 0)
+    if (m_dump_weight)
     {
-        dump_pa = get_graph().m_weight.pa;
-        bin_va = get_graph().m_bweight.va;
-        dump_size = get_graph().m_weight.size;
-        if (dump_size != 0)
-            dump_buffer(dump_pa, nullptr, dump_size, "Weight_BeforeRun");
-    }
+        if (get_graph().m_weight != nullptr && get_graph().m_weight->size > 0)
+        {
+            dump_pa = get_graph().m_weight->pa;
+            bin_va = get_graph().m_bweight.va;
+            dump_size = get_graph().m_weight->size;
+            if (dump_size != 0)
+                dump_buffer(dump_pa, nullptr, dump_size, "Weight_BeforeRun");
+        }
 
-    if (m_dump_weight && get_graph().m_zerocpy_const.size > 0)
-    {
-        dump_pa = get_graph().m_zerocpy_const.pa;
-        bin_va = get_graph().m_bweight.va;
-        dump_size = get_graph().m_zerocpy_const.size;
-        if (dump_size != 0)
-            dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_BeforeRun");
+        if (get_graph().m_zerocpy_const != nullptr && get_graph().m_zerocpy_const->size > 0)
+        {
+            dump_pa = get_graph().m_zerocpy_const->pa;
+            bin_va = get_graph().m_bweight.va;
+            dump_size = get_graph().m_zerocpy_const->size;
+            if (dump_size != 0)
+                dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_BeforeRun");
+        }
     }
 }
 
@@ -579,25 +579,28 @@ void aipudrv::JobBase::dump_job_shared_buffers_after_run()
 
     if (m_dump_text)
     {
-        dump_pa = get_graph().m_text.pa;
+        dump_pa = get_graph().m_text->pa;
         dump_size = get_graph().m_btext.size;
         dump_single_buffer(dump_pa, dump_size, "Text_AfterRun");
     }
 
-    if (m_dump_weight && get_graph().m_weight.size > 0)
+    if (m_dump_weight)
     {
-        dump_pa = get_graph().m_weight.pa;
-        dump_size = get_graph().m_weight.size;
-        if (dump_size != 0)
-            dump_single_buffer(dump_pa, dump_size, "Weight_AfterRun");
-    }
+        if (get_graph().m_weight != nullptr && get_graph().m_weight->size > 0)
+        {
+            dump_pa = get_graph().m_weight->pa;
+            dump_size = get_graph().m_weight->size;
+            if (dump_size != 0)
+                dump_single_buffer(dump_pa, dump_size, "Weight_AfterRun");
+        }
 
-    if (m_dump_weight && get_graph().m_zerocpy_const.size > 0)
-    {
-        dump_pa = get_graph().m_zerocpy_const.pa;
-        dump_size = get_graph().m_zerocpy_const.size;
-        if (dump_size != 0)
-            dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_AfterRun");
+        if (get_graph().m_zerocpy_const != nullptr && get_graph().m_zerocpy_const->size > 0)
+        {
+            dump_pa = get_graph().m_zerocpy_const->pa;
+            dump_size = get_graph().m_zerocpy_const->size;
+            if (dump_size != 0)
+                dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_AfterRun");
+        }
     }
 }
 

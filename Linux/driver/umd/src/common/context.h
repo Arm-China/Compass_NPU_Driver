@@ -33,7 +33,7 @@ private:
     GraphTable  m_graphs;
     pthread_rwlock_t m_glock;
     bool m_do_vcheck = true;
-    std::map<void*, BufferDesc> m_dbg_buffers;
+    std::map<void*, BufferDesc*> m_dbg_buffers;
 
 private:
     static std::map<uint32_t, std::string> umd_status_string;

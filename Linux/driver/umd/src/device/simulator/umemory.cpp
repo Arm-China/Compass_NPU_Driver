@@ -151,9 +151,6 @@ aipu_status_t aipudrv::UMemory::malloc_internal(uint32_t size, uint32_t align, B
     if ((size > m_memblock[asid][mem_region].size) || (0 == size))
         return AIPU_STATUS_ERROR_INVALID_SIZE;
 
-    if (nullptr == desc)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
     if (0 == align)
         align = 1;
 
@@ -200,12 +197,18 @@ aipu_status_t aipudrv::UMemory::malloc_internal(uint32_t size, uint32_t align, B
     return ret;
 }
 
-aipu_status_t aipudrv::UMemory::malloc(uint32_t size, uint32_t align, BufferDesc* desc,
+aipu_status_t aipudrv::UMemory::malloc(uint32_t size, uint32_t align, BufferDesc** desc,
     const char* str, uint32_t asid_mem_cfg)
 {
     aipu_status_t ret = AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
     uint32_t mem_region = asid_mem_cfg & 0xff;
     uint32_t asid = (asid_mem_cfg >> 8) & 0xff;
+
+    if (nullptr == *desc)
+    {
+        *desc = new BufferDesc;
+        (*desc)->reset();
+    }
 
     if (SHARE_ONE_ASID == 1)
         asid = ASID_REGION_0;
@@ -217,20 +220,22 @@ aipu_status_t aipudrv::UMemory::malloc(uint32_t size, uint32_t align, BufferDesc
     }
 
     if (mem_region != MEM_REGION_DDR)
-        ret = malloc_internal(size, align, desc, str, (asid << 8) | mem_region);
+        ret = malloc_internal(size, align, *desc, str, (asid << 8) | mem_region);
 
     if (ret != AIPU_STATUS_SUCCESS)
-        ret = malloc_internal(size, align, desc, str, (asid << 8) | MEM_REGION_DDR);
+        ret = malloc_internal(size, align, *desc, str, (asid << 8) | MEM_REGION_DDR);
 
     return ret;
 }
 
-aipu_status_t aipudrv::UMemory::free(const BufferDesc* desc, const char* str)
+aipu_status_t aipudrv::UMemory::free(BufferDesc* desc, const char* str)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     uint64_t b_start, b_end;
     bool reserve_mem_flag = false;
     auto iter = m_allocated.begin();
+    DEV_PA_64 pa = 0;
+    uint64_t size = 0;
 
     if (nullptr == desc)
         return AIPU_STATUS_ERROR_NULL_PTR;
@@ -271,18 +276,22 @@ aipu_status_t aipudrv::UMemory::free(const BufferDesc* desc, const char* str)
             m_reserved.erase(desc->pa);
             reserve_mem_flag = false;
         }
+        pa = desc->pa;
+        size = desc->size;
+        desc->reset();
+        delete desc;
     }
 
 unlock:
     pthread_rwlock_unlock(&m_lock);
     if (ret == AIPU_STATUS_SUCCESS)
-        add_tracking(desc->pa, desc->size, MemOperationFree, str, false, 0);
+        add_tracking(pa, size, MemOperationFree, str, false, 0);
 
     return ret;
 }
 
 aipu_status_t aipudrv::UMemory::reserve_mem(DEV_PA_32 addr, uint32_t size,
-    BufferDesc* desc, const char* str)
+    BufferDesc** desc, const char* str)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     uint64_t malloc_size, malloc_page = 0, i = 0;
@@ -293,8 +302,11 @@ aipu_status_t aipudrv::UMemory::reserve_mem(DEV_PA_32 addr, uint32_t size,
     if (0 == size)
         return AIPU_STATUS_ERROR_INVALID_SIZE;
 
-    if (nullptr == desc)
-        return AIPU_STATUS_ERROR_NULL_PTR;
+    if (nullptr == *desc)
+    {
+        *desc = new BufferDesc;
+        (*desc)->reset();
+    }
 
     pthread_rwlock_wrlock(&m_lock);
 
@@ -310,12 +322,12 @@ aipu_status_t aipudrv::UMemory::reserve_mem(DEV_PA_32 addr, uint32_t size,
     if (malloc_page > m_memblock[asid][mem_region].bit_cnt)
         return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
 
-    desc->init(get_asid_base(asid), addr, malloc_size, size, 0, (asid << 8) | mem_region);
-    buf.desc = desc;
+    (*desc)->init(get_asid_base(asid), addr, malloc_size, size, 0, (asid << 8) | mem_region);
+    buf.desc = *desc;
     buf.va = new char[size];
     memset(buf.va, 0, size);
     buf.ref_get();
-    m_reserved[desc->pa] = buf;
+    m_reserved[(*desc)->pa] = buf;
 
     i = get_next_alinged_page_no((addr - get_asid_base(asid)) >> 12, 1, (asid << 8) | mem_region);
     for (uint32_t j = 0; j < malloc_page; j++)
@@ -324,7 +336,7 @@ aipu_status_t aipudrv::UMemory::reserve_mem(DEV_PA_32 addr, uint32_t size,
     pthread_rwlock_unlock(&m_lock);
 
     if (ret == AIPU_STATUS_SUCCESS)
-        add_tracking(desc->pa, desc->size, MemOperationAlloc, str, false, 0);
+        add_tracking((*desc)->pa, (*desc)->size, MemOperationAlloc, str, false, 0);
 
     return ret;
 }
@@ -383,6 +395,8 @@ aipu_status_t aipudrv::UMemory::free_all(void)
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     uint64_t b_start = 0, b_end = 0;
     const char *promt = nullptr;
+    DEV_PA_64 pa = 0;
+    uint64_t size = 0;
 
     pthread_rwlock_wrlock(&m_lock);
     for (auto mem_map : m_allocated_buf_map)
@@ -406,9 +420,13 @@ aipu_status_t aipudrv::UMemory::free_all(void)
 
             LOG(LOG_INFO, "free buffer_pa=%lx\n", desc->pa);
             delete []iter->second.va;
+            pa = desc->pa;
+            size = desc->size;
+            desc->reset();
+            delete desc;
             pthread_rwlock_unlock(&m_lock);
             (mem_map == &m_reserved) ? promt = "rsv" : promt = "normal";
-            add_tracking(desc->pa, desc->size, MemOperationFree, promt, false, 0);
+            add_tracking(pa, size, MemOperationFree, promt, false, 0);
             pthread_rwlock_wrlock(&m_lock);
         }
 

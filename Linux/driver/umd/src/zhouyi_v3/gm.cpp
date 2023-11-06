@@ -52,7 +52,7 @@ void aipudrv::GM_V3::gm_dynamic_switch(uint32_t core_cnt)
 }
 
 aipu_status_t aipudrv::GM_V3::gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t buf_type,
-    std::string &buf_name, BufferDesc &buf)
+    std::string &buf_name, BufferDesc *buf)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     uint32_t asid = 0;
@@ -90,18 +90,18 @@ aipu_status_t aipudrv::GM_V3::gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t b
 
     /* record and free weight buffer, the reuse buffer is freed in another path */
     if (buf_type == GM_BUF_TYPE_WEIGHT)
-        m_gm_free_buffer.push_back(&buf);
+        m_gm_free_buffer.push_back(buf);
 
     /* ignore reuse temp buffer (non input/output) */
     if (buf_type == GM_BUF_TYPE_REUSE &&
         m_job.m_gm_info[buf_type][idx].gm_buf_type == GM_SUB_BUF_TYPE_IGNORE)
         goto out;
 
-    get_valid_map_base(buf);
+    get_valid_map_base(*buf);
     if (m_job.m_gm_info[buf_type][idx].gm_buf_type == GM_SUB_BUF_TYPE_TEMP)
         goto out;
 
-    get_valid_sync_region(sg_id, idx, buf_type, buf, io_region);
+    get_valid_sync_region(sg_id, idx, buf_type, *buf, io_region);
     for (int _buf_typ = EM_GM_BUF_INPUT; _buf_typ < EM_GM_BUF_MAX; _buf_typ++)
     {
         DEV_PA_64 sync_pa = io_region.valid_sync_buf[_buf_typ].sync_pa;

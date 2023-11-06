@@ -87,9 +87,9 @@ protected:
 
 protected:
     /* shared buffers */
-    BufferDesc m_rodata;
-    BufferDesc m_descriptor;
-    BufferDesc m_pprint;
+    BufferDesc *m_rodata = nullptr;
+    BufferDesc *m_descriptor = nullptr;
+    BufferDesc *m_pprint = nullptr;
     std::vector<struct JobIOBuffer> m_inputs;
     std::vector<struct JobIOBuffer> m_outputs;
     std::vector<struct JobIOBuffer> m_inter_dumps;
@@ -151,7 +151,7 @@ protected:
         const std::vector<struct GraphParamMapLoadDesc>& param_map,
         const std::vector<BufferDesc*>& reuse_buf,
         const std::vector<BufferDesc*>& static_buf,
-        BufferDesc rodata, BufferDesc dcr,
+        BufferDesc &rodata, BufferDesc &dcr,
         std::set<uint32_t> *dma_buf_idx = nullptr);
     virtual Graph& get_graph()
     {

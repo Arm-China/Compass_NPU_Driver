@@ -25,9 +25,9 @@ class JobV12: public JobBase
 private:
     DEV_PA_64 m_spc = 0;
     DEV_PA_64 m_intr_pc = 0;
-    BufferDesc m_stack;
+    BufferDesc *m_stack = nullptr;
     std::vector<BufferDesc*> m_reuses;
-    std::vector<BufferDesc*> m_weights; /* Do NOT free me in this class */
+    std::vector<BufferDesc*> *m_weights = nullptr; /* Do NOT free me in this class */
     std::string m_sim;
     uint32_t m_log_level = 0;
     bool m_en_eval = false;
@@ -37,7 +37,7 @@ private:
     bool m_do_trigger = false;
     uint32_t m_bind_core_id = 0;
     uint32_t m_fm_mem_region = AIPU_BUF_REGION_DEFAULT;
-    BufferDesc m_top_reuse_buf;
+    BufferDesc *m_top_reuse_buf = nullptr;
     std::set<uint32_t> m_top_reuse_idx;
 
 public:

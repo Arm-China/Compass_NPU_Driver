@@ -323,3 +323,12 @@ aipu_status_t aipudrv::MemoryBase::load_file(DEV_PA_64 dest, const char* name, u
 
     return ret;
 }
+
+void aipudrv::MemoryBase::free_bufferdesc(BufferDesc* desc)
+{
+    if (desc != nullptr)
+    {
+        desc->reset();
+        delete desc;
+    }
+}
