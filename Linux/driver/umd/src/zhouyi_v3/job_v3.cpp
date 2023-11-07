@@ -47,13 +47,13 @@ aipudrv::JobV3::JobV3(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_
 
     if (config->fm_idxes)
     {
-        for (int i = 0; config->fm_idxes_cnt; i++)
+        for (int i = 0; i < config->fm_idxes_cnt; i++)
             m_fm_idxes.insert(config->fm_idxes[i]);
     }
 
     if (config->wt_idxes)
     {
-        for (int i = 0; config->wt_idxes_cnt; i++)
+        for (int i = 0; i < config->wt_idxes_cnt; i++)
             m_wt_idxes.insert(config->wt_idxes[i]);
 
         if (m_wt_idxes.size() > 0)
