@@ -330,7 +330,7 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                         buf_name = "gm_" + buf_name;
                         ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, bufferDesc);
                     } else {
-                        if (m_fm_idxes.count(k) == 1)
+                        if ((m_fm_idxes.count(k) == 1) || (m_fm_mem_region != AIPU_MEM_REGION_DEFAULT))
                             ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
                                 buf_name.c_str(), m_fm_mem_region);
                         else
@@ -527,7 +527,7 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
                             goto add_sg;
                         }
                     } else {
-                        if (m_fm_idxes.count(k) == 1)
+                        if ((m_fm_idxes.count(k) == 1) || (m_fm_mem_region != AIPU_MEM_REGION_DEFAULT))
                         {
                             ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
                                 buf_name.c_str(), m_fm_mem_region);
