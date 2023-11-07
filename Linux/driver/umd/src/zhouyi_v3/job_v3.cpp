@@ -327,6 +327,7 @@ aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
                     /* handle buffer if allocated from GM */
                     if (m_gm->gm_is_gm_buffer(k, GM_BUF_TYPE_REUSE))
                     {
+                        bufferDesc = new BufferDesc;
                         buf_name = "gm_" + buf_name;
                         ret = m_gm->gm_malloc(sg_idx, k, GM_BUF_TYPE_REUSE, buf_name, bufferDesc);
                     } else {
@@ -402,8 +403,7 @@ add_sg:
             goto out;
     }
 
-    if ((m_pprint->size == 0) && get_subgraph_cnt() > 0 &&
-        get_graph().m_subgraphs[0].printfifo_size > 0)
+    if (get_subgraph_cnt() > 0 && get_graph().m_subgraphs[0].printfifo_size > 0)
     {
         std::string buf_name = "printf";
         ret = m_mem->malloc(get_subgraph_cnt() * AIPU_PAGE_SIZE, 0, &m_pprint, buf_name.c_str());
@@ -837,7 +837,7 @@ aipu_status_t aipudrv::JobV3::specify_io_buffer(aipu_shared_tensor_info_t &tenso
     m_sg_job[0].dma_buf_idx.insert(reuse_index);
     if (!m_optimized_reuse_alloc)
     {
-        ret = m_mem->free(bufferDesc, str);
+        ret = m_mem->free_phybuffer(bufferDesc, str);
         if (ret != AIPU_STATUS_SUCCESS)
             goto out;
     }

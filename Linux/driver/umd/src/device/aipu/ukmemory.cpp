@@ -152,6 +152,57 @@ unlock:
     return ret;
 }
 
+aipu_status_t aipudrv::UKMemory::free_phybuffer(BufferDesc* desc, const char* str)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    int kret = 0;
+    aipu_buf_desc kdesc;
+    auto iter = m_allocated.begin();
+    unsigned long free_cmd = AIPU_IOCTL_FREE_BUF;
+    DEV_PA_64 pa = 0;
+    uint64_t size = 0;
+
+    if (desc == nullptr)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
+    pthread_rwlock_wrlock(&m_lock);
+    iter = m_allocated.find(desc->pa);
+    if ((iter == m_allocated.end()) ||
+        (iter->second.desc->size != desc->size))
+    {
+        ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
+        goto unlock;
+    }
+
+    iter->second.ref_put();
+    if (iter->second.get_Buffer_refcnt() == 0)
+    {
+        kdesc.pa = desc->pa;
+        kdesc.bytes = desc->size;
+        munmap(iter->second.va, kdesc.bytes);
+        kret = ioctl(m_fd, free_cmd, &kdesc);
+        if (kret != 0)
+        {
+            LOG(LOG_ERR, "free buffer 0x%lx [fail]", desc->pa);
+            ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
+            goto unlock;
+        }
+
+        LOG(LOG_INFO, "free buffer_pa=%lx\n", iter->second.desc->pa);
+        m_allocated.erase(desc->pa);
+        pa = desc->pa;
+        size = desc->size;
+    }
+
+unlock:
+    pthread_rwlock_unlock(&m_lock);
+
+    if (ret == AIPU_STATUS_SUCCESS)
+        add_tracking(pa, size, MemOperationFree, str, false, 0);
+
+    return ret;
+}
+
 aipu_status_t aipudrv::UKMemory::reserve_mem(DEV_PA_32 addr, uint32_t size, BufferDesc** desc, const char* str)
 {
     return AIPU_STATUS_SUCCESS;

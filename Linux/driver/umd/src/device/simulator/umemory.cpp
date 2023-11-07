@@ -290,6 +290,66 @@ unlock:
     return ret;
 }
 
+aipu_status_t aipudrv::UMemory::free_phybuffer(BufferDesc* desc, const char* str)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    uint64_t b_start, b_end;
+    bool reserve_mem_flag = false;
+    auto iter = m_allocated.begin();
+    DEV_PA_64 pa = 0;
+    uint64_t size = 0;
+
+    if (nullptr == desc)
+        return AIPU_STATUS_ERROR_NULL_PTR;
+
+    if (0 == desc->size)
+        return AIPU_STATUS_ERROR_INVALID_SIZE;
+
+    pthread_rwlock_wrlock(&m_lock);
+    iter = m_allocated.find(desc->pa);
+    if (iter == m_allocated.end())
+    {
+        iter = m_reserved.find(desc->pa);
+        if (iter == m_reserved.end())
+        {
+            ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
+            goto unlock;
+        }
+        reserve_mem_flag = true;
+    }
+
+    iter->second.ref_put();
+    if (iter->second.get_Buffer_refcnt() == 0)
+    {
+        int mem_region = desc->ram_region;
+        int asid = desc->asid;
+        b_start = (iter->second.desc->pa - m_memblock[asid][mem_region].base) / AIPU_PAGE_SIZE;
+        b_end = b_start + iter->second.desc->size / AIPU_PAGE_SIZE;
+        for (uint64_t i = b_start; i < b_end; i++)
+            m_memblock[asid][mem_region].bitmap[i] = true;
+
+        LOG(LOG_INFO, "free buffer_pa=%lx\n", iter->second.desc->pa);
+        delete []iter->second.va;
+        iter->second.va = nullptr;
+        if (!reserve_mem_flag)
+        {
+            m_allocated.erase(desc->pa);
+        } else {
+            m_reserved.erase(desc->pa);
+            reserve_mem_flag = false;
+        }
+        pa = desc->pa;
+        size = desc->size;
+    }
+
+unlock:
+    pthread_rwlock_unlock(&m_lock);
+    if (ret == AIPU_STATUS_SUCCESS)
+        add_tracking(pa, size, MemOperationFree, str, false, 0);
+
+    return ret;
+}
+
 aipu_status_t aipudrv::UMemory::reserve_mem(DEV_PA_32 addr, uint32_t size,
     BufferDesc** desc, const char* str)
 {

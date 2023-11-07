@@ -309,7 +309,7 @@ aipu_status_t aipudrv::JobV12::specify_io_buffer(aipu_shared_tensor_info_t &tens
 
     if (!m_optimized_reuse_alloc)
     {
-        ret = m_mem->free(bufferDesc, str);
+        ret = m_mem->free_phybuffer(bufferDesc, str);
         if (ret != AIPU_STATUS_SUCCESS)
             goto out;
     }
