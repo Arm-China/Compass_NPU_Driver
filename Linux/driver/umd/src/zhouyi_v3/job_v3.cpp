@@ -429,6 +429,13 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
     uint32_t priv_offset = 0, offset = 0;
     int retval = 0;
 
+    if (m_fm_mem_region != AIPU_MEM_REGION_DEFAULT)
+    {
+        retval = -1;
+        LOG(LOG_DEBUG, "don't try optimization if specify memory region\n");
+        goto opt_alloc_fail;
+    }
+
     /* caculate the total size of each buffer type */
     for (uint32_t sg_idx = 0; sg_idx < m_sg_cnt; sg_idx++)
     {
@@ -532,7 +539,7 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
                             goto add_sg;
                         }
                     } else {
-                        if ((m_fm_idxes.count(k) == 1) || (m_fm_mem_region != AIPU_MEM_REGION_DEFAULT))
+                        if (m_fm_idxes.count(k) == 1)
                         {
                             ret = m_mem->malloc(section_desc.size, section_desc.align_in_page, &bufferDesc,
                                 buf_name.c_str(), m_fm_mem_region);
@@ -590,10 +597,10 @@ add_sg:
     return retval;
 
 opt_alloc_fail:
-    if (m_top_priv_buf->size > 0)
+    if (m_top_priv_buf != nullptr && m_top_priv_buf->size > 0)
         m_mem->free(m_top_priv_buf);
 
-    if (m_top_reuse_buf->size > 0)
+    if (m_top_reuse_buf != nullptr && m_top_reuse_buf->size > 0)
         m_mem->free(m_top_reuse_buf);
 
     m_top_reuse_idx.clear();
@@ -960,11 +967,11 @@ aipu_status_t aipudrv::JobV3::free_job_buffers()
         m_mem->free(m_tcbs, "tcbs");
 
     #ifndef SIMULATION
-    if (m_exit_inst_encode->size > 0)
+    if (m_exit_inst_encode != nullptr && m_exit_inst_encode->size > 0)
         m_mem->free(m_exit_inst_encode, "exit_inst_mc");
     #endif
 
-    if (m_pprint->size != 0)
+    if (m_pprint != nullptr && m_pprint->size != 0)
         m_mem->free(m_pprint, "printf");
 
     m_init_tcb.init(0);

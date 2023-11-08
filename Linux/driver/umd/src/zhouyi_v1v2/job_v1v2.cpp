@@ -387,7 +387,7 @@ aipu_status_t aipudrv::JobV12::free_job_buffers()
 aipu_status_t aipudrv::JobV12::schedule()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    JobDesc desc;
+    JobDesc desc = {0};
 
     ret = validate_schedule_status();
     if (ret != AIPU_STATUS_SUCCESS)
@@ -400,7 +400,6 @@ aipu_status_t aipudrv::JobV12::schedule()
     for (uint32_t i = 0; i < m_err_code.size(); i++)
         m_mem->zeroize(m_err_code[i].pa, m_err_code[i].size);
 
-    memset(&desc.kdesc, 0, sizeof(desc.kdesc));
     desc.kdesc.job_id = m_id;
     desc.kdesc.is_defer_run = m_is_defer_run;
     desc.kdesc.do_trigger = m_do_trigger;
@@ -437,18 +436,12 @@ aipu_status_t aipudrv::JobV12::schedule()
     {
         desc.weight_pa = get_graph().m_weight->pa;
         desc.weight_size = get_graph().m_weight->req_size;
-    } else {
-        desc.weight_pa = 0;
-        desc.weight_size = 0;
     }
 
     if (get_graph().m_zerocpy_const != nullptr)
     {
         desc.zerocpy_const_pa = get_graph().m_zerocpy_const->pa;
         desc.zerocpy_const_size = get_graph().m_zerocpy_const->req_size;
-    } else {
-        desc.zerocpy_const_pa = 0;
-        desc.zerocpy_const_size = 0;
     }
 
     desc.rodata_size = m_rodata->req_size;
@@ -456,10 +449,8 @@ aipu_status_t aipudrv::JobV12::schedule()
     {
         desc.dcr_pa = m_descriptor->pa;
         desc.dcr_size = m_descriptor->req_size;
-    } else {
-        desc.dcr_pa = 0;
-        desc.dcr_size = 0;
     }
+
     desc.stack_size = m_stack->req_size;
     desc.reuses = m_reuses;
     desc.weights = m_weights;
