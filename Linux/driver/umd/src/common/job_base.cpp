@@ -58,7 +58,7 @@ aipu_status_t aipudrv::JobBase::get_status(aipu_job_status_t* status)
     if ((m_status == AIPU_JOB_STATUS_DONE) || (m_status == AIPU_JOB_STATUS_EXCEPTION))
     {
         *status = (aipu_job_status_t)m_status;
-        dump_job_private_buffers_after_run(*m_rodata, *m_descriptor);
+        dump_job_private_buffers_after_run(*m_rodata, m_descriptor);
         dump_job_shared_buffers_after_run();
     } else {
         *status = AIPU_JOB_STATUS_NO_STATUS;
@@ -94,7 +94,7 @@ aipu_status_t aipudrv::JobBase::get_status_blocking(aipu_job_status_t* status, i
     if ((m_status == AIPU_JOB_STATUS_DONE) || (m_status == AIPU_JOB_STATUS_EXCEPTION))
     {
         *status = (aipu_job_status_t)m_status;
-        dump_job_private_buffers_after_run(*m_rodata, *m_descriptor);
+        dump_job_private_buffers_after_run(*m_rodata, m_descriptor);
         dump_job_shared_buffers_after_run();
     } else {
         *status = AIPU_JOB_STATUS_NO_STATUS;
@@ -211,7 +211,7 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
     const std::vector<struct GraphParamMapLoadDesc>& param_map,
     const std::vector<BufferDesc*>& reuse_buf,
     const std::vector<BufferDesc*>& static_buf,
-    BufferDesc &rodata, BufferDesc &dcr,
+    BufferDesc &rodata, BufferDesc *dcr,
     std::set<uint32_t> *dma_buf_idx)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
@@ -222,8 +222,8 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
     #endif
 
     m_mem->pa_to_va(rodata.pa, rodata.size, &ro_va);
-    if (dcr.size != 0)
-        m_mem->pa_to_va(dcr.pa, dcr.size, &dcr_va);
+    if (dcr != nullptr && dcr->size != 0)
+        m_mem->pa_to_va(dcr->pa, dcr->size, &dcr_va);
 
     for (uint32_t i = 0; i < param_map.size(); i++)
     {
@@ -255,21 +255,21 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
         if (param_map[i].load_type == PARAM_MAP_LOAD_TYPE_REUSE)
         {
             LOG(LOG_INFO, "%8u: re: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
-                rodata.req_size, dcr.req_size, ref_iter, sec_offset, entry_offset,
+                rodata.req_size, dcr->req_size, ref_iter, sec_offset, entry_offset,
                 get_low_32(reuse_buf[ref_iter]->align_asid_pa) + sec_offset);
             #if DUMP_RO_ENTRY
             snprintf(log, 1024, "%8u: re: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
-                rodata.req_size, dcr.req_size, ref_iter, sec_offset, entry_offset,
+                rodata.req_size, dcr->req_size, ref_iter, sec_offset, entry_offset,
                 get_low_32(reuse_buf[ref_iter]->align_asid_pa) + sec_offset);
             m_ro_entry_dump << log << std::endl;
             #endif
         } else {
             LOG(LOG_INFO, "%8u: wt: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
-                rodata.req_size, dcr.req_size, ref_iter, sec_offset, entry_offset,
+                rodata.req_size, dcr->req_size, ref_iter, sec_offset, entry_offset,
                 get_low_32(static_buf[ref_iter]->align_asid_pa) + sec_offset);
             #if DUMP_RO_ENTRY
             snprintf(log, 1024, "%8u: wt: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
-                rodata.req_size, dcr.req_size, ref_iter, sec_offset, entry_offset,
+                rodata.req_size, dcr->req_size, ref_iter, sec_offset, entry_offset,
                 get_low_32(static_buf[ref_iter]->align_asid_pa) + sec_offset);
             m_ro_entry_dump << log << std::endl;
             #endif
@@ -313,7 +313,7 @@ finish:
 }
 
 aipudrv::DEV_PA_64 aipudrv::JobBase::get_base_pa(int sec_type, BufferDesc& rodata,
-        BufferDesc& descriptor, bool align_asid)
+        BufferDesc* descriptor, bool align_asid)
 {
     DEV_PA_64 pa = 0;
     DEV_PA_64 align_asid_pa = 0;
@@ -322,9 +322,9 @@ aipudrv::DEV_PA_64 aipudrv::JobBase::get_base_pa(int sec_type, BufferDesc& rodat
     {
         pa = rodata.pa;
         align_asid_pa = pa - rodata.asid_base;
-    } else if (sec_type == SECTION_TYPE_DESCRIPTOR) {
-        pa = descriptor.pa;
-        align_asid_pa = pa - descriptor.asid_base;
+    } else if ((descriptor != nullptr) && (sec_type == SECTION_TYPE_DESCRIPTOR)) {
+        pa = descriptor->pa;
+        align_asid_pa = pa - descriptor->asid_base;
     } else if (sec_type == SECTION_TYPE_TEXT) {
         pa = get_graph().m_text->pa;
         align_asid_pa = pa - get_graph().m_text->asid_base;
@@ -333,7 +333,7 @@ aipudrv::DEV_PA_64 aipudrv::JobBase::get_base_pa(int sec_type, BufferDesc& rodat
     return (align_asid == false) ? pa : align_asid_pa;
 }
 
-void aipudrv::JobBase::setup_remap(BufferDesc& rodata, BufferDesc& descriptor)
+void aipudrv::JobBase::setup_remap(BufferDesc& rodata, BufferDesc* descriptor)
 {
     for (uint32_t i = 0; i < get_graph().m_remap.size(); i++)
     {
@@ -529,7 +529,7 @@ void aipudrv::JobBase::dump_job_shared_buffers()
     }
 }
 
-void aipudrv::JobBase::dump_job_private_buffers(BufferDesc& rodata, BufferDesc& descriptor)
+void aipudrv::JobBase::dump_job_private_buffers(BufferDesc& rodata, BufferDesc* descriptor)
 {
     DEV_PA_64 dump_pa;
     uint32_t dump_size;
@@ -544,9 +544,9 @@ void aipudrv::JobBase::dump_job_private_buffers(BufferDesc& rodata, BufferDesc& 
             dump_buffer(dump_pa, bin_va, dump_size, "Rodata_BeforeRun");
     }
 
-    if (m_dump_dcr)
+    if (m_dump_dcr && descriptor != nullptr)
     {
-        dump_pa = descriptor.pa;
+        dump_pa = descriptor->pa;
         bin_va = get_graph().m_bdesc.va;
         dump_size = get_graph().m_bdesc.size;
         if (dump_size != 0)
@@ -604,7 +604,7 @@ void aipudrv::JobBase::dump_job_shared_buffers_after_run()
     }
 }
 
-void aipudrv::JobBase::dump_job_private_buffers_after_run(BufferDesc& rodata, BufferDesc& descriptor)
+void aipudrv::JobBase::dump_job_private_buffers_after_run(BufferDesc& rodata, BufferDesc* descriptor)
 {
     DEV_PA_64 dump_pa;
     uint32_t dump_size;
@@ -669,9 +669,9 @@ void aipudrv::JobBase::dump_job_private_buffers_after_run(BufferDesc& rodata, Bu
             dump_buffer(dump_pa, nullptr, dump_size, "Rodata_AfterRun");
     }
 
-    if (m_dump_dcr)
+    if (m_dump_dcr && descriptor != nullptr)
     {
-        dump_pa = descriptor.pa;
+        dump_pa = descriptor->pa;
         dump_size = get_graph().m_bdesc.size;
         if (dump_size != 0)
             dump_buffer(dump_pa, nullptr, dump_size, "Descriptor_AfterRun");

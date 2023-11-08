@@ -32,7 +32,7 @@ aipu_status_t aipudrv::JobV12::setup_rodata_v12(std::set<uint32_t> *dma_buf_idx)
     const std::vector<struct GraphParamMapLoadDesc>& param_map =
         get_graph().m_param_map;
 
-    return setup_rodata(param_map, m_reuses, *m_weights, *m_rodata, *m_descriptor, dma_buf_idx);
+    return setup_rodata(param_map, m_reuses, *m_weights, *m_rodata, m_descriptor, dma_buf_idx);
 }
 
 int aipudrv::JobV12::alloc_reuse_buffer_optimized()
@@ -214,7 +214,7 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
         goto finish;
 
     /* 7. setup remap */
-    setup_remap(*m_rodata, *m_descriptor);
+    setup_remap(*m_rodata, m_descriptor);
 
     /* 8. get IO buffer address */
     create_io_buffers(get_graph().m_io, m_reuses);
@@ -351,7 +351,7 @@ aipu_status_t aipudrv::JobV12::free_job_buffers()
     if (m_rodata->size != 0)
         m_mem->free(m_rodata);
 
-    if (m_descriptor->size != 0)
+    if (m_descriptor != nullptr && m_descriptor->size != 0)
         m_mem->free(m_descriptor);
 
     if (m_stack->size != 0)
@@ -394,7 +394,7 @@ aipu_status_t aipudrv::JobV12::schedule()
         return ret;
 
     dump_job_shared_buffers();
-    dump_job_private_buffers(*m_rodata, *m_descriptor);
+    dump_job_private_buffers(*m_rodata, m_descriptor);
 
     /* initialize error code buffer */
     for (uint32_t i = 0; i < m_err_code.size(); i++)
@@ -433,8 +433,14 @@ aipu_status_t aipudrv::JobV12::schedule()
     desc.kdesc.dtcm_size_kb = get_graph().m_dtcm_size;
     desc.kdesc.enable_poll_opt = !m_hw_cfg->poll_in_commit_thread;
     desc.text_size = get_graph().m_btext.size;
-    desc.weight_pa = get_graph().m_weight->pa;
-    desc.weight_size = get_graph().m_weight->req_size;
+    if (get_graph().m_weight != nullptr)
+    {
+        desc.weight_pa = get_graph().m_weight->pa;
+        desc.weight_size = get_graph().m_weight->req_size;
+    } else {
+        desc.weight_pa = 0;
+        desc.weight_size = 0;
+    }
 
     if (get_graph().m_zerocpy_const != nullptr)
     {
@@ -446,8 +452,14 @@ aipu_status_t aipudrv::JobV12::schedule()
     }
 
     desc.rodata_size = m_rodata->req_size;
-    desc.dcr_pa = m_descriptor->pa;
-    desc.dcr_size = m_descriptor->req_size;
+    if (m_descriptor != nullptr)
+    {
+        desc.dcr_pa = m_descriptor->pa;
+        desc.dcr_size = m_descriptor->req_size;
+    } else {
+        desc.dcr_pa = 0;
+        desc.dcr_size = 0;
+    }
     desc.stack_size = m_stack->req_size;
     desc.reuses = m_reuses;
     desc.weights = m_weights;

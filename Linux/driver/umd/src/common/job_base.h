@@ -141,7 +141,7 @@ protected:
 
 private:
     DEV_PA_64 get_base_pa(int sec_type, BufferDesc& rodata,
-        BufferDesc& descriptor, bool align_asid);
+        BufferDesc* descriptor, bool align_asid);
     void create_io_buffers(std::vector<struct JobIOBuffer>& bufs,
         const std::vector<GraphIOTensorDesc>& desc,
         const std::vector<BufferDesc*>& reuses);
@@ -151,7 +151,7 @@ protected:
         const std::vector<struct GraphParamMapLoadDesc>& param_map,
         const std::vector<BufferDesc*>& reuse_buf,
         const std::vector<BufferDesc*>& static_buf,
-        BufferDesc &rodata, BufferDesc &dcr,
+        BufferDesc &rodata, BufferDesc *dcr,
         std::set<uint32_t> *dma_buf_idx = nullptr);
     virtual Graph& get_graph()
     {
@@ -160,7 +160,7 @@ protected:
 
     virtual uint32_t get_subgraph_cnt() = 0;
     virtual const std::vector<BufferDesc*> & get_reuse() = 0;
-    void setup_remap(BufferDesc& rodata, BufferDesc& descriptor);
+    void setup_remap(BufferDesc& rodata, BufferDesc* descriptor);
     void create_io_buffers(const struct GraphIOTensors& io,
         const std::vector<BufferDesc*>& reuses);
     void update_io_buffers(const struct GraphIOTensors& io,
@@ -170,9 +170,9 @@ protected:
     void dump_share_buffer(struct JobIOBuffer &iobuf, const char* name, bool keep_name = false);
     int readwrite_dma_buf(struct JobIOBuffer &iobuf, void *data, bool read = true);
     void dump_job_shared_buffers();
-    void dump_job_private_buffers(BufferDesc& rodata, BufferDesc& descriptor);
+    void dump_job_private_buffers(BufferDesc& rodata, BufferDesc* descriptor);
     void dump_job_shared_buffers_after_run();
-    void dump_job_private_buffers_after_run(BufferDesc& rodata, BufferDesc& descriptor);
+    void dump_job_private_buffers_after_run(BufferDesc& rodata, BufferDesc* descriptor);
     aipu_status_t validate_schedule_status();
 
 public:

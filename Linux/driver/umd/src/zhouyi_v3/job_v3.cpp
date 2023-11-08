@@ -275,7 +275,7 @@ aipu_status_t aipudrv::JobV3::setup_rodata_sg(uint32_t sg_id,
 
     rodata.init(0, m_rodata->pa, m_rodata->size, m_rodata->req_size);
     dcr.init(0, m_descriptor->pa, m_descriptor->size, m_descriptor->req_size);
-    return setup_rodata(param_map, reuse_buf, static_buf, rodata, dcr, dma_buf_idx);
+    return setup_rodata(param_map, reuse_buf, static_buf, rodata, &dcr, dma_buf_idx);
 }
 
 aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
@@ -751,7 +751,7 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
     }
 
     /* 8. setup remap */
-    setup_remap(*m_rodata, *m_descriptor);
+    setup_remap(*m_rodata, m_descriptor);
 
     /* 9. parse SegMMU config */
     ret = setup_segmmu(m_sg_job[0]);
@@ -948,7 +948,7 @@ aipu_status_t aipudrv::JobV3::free_job_buffers()
     if (m_rodata->size != 0)
         m_mem->free(m_rodata, "rodata");
 
-    if (m_descriptor->size != 0)
+    if (m_descriptor != nullptr && m_descriptor->size != 0)
         m_mem->free(m_descriptor, "dcr");
 
     if (m_tcbs->size != 0)
@@ -1379,7 +1379,7 @@ aipu_status_t aipudrv::JobV3::schedule()
     m_backup_tcb_used = true;
 
     dump_job_shared_buffers();
-    dump_job_private_buffers(*m_rodata, *m_descriptor);
+    dump_job_private_buffers(*m_rodata, m_descriptor);
     dump_specific_buffers();
 
     memset(&desc.kdesc, 0, sizeof(desc.kdesc));
@@ -1487,7 +1487,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     DEV_PA_64 dump_pa;
     uint32_t dump_size;
     char dump_name[4096];
-    int emu_input_cnt = INIT_NUM + m_inputs.size() + (m_descriptor->size != 0 ? 1 : 0);
+    int emu_input_cnt = INIT_NUM + m_inputs.size() + (m_descriptor != nullptr ? 1 : 0);
     int emu_output_cnt = m_outputs.size();
     int file_id = -1;
     tcb_t tcb;
@@ -1658,7 +1658,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     m_dumpcfg_input.push_back({dump_name, dump_pa});
 
     /* dump temp.dcr */
-    if (m_descriptor->size != 0)
+    if (m_descriptor != nullptr && m_descriptor->size != 0)
     {
         dump_pa = m_descriptor->pa;
         dump_size = m_descriptor->size;
