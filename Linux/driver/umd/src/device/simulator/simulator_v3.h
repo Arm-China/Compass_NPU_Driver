@@ -378,9 +378,18 @@ public:
         return AIPU_STATUS_ERROR_INVALID_OP;
     }
 
-    int get_config_code()
+    const char *get_config_code()
     {
-        return m_config.code;
+        std::map<uint32_t, const char *> npu_sim_codetoname =
+        {
+            {sim_aipu::config_t::X2_1204, "X2_1204"},
+            {sim_aipu::config_t::X2_1204MP3, "X2_1204MP3"}
+        };
+
+        if (npu_sim_codetoname.count(m_config.code) == 1)
+            return npu_sim_codetoname[m_config.code];
+        else
+            return npu_sim_codetoname[sim_aipu::config_t::X2_1204];
     }
 
     /**

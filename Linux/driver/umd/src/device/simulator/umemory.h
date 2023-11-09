@@ -83,7 +83,6 @@ private:
         { {0, 0}, {0, 0}, {0, 0}, {0, 0} },
         { {0, 0}, {0, 0}, {0, 0}, {0, 0} }
     };
-    BufferDesc *desc = nullptr;
     bool m_gm_mean = false;
 
 private:

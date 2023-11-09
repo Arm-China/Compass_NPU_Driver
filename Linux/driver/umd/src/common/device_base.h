@@ -187,9 +187,9 @@ public:
     {
         return ++m_ref_cnt;
     }
-    virtual int get_config_code()
+    virtual const char *get_config_code()
     {
-        return 0;
+        return nullptr;
     }
 
 public:
