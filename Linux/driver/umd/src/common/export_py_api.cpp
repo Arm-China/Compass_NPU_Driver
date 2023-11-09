@@ -33,6 +33,12 @@ typedef enum {
     AIPU_IOCTL_DI_TICK_COUNTER
 } aipu_ioctl_tickcounter_t;
 
+typedef enum {
+    D_TYPE8  = 8,
+    D_TYPE16 = 16,
+    D_TYPE32 = 32
+} data_type_t;
+
 class NPU
 {
     public:
@@ -815,19 +821,55 @@ class NPU
      * @retval AIPU_STATUS_ERROR_INVALID_OP
      */
     aipu_status_t aipu_load_tensor_numpyarray_py(uint64_t job_id, uint32_t tensor,
-        py::array_t<char> numpy_array)
+        py::array_t<int> numpy_array, data_type_t data_size)
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
+        aipu_tensor_desc_t desc;
         const char *status_msg = nullptr;
-        const char *data = numpy_array.data();
+        const int *data = numpy_array.data();
+        uint8_t * in_data = nullptr;
 
-         ret = aipu_load_tensor(m_ctx, job_id, tensor, data);
+        ret = aipu_get_tensor_descriptor(m_ctx, job_id, AIPU_TENSOR_TYPE_INPUT, tensor, &desc);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(m_ctx, ret, &status_msg);
+            fprintf(stderr, "[PY UMD ERROR] aipu_get_tensor_descriptor: %s\n", status_msg);
+            goto finish;
+        }
+
+        if (data_size == D_TYPE32)
+        {
+            in_data = (uint8_t *)data;
+        }
+        else if (data_size == D_TYPE16 || data_size == D_TYPE8)
+        {
+            int for_loop = desc.size / (data_size / D_TYPE8);
+            in_data = new uint8_t[desc.size];
+            for (int i = 0; i < for_loop; i++)
+            {
+                if (data_size == D_TYPE8)
+                    *(in_data + i) = *((uint8_t *)data + 4*i);
+
+                if (data_size == D_TYPE16)
+                    *((uint16_t *)in_data + i) = *((uint16_t *)data + 2*i);
+            }
+        }
+        else
+        {
+            fprintf(stderr, "[PY UMD ERROR] aipu_load_tensor: data type error.\n");
+            goto finish;
+        }
+
+        ret = aipu_load_tensor(m_ctx, job_id, tensor, in_data);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(m_ctx, ret, &status_msg);
             fprintf(stderr, "[PY UMD ERROR] aipu_load_tensor: %s\n", status_msg);
         }
 
+        if (in_data && data_size != D_TYPE32)
+            delete[] in_data;
+    finish:
         return ret;
     }
 
@@ -1331,6 +1373,12 @@ PYBIND11_MODULE(libaipudrv, m) {
     py::enum_<aipu_ioctl_tickcounter_t>(m, "aipu_ioctl_tickcounter_t")
         .value("AIPU_IOCTL_EN_TICK_COUNTER", aipu_ioctl_tickcounter_t::AIPU_IOCTL_EN_TICK_COUNTER)
         .value("AIPU_IOCTL_DI_TICK_COUNTER", aipu_ioctl_tickcounter_t::AIPU_IOCTL_DI_TICK_COUNTER)
+        .export_values();
+
+    py::enum_<data_type_t>(m, "data_type_t")
+        .value("D_TYPE8", data_type_t::D_TYPE8)
+        .value("D_TYPE16", data_type_t::D_TYPE16)
+        .value("D_TYPE32", data_type_t::D_TYPE32)
         .export_values();
 
     py::enum_<aipu_status_t>(m, "aipu_status_t")
