@@ -34,9 +34,12 @@ typedef enum {
 } aipu_ioctl_tickcounter_t;
 
 typedef enum {
-    D_TYPE8  = 8,
-    D_TYPE16 = 16,
-    D_TYPE32 = 32
+    D_INT8   = 0x08,
+    D_UINT8  = 0x108,
+    D_INT16  = 0x10,
+    D_UINT16 = 0x110,
+    D_INT32  = 0x20,
+    D_UINT32 = 0x120,
 } data_type_t;
 
 class NPU
@@ -837,20 +840,23 @@ class NPU
             goto finish;
         }
 
-        if (data_size == D_TYPE32)
+        if (data_size == D_INT32 || data_size == D_UINT32)
         {
             in_data = (uint8_t *)data;
         }
-        else if (data_size == D_TYPE16 || data_size == D_TYPE8)
+        else if (data_size == D_INT16  ||
+                 data_size == D_INT8   ||
+                 data_size == D_UINT16 ||
+                 data_size == D_UINT8)
         {
-            int for_loop = desc.size / (data_size / D_TYPE8);
+            int for_loop = desc.size / ((data_size & 0xFF) / D_INT8);
             in_data = new uint8_t[desc.size];
             for (int i = 0; i < for_loop; i++)
             {
-                if (data_size == D_TYPE8)
+                if (data_size == D_INT8 || data_size == D_UINT8)
                     *(in_data + i) = *((uint8_t *)data + 4*i);
 
-                if (data_size == D_TYPE16)
+                if (data_size == D_INT16 || data_size == D_UINT16)
                     *((uint16_t *)in_data + i) = *((uint16_t *)data + 2*i);
             }
         }
@@ -867,7 +873,7 @@ class NPU
             fprintf(stderr, "[PY UMD ERROR] aipu_load_tensor: %s\n", status_msg);
         }
 
-        if (in_data && data_size != D_TYPE32)
+        if (in_data && ((data_size & 0xFF) != D_INT32))
             delete[] in_data;
     finish:
         return ret;
@@ -893,12 +899,12 @@ class NPU
      * @retval AIPU_STATUS_ERROR_INVALID_TENSOR_ID
      * @retval AIPU_STATUS_ERROR_INVALID_OP
      */
-    std::map<std::string, std::vector<int> > aipu_get_tensor_py(uint64_t job_id,
-        aipu_tensor_type_t type, uint32_t tensor)
+    std::map<std::string, std::vector<int64_t> > aipu_get_tensor_py(uint64_t job_id,
+        aipu_tensor_type_t type, uint32_t tensor, data_type_t data_size)
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         const char *status_msg = nullptr;
-        std::map<std::string, std::vector<int> > retmap;
+        std::map<std::string, std::vector<int64_t> > retmap;
         unsigned char *out_data = nullptr;
         aipu_tensor_desc_t desc;
 
@@ -924,8 +930,48 @@ class NPU
         }
 
         retmap["ret"] = {ret};
-        for (uint32_t i = 0; i < desc.size; i++)
-            retmap["data"].push_back((int)out_data[i]);
+
+        if (data_size == D_UINT8)
+        {
+            for (uint32_t i = 0; i < desc.size; i++)
+                retmap["data"].push_back((int64_t)out_data[i]);
+        }
+        else if (data_size == D_INT8)
+        {
+            int8_t *p = (int8_t *)out_data;
+            for (uint32_t i = 0; i < desc.size; i++)
+                retmap["data"].push_back((int64_t)p[i]);
+        }
+        else if (data_size == D_INT16)
+        {
+            int16_t *p = (int16_t *)out_data;
+            for (uint32_t i = 0; i < (desc.size/2); i++)
+                retmap["data"].push_back((int64_t)p[i]);
+        }
+        else if (data_size == D_UINT16)
+        {
+            uint16_t *p = (uint16_t *)out_data;
+            for (uint32_t i = 0; i < (desc.size/2); i++)
+                retmap["data"].push_back((int64_t)p[i]);
+        }
+        else if (data_size == D_INT32)
+        {
+            int32_t *p = (int32_t *)out_data;
+            for (uint32_t i = 0; i < (desc.size/4); i++)
+                retmap["data"].push_back((int64_t)p[i]);
+        }
+        else if (data_size == D_UINT32)
+        {
+            uint32_t *p = (uint32_t *)out_data;
+            for (uint32_t i = 0; i < (desc.size/4); i++)
+                retmap["data"].push_back((int64_t)p[i]);
+        }
+        else
+        {
+            fprintf(stderr, "[PY UMD ERROR] aipu_get_tensor: invalid data type.\n");
+            retmap["data"] = {};
+            retmap["ret"] = {-66666};
+        }
 
     finish:
         if (out_data)
@@ -1376,9 +1422,12 @@ PYBIND11_MODULE(libaipudrv, m) {
         .export_values();
 
     py::enum_<data_type_t>(m, "data_type_t")
-        .value("D_TYPE8", data_type_t::D_TYPE8)
-        .value("D_TYPE16", data_type_t::D_TYPE16)
-        .value("D_TYPE32", data_type_t::D_TYPE32)
+        .value("D_INT8", data_type_t::D_INT8)
+        .value("D_INT16", data_type_t::D_INT16)
+        .value("D_INT32", data_type_t::D_INT32)
+        .value("D_UINT8", data_type_t::D_UINT8)
+        .value("D_UINT16", data_type_t::D_UINT16)
+        .value("D_UINT32", data_type_t::D_UINT32)
         .export_values();
 
     py::enum_<aipu_status_t>(m, "aipu_status_t")
