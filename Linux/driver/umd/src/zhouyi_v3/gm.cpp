@@ -27,7 +27,7 @@ aipudrv::GM_V3::GM_V3(JobV3 &_job) : m_job(_job), m_graph(m_job.get_graph())
 aipudrv::GM_V3::~GM_V3()
 {
     for (auto buf : m_gm_free_buffer)
-        m_job.m_mem->free(buf);
+        m_job.m_mem->free(&buf);
 }
 
 void aipudrv::GM_V3::gm_dynamic_switch(uint32_t core_cnt)

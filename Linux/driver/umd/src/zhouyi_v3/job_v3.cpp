@@ -598,10 +598,10 @@ add_sg:
 
 opt_alloc_fail:
     if (m_top_priv_buf != nullptr && m_top_priv_buf->size > 0)
-        m_mem->free(m_top_priv_buf);
+        m_mem->free(&m_top_priv_buf);
 
     if (m_top_reuse_buf != nullptr && m_top_reuse_buf->size > 0)
-        m_mem->free(m_top_reuse_buf);
+        m_mem->free(&m_top_reuse_buf);
 
     m_top_reuse_idx.clear();
 
@@ -892,17 +892,17 @@ void aipudrv::JobV3::free_sg_buffers(SubGraphTask& sg)
 {
     if (m_top_priv_buf != nullptr && m_top_priv_buf->size > 0)
     {
-        m_mem->free(m_top_priv_buf, "tot_priv");
+        m_mem->free(&m_top_priv_buf, "tot_priv");
         m_top_priv_buf_freed = true;
     }
 
     if (m_top_priv_buf_freed)
     {
         for (uint32_t i = 0; i < sg.reuse_priv_buffers.size(); i++)
-             m_mem->free_bufferdesc(sg.reuse_priv_buffers[i]);
+             m_mem->free_bufferdesc(&sg.reuse_priv_buffers[i]);
     } else {
         for (uint32_t i = 0; i < sg.reuse_priv_buffers.size(); i++)
-            m_mem->free(sg.reuse_priv_buffers[i]);
+            m_mem->free(&sg.reuse_priv_buffers[i]);
     }
     sg.reuse_priv_buffers.clear();
 
@@ -914,13 +914,13 @@ void aipudrv::JobV3::free_sg_buffers(SubGraphTask& sg)
     {
         if (m_top_reuse_buf != nullptr && m_top_reuse_buf->size > 0)
         {
-            m_mem->free(m_top_reuse_buf, "tot_reuse");
+            m_mem->free(&m_top_reuse_buf, "tot_reuse");
             for (uint32_t i = 0; i < sg.reuses.size(); i++)
             {
                 if (m_gm->gm_is_gm_buffer(i, GM_BUF_TYPE_REUSE))
-                    m_mem->free(sg.reuses[i]);
+                    m_mem->free(&sg.reuses[i]);
                 else
-                    m_mem->free_bufferdesc(sg.reuses[i]);
+                    m_mem->free_bufferdesc(&sg.reuses[i]);
             }
             m_top_reuse_idx.clear();
         } else {
@@ -928,11 +928,11 @@ void aipudrv::JobV3::free_sg_buffers(SubGraphTask& sg)
             {
                 if (sg.dma_buf_idx.count(i) == 1)
                 {
-                    m_mem->free_bufferdesc(sg.reuses[i]);
+                    m_mem->free_bufferdesc(&sg.reuses[i]);
                     continue;
                 }
 
-                m_mem->free(sg.reuses[i]);
+                m_mem->free(&sg.reuses[i]);
             }
         }
 
@@ -946,8 +946,8 @@ void aipudrv::JobV3::free_sg_buffers(SubGraphTask& sg)
         {
             Task *task;
             task = &m_sgt_allocated[i]->tasks[j];
-            m_mem->free(task->stack);
-            m_mem->free(task->private_data);
+            m_mem->free(&task->stack);
+            m_mem->free(&task->private_data);
         }
     }
     m_sgt_allocated.clear();
@@ -957,22 +957,22 @@ aipu_status_t aipudrv::JobV3::free_job_buffers()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    if (m_rodata->size != 0)
-        m_mem->free(m_rodata, "rodata");
+    if (m_rodata && m_rodata->size != 0)
+        m_mem->free(&m_rodata, "rodata");
 
-    if (m_descriptor != nullptr && m_descriptor->size != 0)
-        m_mem->free(m_descriptor, "dcr");
+    if (m_descriptor && m_descriptor->size != 0)
+        m_mem->free(&m_descriptor, "dcr");
 
     if (m_tcbs->size != 0)
-        m_mem->free(m_tcbs, "tcbs");
+        m_mem->free(&m_tcbs, "tcbs");
 
     #ifndef SIMULATION
-    if (m_exit_inst_encode != nullptr && m_exit_inst_encode->size > 0)
-        m_mem->free(m_exit_inst_encode, "exit_inst_mc");
+    if (m_exit_inst_encode && m_exit_inst_encode->size > 0)
+        m_mem->free(&m_exit_inst_encode, "exit_inst_mc");
     #endif
 
-    if (m_pprint != nullptr && m_pprint->size != 0)
-        m_mem->free(m_pprint, "printf");
+    if (m_pprint && m_pprint->size != 0)
+        m_mem->free(&m_pprint, "printf");
 
     m_init_tcb.init(0);
 

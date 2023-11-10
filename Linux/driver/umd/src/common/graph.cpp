@@ -192,20 +192,20 @@ aipu_status_t aipudrv::Graph::unload()
     if (ret != AIPU_STATUS_SUCCESS)
         return ret;
 
-    if (m_text->size != 0)
-        m_mem->free(m_text);
+    if (m_text && m_text->size != 0)
+        m_mem->free(&m_text);
 
 
     if (m_crodata && m_crodata->size != 0)
-        m_mem->free(m_crodata);
+        m_mem->free(&m_crodata);
 
     if (m_zerocpy_const != nullptr && m_zerocpy_const->size != 0)
-        m_mem->free(m_zerocpy_const);
+        m_mem->free(&m_zerocpy_const);
 
     if (m_weight != nullptr)
     {
         if (m_weight->size != 0)
-            m_mem->free(m_weight);
+            m_mem->free(&m_weight);
 
         for (uint32_t i = 0; i < m_weights.size(); i++)
         {
@@ -214,7 +214,7 @@ aipu_status_t aipudrv::Graph::unload()
         }
     } else {
         for (uint32_t i = 0; i < m_weights.size(); i++)
-            m_mem->free(m_weights[i]);
+            m_mem->free(&m_weights[i]);
     }
     m_weights.clear();
 

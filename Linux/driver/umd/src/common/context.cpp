@@ -600,7 +600,7 @@ aipu_status_t aipudrv::MainContext::debugger_free(void* va)
     if (m_dbg_buffers.count(va) == 0)
         return AIPU_STATUS_ERROR_BUF_FREE_FAIL;
 
-    ret = m_dram->free(m_dbg_buffers[va], "dbg");
+    ret = m_dram->free(&m_dbg_buffers[va], "dbg");
     if (ret != AIPU_STATUS_SUCCESS)
         return ret;
 
@@ -951,10 +951,9 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
             if(m_dram->get_shared_buffer(share_buf->pa, share_buf->size, buffer) != 0)
                 return AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
 
-            ret = m_dram->free(buffer.desc, "share");
+            ret = m_dram->free(&buffer.desc, "share");
             if (ret != AIPU_STATUS_SUCCESS)
                 return ret;
-            // delete buffer.desc;
         }
     } else {
         #ifndef SIMULATION

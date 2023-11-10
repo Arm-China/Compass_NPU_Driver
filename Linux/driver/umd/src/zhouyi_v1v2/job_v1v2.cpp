@@ -96,7 +96,7 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
 
 opt_alloc_fail:
     if (m_top_reuse_buf->size > 0)
-        m_mem->free(m_top_reuse_buf);
+        m_mem->free(&m_top_reuse_buf);
 
     m_top_reuse_idx.clear();
 
@@ -349,26 +349,26 @@ aipu_status_t aipudrv::JobV12::free_job_buffers()
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
     if (m_rodata->size != 0)
-        m_mem->free(m_rodata);
+        m_mem->free(&m_rodata);
 
     if (m_descriptor != nullptr && m_descriptor->size != 0)
-        m_mem->free(m_descriptor);
+        m_mem->free(&m_descriptor);
 
     if (m_stack->size != 0)
-        m_mem->free(m_stack);
+        m_mem->free(&m_stack);
 
     if (m_top_reuse_buf != nullptr && m_top_reuse_buf->size > 0)
-        m_mem->free(m_top_reuse_buf);
+        m_mem->free(&m_top_reuse_buf);
 
     for (uint32_t i = 0; i < m_reuses.size(); i++)
     {
         if (m_top_reuse_idx.count(i) == 1)
         {
-            m_mem->free_bufferdesc(m_reuses[i]);
+            m_mem->free_bufferdesc(&m_reuses[i]);
             continue;
         }
 
-        m_mem->free(m_reuses[i]);
+        m_mem->free(&m_reuses[i]);
     }
     m_top_reuse_idx.clear();
 

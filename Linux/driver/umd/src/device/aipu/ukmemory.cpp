@@ -99,7 +99,7 @@ aipu_status_t aipudrv::UKMemory::malloc(uint32_t size, uint32_t align, BufferDes
     return AIPU_STATUS_SUCCESS;
 }
 
-aipu_status_t aipudrv::UKMemory::free(BufferDesc* desc, const char* str)
+aipu_status_t aipudrv::UKMemory::free(BufferDesc** desc, const char* str)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     int kret = 0;
@@ -109,13 +109,13 @@ aipu_status_t aipudrv::UKMemory::free(BufferDesc* desc, const char* str)
     DEV_PA_64 pa = 0;
     uint64_t size = 0;
 
-    if (desc == nullptr)
+    if (*desc == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     pthread_rwlock_wrlock(&m_lock);
-    iter = m_allocated.find(desc->pa);
+    iter = m_allocated.find((*desc)->pa);
     if ((iter == m_allocated.end()) ||
-        (iter->second.desc->size != desc->size))
+        (iter->second.desc->size != (*desc)->size))
     {
         ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
         goto unlock;
@@ -124,23 +124,24 @@ aipu_status_t aipudrv::UKMemory::free(BufferDesc* desc, const char* str)
     iter->second.ref_put();
     if (iter->second.get_Buffer_refcnt() == 0)
     {
-        kdesc.pa = desc->pa;
-        kdesc.bytes = desc->size;
+        kdesc.pa = (*desc)->pa;
+        kdesc.bytes = (*desc)->size;
         munmap(iter->second.va, kdesc.bytes);
         kret = ioctl(m_fd, free_cmd, &kdesc);
         if (kret != 0)
         {
-            LOG(LOG_ERR, "free buffer 0x%lx [fail]", desc->pa);
+            LOG(LOG_ERR, "free buffer 0x%lx [fail]", (*desc)->pa);
             ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
             goto unlock;
         }
 
         LOG(LOG_INFO, "free buffer_pa=%lx\n", iter->second.desc->pa);
-        m_allocated.erase(desc->pa);
-        pa = desc->pa;
-        size = desc->size;
-        desc->reset();
-        delete desc;
+        m_allocated.erase((*desc)->pa);
+        pa = (*desc)->pa;
+        size = (*desc)->size;
+        (*desc)->reset();
+        delete *desc;
+        *desc = nullptr;
     }
 
 unlock:

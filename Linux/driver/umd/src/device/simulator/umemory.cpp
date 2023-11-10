@@ -228,7 +228,7 @@ aipu_status_t aipudrv::UMemory::malloc(uint32_t size, uint32_t align, BufferDesc
     return ret;
 }
 
-aipu_status_t aipudrv::UMemory::free(BufferDesc* desc, const char* str)
+aipu_status_t aipudrv::UMemory::free(BufferDesc** desc, const char* str)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     uint64_t b_start, b_end;
@@ -237,17 +237,17 @@ aipu_status_t aipudrv::UMemory::free(BufferDesc* desc, const char* str)
     DEV_PA_64 pa = 0;
     uint64_t size = 0;
 
-    if (nullptr == desc)
+    if (nullptr == *desc)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
-    if (0 == desc->size)
+    if (0 == (*desc)->size)
         return AIPU_STATUS_ERROR_INVALID_SIZE;
 
     pthread_rwlock_wrlock(&m_lock);
-    iter = m_allocated.find(desc->pa);
+    iter = m_allocated.find((*desc)->pa);
     if (iter == m_allocated.end())
     {
-        iter = m_reserved.find(desc->pa);
+        iter = m_reserved.find((*desc)->pa);
         if (iter == m_reserved.end())
         {
             ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
@@ -259,8 +259,8 @@ aipu_status_t aipudrv::UMemory::free(BufferDesc* desc, const char* str)
     iter->second.ref_put();
     if (iter->second.get_Buffer_refcnt() == 0)
     {
-        int mem_region = desc->ram_region;
-        int asid = desc->asid;
+        int mem_region = (*desc)->ram_region;
+        int asid = (*desc)->asid;
         b_start = (iter->second.desc->pa - m_memblock[asid][mem_region].base) / AIPU_PAGE_SIZE;
         b_end = b_start + iter->second.desc->size / AIPU_PAGE_SIZE;
         for (uint64_t i = b_start; i < b_end; i++)
@@ -271,15 +271,16 @@ aipu_status_t aipudrv::UMemory::free(BufferDesc* desc, const char* str)
         iter->second.va = nullptr;
         if (!reserve_mem_flag)
         {
-            m_allocated.erase(desc->pa);
+            m_allocated.erase((*desc)->pa);
         } else {
-            m_reserved.erase(desc->pa);
+            m_reserved.erase((*desc)->pa);
             reserve_mem_flag = false;
         }
-        pa = desc->pa;
-        size = desc->size;
-        desc->reset();
-        delete desc;
+        pa = (*desc)->pa;
+        size = (*desc)->size;
+        (*desc)->reset();
+        delete *desc;
+        *desc = nullptr;
     }
 
 unlock:

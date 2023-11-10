@@ -288,8 +288,8 @@ public:
     int get_shared_buffer(uint64_t addr, uint64_t size, Buffer &buffer);
     virtual aipu_status_t malloc(uint32_t size, uint32_t align, BufferDesc** buf,
         const char* str = nullptr, uint32_t asid_qos_cfg = 0) = 0;
-    virtual aipu_status_t free(BufferDesc* buf, const char* str = nullptr) = 0;
-    virtual void free_bufferdesc(BufferDesc* desc);
+    virtual aipu_status_t free(BufferDesc** buf, const char* str = nullptr) = 0;
+    virtual void free_bufferdesc(BufferDesc** desc);
     virtual aipu_status_t free_phybuffer(BufferDesc* desc, const char* str = nullptr) = 0;
     virtual aipu_status_t reserve_mem(DEV_PA_32 addr, uint32_t size, BufferDesc** desc, const char* str = nullptr) = 0;
     virtual int read(uint64_t addr, void *dest, size_t size) const = 0;
