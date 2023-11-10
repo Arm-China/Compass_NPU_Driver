@@ -1529,7 +1529,8 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
 
     /* runtime.cfg: config */
     ofs << "#configuration 1:X2_1204 2:X2_1204MP3\n";
-    ofs << "CONFIG=" << m_dev->get_config_code() << "\n";
+    if(m_dev->get_config_code() != nullptr)
+        ofs << "CONFIG=" << m_dev->get_config_code() << "\n";
 
     /* runtime.cfg: enable_avx */
     ofs << "#if ENABLE_AVX is true then using the intel SIMD instructions to speedup.\n";
@@ -1562,7 +1563,8 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
 
     /* runtime.cfg: gm_size */
     ofs << "#GM support: 512KiB,1MiB,2MiB,4MiB,8MiB,16MiB,32MiB,64MiB.\n";
-    ofs << "GM_SIZE=" << gm_info[m_cfg->gm_size] << "\n";
+    if(gm_info.count(m_cfg->gm_size) == 1)
+        ofs << "GM_SIZE=" << gm_info[m_cfg->gm_size] << "\n";
 
     if (m_cfg->plugin_name != nullptr)
     {
