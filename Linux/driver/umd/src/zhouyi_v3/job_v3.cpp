@@ -963,7 +963,7 @@ aipu_status_t aipudrv::JobV3::free_job_buffers()
     if (m_descriptor && m_descriptor->size != 0)
         m_mem->free(&m_descriptor, "dcr");
 
-    if (m_tcbs->size != 0)
+    if (m_tcbs && m_tcbs->size != 0)
         m_mem->free(&m_tcbs, "tcbs");
 
     #ifndef SIMULATION
