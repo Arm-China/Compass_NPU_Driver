@@ -1447,7 +1447,9 @@ aipu_status_t aipudrv::JobV3::schedule()
     else
         ret = m_dev->schedule(desc);
 
+    #ifdef SIMULATION
     ret = dump_for_emulation();
+    #endif
     if (ret != AIPU_STATUS_SUCCESS)
         return ret;
 
