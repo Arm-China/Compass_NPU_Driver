@@ -41,6 +41,26 @@ extern volatile int32_t UMD_LOG_LEVEL;
  * @param FMT format
  * @param ARGS var arguments
  */
+#ifdef __ANDROID__
+#include <android/log.h>
+#include <sys/system_properties.h>
+#define LOG(LogLevel, FMT, ARGS...) do { \
+    if (LogLevel > UMD_LOG_LEVEL) \
+        break; \
+    if (LogLevel==LOG_ERR) \
+        __android_log_print(ANDROID_LOG_ERROR, "UMD", "[%s:%d:%s]" FMT, __FUNCTION__, __LINE__, __PRETTY_FUNCTION__, ## ARGS); \
+    else if (LogLevel==LOG_WARN) \
+        __android_log_print(ANDROID_LOG_WARN, "UMD", "[%s:%d:%s]" FMT, __FUNCTION__, __LINE__, __PRETTY_FUNCTION__, ## ARGS); \
+    else if (LogLevel==LOG_ALERT) \
+        __android_log_print(ANDROID_LOG_WARN, "UMD", "[%ld]" FMT, gettid(), ## ARGS); \
+    else if (LogLevel==LOG_INFO) \
+        __android_log_print(ANDROID_LOG_INFO, "UMD", "[%ld]" FMT, gettid(), ## ARGS); \
+    else if (LogLevel==LOG_DEBUG) \
+        __android_log_print(ANDROID_LOG_DEBUG, "UMD", "[%ld]" FMT, gettid(), ## ARGS); \
+    else if (LogLevel==LOG_DEFAULT) \
+        __android_log_print(ANDROID_LOG_INFO, "UMD", "[%ld]" FMT, gettid(), ## ARGS); \
+    } while (0)
+#else
 #define LOG(LogLevel, FMT, ARGS...) do { \
     if (LogLevel > UMD_LOG_LEVEL) \
         break; \
@@ -57,5 +77,5 @@ extern volatile int32_t UMD_LOG_LEVEL;
     else if (LogLevel==LOG_DEFAULT) \
         printf("" FMT "\n", ## ARGS); \
     } while (0)
-
+#endif
 #endif /* _LOG_H_ */
