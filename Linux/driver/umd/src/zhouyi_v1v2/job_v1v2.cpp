@@ -348,16 +348,16 @@ aipu_status_t aipudrv::JobV12::free_job_buffers()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    if (m_rodata->size != 0)
+    if (m_rodata && m_rodata->size != 0)
         m_mem->free(&m_rodata);
 
-    if (m_descriptor != nullptr && m_descriptor->size != 0)
+    if (m_descriptor && m_descriptor->size != 0)
         m_mem->free(&m_descriptor);
 
-    if (m_stack->size != 0)
+    if (m_stack && m_stack->size != 0)
         m_mem->free(&m_stack);
 
-    if (m_top_reuse_buf != nullptr && m_top_reuse_buf->size > 0)
+    if (m_top_reuse_buf && m_top_reuse_buf->size > 0)
         m_mem->free(&m_top_reuse_buf);
 
     for (uint32_t i = 0; i < m_reuses.size(); i++)
@@ -432,7 +432,7 @@ aipu_status_t aipudrv::JobV12::schedule()
     desc.kdesc.dtcm_size_kb = get_graph().m_dtcm_size;
     desc.kdesc.enable_poll_opt = !m_hw_cfg->poll_in_commit_thread;
     desc.text_size = get_graph().m_btext.size;
-    if (get_graph().m_weight != nullptr && get_graph().m_weight->req_size > 0)
+    if (get_graph().m_weight && get_graph().m_weight->req_size > 0)
     {
         desc.weight_pa = get_graph().m_weight->pa;
         desc.weight_size = get_graph().m_weight->req_size;
