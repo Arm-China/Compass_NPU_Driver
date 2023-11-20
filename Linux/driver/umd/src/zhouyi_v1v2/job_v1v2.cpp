@@ -317,6 +317,9 @@ aipu_status_t aipudrv::JobV12::specify_io_buffer(aipu_shared_tensor_info_t &tens
     if (share_case_type == AIPU_SHARE_BUF_IN_ONE_PROCESS)
     {
         bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
+    } else if (share_case_type == AIPU_SHARE_BUF_CUSTOMED) {
+        bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
+        (*iobuffer_vec)[index].set_dump_ignore_flag(true);
     } else if (share_case_type == AIPU_SHARE_BUF_DMABUF) {
         ret = convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_GET_DMA_BUF_INFO, &dma_buf));
         if (ret != AIPU_STATUS_SUCCESS)

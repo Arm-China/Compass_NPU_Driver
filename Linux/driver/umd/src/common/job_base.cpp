@@ -557,6 +557,9 @@ void aipudrv::JobBase::dump_job_private_buffers(BufferDesc& rodata, BufferDesc* 
     {
         for (uint32_t i = 0; i < m_inputs.size(); i++)
         {
+            if (m_inputs[i].dump_ignore_flag)
+                continue;
+
             char name[32];
             dump_pa   = m_inputs[i].pa;
             dump_size = m_inputs[i].size;
@@ -613,6 +616,9 @@ void aipudrv::JobBase::dump_job_private_buffers_after_run(BufferDesc& rodata, Bu
     {
         for (uint32_t i = 0; i < m_outputs.size(); i++)
         {
+            if (m_outputs[i].dump_ignore_flag)
+                continue;
+
             std::string dump_name = m_dump_dir + "/" + m_dump_prefix + ".output" + std::to_string(i);
 
             dump_pa   = m_outputs[i].pa;
@@ -633,6 +639,9 @@ void aipudrv::JobBase::dump_job_private_buffers_after_run(BufferDesc& rodata, Bu
     {
         for (uint32_t i = 0; i < m_outputs.size(); i++)
         {
+            if (m_outputs[i].dump_ignore_flag)
+                continue;
+
             char name[32];
             dump_pa   = m_outputs[i].pa;
             dump_size = m_outputs[i].size;

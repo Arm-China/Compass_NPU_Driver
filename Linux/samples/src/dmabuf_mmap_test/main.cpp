@@ -42,15 +42,22 @@ using namespace std;
 #define DEV_EXPORTER "/dev/aipu"
 
 /**
+ * 0: AIPU_SHARE_BUF_DMABUF, standard dma-buf case
+ * 1: AIPU_SHARE_BUF_CUSTOMED, arbitray buffer case
+ */
+#define CUSTOMIZE_DMABUF 0
+
+/**
  * 1: operate dma_buf with own wrapper funciton
  * 0: operate dma_buf with aipu_ioctl standard interface
  */
 #define DMABUF_OP_WITH_WRAPPER 1
 
 /**
- * the fd of requested dma_buf.
+ * the fd&pa of requested dma_buf.
  */
 int dmabuf_fd = 0;
+uint64_t dmabuf_pa = 0;
 
 /**
  * request one dma_buf from dma_buf exporter(NUP driver module),
@@ -61,6 +68,7 @@ int dmabuf_malloc(uint64_t size)
     int ret = 0;
     int fd = 0;
     struct aipu_dma_buf_request dma_buf_req = {0};
+    struct aipu_dma_buf dma_buf = {0};
 
     fd = open(DEV_EXPORTER, O_RDWR);
     if (fd < 0)
@@ -74,11 +82,21 @@ int dmabuf_malloc(uint64_t size)
     ret = ioctl(fd, AIPU_IOCTL_ALLOC_DMA_BUF, &dma_buf_req);
     if (ret < 0)
     {
-        AIPU_ERR() << "ioctl " << DEV_EXPORTER << " [fail]\n";
+        AIPU_ERR() << "ioctl alloc" << DEV_EXPORTER << " [fail]\n";
         goto out;
     }
 
     dmabuf_fd = dma_buf_req.fd;
+
+    dma_buf.fd = dma_buf_req.fd;
+    ret = ioctl(fd, AIPU_IOCTL_GET_DMA_BUF_INFO, &dma_buf);
+    if (ret < 0)
+    {
+        AIPU_ERR() << "ioctl get" << DEV_EXPORTER << " [fail]\n";
+        goto out;
+    }
+
+    dmabuf_pa = dma_buf.pa;
 
 out:
     close(fd);
@@ -295,11 +313,25 @@ int main(int argc, char* argv[])
          * @tensor_idx: the tensor index which the dma_buf will replace
          * @type: the replaced tensor type(input or output)
          */
-        share_tensor.dmabuf_fd = dmabuf_fd;
-        share_tensor.offset_in_dmabuf = 0;
+
         share_tensor.tensor_idx = 0;
         share_tensor.type = AIPU_TENSOR_TYPE_INPUT;
+
+        #if CUSTOMIZE_DMABUF
+        /**
+         * specify arbitray IO buffer as share buffer
+         */
+        share_tensor.pa = dmabuf_pa;
+        share_tensor.shared_case_type = AIPU_SHARE_BUF_CUSTOMED;
+        #else
+        /**
+         * specify standard dma-buf as share buffer
+         */
+        share_tensor.dmabuf_fd = dmabuf_fd;
+        share_tensor.offset_in_dmabuf = 0;
         share_tensor.shared_case_type = AIPU_SHARE_BUF_DMABUF;
+        #endif
+
         #else
         /**
          * method 2:
