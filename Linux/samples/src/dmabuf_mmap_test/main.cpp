@@ -43,7 +43,7 @@ using namespace std;
 
 /**
  * 0: AIPU_SHARE_BUF_DMABUF, standard dma-buf case
- * 1: AIPU_SHARE_BUF_CUSTOMED, arbitray buffer case
+ * 1: AIPU_SHARE_BUF_CUSTOMED, customized buffer case
  */
 #define CUSTOMIZE_DMABUF 0
 
@@ -319,7 +319,7 @@ int main(int argc, char* argv[])
 
         #if CUSTOMIZE_DMABUF
         /**
-         * specify arbitray IO buffer as share buffer
+         * specify customized buffer as share buffer
          */
         share_tensor.pa = dmabuf_pa;
         share_tensor.shared_case_type = AIPU_SHARE_BUF_CUSTOMED;
