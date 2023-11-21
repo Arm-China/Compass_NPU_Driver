@@ -63,10 +63,8 @@ TEST_CASE_FIXTURE(JobTest, "schedule")
 
     ret = p_job->schedule();
     CHECK(ret == AIPU_STATUS_SUCCESS);
-#ifndef SIMULATION
     aipu_job_status_t status;
     p_job->get_status_blocking(&status, -1);
-#endif
 }
 
 TEST_CASE_FIXTURE(JobTest, "get_status_blocking")
@@ -173,13 +171,43 @@ TEST_CASE_FIXTURE(JobTest, "bind_core")
     CHECK(ret == AIPU_STATUS_SUCCESS);
 }
 
-TEST_CASE_FIXTURE(JobTest, "mark_shared_tensor")
+TEST_CASE_FIXTURE(JobTest, "specify_io_buffer")
 {
     aipu_status_t ret;
-    DEV_PA_64 addr = 0;
+    aipu_share_buf_t share_buf = {0};
+    aipu_shared_tensor_info_t tensor_info;
 
+    memset(&tensor_info, 0, sizeof(tensor_info));
+    share_buf.size = 1 << 20;
+    share_buf.pa = 0x3f6f000;
     p_job->init(&m_sim_cfg, &m_hw_cfg);
 
-    ret = p_job->mark_shared_tensor(AIPU_TENSOR_TYPE_INPUT, 0, addr);
+    tensor_info.pa = share_buf.pa;
+    tensor_info.tensor_idx = 0;
+    tensor_info.shared_case_type = 0x3;;
+    tensor_info.type = AIPU_TENSOR_TYPE_INPUT;
+    ret = p_job->specify_io_buffer(tensor_info);
+    CHECK(ret == AIPU_STATUS_ERROR_INVALID_OP);
+
+    tensor_info.pa = share_buf.pa;
+    tensor_info.tensor_idx = 10;
+    tensor_info.shared_case_type = AIPU_SHARE_BUF_IN_ONE_PROCESS;;
+    tensor_info.type = AIPU_TENSOR_TYPE_INPUT;
+    ret = p_job->specify_io_buffer(tensor_info);
+    CHECK(ret == AIPU_STATUS_ERROR_INVALID_TENSOR_ID);
+
+    tensor_info.pa = share_buf.pa;
+    tensor_info.tensor_idx = 0;
+    tensor_info.shared_case_type = AIPU_SHARE_BUF_IN_ONE_PROCESS;;
+    tensor_info.type = AIPU_TENSOR_TYPE_PROFILER;
+    ret = p_job->specify_io_buffer(tensor_info);
+    CHECK(ret == AIPU_STATUS_ERROR_INVALID_TENSOR_ID);
+
+    tensor_info.pa = share_buf.pa;
+    tensor_info.tensor_idx = 0;
+    tensor_info.shared_case_type = AIPU_SHARE_BUF_IN_ONE_PROCESS;;
+    tensor_info.type = AIPU_TENSOR_TYPE_INPUT;
+    ret = p_job->specify_io_buffer(tensor_info);
     CHECK(ret == AIPU_STATUS_SUCCESS);
 }
+

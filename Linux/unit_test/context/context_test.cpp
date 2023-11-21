@@ -163,6 +163,48 @@ TEST_CASE_FIXTURE(ContextTest, "get_cluster_count")
 #endif
 }
 
+TEST_CASE_FIXTURE(ContextTest, "config_hw")
+{
+    aipu_global_config_hw_t config = {0};
+    aipu_status_t ret;
+
+    p_ctx->init();
+
+    ret = p_ctx->config_hw(AIPU_CONFIG_TYPE_HW, nullptr);
+    CHECK(ret == AIPU_STATUS_ERROR_NULL_PTR);
+
+    ret = p_ctx->config_hw(AIPU_CONFIG_TYPE_HW, &config);
+    CHECK(ret == AIPU_STATUS_SUCCESS);
+}
+
+TEST_CASE_FIXTURE(ContextTest, "aipu_get_device_status")
+{
+    device_status_t status = DEV_IDLE;
+    aipu_status_t ret;
+
+    p_ctx->init();
+
+    ret = p_ctx->aipu_get_device_status(nullptr);
+    CHECK(ret == AIPU_STATUS_ERROR_NULL_PTR);
+
+    ret = p_ctx->aipu_get_device_status(&status);
+    CHECK(ret == AIPU_STATUS_SUCCESS);
+}
+
+TEST_CASE_FIXTURE(ContextTest, "ioctl_cmd")
+{
+    char kmd_version[16];
+    aipu_status_t ret;
+
+    p_ctx->init();
+
+    ret = p_ctx->ioctl_cmd(AIPU_IOCTL_SET_PROFILE, nullptr);
+    CHECK(ret == AIPU_STATUS_ERROR_NULL_PTR);
+
+    ret = p_ctx->ioctl_cmd(AIPU_IOCTL_GET_DRIVER_VERSION, kmd_version);
+    CHECK(ret == AIPU_STATUS_SUCCESS);
+}
+
 #ifndef SIMULATION
 TEST_CASE_FIXTURE(ContextTest, "get_core_count")
 {
@@ -196,4 +238,25 @@ TEST_CASE_FIXTURE(ContextTest, "get_partition_count")
     ret = p_ctx->get_partition_count(&partition_cnt);
     CHECK(ret == AIPU_STATUS_SUCCESS);
 }
+
+TEST_CASE_FIXTURE(ContextTest, "get_core_info")
+{
+    uint32_t core_id = 0;
+    aipu_core_info_t info = {0};
+    aipu_status_t ret;
+
+    p_ctx->init();
+
+    ret = p_ctx->get_core_info(core_id, nullptr);
+    CHECK(ret == AIPU_STATUS_ERROR_NULL_PTR);
+
+    core_id = 3;
+    ret = p_ctx->get_core_info(core_id, &info);
+    CHECK(ret == AIPU_STATUS_ERROR_INVALID_OP);
+
+    core_id = 0;
+    ret = p_ctx->get_core_info(core_id, &info);
+    CHECK(ret == AIPU_STATUS_SUCCESS);
+}
+
 #endif
