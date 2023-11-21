@@ -1195,7 +1195,11 @@ int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 		return -EINVAL;
 
 	vma->vm_pgoff = (iova - reg->base_iova) >> PAGE_SHIFT;
+#if KERNEL_VERSION(6, 3, 1) > LINUX_VERSION_CODE
 	vma->vm_flags |= VM_IO;
+#else
+	vm_flags_set(vma, VM_IO);
+#endif
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
 	ret = dma_mmap_attrs(reg->dev, vma, reg->base_va, reg->base_pa,
