@@ -931,9 +931,7 @@ int aipu_deinit_mm(struct aipu_memory_manager *mm)
 		mm->gm_policy_attr = NULL;
 	}
 
-	memset(&mm->mem, 0, sizeof(mm->mem) * ZHOUYI_ASID_COUNT);
 	mm->res_cnt = 0;
-
 	kmem_cache_destroy(mm->obj_cache);
 	mm->obj_cache = NULL;
 	kmem_cache_destroy(mm->reg_cache);
@@ -1195,10 +1193,11 @@ int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 		return -EINVAL;
 
 	vma->vm_pgoff = (iova - reg->base_iova) >> PAGE_SHIFT;
-#if KERNEL_VERSION(6, 3, 0) > LINUX_VERSION_CODE
-	vma->vm_flags |= VM_IO;
-#else
+#if KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE || \
+    (defined(__ANDROID_COMMON_KERNEL__) && KERNEL_VERSION(6, 1, 43) <= LINUX_VERSION_CODE)
 	vm_flags_set(vma, VM_IO);
+#else
+	vma->vm_flags |= VM_IO;
 #endif
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
