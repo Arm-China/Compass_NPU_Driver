@@ -264,7 +264,7 @@ aipu_status_t aipu_finish_job(const aipu_ctx_handle_t* ctx, uint64_t job_id, int
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     aipudrv::JobBase* job = nullptr;
-    aipu_job_status_t status;
+    aipu_job_status_t status = AIPU_JOB_STATUS_NO_STATUS;
 
     if (nullptr == ctx)
         return AIPU_STATUS_ERROR_NULL_PTR;

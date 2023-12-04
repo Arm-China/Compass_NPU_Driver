@@ -139,7 +139,7 @@ void aipudrv::JobV3::setup_gm_sync_from_ddr(tcb_t *tcb)
 void aipudrv::JobV3::setup_gm_sync_to_ddr(tcb_t *tcb)
 {
     uint32_t gm_region_idx = 0;
-    tcb_t pre_tcb;
+    tcb_t pre_tcb = {0};
 
     if (!m_mem->is_gm_enable())
         return;
@@ -286,7 +286,7 @@ aipu_status_t aipudrv::JobV3::setup_rodata_sg(uint32_t sg_id,
 aipu_status_t aipudrv::JobV3::alloc_subgraph_buffers()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    SubGraphTask sg;
+    SubGraphTask sg = {0};
 
     /* allocate subgraph buffers */
     for (uint32_t sg_idx = 0; sg_idx < m_sg_cnt; sg_idx++)
@@ -423,7 +423,7 @@ out:
 int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    SubGraphTask sg;
+    SubGraphTask sg = {0};
     uint32_t priv_buf_total_size = 0;
     uint32_t reuse_buf_total_size = 0;
     uint32_t priv_offset = 0, offset = 0;
@@ -496,11 +496,12 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
         for (uint32_t k = 0; k < get_graph().m_subgraphs[sg_idx].private_buffers.size(); k++)
         {
             const GraphSectionDesc &section_desc = get_graph().m_subgraphs[sg_idx].private_buffers[k];
-            BufferDesc *bufferDesc = new BufferDesc;
-            bufferDesc->reset();
+            BufferDesc *bufferDesc = nullptr;
 
             if (section_desc.size != 0)
             {
+                bufferDesc = new BufferDesc;
+                bufferDesc->reset();
                 bufferDesc->init(m_top_priv_buf->asid_base, m_top_priv_buf->pa + priv_offset,
                     ALIGN_PAGE(section_desc.size), section_desc.size);
                 priv_offset += ALIGN_PAGE(section_desc.size);
@@ -520,12 +521,13 @@ int aipudrv::JobV3::alloc_subgraph_buffers_optimized()
             for (uint32_t k = 0; k < get_graph().m_subgraphs[0].reuse_sections.size(); k++)
             {
                 const GraphSectionDesc &section_desc = get_graph().m_subgraphs[0].reuse_sections[k];
-                BufferDesc *bufferDesc = new BufferDesc;
+                BufferDesc *bufferDesc = nullptr;
 
-                bufferDesc->reset();
                 if (section_desc.size != 0)
                 {
                     std::string buf_name = "reuse_" + std::to_string(k);
+                    bufferDesc = new BufferDesc;
+                    bufferDesc->reset();
 
                     /* handle buffer if allocated from GM */
                     if (m_gm->gm_is_gm_buffer(k, GM_BUF_TYPE_REUSE))
@@ -1104,6 +1106,7 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
             default:
                 LOG(LOG_ERR, "subgraph %u, precursor_cnt=%d\n", sg_id,
                     graph.m_subgraphs[sg_id].precursor_cnt);
+                delete tcb;
                 return AIPU_STATUS_ERROR_INVALID_GBIN;
         }
 
@@ -1498,13 +1501,13 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     #define INIT_NUM 4
     #endif
 
-    DEV_PA_64 dump_pa;
-    uint32_t dump_size;
-    char dump_name[4096];
+    DEV_PA_64 dump_pa = 0;
+    uint32_t dump_size = 0;
+    char dump_name[4096] = {0};
     int emu_input_cnt = INIT_NUM + m_inputs.size() + (m_descriptor != nullptr ? 1 : 0);
     int emu_output_cnt = m_outputs.size();
     int file_id = -1;
-    tcb_t tcb;
+    tcb_t tcb = {0};
     bool default_output_prefix = true;
     std::string runtime_cfg = m_dump_dir + "/runtime.cfg";
     std::string metadata_txt = m_dump_dir + "/metadata.txt";
@@ -2086,7 +2089,7 @@ aipu_status_t aipudrv::JobV3::bind_core(uint32_t partition_id)
 aipu_status_t aipudrv::JobV3::debugger_run()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipu_job_status_t status;
+    aipu_job_status_t status = AIPU_JOB_STATUS_NO_STATUS;
 
     if (m_status != AIPU_JOB_STATUS_BIND)
         return AIPU_STATUS_ERROR_INVALID_OP;

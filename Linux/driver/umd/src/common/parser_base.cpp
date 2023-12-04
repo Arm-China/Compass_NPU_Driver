@@ -81,7 +81,7 @@ aipu_status_t aipudrv::ParserBase::fill_io_tensor_desc_inner(uint32_t reuse_sec_
     struct GraphIOTensors& desc) const
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    GraphIOTensorDesc io_desc;
+    GraphIOTensorDesc io_desc = {0};
 
     io_desc.size = sub_section_load.size;
     io_desc.id = sub_section_load.id;
@@ -134,13 +134,13 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     char* desc_load_addr = nullptr;
-    BSSHeader             bss_header;
-    BSSStaticSectionDesc  static_desc_load;
-    BSSReuseSectionDesc   reuse_desc_load;
-    SubSectionDesc        sub_desc_load;
-    GraphSectionDesc      section_ir;
-    GraphParamMapLoadDesc param;
-    GraphIOTensors        io;
+    BSSHeader bss_header = {0};
+    BSSStaticSectionDesc static_desc_load = {0};
+    BSSReuseSectionDesc reuse_desc_load = {0};
+    SubSectionDesc sub_desc_load = {0};
+    GraphSectionDesc section_ir = {0};
+    GraphParamMapLoadDesc param = {0};
+    GraphIOTensors io;
     uint32_t cst_start_addr = 0, zerocpy_cst_start_addr = 0;
 
     void* load_lb = bss;
@@ -347,7 +347,7 @@ aipu_status_t aipudrv::ParserBase::parse_remap_section(char* remap, Graph& gobj)
 aipu_status_t aipudrv::ParserBase::parse_graph_header_top(std::istream& gbin, uint32_t size, Graph& gobj)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    BinHeaderTop header;
+    BinHeaderTop header = {0};
     uint32_t remap_flag = 0;
 
     gbin.read((char*)&header, BIN_HDR_TOP_SIZE);

@@ -113,7 +113,7 @@ class elfio
     {
         clean();
 
-        unsigned char e_ident[EI_NIDENT];
+        unsigned char e_ident[EI_NIDENT] = {0};
         // Read ELF file signature
         stream.read( reinterpret_cast<char*>( &e_ident ), sizeof( e_ident ) );
 

@@ -276,9 +276,9 @@ aipu_status_t aipudrv::MainContext::load_graph(const char* graph_file, GRAPH_ID*
     if (!gbin.is_open())
         return AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
 
-    gbin.seekg (0, gbin.end);
+    gbin.seekg(0, gbin.end);
     fsize = gbin.tellg();
-    gbin.seekg (0, gbin.beg);
+    gbin.seekg(0, gbin.beg);
 
     /* push nullptr into graphs to pin this graph ID */
     pthread_rwlock_wrlock(&m_glock);
@@ -486,7 +486,7 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
         if (m_sim_cfg.simulator == nullptr)
             m_sim_cfg.simulator = new char[BUF_LEN];
 
-        strcpy((char*)m_sim_cfg.simulator, config->simulator);
+        strncpy((char*)m_sim_cfg.simulator, config->simulator, BUF_LEN);
     }
 
     if (config->plugin_name != nullptr)
@@ -494,18 +494,20 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
         if (m_sim_cfg.plugin_name == nullptr)
             m_sim_cfg.plugin_name = new char[BUF_LEN];
 
-        strcpy((char*)m_sim_cfg.plugin_name, config->plugin_name);
+        strncpy((char*)m_sim_cfg.plugin_name, config->plugin_name, BUF_LEN);
     }
+
     if (config->json_filename != nullptr)
     {
         if (m_sim_cfg.json_filename == nullptr)
             m_sim_cfg.json_filename = new char[BUF_LEN];
 
-        strcpy((char*)m_sim_cfg.json_filename, config->json_filename);
+        strncpy((char*)m_sim_cfg.json_filename, config->json_filename, BUF_LEN);
     }
+
     if (config->log_file_path != nullptr)
     {
-        strcpy((char*)m_sim_cfg.log_file_path, config->log_file_path);
+        strncpy((char*)m_sim_cfg.log_file_path, config->log_file_path, BUF_LEN);
     }
 
     m_sim_cfg.log_level = config->log_level;
@@ -524,9 +526,9 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
             m_sim_cfg.x2_arch_desc = new char[64];
 
         if (config->x2_arch_desc != nullptr)
-            strcpy((char*)m_sim_cfg.x2_arch_desc, config->x2_arch_desc);
+            strncpy((char*)m_sim_cfg.x2_arch_desc, config->x2_arch_desc, 64);
         else
-            strcpy((char*)m_sim_cfg.x2_arch_desc, sim_npu_arch_env);
+            strncpy((char*)m_sim_cfg.x2_arch_desc, sim_npu_arch_env, 64);
 
         ret = set_target(AIPU_LOADABLE_GRAPH_ELF_V0, &m_dev, &m_sim_cfg);
         if (ret != AIPU_STATUS_SUCCESS)
@@ -741,7 +743,7 @@ aipu_status_t aipudrv::MainContext::run_batch(GraphBase &graph, uint32_t queue_i
     aipu_create_job_cfg_t *config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS, oldret = AIPU_STATUS_SUCCESS;
-    JOB_ID job_id;
+    JOB_ID job_id = 0;
     JobBase *job = nullptr;
     aipu_job_status_t status = AIPU_JOB_STATUS_NO_STATUS;
     typedef struct job_info {
@@ -750,7 +752,7 @@ aipu_status_t aipudrv::MainContext::run_batch(GraphBase &graph, uint32_t queue_i
         batch_info_t *batch;
     } job_info_t;
 
-    job_info_t job_info_item;
+    job_info_t job_info_item = {0};
     std::queue<job_info_t> job_queue;
     uint32_t types = 0;
     uint32_t batch_num = 0;

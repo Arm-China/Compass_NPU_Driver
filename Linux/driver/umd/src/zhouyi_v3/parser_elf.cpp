@@ -134,9 +134,9 @@ aipu_status_t aipudrv::ParserELF::parse_subgraph(char* start, uint32_t id, Graph
         uint64_t& sg_desc_size)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    Subgraph sg;
-    ElfSubGraphDesc gbin_sg_desc;
-    FeatureMapList  fm_list;
+    Subgraph sg = {0};
+    ElfSubGraphDesc gbin_sg_desc = {0};
+    FeatureMapList  fm_list = {0};
     char* bss = nullptr;
     char* next = nullptr;
 
@@ -283,7 +283,7 @@ finish:
 aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size, Graph& gobj)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    struct ElfSubGraphList sg_desc_header;
+    struct ElfSubGraphList sg_desc_header = {0};
     char* start = nullptr;
 
     ret = parse_graph_header_check(gbin, size);

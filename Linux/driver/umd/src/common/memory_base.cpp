@@ -74,8 +74,8 @@ void aipudrv::MemoryBase::add_tracking(DEV_PA_64 pa, uint64_t size, MemOperation
     const char* str, bool is_32_op, uint32_t data) const
 {
     std::string log;
-    MemTracking tracking;
-    char f_log[1024];
+    MemTracking tracking = {0};
+    char f_log[1024] = {0};
 
     if ((m_enable_mem_dump & (1 << op)) != (uint32_t)(1 << op))
         return;
