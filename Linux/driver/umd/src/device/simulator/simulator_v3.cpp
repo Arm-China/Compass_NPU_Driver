@@ -261,6 +261,8 @@ aipu_status_t aipudrv::SimulatorV3::schedule(const JobDesc& jobdesc)
     uint32_t part_id = job->get_part_id();
     uint32_t cmd_pool_id = 0, value = 0;
     uint32_t qos = job->get_qos();
+    job_queue_elem_t job_queue_item;
+    JobDesc job_desc{0};
 
     if (part_id > m_partition_cnt)
     {
@@ -277,19 +279,24 @@ aipu_status_t aipudrv::SimulatorV3::schedule(const JobDesc& jobdesc)
     else
         cmd_pool_id= job->m_bind_cmdpool_id;
 
-    m_buffer_queue[jobdesc.jobbase] = jobdesc;
+    job_queue_item.job = jobdesc.jobbase;
+    job_queue_item.jobdesc = jobdesc;
+    m_buffer_queue.push(job_queue_item);
 
     if (!m_cmdpool_busy)
     {
         m_cmdpool_busy = true;
-        m_buffer_queue.erase(jobdesc.jobbase);
-        m_commit_queue.insert(jobdesc.jobbase);
+        job_queue_item = m_buffer_queue.front();
+        m_buffer_queue.pop();
+        job = (JobV3 *)job_queue_item.job;
+        job_desc = job_queue_item.jobdesc;
+        m_commit_queue.insert(job_desc.jobbase);
 
         if (!cmd_pool_created(cmd_pool_id))
         {
-            cmd_pool_add_job(cmd_pool_id, job, jobdesc);
-            m_aipu->write_register(TSM_CMD_SCHED_ADDR_HI, get_high_32(jobdesc.tcb_head));
-            m_aipu->write_register(TSM_CMD_SCHED_ADDR_LO, get_low_32(jobdesc.tcb_head));
+            cmd_pool_add_job(cmd_pool_id, job, job_desc);
+            m_aipu->write_register(TSM_CMD_SCHED_ADDR_HI, get_high_32(job_desc.tcb_head));
+            m_aipu->write_register(TSM_CMD_SCHED_ADDR_LO, get_low_32(job_desc.tcb_head));
 
             /* specify cmdpool number & QoS */
             value = (cmd_pool_id << 16) | (qos << 8);
@@ -304,7 +311,7 @@ aipu_status_t aipudrv::SimulatorV3::schedule(const JobDesc& jobdesc)
             LOG(LOG_INFO, "triggering simulator...%lx", job->get_id());
             m_aipu->write_register(TSM_CMD_SCHED_CTRL, DISPATCH_CMD_POOL);
         } else {
-            cmd_pool_append_job(cmd_pool_id, job, jobdesc);
+            cmd_pool_append_job(cmd_pool_id, job, job_desc);
             LOG(LOG_INFO, "append job...%lx\n", job->get_id());
         }
     }
@@ -317,19 +324,22 @@ out:
 aipu_status_t aipudrv::SimulatorV3::fill_commit_queue()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    uint32_t MAX = 3, max = 0, cnt = 0;
+    uint32_t max_limit = 3, max = 0;
+    job_queue_elem_t job_queue_item {0};
 
     LOG(LOG_INFO, "Enter %s...", __FUNCTION__);
 
-    if (m_buffer_queue.size() >= MAX)
-        max = MAX;
+    if (m_buffer_queue.size() >= max_limit)
+        max = max_limit;
     else
         max = m_buffer_queue.size();
 
-    for(auto iter=m_buffer_queue.begin(); iter!=m_buffer_queue.end();)
+    for(uint32_t i = 0; i < max; i++)
     {
-        JobBase *jobbase = (JobBase *)iter->first;
-        JobDesc jobdesc = iter->second;
+        job_queue_item = m_buffer_queue.front();
+        m_buffer_queue.pop();
+        JobBase *jobbase = (JobBase *)job_queue_item.job;
+        JobDesc jobdesc = job_queue_item.jobdesc;
         JobV3 *job = static_cast<JobV3 *>(jobbase);
         uint32_t part_id = job->get_part_id();
         uint32_t cmd_pool_id = 0, value = 0;
@@ -349,7 +359,6 @@ aipu_status_t aipudrv::SimulatorV3::fill_commit_queue()
         else
             cmd_pool_id= job->m_bind_cmdpool_id;
 
-        m_buffer_queue.erase(iter++);
         m_commit_queue.insert(jobbase);
 
         if (!cmd_pool_created(cmd_pool_id))
@@ -375,9 +384,6 @@ aipu_status_t aipudrv::SimulatorV3::fill_commit_queue()
             cmd_pool_append_job(cmd_pool_id, job, jobdesc);
             LOG(LOG_INFO, "append job...%lx\n", job->get_id());
         }
-
-        if (++cnt == max)
-            break;
     }
 
 out:

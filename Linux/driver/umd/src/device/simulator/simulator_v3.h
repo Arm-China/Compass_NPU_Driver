@@ -13,6 +13,7 @@
 
 #include <map>
 #include <set>
+#include <queue>
 #include <mutex>
 #include <sstream>
 #include <pthread.h>
@@ -141,7 +142,11 @@ private:
     uint32_t m_cmdpool_bitmap = 0;
 
     /* 1. buffer all jobs in this queue */
-    std::map< void *, JobDesc> m_buffer_queue;
+    typedef struct {
+        void *job;
+        struct JobDesc jobdesc;
+    } job_queue_elem_t;
+    std::queue< job_queue_elem_t > m_buffer_queue;
 
     /* 2. move jobs from buffer queue to this queue */
     std::set< void * > m_commit_queue;

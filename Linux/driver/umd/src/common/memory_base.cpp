@@ -13,6 +13,8 @@
 #include "memory_base.h"
 #include "utils/log.h"
 #include "utils/helper.h"
+#include <unistd.h>
+#include <sys/syscall.h>
 
 aipudrv::MemoryBase::MemoryBase()
 {
@@ -107,13 +109,14 @@ void aipudrv::MemoryBase::add_tracking(DEV_PA_64 pa, uint64_t size, MemOperation
             tracking.data
         );
     } else {
-        snprintf(f_log, 1024, "%-6u 0x%-16lx %-14s %-9s 0x%-8lx %s",
+        snprintf(f_log, 1024, "%-6u 0x%-16lx %-14s %-9s 0x%-8lx %s    %-8ld",
             m_tracking_idx,
             tracking.pa,
             tracking.log.c_str(),
             MemOperationStr[tracking.op],
             tracking.size,
-            "N/A"
+            "N/A",
+            gettid()
         );
     }
     write_line(f_log);
@@ -132,7 +135,7 @@ void aipudrv::MemoryBase::dump_tracking_log_start() const
 
     snprintf(log, 1024, "===========================Memory Info Dump============================");
     write_line(log);
-    snprintf(log, 1024, "No.    Address            Type           OP        Size       Data");
+    snprintf(log, 1024, "No.    Address            Type           OP        Size       Data   Tid");
     write_line(log);
     snprintf(log, 1024, "------------------------------------------------------------------");
     write_line(log);
