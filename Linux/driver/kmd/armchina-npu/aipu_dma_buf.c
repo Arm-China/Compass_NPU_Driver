@@ -109,7 +109,7 @@ static void aipu_dma_release(struct dma_buf *dmabuf)
 }
 
 #if ((KERNEL_VERSION(5, 6, 0) > LINUX_VERSION_CODE) && \
-     (KERNEL_VERSION(4, 11, 12) < LINUX_VERSION_CODE))
+	(KERNEL_VERSION(4, 11, 12) < LINUX_VERSION_CODE))
 static void *aipu_dma_map(struct dma_buf *dmabuf, unsigned long page_num)
 {
 	return NULL;
@@ -117,7 +117,7 @@ static void *aipu_dma_map(struct dma_buf *dmabuf, unsigned long page_num)
 #endif
 
 #if ((KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE) && \
-     (KERNEL_VERSION(4, 11, 12) < LINUX_VERSION_CODE))
+	(KERNEL_VERSION(4, 11, 12) < LINUX_VERSION_CODE))
 void *aipu_dma_map_atomic(struct dma_buf *dmabuf, unsigned long page_num)
 {
 	return NULL;
@@ -134,11 +134,11 @@ static struct dma_buf_ops aipu_dma_buf_ops = {
 	.vunmap = aipu_dma_vunmap,
 	.release = aipu_dma_release,
 #if ((KERNEL_VERSION(5, 6, 0) > LINUX_VERSION_CODE) && \
-     (KERNEL_VERSION(4, 11, 12) < LINUX_VERSION_CODE))
+	(KERNEL_VERSION(4, 11, 12) < LINUX_VERSION_CODE))
 	.map = aipu_dma_map,
 #endif
 #if ((KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE) && \
-     (KERNEL_VERSION(4, 11, 12) < LINUX_VERSION_CODE))
+	(KERNEL_VERSION(4, 11, 12) < LINUX_VERSION_CODE))
 	.map_atomic = aipu_dma_map_atomic,
 #endif
 };

@@ -1194,7 +1194,7 @@ int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 
 	vma->vm_pgoff = (iova - reg->base_iova) >> PAGE_SHIFT;
 #if KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE || \
-    (defined(__ANDROID_COMMON_KERNEL__) && KERNEL_VERSION(6, 1, 43) <= LINUX_VERSION_CODE)
+	(defined(__ANDROID_COMMON_KERNEL__) && KERNEL_VERSION(6, 1, 43) <= LINUX_VERSION_CODE)
 	vm_flags_set(vma, VM_IO);
 #else
 	vma->vm_flags |= VM_IO;

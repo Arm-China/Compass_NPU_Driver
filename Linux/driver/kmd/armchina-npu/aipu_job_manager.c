@@ -983,9 +983,8 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 	manager = get_job_manager(partition);
 
 	if (IS_SIGNAL_IRQ(flag)) {
-		if (IS_PRINTF_SIGNAL(info->sig_flag)) {
+		if (IS_PRINTF_SIGNAL(info->sig_flag))
 			aipu_job_manager_real_time_printk(manager, partition, info);
-		}
 
 #if AIPU_CONFIG_ENABLE_INTR_PROFILING
 		if (IS_PROFILER_SIGNAL(info->sig_flag)) {

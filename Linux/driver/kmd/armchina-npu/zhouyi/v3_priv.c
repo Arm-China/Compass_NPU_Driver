@@ -46,7 +46,8 @@ static int init_aipu_partition(struct aipu_partition *partition, u32 *clusters, 
 			partition->clusters[cluster_cnt - 1].id = clusters[2 * iter];
 			val = aipu_read32(partition->reg, CLUSTER_CONFIG_REG(clusters[2 * iter]));
 			partition->clusters[cluster_cnt - 1].core_cnt = GET_AIPU_CORE_NUM(val);
-			atomic_set(&partition->clusters[cluster_cnt - 1].en_core_cnt, GET_AIPU_CORE_NUM(val));
+			atomic_set(&partition->clusters[cluster_cnt - 1].en_core_cnt,
+				   GET_AIPU_CORE_NUM(val));
 			partition->clusters[cluster_cnt - 1].tec_cnt = GET_TEC_NUM(val);
 
 			aipu_write32(partition->reg, DEBUG_PAGE_SELECTION_REG,
