@@ -104,7 +104,7 @@ ifeq ($(BUILD_UMD_API_TYPE), python_api)
 endif
 
 ifneq ($(BUILD_ANDROID_NDK), )
-    LDFLAGS += -pthread
+    LDFLAGS += -pthread -llog -ldl
     CXXFLAGS += $(ANDROIDCXXFLAGS)
     LDFLAGS += $(ANDROIDCXXFLAGS) $(ANDROIDLDFLAGS)
 else
