@@ -726,6 +726,9 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
     {
         BufferDesc *tmp_holdDesc = nullptr;
 
+        /* free the orginal buffer starting from addr 0x0 */
+        m_mem->free(&m_tcbs);
+
         ret = m_mem->malloc(0x1000, 0, &tmp_holdDesc, "holdDesc");
         if (AIPU_STATUS_SUCCESS != ret)
             goto finish;
