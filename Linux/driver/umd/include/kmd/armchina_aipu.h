@@ -277,6 +277,7 @@ struct aipu_dma_buf {
  * @AIPU_JOB_EXEC_FLAG_SINGLE_GROUP: [aipu v3 only] the scheduled job is a single group task
  * @AIPU_JOB_EXEC_FLAG_MULTI_GROUP:  [aipu v3 only] the scheduled job is a multi-groups task
  * @AIPU_JOB_EXEC_FLAG_DBG_DISPATCH: [aipu v3 only] the job should be scheduled with debug-dispatch
+ * @AIPU_JOB_EXEC_FLAG_SEG_MMU:      [aipu v3 only] the job has configured segment mmu
  */
 enum aipu_job_execution_flag {
 	AIPU_JOB_EXEC_FLAG_NONE         = 0,
@@ -286,6 +287,7 @@ enum aipu_job_execution_flag {
 	AIPU_JOB_EXEC_FLAG_SINGLE_GROUP = 1 << 3,
 	AIPU_JOB_EXEC_FLAG_MULTI_GROUP  = 1 << 4,
 	AIPU_JOB_EXEC_FLAG_DBG_DISPATCH  = 1 << 5,
+	AIPU_JOB_EXEC_FLAG_SEG_MMU       = 1 << 6,
 };
 
 /**
@@ -310,7 +312,8 @@ enum aipu_job_execution_flag {
  * @enable_poll_opt:   [aipu v1/v2 only, optional] Enable optimizations for job status polling
  * @exec_flag:         [optional] Combinations of execution flags
  * @dtcm_size_kb:      [aipu v2(x1)only, optional] DTCM size in KB
- * @head_tcb_pa:       [aipu v3 only, must] base address of the head TCB of this job
+ * @head_tcb_pa:       [aipu v3 only, must] base address of the first init TCB of this job
+ * @first_task_tcb_pa: [aipu v3 only, must] base address of the first task TCB of this job
  * @last_task_tcb_pa:  [aipu v3 only, must] base address of the last task TCB of this job
  * @tail_tcb_pa:       [aipu v3 only, must] base address of the tail TCB of this job
  *
@@ -339,6 +342,7 @@ struct aipu_job_desc {
 	__u32 exec_flag;
 	__u32 dtcm_size_kb;
 	__u64 head_tcb_pa;
+	__u64 first_task_tcb_pa;
 	__u64 last_task_tcb_pa;
 	__u64 tail_tcb_pa;
 };

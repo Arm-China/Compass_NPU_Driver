@@ -917,8 +917,13 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     GraphBase* p_gobj = nullptr;
 
-    if (nullptr == arg)
-        return AIPU_STATUS_ERROR_NULL_PTR;
+    if (cmd != AIPU_IOCTL_ENABLE_TICK_COUNTER &&
+        cmd != AIPU_IOCTL_DISABLE_TICK_COUNTER &&
+        cmd != AIPU_IOCTL_ABORT_CMD_POOL)
+    {
+        if (nullptr == arg)
+            return AIPU_STATUS_ERROR_NULL_PTR;
+    }
 
     if (cmd >= AIPU_IOCTL_SET_PROFILE && cmd <= AIPU_IOCTL_FREE_SHARE_BUF)
     {
