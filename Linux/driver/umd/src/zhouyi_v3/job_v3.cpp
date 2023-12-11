@@ -722,6 +722,24 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
     if (AIPU_STATUS_SUCCESS != ret)
         goto finish;
 
+    if (m_tcbs->align_asid_pa == 0 || m_tcbs->pa == 0)
+    {
+        BufferDesc *tmp_holdDesc = nullptr;
+
+        ret = m_mem->malloc(0x1000, 0, &tmp_holdDesc, "holdDesc");
+        if (AIPU_STATUS_SUCCESS != ret)
+            goto finish;
+
+        ret = m_mem->malloc(m_tot_tcb_cnt * sizeof(tcb_t), 0, &m_tcbs, "tcbs");
+        if (AIPU_STATUS_SUCCESS != ret)
+        {
+            m_mem->free(&tmp_holdDesc);
+            goto finish;
+        }
+
+        m_mem->free(&tmp_holdDesc);
+    }
+
     m_mem->zeroize(m_tcbs->pa, m_tot_tcb_cnt * sizeof(tcb_t));
     m_init_tcb.init(m_tcbs->pa);
 
