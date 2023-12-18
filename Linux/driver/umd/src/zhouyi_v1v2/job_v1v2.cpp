@@ -314,24 +314,46 @@ aipu_status_t aipudrv::JobV12::specify_io_buffer(aipu_shared_tensor_info_t &tens
             goto out;
     }
 
-    if (share_case_type == AIPU_SHARE_BUF_IN_ONE_PROCESS)
+    switch (share_case_type)
     {
-        bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
-    } else if (share_case_type == AIPU_SHARE_BUF_CUSTOMED) {
-        bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
-        (*iobuffer_vec)[index].set_dump_ignore_flag(true);
-    } else if (share_case_type == AIPU_SHARE_BUF_DMABUF) {
-        ret = convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_GET_DMA_BUF_INFO, &dma_buf));
-        if (ret != AIPU_STATUS_SUCCESS)
-            goto out;
+        case AIPU_SHARE_BUF_IN_ONE_PROCESS:
+            bufferDesc->init(m_mem->get_asid_base(0), buffer_pa,
+                bufferDesc->size, bufferDesc->req_size);
+            break;
 
-        buffer_pa = dma_buf.pa + offset;
-        bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size, bufferDesc->req_size);
-        (*iobuffer_vec)[index].set_dmabuf_info(fd, dma_buf.bytes, offset);
-    } else {
-        ret = AIPU_STATUS_ERROR_INVALID_OP;
-        goto out;
+        case AIPU_SHARE_BUF_CUSTOMED:
+            bufferDesc->init(m_mem->get_asid_base(0), buffer_pa,
+                bufferDesc->size, bufferDesc->req_size);
+            (*iobuffer_vec)[index].set_dump_ignore_flag(true);
+            break;
+
+        case AIPU_SHARE_BUF_DMABUF:
+            ret = convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_GET_DMA_BUF_INFO, &dma_buf));
+            if (ret != AIPU_STATUS_SUCCESS)
+                goto out;
+
+            buffer_pa = dma_buf.pa + offset;
+            bufferDesc->init(m_mem->get_asid_base(0), buffer_pa,
+                bufferDesc->size, bufferDesc->req_size);
+            (*iobuffer_vec)[index].set_dmabuf_info(fd, dma_buf.bytes, offset);
+            break;
+
+        case AIPU_SHARE_BUF_ATTACH_DMABUF:
+            ret = convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_ATTACH_DMABUF, &dma_buf));
+            if (ret != AIPU_STATUS_SUCCESS)
+                goto out;
+
+            buffer_pa = dma_buf.pa + offset;
+            bufferDesc->init(m_mem->get_asid_base(0), buffer_pa,
+                bufferDesc->size, bufferDesc->req_size);
+            (*iobuffer_vec)[index].set_dmabuf_info(fd, dma_buf.bytes, offset);
+            break;
+
+        default:
+            ret = AIPU_STATUS_ERROR_INVALID_OP;
+            goto out;
     }
+
     LOG(LOG_DEBUG, "specify_io_buffer: pa=%lx, size=%lx, share_case_type=%d\n",
         buffer_pa, bufferDesc->size, share_case_type);
 

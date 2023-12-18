@@ -474,6 +474,47 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
             ret = readwrite_dmabuf_helper(m_fd, (aipu_dmabuf_op_t *)arg, !WRITE_DMABUF);
             break;
 
+        case AIPU_IOCTL_ATTACH_DMABUF:
+            {
+                struct aipu_dma_buf *dma_buf = (struct aipu_dma_buf *)arg;
+                std::string name;
+
+                kret = ioctl(m_fd, AIPU_IOCTL_ATTACH_DMA_BUF, dma_buf);
+                if (kret < 0)
+                {
+                    LOG(LOG_ERR, "Attatch dma_buf [fail]");
+                    ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+                    goto out;
+                }
+                name = "dmabuf_fd_" + std::to_string(dma_buf->fd);
+                m_dma_buf_map[dma_buf->fd] = *dma_buf;
+                m_dram->add_tracking(dma_buf->pa, dma_buf->bytes,
+                    MemOperationAlloc, name.c_str(), false, 0);
+                break;
+            }
+
+        case AIPU_IOCTL_DETACH_DMABUF:
+            {
+                int dmabuf_fd = *(int *)arg;
+
+                kret = ioctl(m_fd, AIPU_IOCTL_DETACH_DMA_BUF, &dmabuf_fd);
+                if (kret < 0)
+                {
+                    LOG(LOG_ERR, "Detatch dma_buf [fail]");
+                    ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+                    goto out;
+                }
+
+                if (m_dma_buf_map.count(dmabuf_fd) == 1)
+                {
+                    struct aipu_dma_buf dma_buf = m_dma_buf_map[dmabuf_fd];
+                    std::string name = "dmabuf_fd_" + std::to_string(dma_buf.fd);
+                    m_dram->add_tracking(dma_buf.pa, dma_buf.bytes,
+                        MemOperationFree, name.c_str(), false, 0);
+                    m_dma_buf_map.erase(dmabuf_fd);
+                }
+                break;
+            }
         case AIPU_IOCTL_GET_VERSION:
             {
                 aipu_driver_version_t *drv_ver = (aipu_driver_version_t *)arg;
