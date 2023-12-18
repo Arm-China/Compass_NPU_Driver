@@ -184,12 +184,13 @@ struct aipu_sram_disable_per_fd {
  * @obj_cache: slab cache of the region objects
  * @reg_cache: slab cache of the regions
  * @tbuf_cache: slab cache of the tcb descriptors
+ * @importer_bufs: buffers from dma-buf importer(s)
  */
 struct aipu_memory_manager {
 	int version;
 	bool has_iommu;
 	struct device *dev;
-	struct mutex lock; /* Protect sram disabled head struct */
+	struct mutex lock; /* Protect sram disabled head/importer bufs struct */
 	int res_cnt;
 	struct aipu_mem_region_list mem;
 	struct aipu_mem_region_list ase[ZHOUYI_ASID_COUNT];
@@ -206,6 +207,7 @@ struct aipu_memory_manager {
 	struct kmem_cache *obj_cache;
 	struct kmem_cache *reg_cache;
 	struct kmem_cache *tbuf_cache;
+	struct aipu_dma_buf_importer *importer_bufs;
 };
 
 int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, int version);

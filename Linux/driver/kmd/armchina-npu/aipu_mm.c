@@ -17,6 +17,7 @@
 #include "aipu_priv.h"
 #include "aipu_mm.h"
 #include "aipu_common.h"
+#include "aipu_dma_buf.h"
 #include "v2.h"
 
 static struct device *aipu_mm_create_child_dev(struct device *dev, u32 idx)
@@ -808,6 +809,10 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	if (!mm->sram_disable_head)
 		return -ENOMEM;
 	INIT_LIST_HEAD(&mm->sram_disable_head->list);
+	mm->importer_bufs = devm_kzalloc(mm->dev, sizeof(*mm->importer_bufs), GFP_KERNEL);
+	if (!mm->importer_bufs)
+		return -ENOMEM;
+	INIT_LIST_HEAD(&mm->importer_bufs->node);
 	spin_lock_init(&mm->slock);
 	mm->default_asid_base = 0;
 	mm->default_asid_size = 0xC0000000;

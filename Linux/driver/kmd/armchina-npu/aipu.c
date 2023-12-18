@@ -191,6 +191,23 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			ret = -EINVAL;
 		}
 		break;
+	case AIPU_IOCTL_ATTACH_DMA_BUF:
+		if (!copy_from_user(&dmabuf_info, (struct aipu_dma_buf __user *)arg,
+				    sizeof(dmabuf_info))) {
+			ret = aipu_attach_dma_buf(&aipu->mm, &dmabuf_info);
+			if (!ret && copy_to_user((struct aipu_dma_buf __user *)arg,
+						 &dmabuf_info, sizeof(dmabuf_info)))
+				ret = -EINVAL;
+		} else {
+			ret = -EINVAL;
+		}
+		break;
+	case AIPU_IOCTL_DETACH_DMA_BUF:
+		if (!copy_from_user(&fd, (int __user *)arg, sizeof(fd)))
+			ret = aipu_detach_dma_buf(&aipu->mm, fd);
+		else
+			ret = -EINVAL;
+		break;
 	case AIPU_IOCTL_GET_DRIVER_VERSION:
 		ret = copy_to_user((char __user *)arg, KMD_VERSION,
 				   sizeof(KMD_VERSION));

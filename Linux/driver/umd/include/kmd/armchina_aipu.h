@@ -588,6 +588,26 @@ struct aipu_hw_status {
  */
 #define AIPU_IOCTL_GET_DMA_BUF_INFO _IOWR(AIPU_IOCTL_MAGIC, 17, struct aipu_dma_buf)
 /**
+ * DOC: AIPU_IOCTL_ATTACH_DMA_BUF
+ *
+ * @Description
+ *
+ * ioctl to get the buffer addr and size from a dma-buf importer's fd
+ *   aipu_dma_buf->fd:    filled by UMD
+ *   aipu_dma_buf->pa:    filled by KMD
+ *   aipu_dma_buf->bytes: filled by KMD
+ */
+#define AIPU_IOCTL_ATTACH_DMA_BUF _IOWR(AIPU_IOCTL_MAGIC, 18, struct aipu_dma_buf)
+/**
+ * DOC: AIPU_IOCTL_DETACH_DMA_BUF
+ *
+ * @Description
+ *
+ * ioctl to detach a dma-buf attached before
+ *   int fd:    filled by UMD
+ */
+#define AIPU_IOCTL_DETACH_DMA_BUF _IOW(AIPU_IOCTL_MAGIC, 19, int)
+/**
  * DOC: AIPU_IOCTL_GET_DRIVER_VERSION
  *
  * @Description
@@ -595,6 +615,6 @@ struct aipu_hw_status {
  * ioctl to get the kmd version: major.minor.patch
  * the char buffer size from UMD should be at least 16 characters.
  */
-#define AIPU_IOCTL_GET_DRIVER_VERSION _IOR(AIPU_IOCTL_MAGIC, 18, char*)
+#define AIPU_IOCTL_GET_DRIVER_VERSION _IOR(AIPU_IOCTL_MAGIC, 20, char*)
 
 #endif /* __UAPI_MISC_ARMCHINA_AIPU_H__ */

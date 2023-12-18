@@ -258,6 +258,77 @@ int aipu_get_dma_buf_info(struct aipu_dma_buf *dmabuf_info)
 	return 0;
 }
 
+int aipu_attach_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf *dmabuf_info)
+{
+	struct dma_buf *dmabuf = NULL;
+	struct dma_buf_attachment *attach = NULL;
+	struct sg_table *table = NULL;
+	struct aipu_dma_buf_importer *im_buf = NULL;
+
+	if (!mm || !dmabuf_info || dmabuf_info->fd <= 0)
+		return -EINVAL;
+
+	dmabuf = dma_buf_get(dmabuf_info->fd);
+	if (!dmabuf)
+		return -EINVAL;
+
+	attach = dma_buf_attach(dmabuf, mm->dev);
+	if (!attach)
+		return -EINVAL;
+
+	table = dma_buf_map_attachment(attach, DMA_BIDIRECTIONAL);
+	if (!table)
+		return -EINVAL;
+
+	dmabuf_info->pa = sg_dma_address(table->sgl);
+	dmabuf_info->bytes = sg_dma_len(table->sgl);
+
+	im_buf = devm_kzalloc(mm->dev, sizeof(*im_buf), GFP_KERNEL);
+	if (!im_buf)
+		return -ENOMEM;
+
+	im_buf->fd = dmabuf_info->fd;
+	im_buf->attach = attach;
+	im_buf->table = table;
+	mutex_lock(&mm->lock);
+	list_add(&im_buf->node, &mm->importer_bufs->node);
+	mutex_unlock(&mm->lock);
+
+	dma_buf_put(dmabuf);
+	return 0;
+}
+
+int aipu_detach_dma_buf(struct aipu_memory_manager *mm, int fd)
+{
+	struct aipu_dma_buf_importer *im_buf = NULL;
+	struct aipu_dma_buf_importer *next = NULL;
+	struct dma_buf *dmabuf = NULL;
+	int ret = -EINVAL;
+
+	if (!mm || fd <= 0)
+		return -EINVAL;
+
+	dmabuf = dma_buf_get(fd);
+	if (!dmabuf)
+		return -EINVAL;
+
+	mutex_lock(&mm->lock);
+	list_for_each_entry_safe(im_buf, next, &mm->importer_bufs->node, node) {
+		if (fd == im_buf->fd) {
+			dma_buf_unmap_attachment(im_buf->attach, im_buf->table, DMA_BIDIRECTIONAL);
+			dma_buf_detach(dmabuf, im_buf->attach);
+			list_del(&im_buf->node);
+			devm_kfree(mm->dev, im_buf);
+			ret = 0;
+			break;
+		}
+	}
+	mutex_unlock(&mm->lock);
+
+	dma_buf_put(dmabuf);
+	return ret;
+}
+
 #if KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE
 MODULE_IMPORT_NS(DMA_BUF);
 #endif
