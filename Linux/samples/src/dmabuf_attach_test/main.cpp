@@ -508,6 +508,7 @@ int main(int argc, char* argv[])
         AIPU_INFO()("aipu_unload_graph success\n");
 
         #if DMABUF_OP_WITH_WRAPPER
+        aipu_ioctl(ctx, AIPU_IOCTL_DETACH_DMABUF, &dmabuf_fd);
         dmabuf_free(dmabuf_fd);
         #else
         aipu_ioctl(ctx, AIPU_IOCTL_FREE_DMABUF, &dmabuf_req.fd);
