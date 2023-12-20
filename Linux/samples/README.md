@@ -83,7 +83,8 @@ note:
   as independent one, they can't be shared with other intermidiate tensor buffers
   on generating model binary. To get independent input or output tensor buffer in
   model binary, it needs to specify specific parameters: '--disable_input_buffer_reuse'
-  and '--disable_output_buffer_reuse' to NN Compiler graph builder(aipugb).
+  and '--disable_output_buffer_reuse' to NN Compiler graph builder(aipugb). Or add
+  'disable_input_buffer_reuse=True' and 'disable_output_buffer_reuse=True' in command aipubuild.
 
   Example 1: generate independent input tensor buffer in model binary
   aipugb graph.def -w weight.bin --disable_input_buffer_reuse --target X2_1204 -o aipu.bin

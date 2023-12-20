@@ -16,6 +16,8 @@
  *        other intermidiate buffers. when generating model binary with NN
  *        Compiler graph builder(aipugb), it has to append parameters
  *        '--disable_input_buffer_reuse' or '--disable_output_buffer_reuse'.
+ *        Or add 'disable_input_buffer_reuse=True' and 'disable_output_buffer_reuse=True'
+ *        in command aipubuild.
  *        please reference the detailed command in sample/README.md.
  *
  */
