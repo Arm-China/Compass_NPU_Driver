@@ -1017,13 +1017,15 @@ class NPU
 
             case AIPU_IOCTL_ALLOC_SHARE_BUF:
                 {
-                std::string str_key[] = {"size"};
+                std::string str_key[] = {"size", "mem_type"};
                 arg = malloc(sizeof(aipu_share_buf_t));
                 aipu_share_buf_t *p = (aipu_share_buf_t *)arg;
                 memset(p, 0, sizeof(aipu_share_buf_t));
                 if (py_arg.count(str_key[0]) == 1)
                     p->size = (uint32_t)py_arg[str_key[0]];
 
+                if (py_arg.count(str_key[1]) == 1)
+                    p->mem_type = (uint32_t)py_arg[str_key[1]];
                 }
                 break;
 
