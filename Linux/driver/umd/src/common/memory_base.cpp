@@ -41,6 +41,7 @@ aipudrv::MemoryBase::MemoryBase()
         LOG(LOG_ALERT, "memory log file: %s", m_file_name.c_str());
         mem_dump.open(m_file_name.c_str(), std::ofstream::out | std::ofstream::trunc);
         mem_dump.close();
+        mem_dump.open(m_file_name.c_str(), std::ofstream::out | std::ofstream::app);
     }
 
     if (gm_enable != nullptr)
@@ -56,6 +57,7 @@ aipudrv::MemoryBase::~MemoryBase()
 {
     pthread_rwlock_destroy(&m_lock);
     pthread_rwlock_destroy(&m_tlock);
+    mem_dump.close();
 }
 
 std::string aipudrv::MemoryBase::get_tracking_log(DEV_PA_64 pa) const
@@ -160,9 +162,7 @@ void aipudrv::MemoryBase::write_line(const char* log) const
 {
     if (m_enable_mem_dump)
     {
-        mem_dump.open(m_file_name.c_str(), std::ofstream::out | std::ofstream::app);
         mem_dump << log << std::endl;
-        mem_dump.close();
     }
 }
 
