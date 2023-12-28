@@ -52,6 +52,14 @@ enum
     SUBG_DEPEND_PREALL = -1,
 };
 
+/* section: .note.aipu.globalparam */
+struct DS_ModelGlobalParam
+{
+    uint32_t reserve0[32];
+    uint32_t input_shape[96];
+    uint32_t reserve1[128];
+};
+
 struct GM_info_desc {
     uint32_t gm_buf_type; // 0: ignore, 1: input, 2: output
     BssBufferIndex gm_buf_idx;

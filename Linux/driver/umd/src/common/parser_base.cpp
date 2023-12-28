@@ -121,6 +121,9 @@ aipu_status_t aipudrv::ParserBase::fill_io_tensor_desc_inner(uint32_t reuse_sec_
         case SECTION_TYPE_SEGMMU:
             desc.segmmus.push_back(io_desc);
             break;
+        case SECTION_TYPE_OUT_TENSOR_SHAPE:
+            desc.outputs_shape.push_back(io_desc);
+            break;
         default:
             LOG(LOG_WARN, "no sub_section type: %d\n", sub_section_load.type);
             return AIPU_STATUS_ERROR_INVALID_TENSOR_TYPE;
@@ -262,7 +265,8 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
                 (SECTION_TYPE_PLOG_DATA == sub_desc_load.type) ||
                 (SECTION_TYPE_LAYER_COUNTER == sub_desc_load.type) ||
                 (SECTION_TYPE_ERROR_CODE == sub_desc_load.type) ||
-                (SECTION_TYPE_SEGMMU == sub_desc_load.type))
+                (SECTION_TYPE_SEGMMU == sub_desc_load.type) ||
+                (SECTION_TYPE_OUT_TENSOR_SHAPE == sub_desc_load.type))
             {
                 fill_io_tensor_desc_inner<SubSectionDesc>(reuse_sec_iter,
                     sub_sec_iter, sub_desc_load, io);
@@ -306,6 +310,10 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
         goto finish;
 
     ret = sort_io_tensor(io.inter_dumps);
+    if (ret != AIPU_STATUS_SUCCESS)
+        goto finish;
+
+    ret = sort_io_tensor(io.outputs_shape);
     if (ret != AIPU_STATUS_SUCCESS)
         goto finish;
 

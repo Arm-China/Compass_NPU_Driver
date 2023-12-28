@@ -105,7 +105,24 @@ enum ELFSection {
     ELFSectionCompilerMsg,
     ELFSectionGmconfig,
     ELFSectionSegmmu,
+    ELFSectionGlobalParam,
+    ELFSectionInputShapeConstraint,
     ELFSectionCnt
+};
+
+struct DS_AIPUTensorShape
+{
+    uint32_t dim;
+    uint32_t *shapes;    // std::vector<uint32_t> shapes;
+};
+
+/* section: .note.aipu.inputshapeconstraint */
+struct DS_InputShapeConstraint
+{
+    uint32_t num_inputs;
+    // store in order as : [inp0_min_shape,inp0_max_shape,inp1_min_shape,inp1_max_shape,...]
+    // the constrains contains num_input*2 shape, the first is min shape, the second is max shape.
+    DS_AIPUTensorShape *constrains;    // std::vector<DS_AIPUTensorShape> constrains;
 };
 
 class ParserELF : public ParserBase
@@ -113,7 +130,7 @@ class ParserELF : public ParserBase
 private:
     ELFHeaderBottom m_header;
     ELFIO::elfio m_elf;
-    AIPUCompilerMsg m_aipu_compile_msg;
+    AIPUCompilerMsg m_aipu_compile_msg = {0};
 
 private:
     ELFIO::section* m_text = nullptr;
@@ -131,7 +148,9 @@ private:
         "subgraphs",
         "compilermsg",
         "gmconfig",
-        "segmmu"
+        "segmmu",
+        "globalparam",
+        "inputshapeconstraint"
     };
 
 private:

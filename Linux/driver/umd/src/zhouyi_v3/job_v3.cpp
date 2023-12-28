@@ -697,6 +697,44 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
     SubGraphTask sg;
     int retval = 0;
 
+    /* 0. allocate and set model global parameter if need */
+    if (get_graph().is_dynamic_shape() && get_graph().get_config_shape_sz() > 0)
+    {
+        uint32_t input_shape[96] = {0};
+        uint32_t *shape_ptr = input_shape;
+
+        ret = m_mem->malloc(sizeof(DS_ModelGlobalParam), 0,
+            &m_model_global_param, "modelparam");
+        if (AIPU_STATUS_SUCCESS != ret)
+        {
+            LOG(LOG_ERR, "alloc model global param [fail]");
+            goto finish;
+        }
+
+        m_mem->write(m_model_global_param->pa, get_graph().m_bglobalparam.va,
+            get_graph().m_bglobalparam.size);
+
+        for (uint32_t input_idx = 0; input_idx < get_graph().get_config_shape_sz();
+            input_idx++)
+        {
+            if (get_graph().in_config_shape(input_idx))
+            {
+                for (uint32_t dim_idx = 0;
+                    dim_idx < get_graph().get_config_shape_dim_sz(input_idx);
+                    dim_idx++)
+                {
+                    *shape_ptr++ = get_graph().get_config_shape_item(input_idx, dim_idx);
+                }
+            } else {
+                ret = AIPU_STATUS_ERROR_NOT_CONFIG_SHAPE;
+                LOG(LOG_ERR, "input shape %d is not configured\n", input_idx);
+                goto finish;
+            }
+        }
+
+        m_mem->write(m_model_global_param->pa + 32 * 4, input_shape, 96 * 4);
+    }
+
     /* 1. allocate and load job rodata */
     if (get_graph().m_brodata.size != 0)
     {
@@ -998,6 +1036,9 @@ aipu_status_t aipudrv::JobV3::free_job_buffers()
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
+    if (m_model_global_param && m_model_global_param->size != 0)
+        m_mem->free(&m_model_global_param, "modelparam");
+
     if (m_rodata && m_rodata->size != 0)
         m_mem->free(&m_rodata, "rodata");
 
@@ -1082,6 +1123,9 @@ aipu_status_t aipudrv::JobV3::setup_placehold_tcb_task(uint32_t sg_id, uint32_t 
     tcb->task_id_y = 0;
     tcb->task_id_z = 0;
     tcb->tcbp = get_low_32(next_tcb_pa - m_tcbs->asid_base);
+
+    if (get_graph().is_dynamic_shape() && get_graph().get_config_shape_sz() > 0)
+        tcb->global_param = get_low_32(m_model_global_param->align_asid_pa);
 
     m_mem->write(next_tcb_pa, (const char*)tcb, sizeof(*tcb));
     delete tcb;

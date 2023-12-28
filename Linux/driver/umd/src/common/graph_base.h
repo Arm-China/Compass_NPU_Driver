@@ -115,6 +115,10 @@ public:
     virtual aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type,
         uint32_t tensor, aipu_tensor_desc_t* desc) = 0;
     virtual DEV_PA_64 debugger_get_instr_base() = 0;
+    virtual uint32_t get_dynamic_shape_num() = 0;
+    virtual int32_t get_dynamic_shape_dim_num(uint32_t idx, bool max_shape_dim) = 0;
+    virtual bool get_dynamic_shape_data(uint32_t idx, bool max_shape_dim, uint32_t *data) = 0;
+    virtual bool set_dynamic_shape_data(aupu_dynshape_param_t *shape_param) = 0;
 
     JobBase* get_job(JOB_ID id)
     {

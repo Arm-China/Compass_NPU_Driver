@@ -97,7 +97,8 @@ struct tcb_t
             uint32_t idp;
             uint32_t dsize;
             uint32_t tcbp;
-            uint32_t rsvd2[4];
+            uint32_t global_param;
+            uint32_t rsvd2[3];
         } noninit;
         union
         {
@@ -158,6 +159,7 @@ struct tcb_t
 #define idp          __data.noninit.idp
 #define dsize        __data.noninit.dsize
 #define tcbp         __data.noninit.tcbp
+#define global_param __data.noninit.global_param
 
 #define gm_ctl       __data.init.clst.gm_ctrl
 #define igrid_id     __data.init.clst.grid_id

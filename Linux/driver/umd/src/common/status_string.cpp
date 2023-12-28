@@ -83,6 +83,12 @@ std::map<uint32_t, std::string> aipudrv::MainContext::umd_status_string =
         "There's no specific batch queue" },
     { AIPU_STATUS_ERROR_DMABUF_SHARED_IO,
         "Specify dma_buf: not expect input&output buffer shared" },
+    { AIPU_STATUS_ERROR_GET_SHAPE_FAILED,
+        "Get dynamic shape failed." },
+    { AIPU_STATUS_ERROR_SET_SHAPE_FAILED,
+        "Set dynamic shape failed." },
+    { AIPU_STATUS_ERROR_NOT_CONFIG_SHAPE,
+        "The input tensor shape is not configured." },
     { AIPU_STATUS_MAX,
         "Status Max value which should not be returned to application." },
     /* AIPU layer library runtime error code */

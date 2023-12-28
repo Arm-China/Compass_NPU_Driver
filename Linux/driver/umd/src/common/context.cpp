@@ -927,40 +927,142 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
 
     if (cmd >= AIPU_IOCTL_SET_PROFILE && cmd <= AIPU_IOCTL_FREE_SHARE_BUF)
     {
-        if (cmd == AIPU_IOCTL_SET_PROFILE) {
-            m_dev->enable_profiling((*(int *)arg) != 0);
-        } else if (cmd == AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION) {
-            aipu_bin_buildversion_t *buildver = (aipu_bin_buildversion_t *)arg;
+        switch(cmd)
+        {
+            case AIPU_IOCTL_SET_PROFILE:
+                m_dev->enable_profiling((*(int *)arg) != 0);
+                break;
 
-            if (!aipudrv::valid_graph_id(buildver->graph_id))
-                return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+            case AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION:
+                {
+                    aipu_bin_buildversion_t *buildver = (aipu_bin_buildversion_t *)arg;
 
-            p_gobj = get_graph_object(buildver->graph_id);
-            if (nullptr == p_gobj)
-                return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+                    if (!aipudrv::valid_graph_id(buildver->graph_id))
+                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
-            buildver->aipubin_buildversion = p_gobj->get_buildversion();
-        } else if (cmd == AIPU_IOCTL_ALLOC_SHARE_BUF) {
-            aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
-            BufferDesc *buf = nullptr;// new BufferDesc;
+                    p_gobj = get_graph_object(buildver->graph_id);
+                    if (nullptr == p_gobj)
+                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
-            ret = m_dram->malloc(share_buf->size, 1, &buf, "share", share_buf->mem_type);
-            if (ret != AIPU_STATUS_SUCCESS)
-                return ret;
+                    buildver->aipubin_buildversion = p_gobj->get_buildversion();
+                }
+                break;
 
-            if (m_dram->pa_to_va(buf->pa, buf->size, (char **)&share_buf->va) != 0)
-                return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
-            share_buf->pa = buf->pa;
-        } else if (cmd == AIPU_IOCTL_FREE_SHARE_BUF) {
-            aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
-            Buffer buffer;
+            case AIPU_IOCTL_ALLOC_SHARE_BUF:
+                {
+                    aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
+                    BufferDesc *buf = nullptr;
 
-            if(m_dram->get_shared_buffer(share_buf->pa, share_buf->size, buffer) != 0)
-                return AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
+                    ret = m_dram->malloc(share_buf->size, 1, &buf, "share", share_buf->mem_type);
+                    if (ret != AIPU_STATUS_SUCCESS)
+                        return ret;
 
-            ret = m_dram->free(&buffer.desc, "share");
-            if (ret != AIPU_STATUS_SUCCESS)
-                return ret;
+                    if (m_dram->pa_to_va(buf->pa, buf->size, (char **)&share_buf->va) != 0)
+                        return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
+                    share_buf->pa = buf->pa;
+                }
+                break;
+
+            case AIPU_IOCTL_FREE_SHARE_BUF:
+                {
+                    aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
+                    Buffer buffer;
+
+                    if(m_dram->get_shared_buffer(share_buf->pa, share_buf->size, buffer) != 0)
+                        return AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
+
+                    ret = m_dram->free(&buffer.desc, "share");
+                    if (ret != AIPU_STATUS_SUCCESS)
+                        return ret;
+                }
+                break;
+
+            case AIPU_IOCTL_GET_DS_NUM:
+                {
+                    aipu_dynshape_num_t *ds_num = (aipu_dynshape_num_t *)arg;
+
+                    if (!aipudrv::valid_graph_id(ds_num->graph_id))
+                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+                    p_gobj = get_graph_object(ds_num->graph_id);
+                    if (nullptr == p_gobj)
+                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+                    if (ds_num->ds_num != nullptr) {
+                        *ds_num->ds_num = p_gobj->get_dynamic_shape_num();
+                    } else {
+                        LOG(LOG_ERR, "ds_num ptr is NULL\n");
+                        return AIPU_STATUS_ERROR_NULL_PTR;
+                    }
+                }
+                break;
+
+            case AIPU_IOCTL_GET_DS_DIM_NUM:
+                {
+                    aipu_dynshape_dim_num_t *ds_dim_num = (aipu_dynshape_dim_num_t *)arg;
+
+                    if (!aipudrv::valid_graph_id(ds_dim_num->graph_id))
+                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+                    p_gobj = get_graph_object(ds_dim_num->graph_id);
+                    if (nullptr == p_gobj)
+                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+                    if (ds_dim_num->ds_dim_num != nullptr) {
+                        *ds_dim_num->ds_dim_num =
+                            p_gobj->get_dynamic_shape_dim_num(ds_dim_num->ds_idx,
+                                ds_dim_num->max_threshhold);
+                    } else {
+                        LOG(LOG_ERR, "ds_dim_num ptr is NULL\n");
+                        return AIPU_STATUS_ERROR_NULL_PTR;
+                    }
+                }
+                break;
+
+            case AIPU_IOCTL_GET_DS_INFO:
+                {
+                    aipu_dynshape_info_t *ds_info = (aipu_dynshape_info_t *)arg;
+
+                    if (!aipudrv::valid_graph_id(ds_info->graph_id))
+                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+                    p_gobj = get_graph_object(ds_info->graph_id);
+                    if (nullptr == p_gobj)
+                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+                    bool success = p_gobj->get_dynamic_shape_data(ds_info->ds_idx,
+                        ds_info->max_threshhold, ds_info->ds_data);
+                    if (!success)
+                    {
+                        LOG(LOG_ERR, "get dynamic shape failed\n");
+                        return AIPU_STATUS_ERROR_GET_SHAPE_FAILED;
+                    }
+                }
+                break;
+
+            case AIPU_IOCTL_SET_DS_INFO:
+                {
+                    aupu_dynshape_param_t *ds_param = (aupu_dynshape_param_t *)arg;
+
+                    if (!aipudrv::valid_graph_id(ds_param->graph_id))
+                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+                    p_gobj = get_graph_object(ds_param->graph_id);
+                    if (nullptr == p_gobj)
+                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+                    bool success = p_gobj->set_dynamic_shape_data(ds_param);
+                    if (!success)
+                    {
+                        LOG(LOG_ERR, "set dynamic shape failed\n");
+                        return AIPU_STATUS_ERROR_SET_SHAPE_FAILED;
+                    }
+                }
+                break;
+
+            default:
+                LOG(LOG_ERR, "invalid command\n");
+                return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
         }
     } else {
         #ifndef SIMULATION

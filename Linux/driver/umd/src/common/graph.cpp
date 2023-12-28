@@ -218,6 +218,107 @@ aipu_status_t aipudrv::Graph::unload()
     }
     m_weights.clear();
 
+    m_set_shape.clear();
+
     m_mem->dump_tracking_log_end();
     return ret;
+}
+
+int32_t aipudrv::Graph::get_dynamic_shape_dim_num(uint32_t idx, bool max_shape_dim)
+{
+    if (!is_dynamic_shape())
+        return 0;
+
+    if (idx >= 0 && idx < m_input_shape_constraint.size())
+    {
+        if (!max_shape_dim)
+            return m_input_shape_constraint[idx][0].size();
+        else
+            return m_input_shape_constraint[idx][1].size();
+    }
+
+    return 0;
+}
+
+bool aipudrv::Graph::get_dynamic_shape_data(uint32_t idx, bool max_shape_dim, uint32_t *data)
+{
+    if (!is_dynamic_shape())
+        return false;
+
+    if (data == nullptr)
+    {
+        LOG(LOG_ERR, "data ptr is NULL\n");
+        return false;
+    }
+
+    if (idx >= 0 && idx < m_input_shape_constraint.size())
+    {
+        if (!max_shape_dim)
+        {
+            for (uint32_t i = 0; i < m_input_shape_constraint[idx][0].size(); i++)
+                *(data + i) = m_input_shape_constraint[idx][0][i];
+        } else {
+            for (uint32_t i = 0; i < m_input_shape_constraint[idx][1].size(); i++)
+                *(data + i) = m_input_shape_constraint[idx][1][i];
+        }
+    }
+
+    return true;
+}
+
+bool aipudrv::Graph::set_dynamic_shape_data(aupu_dynshape_param_t *shape_param)
+{
+    if (!is_dynamic_shape())
+        return false;
+
+    if (shape_param->input_shape_cnt != get_dynamic_shape_num())
+    {
+        LOG(LOG_ERR, "config shape count not match input shape count\n");
+        return false;
+    }
+
+    if (shape_param->shape_items == nullptr)
+    {
+        LOG(LOG_ERR, "config shape address is NULL\n");
+        return false;
+    }
+
+    for (uint32_t i = 0; i < shape_param->input_shape_cnt; i++)
+    {
+        aupu_dynshape_item_t *shape_item = &shape_param->shape_items[i];
+        uint32_t idx = shape_item->ds_idx;
+
+        if (idx >= 0 && idx < m_input_shape_constraint[idx].size())
+        {
+            uint64_t size = 1;
+
+            for (uint32_t dim = 0; dim < m_input_shape_constraint[idx][0].size(); dim++)
+            {
+                size *= shape_item->ds_data[dim];
+                m_set_shape[idx].push_back(shape_item->ds_data[dim]);
+            }
+
+            if (size < m_input_shape_threshhold[idx][0] &&
+                size > m_input_shape_threshhold[idx][1])
+            {
+                m_set_shape.clear();
+                LOG(LOG_ERR, "input %d: dynamic shape invalid, valid scope [%lu, %lu]\n",
+                    idx, m_input_shape_threshhold[idx][0], m_input_shape_threshhold[idx][1]);
+                return false;
+            }
+        } else {
+            m_set_shape.clear();
+            LOG(LOG_ERR, "input %d invalid index\n", idx);
+            return false;
+        }
+    }
+
+    if (m_set_shape.size() != get_dynamic_shape_num())
+    {
+        m_set_shape.clear();
+        LOG(LOG_ERR, "set shape count != input shape count\n");
+        return false;
+    }
+
+    return true;
 }

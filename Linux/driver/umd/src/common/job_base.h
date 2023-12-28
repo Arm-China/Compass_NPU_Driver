@@ -98,6 +98,7 @@ protected:
     std::vector<struct JobIOBuffer> m_layer_counter;
     std::vector<struct JobIOBuffer> m_err_code;
     std::vector<struct JobIOBuffer> m_segmmus;
+    std::vector<struct JobIOBuffer> m_outputs_shape;
 
 protected:
     bool m_dump_text = false;

@@ -213,6 +213,9 @@ aipu_status_t aipudrv::GraphV3::get_tensor_count(aipu_tensor_type_t type, uint32
         case AIPU_TENSOR_TYPE_PROFILER:
             *cnt = (uint32_t)m_subgraphs[0].io.profiler.size();
             break;
+        case AIPU_TENSOR_TYPE_OUT_TENSOR_SHAPE:
+            *cnt = (uint32_t)m_subgraphs[0].io.outputs_shape.size();
+            break;
         default:
             LOG(LOG_WARN, "no tensor with type: %d\n", type);
             return AIPU_STATUS_ERROR_INVALID_TENSOR_TYPE;
@@ -252,6 +255,9 @@ aipu_status_t aipudrv::GraphV3::get_tensor_descriptor(aipu_tensor_type_t type, u
             break;
         case AIPU_TENSOR_TYPE_PROFILER:
             io = m_subgraphs[0].io.profiler[tensor];
+            break;
+        case AIPU_TENSOR_TYPE_OUT_TENSOR_SHAPE:
+            io = m_subgraphs[0].io.outputs_shape[tensor];
             break;
         default:
             LOG(LOG_WARN, "no tensor with type: %d\n", type);

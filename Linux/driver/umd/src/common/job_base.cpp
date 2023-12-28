@@ -188,6 +188,10 @@ aipu_status_t aipudrv::JobBase::get_tensor(aipu_tensor_type_t type, uint32_t ten
             iobuffer_vec = &m_err_code;
             break;
 
+        case AIPU_TENSOR_TYPE_OUT_TENSOR_SHAPE:
+            iobuffer_vec = &m_outputs_shape;
+            break;
+
         default:
             return AIPU_STATUS_ERROR_INVALID_OP;
     }

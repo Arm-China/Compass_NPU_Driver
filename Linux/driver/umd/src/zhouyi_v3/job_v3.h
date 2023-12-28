@@ -144,6 +144,11 @@ private:
      */
     BufferDesc *m_exit_inst_encode = nullptr;
 
+    /**
+     * model global parameter buffer
+     */
+    BufferDesc *m_model_global_param = nullptr;
+
 public:
     GraphV3& get_graph()
     {

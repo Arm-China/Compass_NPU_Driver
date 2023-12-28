@@ -62,6 +62,7 @@ struct GraphIOTensors {
     std::vector<struct GraphIOTensorDesc> layer_counter;
     std::vector<struct GraphIOTensorDesc> err_code;
     std::vector<struct GraphIOTensorDesc> segmmus;
+    std::vector<struct GraphIOTensorDesc> outputs_shape;
 };
 
 struct GraphParamMapLoadDesc {
@@ -104,6 +105,19 @@ protected:
     struct BinSection m_bdata;
     std::vector<RemapEntry> m_remap;
 
+    /* dynamic shape */
+    struct BinSection m_bglobalparam;
+
+    /* entry: <min shape (N, H, W, C), max shape (N, H, W, C)> etc */
+    std::map<int, std::vector<std::vector<uint32_t>>> m_input_shape_constraint;
+
+    /* entry: <min size, max size>, size = N*H*W*C */
+    std::map<int, std::vector<uint64_t>> m_input_shape_threshhold;
+
+    /* entry: idx: <N, H, W, C> */
+    std::map<int, std::vector<uint32_t>> m_set_shape;
+    bool m_dynamic_shape = false;
+
 protected:
     /* Buffers in memory for AIPU's access */
     BufferDesc *m_text = nullptr;
@@ -122,6 +136,11 @@ protected:
     int m_dtcm_size = 0;
 
 public:
+    virtual int32_t get_dynamic_shape_dim_num(uint32_t idx, bool max_shape_dim);
+    virtual bool get_dynamic_shape_data(uint32_t idx, bool max_shape_dim, uint32_t *data);
+    virtual bool set_dynamic_shape_data(aupu_dynshape_param_t *shape_param);
+
+public:
     virtual void set_stack(uint32_t sg_id, uint32_t size, uint32_t align) = 0;
     virtual void add_param(uint32_t sg_id, struct GraphParamMapLoadDesc param) = 0;
     virtual void add_static_section(uint32_t sg_id, struct GraphSectionDesc section) = 0;
@@ -130,6 +149,7 @@ public:
     virtual void set_gmconfig(BinSection &gm_section) {}
     virtual void set_segmmu(BinSection &segmmu_section) {}
     virtual aipu_status_t extract_gm_info(int sg_id) { return AIPU_STATUS_SUCCESS; }
+
 
 public:
     virtual void print_parse_info() = 0;
@@ -184,6 +204,87 @@ public:
     void set_dtcm_size(int dtcm_sz)
     {
         m_dtcm_size = dtcm_sz;
+    }
+
+    void set_modle_global_param(BinSection mgp_section)
+    {
+        m_bglobalparam = mgp_section;
+        m_dynamic_shape = true;
+    }
+
+    #define GET_U32_FROM_PTR_ADV(ptr) (*(uint32_t *)ptr++)
+    bool set_input_shape_constrait(BinSection &isc_section)
+    {
+        uint32_t *start = (uint32_t *)isc_section.va;
+        uint32_t num_inputs = GET_U32_FROM_PTR_ADV(start);
+
+        for (uint32_t i = 0; i < num_inputs; i++)
+        {
+            uint32_t dim = GET_U32_FROM_PTR_ADV(start);
+            std::vector<uint32_t> shape_vec;
+
+            for (uint32_t j = 0; j < dim; j++)
+            {
+                shape_vec.push_back(GET_U32_FROM_PTR_ADV(start));
+            }
+
+            if (shape_vec.size() > 0)
+            {
+                uint64_t size = 1;
+
+                m_input_shape_constraint[i/2].push_back(shape_vec);
+                for (uint32_t k = 0; k < shape_vec.size(); k++)
+                {
+                     size *= shape_vec[k];
+
+                     if (size == 0)
+                     {
+                        LOG(LOG_ALERT, "input shape %d, dim %d is 0\n", i/2, k);
+                        return false;
+                     }
+                }
+
+                m_input_shape_threshhold[i/2].push_back(size);
+            }
+        }
+
+        return true;
+    }
+
+    bool is_dynamic_shape()
+    {
+        return m_dynamic_shape;
+    }
+
+    uint32_t get_dynamic_shape_num()
+    {
+        if (!is_dynamic_shape())
+            return 0;
+        else
+            return m_input_shape_constraint.size();
+    }
+
+    bool in_config_shape(uint32_t idx)
+    {
+        return m_set_shape.count(idx) == 1;
+    }
+
+    uint32_t get_config_shape_sz()
+    {
+        return m_set_shape.size();
+    }
+
+    uint32_t get_config_shape_dim_sz(uint32_t input_idx)
+    {
+        if (m_set_shape.count(input_idx))
+            return m_set_shape[input_idx].size();
+        else
+            return 0;
+    }
+
+    uint32_t get_config_shape_item(uint32_t input_idx, uint32_t dim_idx)
+    {
+        return m_set_shape[input_idx][dim_idx];
     }
 
     virtual void set_enrty(uint32_t offset){};

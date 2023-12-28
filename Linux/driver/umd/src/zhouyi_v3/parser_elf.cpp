@@ -354,6 +354,23 @@ aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size,
         gobj.set_hw_revision(AIPU_REVISION(m_aipu_compile_msg.device));
     }
 
+    if (m_aipu_compile_msg.flag & (1 << 6))
+    {
+        if (sections[ELFSectionGlobalParam].size != 0)
+        {
+            if (sections[ELFSectionGlobalParam].size == sizeof(DS_ModelGlobalParam))
+                gobj.set_modle_global_param(sections[ELFSectionGlobalParam]);
+            else
+                LOG(LOG_ALERT, "Section ModelGlobalParam violation\n");
+        }
+
+        if (sections[ELFSectionInputShapeConstraint].size != 0)
+        {
+            if(!gobj.set_input_shape_constrait(sections[ELFSectionInputShapeConstraint]))
+                LOG(LOG_ALERT, "Section InputShapeConstraint violation\n");
+        }
+    }
+
     start = (char*)sections[ELFSectionSubGraphs].va;
     memcpy(&sg_desc_header, start, sizeof(sg_desc_header));
 
