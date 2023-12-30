@@ -21,8 +21,15 @@
 #include "utils/debug.h"
 #include "utils/helper.h"
 #include "device.h"
+
+#if (defined ZHOUYI_V12)
 #include "graph_v1v2.h"
-#include "graph_v3.h"
+#endif
+
+#if (defined ZHOUYI_V3) || (defined ZHOUYI_V4)
+#include "graph_v3x.h"
+#endif
+
 #include "super_graph.h"
 #include "job_base.h"
 #include "parser_base.h"
@@ -46,7 +53,11 @@ aipudrv::MainContext::MainContext()
     m_sim_cfg.enable_avx = false;
     m_sim_cfg.enable_calloc = false;
     m_sim_cfg.en_eval = false;
+    #if (defined ZHOUYI_V3)
     m_sim_cfg.gm_size = 4 * MB_SIZE;
+    #else
+    m_sim_cfg.gm_size = 8 * MB_SIZE;
+    #endif
 
     m_hw_cfg.poll_in_commit_thread = true;
 
@@ -191,9 +202,9 @@ aipu_status_t aipudrv::MainContext::create_graph_object(std::istream& gbin, uint
     if (AIPU_LOADABLE_GRAPH_V0005 == g_version)
         p_gobj = new GraphV12(this, id, m_dev);
 #endif
-#if (defined ZHOUYI_V3)
+#if (defined ZHOUYI_V3) || (defined ZHOUYI_V4)
     if (AIPU_LOADABLE_GRAPH_ELF_V0 == g_version)
-        p_gobj = new GraphV3(this, id, m_dev);
+        p_gobj = new GraphV3X(this, id, m_dev);
 #endif
 
     if (nullptr == p_gobj)
@@ -518,7 +529,13 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
 
     m_sim_cfg.gm_size = config->gm_size;
     if (gm_sz_cfg.count(m_sim_cfg.gm_size) != 1)
+    {
+        #if (defined ZHOUYI_V3)
         m_sim_cfg.gm_size = 4 * MB_SIZE;
+        #else
+        m_sim_cfg.gm_size = 8 * MB_SIZE;
+        #endif
+    }
 
     if ((config->x2_arch_desc != nullptr) || (sim_npu_arch_env != nullptr))
     {

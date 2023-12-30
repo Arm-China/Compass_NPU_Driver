@@ -8,7 +8,7 @@
 #include <vector>
 #include <memory>
 #include <pthread.h>
-#include "graph_v3.h"
+#include "../common/graph_v3x.h"
 #include "kmd/tcb.h"
 
 namespace aipudrv
@@ -40,7 +40,7 @@ class GM_V3
 
     public:
     JobV3 &m_job;
-    const GraphV3 &m_graph;
+    const GraphV3X &m_graph;
 
     /**
      * index 0: record the input info, DDR->GM

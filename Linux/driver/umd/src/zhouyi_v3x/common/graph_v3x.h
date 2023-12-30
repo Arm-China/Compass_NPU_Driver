@@ -49,6 +49,7 @@ enum
 {
     SUBG_DEPEND_NONE = 0,
     SUBG_DEPEND_IMMEDIATE = 1,
+    SUBG_DEPEND_PREGROUPS = 1,
     SUBG_DEPEND_PREALL = -1,
 };
 
@@ -133,7 +134,7 @@ struct Subgraph {
     struct GraphIOTensors io;
 };
 
-class GraphV3: public Graph
+class GraphV3X: public Graph
 {
 private:
     std::vector<struct Subgraph> m_subgraphs;
@@ -144,6 +145,9 @@ private:
 public:
     std::map<uint32_t, GM_info_desc> m_gm_info[2];
     uint32_t m_segmmu_num = 0;
+
+    /* for broadcast, <sg_id, core_num> */
+    std::map<uint32_t, uint32_t> m_broadcast_info;
 
 public:
     void print_parse_info();
@@ -239,12 +243,13 @@ public:
     }
 
 public:
-    GraphV3(void* ctx, GRAPH_ID id, DeviceBase* dev);
-    ~GraphV3();
-    GraphV3(const GraphV3& graph) = delete;
-    GraphV3& operator=(const GraphV3& graph) = delete;
+    GraphV3X(void* ctx, GRAPH_ID id, DeviceBase* dev);
+    ~GraphV3X();
+    GraphV3X(const GraphV3X& graph) = delete;
+    GraphV3X& operator=(const GraphV3X& graph) = delete;
 
     friend class JobV3;
+    friend class JobV4;
 };
 }
 

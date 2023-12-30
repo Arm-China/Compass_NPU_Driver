@@ -20,8 +20,12 @@ ANDROIDLDFLAGS := -Wl,-O3 -Wl,--gc-sections \
                   -static-libstdc++ -Wl,--build-id -Wl,--warn-shared-textrel -Wl,--fatal-warnings -Qunused-arguments -Wl,-z,noexecstack  -Wl,-z,defs
 
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
-    ifneq ($(BUILD_AIPU_VERSION), aipu_v1v2)
+    ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
         LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X2_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X2_SIM_LNAME)
+    endif
+
+    ifeq ($(BUILD_AIPU_VERSION), aipu_v4)
+        LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X3_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X3_SIM_LNAME)
     endif
 endif
 
@@ -43,9 +47,19 @@ ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
     CXXFLAGS += -DZHOUYI_V3
 endif
 
+ifeq ($(BUILD_AIPU_VERSION), aipu_v4)
+    CXXFLAGS += -DZHOUYI_V4
+endif
+
 ifeq ($(BUILD_AIPU_VERSION), all)
     CXXFLAGS += -DZHOUYI_V12
-    CXXFLAGS += -DZHOUYI_V3
+    ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
+        CXXFLAGS += -DZHOUYI_V3
+    endif
+
+    ifeq ($(BUILD_AIPU_VERSION), aipu_v4)
+        CXXFLAGS += -DZHOUYI_V4
+    endif
 endif
 
 ifneq ($(BUILD_ANDROID_NDK), )

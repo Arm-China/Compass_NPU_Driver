@@ -15,7 +15,7 @@
 #include <set>
 #include <memory>
 #include <pthread.h>
-#include "graph_v3.h"
+#include "../common/graph_v3x.h"
 #include "kmd/tcb.h"
 #include "job_base.h"
 #include "gm.h"
@@ -82,14 +82,16 @@ struct dumpcfg_host_desc
     uint32_t lo_addr;
 };
 
-class JobV3: public JobBase
+class JobV4: public JobBase
 {
 private:
     uint32_t    m_tot_tcb_cnt = 0;
     uint32_t    m_sg_cnt = 0;
     uint32_t    m_task_per_sg = 0;
     uint32_t    m_partition_id = 0;
-    uint32_t    m_grid_id = 0;
+    uint16_t    m_grid_id = 0;
+    uint16_t    m_start_group_id = 0;
+    uint16_t    m_group_id_idx = 0;
     uint32_t    m_core_cnt = 0;
     uint32_t    m_qos = 0;
     uint32_t    m_fm_mem_region = AIPU_MEM_REGION_DEFAULT;
@@ -108,7 +110,7 @@ private:
     uint32_t m_segmmu_num = 0;
     uint32_t m_segmmu_tcb_num = 3;
     std::vector<SegMMUConfig> m_segmmu_sec;
-    GM_V3 *m_gm = nullptr;
+    GM_V4 *m_gm = nullptr;
     bool m_same_asid = true;
 
     std::string m_dumpcfg_header;
@@ -144,23 +146,10 @@ private:
      */
     BufferDesc *m_exit_inst_encode = nullptr;
 
-    /**
-     * model global parameter buffer
-     */
-    BufferDesc *m_model_global_param = nullptr;
-
-    /**
-     * For dynamic shape feature
-     *
-     * true: all io tensors size updated according to dynamic shape.
-     * false: all io tensors size not updated.
-     */
-    bool m_dynamic_shape_tensor_size_updated = false;
-
 public:
-    GraphV3& get_graph()
+    GraphV3X& get_graph()
     {
-        return static_cast<GraphV3&>(m_graph);
+        return static_cast<GraphV3X&>(m_graph);
     }
 
     virtual uint32_t get_subgraph_cnt()
@@ -177,8 +166,6 @@ private:
     aipu_status_t setup_rodata_sg(uint32_t sg_id, const std::vector<struct GraphParamMapLoadDesc>& param_map,
         std::vector<BufferDesc*>& reuse_buf, std::vector<BufferDesc*>& static_buf,
         std::set<uint32_t> *dma_buf_idx = nullptr);
-    aipu_status_t setup_placehold_tcb_task(uint32_t sg_id, uint32_t grid_id, uint32_t core_id, uint32_t task_id,
-        tcb_t *prev);
     aipu_status_t setup_tcb_task(uint32_t sg_id, uint32_t grid_id, uint32_t core_id, uint32_t task_id);
     aipu_status_t setup_tcb_sg(uint32_t sg_id, uint32_t grid_id, uint32_t core_id);
     void          set_job_params(uint32_t sg_cnt, uint32_t task_per_sg, uint32_t remap, uint32_t core_cnt);
@@ -188,14 +175,12 @@ private:
     aipu_status_t alloc_subgraph_buffers();
     aipu_status_t init_per_task_data();
     aipu_status_t setup_tcbs();
-    aipu_status_t config_smmu_tcb();
+    aipu_status_t config_smmu_tcb(tcb_t *tcb);
     void setup_gm_sync_from_ddr(tcb_t *tcb);
-    void setup_gm_sync_to_ddr(tcb_t *tcb);
     aipu_status_t setup_segmmu(SubGraphTask &sg);
     void free_sg_buffers(SubGraphTask& sg);
     aipu_status_t dump_for_emulation();
     aipu_status_t specify_io_buffer(aipu_shared_tensor_info_t &tensor_info);
-    aipu_status_t parse_dynamic_out_shape();
 
 public:
     aipu_status_t init(const aipu_global_config_simulation_t* cfg,
@@ -205,7 +190,7 @@ public:
     aipu_status_t bind_core(uint32_t core_id);
     aipu_status_t debugger_run();
 
-    #if (defined(SIMULATION) && defined(ZHOUYI_V3))
+    #if defined(SIMULATION)
     virtual void dumpcfg_alljob();
     #endif
 
@@ -239,12 +224,12 @@ public:
     }
 
 public:
-    JobV3(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_create_job_cfg_t *config = nullptr);
-    ~JobV3();
-    JobV3(const JobV3& job) = delete;
-    JobV3& operator=(const JobV3& job) = delete;
+    JobV4(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_create_job_cfg_t *config = nullptr);
+    ~JobV4();
+    JobV4(const JobV4& job) = delete;
+    JobV4& operator=(const JobV4& job) = delete;
 
-    friend class GM_V3;
+    friend class GM_V4;
 };
 }
 

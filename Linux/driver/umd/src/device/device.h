@@ -13,8 +13,19 @@
 #include "device_base.h"
 #include "parser_base.h"
 #ifdef SIMULATION
+
+#ifdef ZHOUYI_V12
 #include "simulator/simulator.h"
+#endif
+
+#ifdef ZHOUYI_V3
 #include "simulator/simulator_v3.h"
+#endif
+
+#ifdef ZHOUYI_V4
+#include "simulator/simulator_v4.h"
+#endif
+
 #else
 #include "aipu/aipu.h"
 #endif
@@ -65,6 +76,15 @@ inline aipu_status_t test_get_device(uint32_t graph_version, DeviceBase** dev,
                 *dev = SimulatorV3::get_v3_simulator(cfg);
         }
     #endif
+    #if (defined ZHOUYI_V4)
+        if (AIPU_LOADABLE_GRAPH_ELF_V0 == graph_version)
+        {
+            if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V4))
+                return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
+            else if (nullptr == *dev)
+                *dev = SimulatorV4::get_v4_simulator(cfg);
+        }
+    #endif
     }
 #else /* !SIMULATION */
     ret = Aipu::get_aipu(dev);
@@ -84,8 +104,10 @@ inline aipu_status_t set_target(uint32_t graph_version, DeviceBase** dev,
     if (dev == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
-#if (defined SIMULATION) && (defined ZHOUYI_V3)
+#if (defined SIMULATION)
     std::lock_guard<std::mutex> lock_(m_tex);
+
+    #if (defined ZHOUYI_V3)
     if (AIPU_LOADABLE_GRAPH_ELF_V0 == graph_version)
     {
         if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V3))
@@ -97,6 +119,19 @@ inline aipu_status_t set_target(uint32_t graph_version, DeviceBase** dev,
             v3_sim->has_target(AIPU_ARCH_ZHOUYI, AIPU_ISA_VERSION_ZHOUYI_V3, 1204, 0);
         }
     }
+    #elif (defined ZHOUYI_V4)
+    if (AIPU_LOADABLE_GRAPH_ELF_V0 == graph_version)
+    {
+        if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V4))
+        {
+            return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
+        } else if (nullptr == *dev) {
+            SimulatorV4 *v4_sim = nullptr;
+            *dev = v4_sim = SimulatorV4::get_v4_simulator(cfg);
+            v4_sim->has_target(AIPU_ARCH_ZHOUYI, AIPU_ISA_VERSION_ZHOUYI_V4, 1304, 0);
+        }
+    }
+    #endif
 
     if (nullptr == *dev)
         return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;

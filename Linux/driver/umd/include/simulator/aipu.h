@@ -9,9 +9,15 @@
 #include <stdint.h>
 #include <memory>
 
+#define TSM_CMD_SCHED_CTRL       0x0
 #define TSM_CMD_SCHED_ADDR_HI    0x8
 #define TSM_CMD_SCHED_ADDR_LO    0xC
-#define TSM_CMD_SCHED_CTRL       0x0
+#define TSM_CMD_TCB_NUMBER       0x1C
+
+#define TSM_STATUS               0x18
+#define TSM_STATUS_CMDPOOL_FULL_QOSL(val) (val & 0xff)
+#define TSM_STATUS_CMDPOOL_FULL_QOSH(val) ((val >> 8) & 0xff)
+
 #define CREATE_CMD_POOL          0x1
 #define DESTROY_CMD_POOL         0x2
 #define DISPATCH_CMD_POOL        0x4

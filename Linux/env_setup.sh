@@ -30,6 +30,7 @@
 #         |-- bin
 #         |   |-- aipu_simulator_x1
 #         |   |-- aipu_simulator_x2
+#         |   |-- aipu_simulator_x3
 #         |   |-- aipu_simulator_z1
 #         |   |-- aipu_simulator_z2
 #         |   |-- aipu_simulator_z3
@@ -37,6 +38,7 @@
 #         `-- lib
 #             |-- libaipu_simulator_x1.so
 #             |-- libaipu_simulator_x2.so
+#             |-- libaipu_simulator_x3.so
 #             |-- libaipu_simulator_z1.so
 #             |-- libaipu_simulator_z2.so
 #             |-- libaipu_simulator_z3.so
@@ -112,6 +114,10 @@ setenv COMPASS_DRV_RTENVAR_X1_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu
 # 3.2. aipu v3 simulator
 setenv CONFIG_DRV_BRENVAR_X2_SIM_LPATH       ${COMPASS_DRV_RTENVAR_SIM_LPATH}
 setenv COMPASS_DRV_BRENVAR_X2_SIM_LNAME      aipu_simulator_x2
+
+# 3.3. aipu v3a simulator
+setenv CONFIG_DRV_BRENVAR_X3_SIM_LPATH       ${COMPASS_DRV_RTENVAR_SIM_LPATH}
+setenv COMPASS_DRV_BRENVAR_X3_SIM_LNAME      aipu_simulator_x3
 
 ##############################################
 #          4. Driver Internal                #

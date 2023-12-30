@@ -30,6 +30,7 @@
 #         |-- bin
 #         |   |-- aipu_simulator_x1
 #         |   |-- aipu_simulator_x2
+#         |   |-- aipu_simulator_x3
 #         |   |-- aipu_simulator_z1
 #         |   |-- aipu_simulator_z2
 #         |   |-- aipu_simulator_z3
@@ -37,6 +38,7 @@
 #         `-- lib
 #             |-- libaipu_simulator_x1.so
 #             |-- libaipu_simulator_x2.so
+#             |-- libaipu_simulator_x3.so
 #             |-- libaipu_simulator_z1.so
 #             |-- libaipu_simulator_z2.so
 #             |-- libaipu_simulator_z3.so
@@ -101,6 +103,10 @@ export COMPASS_DRV_RTENVAR_X1_SIMULATOR=${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu_simu
 ### aipu v3 Simulation
 export CONFIG_DRV_BRENVAR_X2_SIM_LPATH=${COMPASS_DRV_RTENVAR_SIM_LPATH}
 export COMPASS_DRV_BRENVAR_X2_SIM_LNAME=aipu_simulator_x2
+
+### aipu v3a Simulation
+export CONFIG_DRV_BRENVAR_X3_SIM_LPATH=${COMPASS_DRV_RTENVAR_SIM_LPATH}
+export COMPASS_DRV_BRENVAR_X3_SIM_LNAME=aipu_simulator_x3
 
 ### You are not suggested to modify the following environment variables
 # Driver src & build dir.

@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "job_v3.h"
-#include "graph_v3.h"
+#include "../common/graph_v3x.h"
 #include "parser_base.h"
 #include "utils/helper.h"
 
@@ -1140,7 +1140,7 @@ aipu_status_t aipudrv::JobV3::setup_placehold_tcb_task(uint32_t sg_id, uint32_t 
 aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, uint32_t core_id, uint32_t task_id)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    GraphV3& graph = get_graph();
+    GraphV3X& graph = get_graph();
     Task& task = m_sg_job[sg_id].tasks[task_id];
     tcb_t* tcb = new tcb_t;
     TCB* next_tcb = nullptr;
@@ -1971,7 +1971,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     return AIPU_STATUS_SUCCESS;
 }
 
-#if defined(SIMULATION) && defined(ZHOUYI_V3)
+#if defined(SIMULATION)
 void aipudrv::JobV3::dumpcfg_alljob()
 {
     JobV3 *job = nullptr;
@@ -1979,7 +1979,7 @@ void aipudrv::JobV3::dumpcfg_alljob()
     uint32_t count = 0, cmdpool_mask = 0;
     MainContext *ctx = static_cast<MainContext *>(get_graph().m_ctx);
     GraphTable &graphs = ctx->get_graphtable();
-    GraphV3 *graph = nullptr;
+    GraphV3X *graph = nullptr;
     std::ostringstream oss;
     SimulatorV3 *sim = static_cast<SimulatorV3 *>(m_dev);
     static bool dump_done = false;
@@ -2015,7 +2015,7 @@ void aipudrv::JobV3::dumpcfg_alljob()
     for (auto g : graphs)
     {
         graph_iter++;
-        graph = static_cast<GraphV3 *>(g.second);
+        graph = static_cast<GraphV3X *>(g.second);
         auto job_iter = graph->m_jobs.begin();
         for (auto item: graph->m_jobs)
         {
@@ -2072,7 +2072,7 @@ void aipudrv::JobV3::dumpcfg_alljob()
     cmdpool_mask = sim->get_cmdpool_bitmap();
     for (auto g : graphs)
     {
-        graph = static_cast<GraphV3 *>(g.second);
+        graph = static_cast<GraphV3X *>(g.second);
         for (auto item: graph->m_jobs)
         {
             job = static_cast<JobV3 *>(item.second);
@@ -2113,7 +2113,7 @@ void aipudrv::JobV3::dumpcfg_alljob()
     count = 0;
     for (auto g : graphs)
     {
-        graph = static_cast<GraphV3 *>(g.second);
+        graph = static_cast<GraphV3X *>(g.second);
         for (auto item: graph->m_jobs)
         {
             job = static_cast<JobV3 *>(item.second);
@@ -2137,7 +2137,7 @@ void aipudrv::JobV3::dumpcfg_alljob()
     /* gen metadata.txt */
     for (auto g : graphs)
     {
-        graph = static_cast<GraphV3 *>(g.second);
+        graph = static_cast<GraphV3X *>(g.second);
         for (auto item: graph->m_jobs)
         {
             job = static_cast<JobV3 *>(item.second);

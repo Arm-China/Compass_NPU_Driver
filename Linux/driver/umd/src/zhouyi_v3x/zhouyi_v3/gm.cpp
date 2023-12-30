@@ -4,7 +4,7 @@
 
 #include <cstring>
 #include "job_v3.h"
-#include "graph_v3.h"
+#include "../common/graph_v3x.h"
 #include "parser_base.h"
 #include "utils/helper.h"
 

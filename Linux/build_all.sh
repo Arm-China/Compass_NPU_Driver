@@ -31,11 +31,11 @@ build_help() {
     echo "-k, --kversion    kernel version (optional)"
     echo "                    - [major].[minor]"
     echo "                    - [major].[minor].[patch]"
-    echo "-v, --version     AIPU version (optional, by default build all):"
+    echo "-v, --version     AIPU version (optional, by default build V1/2/3):"
     echo "                    - v1"
     echo "                    - v2"
     echo "                    - v3"
-    echo "                    - all"
+    echo "                    - v4"
     echo "-a, --api         Build UMD API type (optional, by default standard api):"
     echo "                    - standard_api"
     echo "                    - python_api"
@@ -149,11 +149,16 @@ fi
 if [ "$BUILD_AIPU_VERSION"x == "v1"x ]  ||
    [ "$BUILD_AIPU_VERSION"x == "v2"x ]; then
     BUILD_AIPU_VERSION=aipu_v1v2
-elif [ "$BUILD_AIPU_VERSION"x == "v3"x ]; then
+elif [ "$BUILD_AIPU_VERSION"x == "v3"x ] || [ "$BUILD_AIPU_VERSION"x == "all"x ]; then
     BUILD_AIPU_VERSION=aipu_v3
-elif [ "$BUILD_AIPU_VERSION"x != "v3"x ] &&
-     [ "$BUILD_AIPU_VERSION"x != "all"x ]; then
-    echo -e "$COMPASS_DRV_BRENVAR_ERROR Invalid AIPU version $BUILD_AIPU_VERSION"
+elif [ "$BUILD_AIPU_VERSION"x == "v4"x ]; then
+    BUILD_AIPU_VERSION=aipu_v4
+elif [ "$BUILD_AIPU_VERSION"x != "v1"x ] &&
+     [ "$BUILD_AIPU_VERSION"x != "v2"x ] &&
+     [ "$BUILD_AIPU_VERSION"x != "v3"x ] &&
+     [ "$BUILD_AIPU_VERSION"x != "v4"x ]; then
+    echo -e "$COMPASS_DRV_BRENVAR_ERROR Invalid AIPU version $BUILD_AIPU_VERSION," \
+        "specify target: -v [v2|v3|v4]"
     exit 2
 fi
 
@@ -279,6 +284,7 @@ if [ "$BUILD_TEST"x = "sample"x ]; then
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dmabuf_dma_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dmabuf_producer_consumer_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dmabuf_attach_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=emulation_test
     fi
     cd -
 fi

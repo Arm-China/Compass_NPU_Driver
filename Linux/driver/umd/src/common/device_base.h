@@ -79,11 +79,12 @@ struct JobDesc
     uint32_t aipu_revision;
     bool dump_reuse;
 
-    /* aipu v3 only */
+    /* aipu v3x only */
     DEV_PA_64 tcb_head;
     DEV_PA_64 tcb_tail;
+    int32_t tcb_number;
 
-    /* aipu v3 simulation */
+    /* aipu v3x simulation */
     void *jobbase;
 
     /* aipu v1/v2 only */
@@ -116,7 +117,8 @@ enum DeviceType
     DEV_TYPE_NONE             = 0,
     DEV_TYPE_SIMULATOR_V1V2 = 1,
     DEV_TYPE_SIMULATOR_V3     = 2,
-    DEV_TYPE_AIPU             = 3,
+    DEV_TYPE_SIMULATOR_V4     = 3,
+    DEV_TYPE_AIPU             = 4,
 };
 
 class DeviceBase
@@ -331,6 +333,22 @@ public:
  */
 public:
     virtual void enable_profiling(bool en) {}
+
+public:
+    virtual uint16_t get_grid_id()
+    {
+        return 0;
+    }
+
+    virtual int get_start_group_id(int group_cnt, uint16_t &start_group_id)
+    {
+        return 0;
+    }
+
+    virtual int put_start_group_id(uint16_t start_group_id, int group_cnt)
+    {
+        return 0;
+    }
 
 public:
     DeviceBase(){};

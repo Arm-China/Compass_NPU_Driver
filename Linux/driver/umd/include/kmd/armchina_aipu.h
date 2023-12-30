@@ -41,6 +41,7 @@ enum aipu_arch {
  * @AIPU_ISA_VERSION_ZHOUYI_V2_1: AIPU ISA version is Zhouyi V2 (Z3).
  * @AIPU_ISA_VERSION_ZHOUYI_V2_2: AIPU ISA version is Zhouyi V2 (X1).
  * @AIPU_ISA_VERSION_ZHOUYI_V3:   AIPU ISA version is Zhouyi V3.
+ * @AIPU_ISA_VERSION_ZHOUYI_V4:   AIPU ISA version is Zhouyi V4.
  *
  * Zhouyi architecture has multiple ISA versions released.
  * This enum is used to indicate the ISA version of an AIPU core in the system.
@@ -51,6 +52,7 @@ enum aipu_isa_version {
 	AIPU_ISA_VERSION_ZHOUYI_V2_1 = 3,
 	AIPU_ISA_VERSION_ZHOUYI_V2_2 = 4,
 	AIPU_ISA_VERSION_ZHOUYI_V3   = 5,
+	AIPU_ISA_VERSION_ZHOUYI_V4   = 6,
 };
 
 /**

@@ -4,7 +4,7 @@
 
 
 /**
- * @file  parser_elf.h
+ * @file  parser_v3.h
  * @brief AIPU User Mode Driver (UMD) ELF parser class header
  */
 
@@ -14,7 +14,7 @@
 #include <fstream>
 #include "elfio/elfio.hpp"
 #include "parser_base.h"
-#include "graph_v3.h"
+#include "graph_v3x.h"
 
 namespace aipudrv
 {
@@ -39,7 +39,7 @@ namespace aipudrv
 #define BUILDTOOL_BUILD_NUMBER 1
 #endif
 
- #define AIPUBIN_BT_VERSION_NUMBER ((((MAJOR_VERSION)&0xff)) | (((MINOR_VERSION)&0xff) << 8)\
+#define AIPUBIN_BT_VERSION_NUMBER ((((MAJOR_VERSION)&0xff)) | (((MINOR_VERSION)&0xff) << 8)\
         | (BUILDTOOL_BUILD_NUMBER & 0xffff) << 16)
 
 /* section: .note.aipu.compilermsg */
@@ -156,9 +156,9 @@ private:
 private:
     BinSection get_bin_note(const std::string& note_name);
     ELFIO::section* get_elf_section(const std::string &section_name);
-    aipu_status_t parse_subgraph(char* start, uint32_t id, GraphV3& gobj,
+    aipu_status_t parse_subgraph(char* start, uint32_t id, GraphV3X& gobj,
         uint64_t& sg_desc_size);
-    aipu_status_t parse_no_subgraph(char* start, uint32_t id, GraphV3& gobj,
+    aipu_status_t parse_no_subgraph(char* start, uint32_t id, GraphV3X& gobj,
         uint64_t& sg_desc_size);
     aipu_status_t parse_graph_header_check(std::istream& gbin, uint32_t gbin_sz);
 

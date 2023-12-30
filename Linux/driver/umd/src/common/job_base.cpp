@@ -664,7 +664,9 @@ void aipudrv::JobBase::dump_job_private_buffers_after_run(BufferDesc& rodata, Bu
 
     if (m_dump_reuse)
     {
-        if ((m_dev->get_dev_type() == DEV_TYPE_AIPU) || (m_dev->get_dev_type() == DEV_TYPE_SIMULATOR_V3))
+        if ((m_dev->get_dev_type() == DEV_TYPE_AIPU) ||
+            (m_dev->get_dev_type() == DEV_TYPE_SIMULATOR_V3) ||
+            (m_dev->get_dev_type() == DEV_TYPE_SIMULATOR_V4))
         {
             std::vector<BufferDesc*> m_job_reuses = get_reuse();
             for (uint32_t i = 0; i < m_job_reuses.size(); i++)

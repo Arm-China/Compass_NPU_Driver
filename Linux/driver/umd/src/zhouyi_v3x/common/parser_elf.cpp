@@ -4,7 +4,7 @@
 
 
 /**
- * @file  parser_elf.cpp
+ * @file  parser_v3.cpp
  * @brief AIPU User Mode Driver (UMD) ELF parser module implementation
  */
 
@@ -130,7 +130,7 @@ aipu_status_t aipudrv::ParserELF::parse_reuse_section(char* bss, uint32_t count,
     return AIPU_STATUS_SUCCESS;
 }
 
-aipu_status_t aipudrv::ParserELF::parse_subgraph(char* start, uint32_t id, GraphV3& gobj,
+aipu_status_t aipudrv::ParserELF::parse_subgraph(char* start, uint32_t id, GraphV3X& gobj,
         uint64_t& sg_desc_size)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
@@ -205,7 +205,7 @@ aipu_status_t aipudrv::ParserELF::parse_subgraph(char* start, uint32_t id, Graph
     return ret;
 }
 
-aipu_status_t aipudrv::ParserELF::parse_no_subgraph(char* start, uint32_t id, GraphV3& gobj,
+aipu_status_t aipudrv::ParserELF::parse_no_subgraph(char* start, uint32_t id, GraphV3X& gobj,
         uint64_t& sg_desc_size)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
@@ -379,7 +379,7 @@ aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size,
         for (uint32_t i = 0; i < sg_desc_header.subgraphs_cnt; i++)
         {
             uint64_t sg_desc_size = 0;
-            ret = parse_subgraph(start, i, static_cast<GraphV3&>(gobj), sg_desc_size);
+            ret = parse_subgraph(start, i, static_cast<GraphV3X&>(gobj), sg_desc_size);
             if (ret)
                 goto finish;
 
@@ -392,7 +392,7 @@ aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size,
          * use any information in this Subgraph for running.
          */
         uint64_t sg_desc_size = 0;
-        ret = parse_no_subgraph(start, 0, static_cast<GraphV3&>(gobj), sg_desc_size);
+        ret = parse_no_subgraph(start, 0, static_cast<GraphV3X&>(gobj), sg_desc_size);
         if (ret)
             goto finish;
 

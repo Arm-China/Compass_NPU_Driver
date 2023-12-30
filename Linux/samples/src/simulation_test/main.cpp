@@ -79,6 +79,7 @@ int main(int argc, char* argv[])
         sim_glb_config.log_level = 0;
 #endif
     }
+
     sim_glb_config.verbose = opt.verbose;
     sim_glb_config.en_eval = true;
     sim_glb_config.simulator = opt.simulator;

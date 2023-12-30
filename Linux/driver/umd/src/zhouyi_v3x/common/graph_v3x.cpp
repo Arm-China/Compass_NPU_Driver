@@ -10,23 +10,31 @@
 
 #include <cstring>
 #include "context.h"
-#include "graph_v3.h"
+#include "graph_v3x.h"
+
+#if (defined ZHOUYI_V3)
 #include "job_v3.h"
+#elif (defined ZHOUYI_V4)
+#include "job_v4.h"
+#endif
+
 #include "parser_elf.h"
 #include "utils/helper.h"
 #include "utils/log.h"
 
-aipudrv::GraphV3::GraphV3(void* ctx, GRAPH_ID id, DeviceBase* dev): Graph(ctx, id, dev)
+
+
+aipudrv::GraphV3X::GraphV3X(void* ctx, GRAPH_ID id, DeviceBase* dev): Graph(ctx, id, dev)
 {
     m_parser = new ParserELF();
 }
 
-aipudrv::GraphV3::~GraphV3()
+aipudrv::GraphV3X::~GraphV3X()
 {
     delete m_parser;
 }
 
-void aipudrv::GraphV3::print_parse_info()
+void aipudrv::GraphV3X::print_parse_info()
 {
     LOG(LOG_DEFAULT, "=====================Graph Parse Results====================");
     LOG(LOG_DEFAULT, "Target device: z%u-%u", m_hw_version, m_hw_config);
@@ -73,7 +81,7 @@ void aipudrv::GraphV3::print_parse_info()
     LOG(LOG_DEFAULT, "============================================================");
 }
 
-aipu_status_t aipudrv::GraphV3::extract_gm_info(int sg_id)
+aipu_status_t aipudrv::GraphV3X::extract_gm_info(int sg_id)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     GMConfig *gmconfig = nullptr;
@@ -163,11 +171,15 @@ out:
     return ret;
 }
 
-aipu_status_t aipudrv::GraphV3::create_job(JOB_ID* id, const aipu_global_config_simulation_t* glb_sim_cfg,
+aipu_status_t aipudrv::GraphV3X::create_job(JOB_ID* id, const aipu_global_config_simulation_t* glb_sim_cfg,
     aipu_global_config_hw_t *hw_cfg, aipu_create_job_cfg_t *job_config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    JobV3 *job = nullptr;
+    #if (defined ZHOUYI_V3)
+    JobV3 *job = nullptr;    
+    #elif (defined ZHOUYI_V4)
+    JobV4 *job = nullptr;
+    #endif    
     uint32_t part_cnt = 0;
 
     if (nullptr == job_config)
@@ -188,13 +200,17 @@ aipu_status_t aipudrv::GraphV3::create_job(JOB_ID* id, const aipu_global_config_
         return AIPU_STATUS_ERROR_INVALID_QOS;
     }
 
+    #if (defined ZHOUYI_V3)
     job = new JobV3((MainContext*)m_ctx, *this, m_dev, job_config);
+    #elif (defined ZHOUYI_V4)
+    job = new JobV4((MainContext*)m_ctx, *this, m_dev, job_config);
+    #endif
     ret = job->init(glb_sim_cfg, hw_cfg);
     *id = add_job(job);
     return ret;
 }
 
-aipu_status_t aipudrv::GraphV3::get_tensor_count(aipu_tensor_type_t type, uint32_t* cnt)
+aipu_status_t aipudrv::GraphV3X::get_tensor_count(aipu_tensor_type_t type, uint32_t* cnt)
 {
     if (nullptr == cnt)
         return AIPU_STATUS_ERROR_NULL_PTR;
@@ -224,7 +240,7 @@ aipu_status_t aipudrv::GraphV3::get_tensor_count(aipu_tensor_type_t type, uint32
     return AIPU_STATUS_SUCCESS;
 }
 
-aipu_status_t aipudrv::GraphV3::get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor, aipu_tensor_desc_t* desc)
+aipu_status_t aipudrv::GraphV3X::get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor, aipu_tensor_desc_t* desc)
 {
     uint32_t cnt = 0;
     GraphIOTensorDesc io;
@@ -273,7 +289,7 @@ aipu_status_t aipudrv::GraphV3::get_tensor_descriptor(aipu_tensor_type_t type, u
     return AIPU_STATUS_SUCCESS;
 }
 
-aipu_status_t aipudrv::GraphV3::update_dynamic_io_tensor_size(aipu_tensor_type_t type)
+aipu_status_t aipudrv::GraphV3X::update_dynamic_io_tensor_size(aipu_tensor_type_t type)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     GraphIOTensorDesc *io = nullptr;
