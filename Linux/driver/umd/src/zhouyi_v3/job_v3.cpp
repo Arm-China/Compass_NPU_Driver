@@ -1227,7 +1227,7 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
     if (m_profiler.size() > 0)
     {
         tcb->pprofiler = get_low_32(m_profiler[0].align_asid_pa +  graph.m_subgraphs[sg_id].profiler_buf_size);
-        tcb->__data.noninit.rsvd2[3] = m_profiler[0].align_asid_pa;
+        tcb->__data.noninit.rsvd2[2] = m_profiler[0].align_asid_pa;
     }
 
     if (graph.m_subgraphs[sg_id].printfifo_size > 0)
