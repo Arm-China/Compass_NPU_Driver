@@ -24,6 +24,14 @@ static struct device *aipu_mm_create_child_dev(struct device *dev, u32 idx)
 {
 	struct device *child = NULL;
 
+#if (KERNEL_VERSION(4, 11, 0) > LINUX_VERSION_CODE)
+	if (idx) {
+		dev_err(dev, "multiple mem regions are not supported (idx %d)\n", idx);
+		return NULL;
+	}
+	return dev;
+#endif
+
 	child = devm_kzalloc(dev, sizeof(*child), GFP_KERNEL);
 	if (!child)
 		return NULL;
@@ -236,6 +244,9 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 		reg->dev = aipu_mm_create_child_dev(mm->dev, idx);
 	else
 		reg->dev = mm->dev;
+
+	if (!reg->dev)
+		goto err;
 
 	/* only head of the list is created; for v3; */
 	reg->tcb_buf_head = create_tcb_buf(mm, reg);
