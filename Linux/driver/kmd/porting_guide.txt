@@ -692,47 +692,7 @@ if the incoming interrupt is from another device.
 
 This attribute is mandatory in all cases.
 
-3.1.7 Cluster-Partition Pair
-----------------------------
-Zhouyi V3 hardware is organized in such architecture: partition > cluster > core > TEC.
-Driver should configure the partition number and cluster info. in each partition.
-
-We use the cluster-partition pair in DTS to specify their relationships:
-
-    cluster-partition = <cluster_id_1 partition_id_i>, <cluster_id_2 partition_id_j>,
-                        <cluster_id_3 partition_id_k>, ..., <cluster_id_n partition_id_w>;
-
-which means that there are 4 clusters in all and you:
-
-    configure cluster_1 into partition_i;
-    configure cluster_2 into partition_j;
-    configure cluster_3 into partition_k;
-    configure cluster_4 into partition_w;
-
-where i, j, k, w can be the same or different with each other, depending on your decision and
-the maximum partition count.
-
-You should notice that:
-
-    1. the configured partition count should be <= the maximum count allowed by your AIPU h/w arch.;
-    2. one cluster should be configured into one and only one partition;
-    3. one partition can hold one single cluster or multiple ones;
-    4. the cluster-partition relation cannot be changed at runtime after configured by DTS;
-    5. the cluster_id and partition_id should be a uint32 number;
-
-For example, if the AIPU on your system has only one cluster, you can configure as:
-
-    /* case 1 */
-    aipu@64000000 {
-        compatible = "armchina,zhouyi";
-        cluster-partition = <0 0>;
-        /* other attributes */
-        /* ... */
-    };
-
-This attribute is mandatory for V3. For other architectures, you can omit it.
-
-3.1.8 GM-Policy
+3.1.7 GM-Policy
 ---------------
 In Zhouyi V3, every AIPU cluster has a General Memory (GM) region caching the address of
 frequently updated data.

@@ -96,7 +96,7 @@ static struct aipu_partition *v3_create_partitions(struct aipu_priv *aipu,
 
 	WARN_ON(!aipu->is_init);
 
-	/* Get cluster count and partition count */
+	/* Get cluster count (by default 1) */
 	/*
 	 * Cluster-partition attribute should be in the following format:
 	 *	cluster-partition = <cluster_id0 partition_idx>, <cluster_id1 partition_idy>,
@@ -106,19 +106,18 @@ static struct aipu_partition *v3_create_partitions(struct aipu_priv *aipu,
 	 */
 	ret = of_property_count_u32_elems(p_dev->dev.of_node, "cluster-partition");
 	if (ret <= 0) {
-		dev_err(&p_dev->dev, "check your dts: no cluster-partition found");
-		return ERR_PTR(ret);
+		dev_warn(&p_dev->dev, "use the default config (1 cluster)");
+		ret = 2;
 	}
 
 	cluster_cnt = ret >> 1;
 	WARN_ON(!cluster_cnt);
 
 	cluster_arr = devm_kzalloc(&p_dev->dev, cluster_cnt * 2 * sizeof(u32), GFP_KERNEL);
-	if (of_property_read_u32_array(p_dev->dev.of_node, "cluster-partition", cluster_arr,
-				       cluster_cnt * 2)) {
-		dev_err(&p_dev->dev, "check your dts: read cluster-partition failed");
-		return ERR_PTR(-EINVAL);
-	}
+
+	/* use default configuration if no cluster-partition presents in dts */
+	of_property_read_u32_array(p_dev->dev.of_node, "cluster-partition", cluster_arr,
+				   cluster_cnt * 2);
 
 	for (iter = 0; iter < cluster_cnt; iter++) {
 		if (cluster_arr[2 * iter + 1] > (partition_cnt - 1))
