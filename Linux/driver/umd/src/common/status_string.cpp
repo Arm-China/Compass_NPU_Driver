@@ -89,6 +89,10 @@ std::map<uint32_t, std::string> aipudrv::MainContext::umd_status_string =
         "Set dynamic shape failed." },
     { AIPU_STATUS_ERROR_NOT_CONFIG_SHAPE,
         "The input tensor shape is not configured." },
+    { AIPU_STATUS_ERROR_UNMATCH_OUT_SHAPE,
+        "The out shape count doesn't match with original out tensor count." },
+    { AIPU_STATUS_ERROR_ZERO_TENSOR_SIZE,
+        "The out shape tensor size is zero." },
     { AIPU_STATUS_MAX,
         "Status Max value which should not be returned to application." },
     /* AIPU layer library runtime error code */

@@ -86,6 +86,10 @@ aipu_status_t aipudrv::JobBase::get_status_blocking(aipu_job_status_t* status, i
             m_hw_cfg->poll_in_commit_thread, this));
         if (ret != AIPU_STATUS_SUCCESS)
             return ret;
+
+        ret = parse_dynamic_out_shape();
+        if (ret != AIPU_STATUS_SUCCESS)
+            return ret;
     }
 
     if (jobs_status.size() != 0)

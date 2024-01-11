@@ -149,6 +149,14 @@ private:
      */
     BufferDesc *m_model_global_param = nullptr;
 
+    /**
+     * For dynamic shape feature
+     *
+     * true: all io tensors size updated according to dynamic shape.
+     * false: all io tensors size not updated.
+     */
+    bool m_dynamic_shape_tensor_size_updated = false;
+
 public:
     GraphV3& get_graph()
     {
@@ -187,6 +195,7 @@ private:
     void free_sg_buffers(SubGraphTask& sg);
     aipu_status_t dump_for_emulation();
     aipu_status_t specify_io_buffer(aipu_shared_tensor_info_t &tensor_info);
+    aipu_status_t parse_dynamic_out_shape();
 
 public:
     aipu_status_t init(const aipu_global_config_simulation_t* cfg,

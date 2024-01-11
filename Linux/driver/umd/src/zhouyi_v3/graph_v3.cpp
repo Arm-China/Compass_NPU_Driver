@@ -272,3 +272,29 @@ aipu_status_t aipudrv::GraphV3::get_tensor_descriptor(aipu_tensor_type_t type, u
 
     return AIPU_STATUS_SUCCESS;
 }
+
+aipu_status_t aipudrv::GraphV3::update_dynamic_io_tensor_size(aipu_tensor_type_t type)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    GraphIOTensorDesc *io = nullptr;
+
+    if (type == AIPU_TENSOR_TYPE_INPUT)
+    {
+        for (uint32_t i = 0; i < m_subgraphs[0].io.inputs.size(); i++)
+        {
+            io = &m_subgraphs[0].io.inputs[i];
+            io->size = get_config_in_tensor_size(i);
+        }
+    } else if (type == AIPU_TENSOR_TYPE_OUTPUT) {
+        for (uint32_t i = 0; i < m_subgraphs[0].io.outputs.size(); i++)
+        {
+            io = &m_subgraphs[0].io.outputs[i];
+            io->size = get_config_out_tensor_size(i);
+        }
+    } else {
+        LOG(LOG_ERR, "Invalid io tensor type:%d\n", type);
+        return AIPU_STATUS_ERROR_INVALID_OP;
+    }
+
+    return ret;
+}

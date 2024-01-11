@@ -14,6 +14,7 @@
 #include <map>
 #include <vector>
 #include <deque>
+#include <mutex>
 #include <pthread.h>
 #include "standard_api.h"
 #include "graph_base.h"
@@ -115,8 +116,16 @@ protected:
     std::map<int, std::vector<uint64_t>> m_input_shape_threshhold;
 
     /* entry: idx: <N, H, W, C> */
-    std::map<int, std::vector<uint32_t>> m_set_shape;
+    std::map<int, std::vector<uint32_t>> m_parsed_shape;
+
+    /* new set input tensor size for dynamic shape */
+    std::map<int, uint32_t> m_config_in_tensor_size;
+
+    /* new output tensor size for dynamic shape */
+    std::map<int, uint32_t> m_config_out_tensor_size;
     bool m_dynamic_shape = false;
+    bool m_dynamic_out_shape_updated = false;
+    std::mutex m_dynamic_out_shape_updated_mtx;
 
 protected:
     /* Buffers in memory for AIPU's access */
@@ -139,6 +148,10 @@ public:
     virtual int32_t get_dynamic_shape_dim_num(uint32_t idx, bool max_shape_dim);
     virtual bool get_dynamic_shape_data(uint32_t idx, bool max_shape_dim, uint32_t *data);
     virtual bool set_dynamic_shape_data(aupu_dynshape_param_t *shape_param);
+    virtual aipu_status_t update_dynamic_io_tensor_size(aipu_tensor_type_t type)
+    {
+        return AIPU_STATUS_SUCCESS;
+    }
 
 public:
     virtual void set_stack(uint32_t sg_id, uint32_t size, uint32_t align) = 0;
@@ -266,25 +279,71 @@ public:
 
     bool in_config_shape(uint32_t idx)
     {
-        return m_set_shape.count(idx) == 1;
+        return m_parsed_shape.count(idx) == 1;
     }
 
     uint32_t get_config_shape_sz()
     {
-        return m_set_shape.size();
+        return m_parsed_shape.size();
     }
 
     uint32_t get_config_shape_dim_sz(uint32_t input_idx)
     {
-        if (m_set_shape.count(input_idx))
-            return m_set_shape[input_idx].size();
+        if (m_parsed_shape.count(input_idx))
+            return m_parsed_shape[input_idx].size();
         else
             return 0;
     }
 
     uint32_t get_config_shape_item(uint32_t input_idx, uint32_t dim_idx)
     {
-        return m_set_shape[input_idx][dim_idx];
+        return m_parsed_shape[input_idx][dim_idx];
+    }
+
+    uint32_t get_config_in_tensor_size(uint32_t input_idx)
+    {
+        return m_config_in_tensor_size[input_idx];
+    }
+
+    void set_config_out_tensor_size(uint32_t output_idx, uint32_t size)
+    {
+        m_config_out_tensor_size[output_idx] = size;
+    }
+
+    uint32_t get_config_out_tensor_size(uint32_t output_idx)
+    {
+        return m_config_out_tensor_size[output_idx];
+    }
+
+    void clear_config_out_tensor_size()
+    {
+        m_config_out_tensor_size.clear();;
+    }
+
+    // false: not updated yet
+    bool testset_dynamic_out_shape_updated()
+    {
+        bool flag = false;
+
+        m_dynamic_out_shape_updated_mtx.lock();
+        flag =  m_dynamic_out_shape_updated;
+        if (!m_dynamic_out_shape_updated)
+            m_dynamic_out_shape_updated = true;
+        m_dynamic_out_shape_updated_mtx.unlock();
+
+        return flag;
+    }
+
+    void reset_dynamic_out_shape_updated_flag()
+    {
+        m_dynamic_out_shape_updated_mtx.lock();
+        m_dynamic_out_shape_updated = false;
+        m_dynamic_out_shape_updated_mtx.unlock();
+    }
+
+    bool is_dynamic_out_shape_updated()
+    {
+        return m_dynamic_out_shape_updated;
     }
 
     virtual void set_enrty(uint32_t offset){};

@@ -802,6 +802,13 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
         goto finish;
 
     /* 6. get IO buffer address, all subgraphs share the same copy of reuse buffers */
+    if (get_graph().is_dynamic_shape() &&
+        (get_graph().get_config_shape_sz() == m_inputs.size()))
+    {
+        if (get_graph().is_dynamic_out_shape_updated())
+            m_dynamic_shape_tensor_size_updated = true;
+
+    }
     create_io_buffers(get_graph().m_subgraphs[0].io, m_sg_job[0].reuses);
     if (get_subgraph_cnt() == 0)
         goto finish;
@@ -2187,5 +2194,56 @@ aipu_status_t aipudrv::JobV3::debugger_run()
     if ((AIPU_STATUS_SUCCESS == ret) && (AIPU_JOB_STATUS_DONE != status))
         ret = AIPU_STATUS_ERROR_JOB_EXCEPTION;
 
+    return ret;
+}
+
+aipu_status_t aipudrv::JobV3::parse_dynamic_out_shape()
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    uint64_t size = 0;
+    uint32_t data[96] = {0};
+
+    if (get_graph().is_dynamic_shape() &&
+        (get_graph().get_config_shape_sz() == m_inputs.size()))
+    {
+        if (!get_graph().testset_dynamic_out_shape_updated())
+        {
+            if (m_outputs_shape.size() != m_outputs.size())
+            {
+                ret = AIPU_STATUS_ERROR_UNMATCH_OUT_SHAPE;
+                LOG(LOG_ERR, "DS out tensor cnt != Original out tensor cnt\n");
+                goto out;
+            }
+
+            for (uint32_t i = 0; i < m_outputs_shape.size(); i++)
+            {
+                m_mem->read(m_outputs_shape[i].pa, (char*)data, m_outputs_shape[i].size);
+                size = 1;
+                for (uint32_t j = 0; j < m_outputs_shape[i].size / 4; j++)
+                    size *= data[j];
+
+                if (size == 0)
+                {
+                    get_graph().clear_config_out_tensor_size();
+                    ret = AIPU_STATUS_ERROR_ZERO_TENSOR_SIZE;
+                    LOG(LOG_ERR, "Invalid dynamic out shape %d: size (0)\n", i);
+                    goto out;
+                }
+
+                get_graph().set_config_out_tensor_size(i, size);
+            }
+
+            get_graph().update_dynamic_io_tensor_size(AIPU_TENSOR_TYPE_OUTPUT);
+        }
+
+        /**
+         * if m_inputs and m_outputs are not updated according to
+         * new dynamic shape, update them here.
+         */
+        if (!m_dynamic_shape_tensor_size_updated)
+            update_io_buffers(get_graph().m_subgraphs[0].io, m_sg_job[0].reuses);
+    }
+
+out:
     return ret;
 }

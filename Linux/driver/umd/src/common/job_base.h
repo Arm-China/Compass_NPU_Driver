@@ -192,6 +192,11 @@ public:
         return AIPU_STATUS_SUCCESS;
     }
 
+    virtual aipu_status_t parse_dynamic_out_shape()
+    {
+        return AIPU_STATUS_SUCCESS;
+    }
+
     virtual aipu_status_t config_simulation(uint64_t types, const aipu_job_config_simulation_t* config)
     {
         return AIPU_STATUS_SUCCESS;

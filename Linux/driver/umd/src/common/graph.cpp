@@ -218,7 +218,7 @@ aipu_status_t aipudrv::Graph::unload()
     }
     m_weights.clear();
 
-    m_set_shape.clear();
+    m_parsed_shape.clear();
 
     m_mem->dump_tracking_log_end();
     return ret;
@@ -290,35 +290,43 @@ bool aipudrv::Graph::set_dynamic_shape_data(aupu_dynshape_param_t *shape_param)
 
         if (idx >= 0 && idx < m_input_shape_constraint[idx].size())
         {
-            uint64_t size = 1;
+            uint32_t size = 1;
 
             for (uint32_t dim = 0; dim < m_input_shape_constraint[idx][0].size(); dim++)
             {
                 size *= shape_item->ds_data[dim];
-                m_set_shape[idx].push_back(shape_item->ds_data[dim]);
+                m_parsed_shape[idx].push_back(shape_item->ds_data[dim]);
             }
 
             if (size < m_input_shape_threshhold[idx][0] &&
                 size > m_input_shape_threshhold[idx][1])
             {
-                m_set_shape.clear();
+                m_parsed_shape.clear();
                 LOG(LOG_ERR, "input %d: dynamic shape invalid, valid scope [%lu, %lu]\n",
                     idx, m_input_shape_threshhold[idx][0], m_input_shape_threshhold[idx][1]);
                 return false;
             }
+
+            m_config_in_tensor_size[idx] = size;
         } else {
-            m_set_shape.clear();
+            m_parsed_shape.clear();
+            m_config_in_tensor_size.clear();
             LOG(LOG_ERR, "input %d invalid index\n", idx);
             return false;
         }
+
     }
 
-    if (m_set_shape.size() != get_dynamic_shape_num())
+    if (m_parsed_shape.size() != get_dynamic_shape_num())
     {
-        m_set_shape.clear();
+        m_parsed_shape.clear();
+        m_config_in_tensor_size.clear();
         LOG(LOG_ERR, "set shape count != input shape count\n");
         return false;
     }
+
+    reset_dynamic_out_shape_updated_flag();
+    update_dynamic_io_tensor_size(AIPU_TENSOR_TYPE_INPUT);
 
     return true;
 }

@@ -154,6 +154,9 @@ public:
     aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor, aipu_tensor_desc_t* desc);
 
 public:
+    virtual aipu_status_t update_dynamic_io_tensor_size(aipu_tensor_type_t type);
+
+public:
     void set_subgraph(struct Subgraph sg)
     {
         m_subgraphs.push_back(sg);

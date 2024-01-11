@@ -530,7 +530,9 @@ typedef enum {
     AIPU_STATUS_ERROR_GET_SHAPE_FAILED     = 0x28,
     AIPU_STATUS_ERROR_SET_SHAPE_FAILED     = 0x29,
     AIPU_STATUS_ERROR_NOT_CONFIG_SHAPE     = 0x30,
-    AIPU_STATUS_MAX                        = 0x31,
+    AIPU_STATUS_ERROR_UNMATCH_OUT_SHAPE    = 0x31,
+    AIPU_STATUS_ERROR_ZERO_TENSOR_SIZE     = 0x32,
+    AIPU_STATUS_MAX                        = 0x33,
     /* AIPU layer library runtime error code */
     AIPU_STATUS_ERROR_UNKNOWN_ERROR        = 0x200,
     AIPU_STATUS_ERROR_KEYBOARD_INTERRUPT   = 0x300,
