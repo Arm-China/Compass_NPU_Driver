@@ -383,6 +383,7 @@ void aipudrv::JobBase::create_io_buffers(const struct GraphIOTensors& io,
     create_io_buffers(m_layer_counter, io.layer_counter, reuses);
     create_io_buffers(m_err_code, io.err_code, reuses);
     create_io_buffers(m_segmmus, io.segmmus, reuses);
+    create_io_buffers(m_outputs_shape, io.outputs_shape, reuses);
 }
 
 void aipudrv::JobBase::update_io_buffers(const struct GraphIOTensors& io,
