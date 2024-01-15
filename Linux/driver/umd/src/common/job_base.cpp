@@ -263,21 +263,21 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
         if (param_map[i].load_type == PARAM_MAP_LOAD_TYPE_REUSE)
         {
             LOG(LOG_INFO, "%8u: re: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
-                rodata.req_size, dcr->req_size, ref_iter, sec_offset, entry_offset,
+                rodata.req_size, (dcr != nullptr) ? dcr->req_size : 0, ref_iter, sec_offset, entry_offset,
                 get_low_32(reuse_buf[ref_iter]->align_asid_pa) + sec_offset);
             #if DUMP_RO_ENTRY
             snprintf(log, 1024, "%8u: re: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
-                rodata.req_size, dcr->req_size, ref_iter, sec_offset, entry_offset,
+                rodata.req_size, (dcr != nullptr) ? dcr->req_size : 0, ref_iter, sec_offset, entry_offset,
                 get_low_32(reuse_buf[ref_iter]->align_asid_pa) + sec_offset);
             m_ro_entry_dump << log << std::endl;
             #endif
         } else {
             LOG(LOG_INFO, "%8u: wt: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
-                rodata.req_size, dcr->req_size, ref_iter, sec_offset, entry_offset,
+                rodata.req_size, (dcr != nullptr) ? dcr->req_size : 0, ref_iter, sec_offset, entry_offset,
                 get_low_32(static_buf[ref_iter]->align_asid_pa) + sec_offset);
             #if DUMP_RO_ENTRY
             snprintf(log, 1024, "%8u: wt: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
-                rodata.req_size, dcr->req_size, ref_iter, sec_offset, entry_offset,
+                rodata.req_size, (dcr != nullptr) ? dcr->req_size : 0, ref_iter, sec_offset, entry_offset,
                 get_low_32(static_buf[ref_iter]->align_asid_pa) + sec_offset);
             m_ro_entry_dump << log << std::endl;
             #endif
