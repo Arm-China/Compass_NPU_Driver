@@ -1131,9 +1131,6 @@ aipu_status_t aipudrv::JobV3::setup_placehold_tcb_task(uint32_t sg_id, uint32_t 
     tcb->task_id_z = 0;
     tcb->tcbp = get_low_32(next_tcb_pa - m_tcbs->asid_base);
 
-    if (get_graph().is_dynamic_shape() && get_graph().get_config_shape_sz() > 0)
-        tcb->global_param = get_low_32(m_model_global_param->align_asid_pa);
-
     m_mem->write(next_tcb_pa, (const char*)tcb, sizeof(*tcb));
     delete tcb;
 
@@ -1243,6 +1240,9 @@ aipu_status_t aipudrv::JobV3::setup_tcb_task(uint32_t sg_id, uint32_t grid_id, u
         tcb->pprint = get_low_32(pa);
         tcb->interrupt |= EN_INTERRUPT_TEC;
     }
+
+    if (get_graph().is_dynamic_shape() && get_graph().get_config_shape_sz() > 0)
+        tcb->global_param = get_low_32(m_model_global_param->align_asid_pa);
 
     #ifndef SIMULATION
     /* config placehold task tcb for recording last dispatched tcb */
