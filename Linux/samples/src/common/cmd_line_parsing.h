@@ -28,7 +28,7 @@ typedef struct cmd_opt {
     std::vector<std::string> gt_files;
     std::vector<uint32_t> gts_size;
     std::vector<char*> gts;
-    std::string x2_arch_desc;
+    std::string npu_arch_desc;
     uint32_t gt_size;
     bool log_level_set = false;
     uint32_t log_level;

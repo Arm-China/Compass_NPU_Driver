@@ -44,22 +44,13 @@ ifeq ($(BUILD_AIPU_VERSION), aipu_v1v2)
 endif
 
 ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
+    CXXFLAGS += -DZHOUYI_V12
     CXXFLAGS += -DZHOUYI_V3
 endif
 
 ifeq ($(BUILD_AIPU_VERSION), aipu_v4)
-    CXXFLAGS += -DZHOUYI_V4
-endif
-
-ifeq ($(BUILD_AIPU_VERSION), all)
     CXXFLAGS += -DZHOUYI_V12
-    ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
-        CXXFLAGS += -DZHOUYI_V3
-    endif
-
-    ifeq ($(BUILD_AIPU_VERSION), aipu_v4)
-        CXXFLAGS += -DZHOUYI_V4
-    endif
+    CXXFLAGS += -DZHOUYI_V4
 endif
 
 ifneq ($(BUILD_ANDROID_NDK), )

@@ -109,7 +109,7 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
             break;
 
         case 'a':
-            opt->x2_arch_desc = optarg;
+            opt->npu_arch_desc = optarg;
             break;
 
         case 's':

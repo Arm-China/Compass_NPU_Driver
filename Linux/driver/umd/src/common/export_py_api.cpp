@@ -95,7 +95,7 @@ class NPU
      *      {
      *          "simulator" : "simulator path",
      *          "log_file_path" : "simulator log path",
-     *          "x2_arch_desc" : [X2_1204 | X2_1204MP3],
+     *          "npu_arch_desc" : [X2_1204 | X2_1204MP3],
      *          "plugin_name" : "simulator plugin file name",
      *          "json_filename" : "simulator json file name",
      *          "log_level" : "simulator log level, 0|1|2|3",
@@ -122,7 +122,7 @@ class NPU
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         const char *status_msg = nullptr;
-        std::string str_key[] = {"simulator", "log_file_path", "x2_arch_desc", "plugin_name", "json_filename"};
+        std::string str_key[] = {"simulator", "log_file_path", "npu_arch_desc", "plugin_name", "json_filename"};
         std::string int_key[] = {"log_level", "gm_size", "verbose", "enable_avx", "enable_calloc", "en_eval"};
 
         if (global_cfg_simulation.count(str_key[0]) == 1)
@@ -143,9 +143,9 @@ class NPU
 
         if (global_cfg_simulation.count(str_key[2]) == 1)
         {
-            m_global_config_simulation.x2_arch_desc = new char[PATH_LEN];
-            memset((void *)m_global_config_simulation.x2_arch_desc, 0, PATH_LEN);
-            strncpy((char*)m_global_config_simulation.x2_arch_desc, (char*)global_cfg_simulation[str_key[2]].c_str(),
+            m_global_config_simulation.npu_arch_desc = new char[PATH_LEN];
+            memset((void *)m_global_config_simulation.npu_arch_desc, 0, PATH_LEN);
+            strncpy((char*)m_global_config_simulation.npu_arch_desc, (char*)global_cfg_simulation[str_key[2]].c_str(),
                 strlen(global_cfg_simulation[str_key[2]].c_str()));
         }
 
@@ -1233,8 +1233,8 @@ class NPU
         if (m_global_config_simulation.log_file_path)
             delete []m_global_config_simulation.log_file_path;
 
-        if (m_global_config_simulation.x2_arch_desc)
-            delete []m_global_config_simulation.x2_arch_desc;
+        if (m_global_config_simulation.npu_arch_desc)
+            delete []m_global_config_simulation.npu_arch_desc;
 
         if (m_global_config_simulation.plugin_name)
             delete []m_global_config_simulation.plugin_name;
@@ -1344,7 +1344,7 @@ PYBIND11_MODULE(libaipudrv, m) {
         .def(py::init<>())
         .def_readwrite("simulator", &aipu_global_config_simulation_t::simulator)
         .def_readwrite("log_file_path", &aipu_global_config_simulation_t::log_file_path)
-        .def_readwrite("x2_arch_desc", &aipu_global_config_simulation_t::x2_arch_desc)
+        .def_readwrite("npu_arch_desc", &aipu_global_config_simulation_t::npu_arch_desc)
         .def_readwrite("plugin_name", &aipu_global_config_simulation_t::plugin_name)
         .def_readwrite("json_filename", &aipu_global_config_simulation_t::json_filename)
         .def_readwrite("log_level", &aipu_global_config_simulation_t::log_level)

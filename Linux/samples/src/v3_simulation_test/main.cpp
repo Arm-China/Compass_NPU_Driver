@@ -79,8 +79,8 @@ int main(int argc, char* argv[])
 #endif
     }
     sim_glb_config.verbose = opt.verbose;
-    if (!opt.x2_arch_desc.empty())
-        sim_glb_config.x2_arch_desc = opt.x2_arch_desc.c_str();
+    if (!opt.npu_arch_desc.empty())
+        sim_glb_config.npu_arch_desc = opt.npu_arch_desc.c_str();
 
     sim_glb_config.simulator = opt.simulator;
     sim_glb_config.enable_calloc = true;

@@ -43,7 +43,7 @@ aipudrv::MainContext::MainContext()
     m_dram = nullptr;
     pthread_rwlock_init(&m_glock, NULL);
     m_sim_cfg.simulator = nullptr;
-    m_sim_cfg.x2_arch_desc = nullptr;
+    m_sim_cfg.npu_arch_desc = nullptr;
     m_sim_cfg.plugin_name = nullptr;
     m_sim_cfg.json_filename = nullptr;
     m_sim_cfg.log_file_path = new char[BUF_LEN];
@@ -75,8 +75,8 @@ aipudrv::MainContext::~MainContext()
     if (m_sim_cfg.simulator != nullptr)
         delete[] m_sim_cfg.simulator;
 
-    if (m_sim_cfg.x2_arch_desc != nullptr)
-        delete[] m_sim_cfg.x2_arch_desc;
+    if (m_sim_cfg.npu_arch_desc != nullptr)
+        delete[] m_sim_cfg.npu_arch_desc;
 
     if (m_sim_cfg.plugin_name != nullptr)
         delete[] m_sim_cfg.plugin_name;
@@ -537,15 +537,15 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
         #endif
     }
 
-    if ((config->x2_arch_desc != nullptr) || (sim_npu_arch_env != nullptr))
+    if ((config->npu_arch_desc != nullptr) || (sim_npu_arch_env != nullptr))
     {
-        if (m_sim_cfg.x2_arch_desc == nullptr)
-            m_sim_cfg.x2_arch_desc = new char[64];
+        if (m_sim_cfg.npu_arch_desc == nullptr)
+            m_sim_cfg.npu_arch_desc = new char[64];
 
-        if (config->x2_arch_desc != nullptr)
-            strncpy((char*)m_sim_cfg.x2_arch_desc, config->x2_arch_desc, 64);
+        if (config->npu_arch_desc != nullptr)
+            strncpy((char*)m_sim_cfg.npu_arch_desc, config->npu_arch_desc, 64);
         else
-            strncpy((char*)m_sim_cfg.x2_arch_desc, sim_npu_arch_env, 64);
+            strncpy((char*)m_sim_cfg.npu_arch_desc, sim_npu_arch_env, 64);
 
         ret = set_target(AIPU_LOADABLE_GRAPH_ELF_V0, &m_dev, &m_sim_cfg);
         if (ret != AIPU_STATUS_SUCCESS)

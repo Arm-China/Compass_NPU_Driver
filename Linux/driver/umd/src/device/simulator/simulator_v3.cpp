@@ -37,8 +37,8 @@ aipudrv::SimulatorV3::SimulatorV3(const aipu_global_config_simulation_t* cfg)
             m_json_filename = cfg->json_filename;
         if (cfg->log_file_path != nullptr)
             m_log_filepath = cfg->log_file_path;
-        if (cfg->x2_arch_desc != nullptr)
-            m_arch_desc = cfg->x2_arch_desc;
+        if (cfg->npu_arch_desc != nullptr)
+            m_arch_desc = cfg->npu_arch_desc;
 
     }
     pthread_rwlock_init(&m_lock, NULL);
