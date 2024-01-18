@@ -1754,7 +1754,6 @@ void aipudrv::JobV4::dumpcfg_alljob()
     GraphTable &graphs = ctx->get_graphtable();
     GraphV3X *graph = nullptr;
     std::ostringstream oss;
-    // SimulatorV4 *sim = static_cast<SimulatorV4 *>(m_dev);
     static bool dump_done = false;
     static std::mutex mtex;
 
@@ -1772,12 +1771,6 @@ void aipudrv::JobV4::dumpcfg_alljob()
     FileWrapper ofsmt("./metadata.txt", std::ios::out);
     if (!ofs.is_open() || !ofsmt.is_open())
         return;
-
-    /**
-     * set destroy flag for each tcbchain in all cmdpool, the simulator
-     * can know when it's reasonable to set end/idle status for cmdpool.
-     */
-    // sim->set_destroy_to_all_tcbchain();
 
     /* runtime.cfg: [COMMON] */
     ofs << m_dumpcfg_header << "\n";
@@ -1800,39 +1793,6 @@ void aipudrv::JobV4::dumpcfg_alljob()
                 oss << "BASE" << count << "=0x" << std::hex << job->m_dumpcfg_input.at(i).base << "\n";
                 count++;
             }
-
-            /* dump finally updated init/task tcb for each job */
-            for (int i = 0; i < 2; i++)
-            {
-                if (i == 0)
-                {
-                    m_mem->dump_file(std::get<1>(job->m_dump_tcb_info[i]),
-                                     std::get<0>(job->m_dump_tcb_info[i]).c_str(),
-                                     std::get<2>(job->m_dump_tcb_info[i]));
-                }
-                else
-                {
-                    if ((graph_iter != graphs.end()) ||
-                        (graph_iter == graphs.end() && job_iter != graph->m_jobs.end()))
-                    {
-                        void *addr = nullptr;
-                        uint32_t size = 0;
-                        uint32_t offset = (m_tot_tcb_cnt - 2) * sizeof(tcb_t) + 4;
-
-                        /**
-                         * copy the 'next' field from job's last task tcb to task.tcb file's
-                         * corresponding location.this will connect current job's tcb chain
-                         * to next job's tcb chain.
-                         */
-                        umd_mmap_file_helper(std::get<0>(job->m_dump_tcb_info[i]).c_str(), &addr, &size);
-                        m_mem->read(job->get_tcb_head_pa() + offset,
-                                    (char *)addr + size - 2 * sizeof(tcb_t) + 4, 4);
-                    }
-                }
-                oss << "FILE" << std::dec << count << "=" << std::get<0>(job->m_dump_tcb_info[i]) << "\n";
-                oss << "BASE" << count << "=0x" << std::hex << std::get<1>(job->m_dump_tcb_info[i]) << "\n";
-                count++;
-            }
         }
     }
     ofs << "[INPUT]\n";
@@ -1843,7 +1803,7 @@ void aipudrv::JobV4::dumpcfg_alljob()
     /* runtime.cfg: [HOST] */
     oss.str("");
     count = 0;
-    cmdpool_mask = 1;//sim->get_cmdpool_bitmap();
+    cmdpool_mask = 1;
     for (auto g : graphs)
     {
         graph = static_cast<GraphV3X *>(g.second);
@@ -1857,7 +1817,6 @@ void aipudrv::JobV4::dumpcfg_alljob()
                 oss << "TCBP_LO" << std::dec << count << "=0x" << std::hex << job->m_dumpcfg_host.lo_addr << "\n";
                 count++;
                 cmdpool_mask &= ~(1 << job->m_bind_cmdpool_id);
-                // sim->clear_cmdpool_bitmap(job->m_bind_cmdpool_id);
             }
         }
     }

@@ -130,7 +130,7 @@ typedef struct {
 typedef struct {
     /**
      * configure simulator file name for aipu v1/v2;
-     * set simulator to be NULL for aipu v3;
+     * set simulator to be NULL for aipu v3/v4;
      * log_level works for all simulator versions;
      */
     const char *simulator;

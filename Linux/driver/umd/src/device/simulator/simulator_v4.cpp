@@ -182,12 +182,33 @@ unlock:
     return ret;
 }
 
+bool aipudrv::SimulatorV4::is_cmdpool_full(int qos, int part_id, int partition_mode,
+    int cluster_idx, uint32_t reg_val)
+{
+    uint32_t cmdpool_full_flag = 0;
+
+    if (qos == AIPU_JOB_QOS_SLOW)
+    {
+        if ((partition_mode == POOL_SCP) && (part_id == 1))
+            cmdpool_full_flag = (1 << (cluster_idx + 4)) & reg_val;
+        else
+            cmdpool_full_flag = (1 << cluster_idx) & reg_val;
+    } else {
+        if ((partition_mode == POOL_SCP) && (part_id == 1))
+            cmdpool_full_flag = (1 << (cluster_idx + 12)) & reg_val;
+        else
+            cmdpool_full_flag = (1 << (cluster_idx + 8)) & reg_val;
+    }
+
+    return !!cmdpool_full_flag;
+}
+
 aipu_status_t aipudrv::SimulatorV4::schedule(const JobDesc& jobdesc)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     JobV4 *job = static_cast<JobV4 *>(jobdesc.jobbase);
     uint32_t part_id = job->get_part_id();
-    uint32_t cmd_pool_id = 0, value = 0;
+    uint32_t cmd_pool_id = 0, value = 0, cluster_idx = 0;
     uint32_t qos = job->get_qos();
     job_queue_elem_t job_queue_item;
     JobDesc job_desc{0};
@@ -200,7 +221,7 @@ aipu_status_t aipudrv::SimulatorV4::schedule(const JobDesc& jobdesc)
 
     pthread_rwlock_wrlock(&m_lock);
     if (job->m_bind_cmdpool_id == 0xffffffff)
-        cmd_pool_id = job->m_bind_cmdpool_id = get_cmdpool_id(0, part_id);
+        cmd_pool_id = job->m_bind_cmdpool_id = get_cmdpool_id(cluster_idx, part_id);
     else
         cmd_pool_id = job->m_bind_cmdpool_id;
 
@@ -211,16 +232,11 @@ aipu_status_t aipudrv::SimulatorV4::schedule(const JobDesc& jobdesc)
     if (!m_cmdpool_busy)
     {
         uint32_t reg_val = 0;
-        uint32_t cmdpool_full_bits = 0;
 
         m_aipu->read_register(TSM_STATUS, reg_val);
 
-        if (qos == AIPU_JOB_QOS_SLOW)
-            cmdpool_full_bits = TSM_STATUS_CMDPOOL_FULL_QOSL(reg_val);
-        else
-            cmdpool_full_bits = TSM_STATUS_CMDPOOL_FULL_QOSH(reg_val);
-
-        if ((cmdpool_full_bits & (1 << cmd_pool_id)) == 0)
+        if (!is_cmdpool_full(qos, part_id, m_partition_mode,
+            cluster_idx, reg_val))
         {
             m_cmdpool_busy = true;
             job_queue_item = m_buffer_queue.front();
@@ -271,7 +287,7 @@ aipu_status_t aipudrv::SimulatorV4::fill_commit_queue()
         uint32_t cmd_pool_id = 0, value = 0;
         uint32_t qos = job->get_qos();
         uint32_t reg_val = 0;
-        uint32_t cmdpool_full_bits = 0;
+        uint32_t cluster_idx = 0;
 
         if (part_id > POOL_SCP)
             part_id = POOL_PCP;
@@ -285,12 +301,9 @@ aipu_status_t aipudrv::SimulatorV4::fill_commit_queue()
             cmd_pool_id = job->m_bind_cmdpool_id;
 
         m_aipu->read_register(TSM_STATUS, reg_val);
-        if (qos == AIPU_JOB_QOS_SLOW)
-            cmdpool_full_bits = TSM_STATUS_CMDPOOL_FULL_QOSL(reg_val);
-        else
-            cmdpool_full_bits = TSM_STATUS_CMDPOOL_FULL_QOSH(reg_val);
 
-        if ((cmdpool_full_bits & (1 << cmd_pool_id)) == 0)
+        if (!is_cmdpool_full(qos, part_id, m_partition_mode,
+            cluster_idx, reg_val))
         {
             if (!m_cmdpool_busy)
             {
@@ -391,7 +404,7 @@ aipu_ll_status_t aipudrv::SimulatorV4::poll_status(std::vector<aipu_job_status_d
                  * dump a combination runtime.cfg for all jobs in one running period,
                  * it doesn't allow to be used in multiple threads scenario.
                  */
-                job->dumpcfg_alljob();
+                // job->dumpcfg_alljob();
             }
             pthread_rwlock_unlock(&m_lock);
         }

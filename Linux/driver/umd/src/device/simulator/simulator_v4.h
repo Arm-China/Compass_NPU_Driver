@@ -122,6 +122,8 @@ private:
         };
 
 private:
+    bool is_cmdpool_full(int qos, int part_id, int partition_mode,
+        int cluster_idx, uint32_t reg_val);
     uint32_t get_cmdpool_id(uint32_t cluster_id, uint32_t part_id)
     {
         return m_cmdpool_id[cluster_id][part_id];
