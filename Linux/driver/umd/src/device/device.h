@@ -86,8 +86,6 @@ inline aipu_status_t test_get_device(uint32_t graph_version, DeviceBase** dev,
         }
     #endif
     }
-#else /* !SIMULATION */
-    ret = Aipu::get_aipu(dev);
 #endif
 
     if (nullptr == *dev)
