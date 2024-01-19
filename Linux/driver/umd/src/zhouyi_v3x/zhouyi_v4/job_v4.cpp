@@ -1090,9 +1090,6 @@ aipu_status_t aipudrv::JobV4::setup_tcb_sg(uint32_t sg_id, uint32_t grid_id, uin
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    /* increase group index for each group */
-    m_group_id_idx++;
-
     /* setup task TCBs */
     for (uint32_t t = 0; t < m_task_per_sg; t++)
     {
@@ -1100,6 +1097,9 @@ aipu_status_t aipudrv::JobV4::setup_tcb_sg(uint32_t sg_id, uint32_t grid_id, uin
         if (AIPU_STATUS_SUCCESS != ret)
             return ret;
     }
+
+    /* increase group index for each group */
+    m_group_id_idx++;
 
     return ret;
 }
