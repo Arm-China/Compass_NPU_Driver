@@ -42,12 +42,11 @@ class GM_V4
     const GraphV3X &m_graph;
 
     DEV_PA_64 m_gm_buf_base = 0;
-    uint32_t m_gm_buf_map_size= 0;
+    uint32_t m_gm_buf_sync_size= 0;
 
     public:
     aipu_status_t gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t buf_type,
         std::string &buf_name, BufferDesc *buf);
-    void gm_dynamic_switch(uint32_t core_cnt);
     bool gm_is_gm_buffer(uint32_t idx, uint32_t buf_type);
     bool gm_need_remap();
     void get_valid_map_base(BufferDesc &buf);

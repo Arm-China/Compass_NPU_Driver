@@ -80,12 +80,6 @@ void aipudrv::JobV4::set_job_params(uint32_t sg_cnt, uint32_t task_per_sg,
     m_segmmu_tcb_num = core_cnt;
     m_tot_tcb_cnt = m_sg_cnt * m_task_per_sg + 1 + 1;
     m_backup_tcb.reset(new char[m_tot_tcb_cnt * sizeof(tcb_t)]);
-
-    /**
-     * case: only disable GM_V4 for multiple core NPU when multiple small models
-     *       parallel to run on separate core.
-     */
-    m_gm->gm_dynamic_switch(core_cnt);
 }
 
 void aipudrv::JobV4::setup_gm_sync_from_ddr(tcb_t *tcb)
@@ -100,7 +94,7 @@ void aipudrv::JobV4::setup_gm_sync_from_ddr(tcb_t *tcb)
     tcb->gm_addr_low = get_low_32(m_gm->m_gm_buf_base);
     tcb->gm_addr_high = get_high_32(m_gm->m_gm_buf_base);
 
-    if (m_gm->m_gm_buf_map_size != 0)
+    if (m_gm->m_gm_buf_sync_size != 0)
         tcb->gm_sync = GM_SYNC_DDR_TO_GM;
 }
 

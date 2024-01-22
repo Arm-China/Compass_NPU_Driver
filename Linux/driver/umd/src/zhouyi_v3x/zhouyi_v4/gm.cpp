@@ -30,27 +30,6 @@ aipudrv::GM_V4::~GM_V4()
         m_job.m_mem->free(&buf);
 }
 
-void aipudrv::GM_V4::gm_dynamic_switch(uint32_t core_cnt)
-{
-    /**
-     * set this env variable as true(y/Y), small model containing only
-     * one subgraph can use GM_V4. but if hope multiple small models
-     * parallel to run, it has to be set as false(n/N).
-     */
-    const char *gm_allow_small_model = getenv("UMD_GM_ASM");
-
-    if (gm_allow_small_model != nullptr)
-    {
-        if (gm_allow_small_model[0] == 'y' || gm_allow_small_model[0] == 'Y')
-            m_gm_asm = true;
-    } else {
-        if (core_cnt > 1)
-            m_gm_asm = false;
-        else if (core_cnt == 1)
-            m_gm_asm = true;
-    }
-}
-
 aipu_status_t aipudrv::GM_V4::gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t buf_type,
     std::string &buf_name, BufferDesc *buf)
 {
@@ -61,7 +40,7 @@ aipu_status_t aipudrv::GM_V4::gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t b
         ? m_graph.get_subgraph(sg_id).reuse_sections : m_graph.get_subgraph(sg_id).static_sections;
     uint32_t buf_size = section_desc[idx].size;
 
-    buf_size = (buf_size + (1 << 18)) & (1 << 18); // 256KB alignment
+    buf_size = (buf_size + ((1 << 18) - 1)) & (~((1 << 18) - 1)); // 256KB alignment
 
     ret = m_job.m_mem->malloc(buf_size,
         section_desc[idx].align_in_page, &buf, buf_name.c_str(), (asid << 8) | mem_region);
@@ -83,7 +62,7 @@ aipu_status_t aipudrv::GM_V4::gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t b
 
     for (int _buf_typ = EM_GM_BUF_INPUT; _buf_typ < EM_GM_BUF_MAX; _buf_typ++)
     {
-        m_gm_buf_map_size = buf_size;
+        m_gm_buf_sync_size = buf_size;
     }
 
 out:
@@ -97,17 +76,8 @@ bool aipudrv::GM_V4::gm_is_gm_buffer(uint32_t idx, uint32_t buf_type)
     if (!m_job.m_mem->is_gm_enable())
         goto out;
 
-    if (m_job.m_qos == AIPU_JOB_QOS_HIGH && !m_job.m_mem->is_both_gm_region_enable())
-        goto out;
-
     if (m_job.m_gm_info[buf_type].count(idx) != 1)
         goto out;
-
-    if (!m_gm_asm && m_job.m_sg_cnt == 1)
-    {
-        m_job.m_gm_info[buf_type].erase(idx);
-        goto out;
-    }
 
     ret = true;
 out:
@@ -116,7 +86,7 @@ out:
 
 bool aipudrv::GM_V4::gm_need_remap()
 {
-    if (m_gm_buf_map_size != 0)
+    if (m_gm_buf_sync_size != 0)
         return true;
 
     // is a temp buffer, non input/output
