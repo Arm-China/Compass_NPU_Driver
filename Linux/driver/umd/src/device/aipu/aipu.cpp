@@ -212,13 +212,12 @@ aipu_status_t aipudrv::Aipu::schedule(const JobDesc& job)
 
 aipu_ll_status_t aipudrv::Aipu::get_status(uint32_t max_cnt, bool of_this_thread, void *jobbase)
 {
-    aipu_ll_status_t ret = AIPU_LL_STATUS_SUCCESS;
+    aipu_ll_status_t ret = AIPU_LL_STATUS_JOB_NO_DONE;
     int kret = 0;
     aipu_job_status_query status_query;
     JobBase *job = (JobBase *)jobbase;
     JobBase *done_job = nullptr;
     aipu_job_callback_func_t job_callback_func = nullptr;
-    bool job_is_done = false;
 
     status_query.of_this_thread = of_this_thread;
     status_query.max_cnt = max_cnt;
@@ -233,35 +232,27 @@ aipu_ll_status_t aipudrv::Aipu::get_status(uint32_t max_cnt, bool of_this_thread
 
     for (uint32_t i = 0; i < status_query.poll_cnt; i++)
     {
-        m_job_sts_queue.push_q(status_query.status[i]);
-
         done_job = job->get_base_graph().get_job(status_query.status[i].job_id);
         if (done_job != nullptr)
         {
+            done_job->update_job_status(status_query.status[i].state);
             job_callback_func = done_job->get_job_cb();
-            /**
-             * deliver done job to backend timely, note that: it should not to call
-             * aipu_get_job_status again
-             */
+
+            /* deliver done job to backend timely. */
             if (job_callback_func != nullptr)
             {
-                done_job->update_job_status(m_job_sts_queue.pop_q(done_job->get_id()).state);
                 job_callback_func(status_query.status[i].job_id,
                     (aipu_job_status_t)status_query.status[i].state);
-                ret = AIPU_LL_STATUS_JOB_NO_DONE;
-            } else {
-                if (done_job == job)
-                {
-                    job->update_job_status(m_job_sts_queue.pop_q(job->get_id()).state);
-                    job_is_done = true;
-                }
             }
+
+            if (done_job == job)
+                ret = AIPU_LL_STATUS_SUCCESS;
         }
     }
 
 clean:
     delete[] status_query.status;
-    return (job_is_done == true) ? AIPU_LL_STATUS_SUCCESS : ret;
+    return ret;
 }
 
 aipu_ll_status_t aipudrv::Aipu::get_status(std::vector<aipu_job_status_desc>& jobs_status,
@@ -284,11 +275,8 @@ aipu_ll_status_t aipudrv::Aipu::poll_status(uint32_t max_cnt, int32_t time_out,
      * firstly finished job. so it's necesssary to check the cache queue containing
      * finished job firstly. if there's no target job, switch to poll NPU HW.
      */
-    if (m_job_sts_queue.is_job_exist(job->get_id()))
-    {
-        job->update_job_status(m_job_sts_queue.pop_q(job->get_id()).state);
+    if (job->get_job_status() == AIPU_JOB_STATUS_DONE)
         return ret;
-    }
 
     poll_list.fd = m_fd;
     poll_list.events = POLLIN | POLLPRI;

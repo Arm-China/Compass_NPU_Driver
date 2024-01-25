@@ -225,6 +225,11 @@ public:
         m_status = status;
     }
 
+    uint32_t get_job_status()
+    {
+        return m_status;
+    }
+
     Graph& get_base_graph()
     {
         return static_cast<Graph&>(m_graph);
