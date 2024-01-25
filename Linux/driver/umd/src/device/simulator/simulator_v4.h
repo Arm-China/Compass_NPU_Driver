@@ -244,8 +244,8 @@ public:
     aipu_status_t parse_config(uint32_t config, uint32_t &code);
     aipu_status_t schedule(const JobDesc& job);
     aipu_status_t fill_commit_queue();
-    aipu_ll_status_t poll_status(std::vector<aipu_job_status_desc>& jobs_status,
-        uint32_t max_cnt, int32_t time_out, bool of_this_thread, void *jobbase = nullptr);
+    aipu_ll_status_t poll_status(uint32_t max_cnt, int32_t time_out,
+        bool of_this_thread, void *jobbase = nullptr);
 
     aipu_status_t get_simulation_instance(void** simulator, void** memory)
     {

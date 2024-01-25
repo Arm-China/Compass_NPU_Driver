@@ -31,6 +31,7 @@ typedef enum {
     AIPU_LL_STATUS_ERROR_IOCTL_TICK_COUNTER,
     AIPU_LL_STATUS_ERROR_CONFIG_CLUSTER,
     AIPU_LL_STATUS_ERROR_IOCTL_FAIL,
+    AIPU_LL_STATUS_JOB_NO_DONE,
 } aipu_ll_status_t;
 
 inline aipu_status_t convert_ll_status(aipu_ll_status_t status)
@@ -176,8 +177,8 @@ public:
         return AIPU_LL_STATUS_SUCCESS;
     }
     /* blocking with timeout */
-    virtual aipu_ll_status_t poll_status(std::vector<aipu_job_status_desc>& jobs_status,
-        uint32_t max_cnt, int32_t time_out, bool of_this_thread, void *jobbase = nullptr)
+    virtual aipu_ll_status_t poll_status(uint32_t max_cnt, int32_t time_out,
+        bool of_this_thread, void *jobbase = nullptr)
     {
         return AIPU_LL_STATUS_SUCCESS;
     }

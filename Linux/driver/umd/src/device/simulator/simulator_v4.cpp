@@ -341,11 +341,10 @@ aipu_status_t aipudrv::SimulatorV4::fill_commit_queue()
     return ret;
 }
 
-aipu_ll_status_t aipudrv::SimulatorV4::poll_status(std::vector<aipu_job_status_desc>& jobs_status,
-    uint32_t max_cnt, int32_t time_out, bool of_this_thread, void *jobbase)
+aipu_ll_status_t aipudrv::SimulatorV4::poll_status(uint32_t max_cnt, int32_t time_out,
+    bool of_this_thread, void *jobbase)
 {
     uint32_t value = 0;
-    aipu_job_status_desc desc;
     JobV4 *job = static_cast<JobV4 *>(jobbase);
     uint32_t cmd_pool_id = job->m_bind_cmdpool_id;
     uint32_t cmd_pool_status_reg = CMD_POOL0_STATUS + 0x40 * cmd_pool_id;
@@ -354,8 +353,7 @@ aipu_ll_status_t aipudrv::SimulatorV4::poll_status(std::vector<aipu_job_status_d
 
     if (job->get_subgraph_cnt() == 0)
     {
-        desc.state = AIPU_JOB_STATE_DONE;
-        jobs_status.push_back(desc);
+        job->update_job_status(AIPU_JOB_STATE_DONE);
         return AIPU_LL_STATUS_SUCCESS;
     }
 
@@ -365,8 +363,7 @@ aipu_ll_status_t aipudrv::SimulatorV4::poll_status(std::vector<aipu_job_status_d
         if (m_done_queue.count(jobbase))
         {
             m_done_queue.erase(jobbase);
-            desc.state = AIPU_JOB_STATE_DONE;
-            jobs_status.push_back(desc);
+            job->update_job_status(AIPU_JOB_STATE_DONE);
             pthread_rwlock_unlock(&m_lock);
             break;
         }

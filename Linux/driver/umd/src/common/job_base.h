@@ -220,6 +220,11 @@ public:
         return m_id;
     }
 
+    void update_job_status(uint32_t status)
+    {
+        m_status = status;
+    }
+
     Graph& get_base_graph()
     {
         return static_cast<Graph&>(m_graph);
