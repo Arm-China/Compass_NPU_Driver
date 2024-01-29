@@ -20,6 +20,7 @@ typedef struct cmd_opt {
     std::vector<std::string> bin_files;
     char inputs_file_name[1024];
     char gts_file_name[4096];
+    char input_shape[1024];
     char dump_dir[BUF_LEN];
     char simulator[BUF_LEN];
     std::vector<std::string> input_files;

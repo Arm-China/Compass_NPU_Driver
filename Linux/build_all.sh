@@ -270,6 +270,7 @@ if [ "$BUILD_TEST"x = "sample"x ]; then
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=mthread_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=time_cost_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=sharebuffer_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dynamic_shape_test
     else
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=benchmark_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=batch_test
@@ -285,6 +286,7 @@ if [ "$BUILD_TEST"x = "sample"x ]; then
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dmabuf_producer_consumer_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dmabuf_attach_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=emulation_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dynamic_shape_test
     fi
     cd -
 fi

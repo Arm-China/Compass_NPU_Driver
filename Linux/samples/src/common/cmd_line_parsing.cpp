@@ -32,13 +32,14 @@ static struct option opts[] = {
     { "dump_opt", optional_argument, NULL, 'o' },
     { "verbose", optional_argument, NULL, 'v' },
     { "time", required_argument, NULL, 't' },
+    { "shape", required_argument, NULL, 'r' },
     { NULL, 0, NULL, 0 }
 };
 
 void help(void)
 {
     std::string help_info =
-        "usage: ./test -s sim -b aipu.bin -i input0.bin,input1.bin -c output.bin -d ./output [-l 0-3] [-v]\n"
+        "usage: ./test -s sim -b aipu.bin -i input0.bin,input1.bin -c output.bin -d ./output [-l 0-3] [-v] [-r]\n"
         "   -s: aipu v1/v2 simulator path\n"
         "   -b: aipu.bin\n"
         "   -i: input bins\n"
@@ -48,7 +49,8 @@ void help(void)
         "   -o: dump options for text/weight/in/out on board(hex form: ff)\n"
         "   -t: test flush or finish job time(flush | finish), only for basic_time_test\n"
         "   -l: simulator log level(0-3)\n"
-        "   -v: simulator verbose(0, 1)\n";
+        "   -v: simulator verbose(0, 1)\n"
+        "   -r: dynamic real input shape(eg: 1,480,640,3)\n";
 
     std::cout << help_info;
     exit(0);
@@ -73,7 +75,7 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
 
     while (1)
     {
-        c = getopt_long(argc, argv, "hs:C:b:i:c:d:a:s:z:q:k:x:o:l:t:v", opts, &opt_idx);
+        c = getopt_long(argc, argv, "hs:C:b:i:c:d:a:s:z:q:k:x:o:l:t:r:v", opts, &opt_idx);
         if (-1 == c)
             break;
 
@@ -135,6 +137,10 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
                 opt->flush_time = true;
             else
                 opt->flush_time = false;
+            break;
+
+        case 'r':
+            strcpy(opt->input_shape, optarg);
             break;
 
         case 'h':
