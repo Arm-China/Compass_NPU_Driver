@@ -312,9 +312,6 @@ aipu_status_t aipudrv::MainContext::load_graph(const char* graph_file, GRAPH_ID*
     pthread_rwlock_unlock(&m_glock);
     *id = _id;
 
-    /* TBD */
-    return ret;
-
 finish:
     gbin.close();
     return ret;
