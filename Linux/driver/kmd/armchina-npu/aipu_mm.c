@@ -253,10 +253,6 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 	if (!reg->tcb_buf_head)
 		goto err;
 
-	/* unused for normal memory */
-	reg->cluster_id = 0;
-	reg->qos = AIPU_GM_QOS_NONE;
-
 	/* create a list head, not a real region */
 	if (!size)
 		return reg;
@@ -365,37 +361,8 @@ static int get_free_bitmap_no(struct aipu_memory_manager *mm, struct aipu_mem_re
 	unsigned long align_order = order_base_2(buf_req->align_in_page);
 	unsigned long mask = (1UL << align_order) - 1;
 	unsigned long offset = reg->base_pfn & ((1UL << align_order) - 1);
-	unsigned long count = reg->count;
-	unsigned long start = 0;
 
-	if (reg->qos == AIPU_GM_QOS_ALL && mm->gm_policy == AIPU_GM_POLICY_HALF_DIVIDED) {
-		if (buf_req->region == AIPU_BUF_REGION_QOS_SLOW_GM)
-			count = count >> 1;
-		else if (buf_req->region == AIPU_BUF_REGION_QOS_FAST_GM)
-			start = count >> 1;
-	}
-
-	return bitmap_find_next_zero_area_off(reg->bitmap, count, start, alloc_nr, mask, offset);
-}
-
-static u64 get_gm_base(struct aipu_memory_manager *mm, struct aipu_mem_region *gm,
-		       struct aipu_buf_request *buf_req)
-{
-	u64 gm_base = 0;
-
-	if (!mm->gm)
-		return 0;
-
-	gm_base = gm->base_iova;
-
-	if (gm->qos == AIPU_GM_QOS_NONE)
-		return 0;
-
-	if (mm->gm_policy == AIPU_GM_POLICY_HALF_DIVIDED &&
-	    buf_req->region == AIPU_BUF_REGION_QOS_FAST_GM)
-		gm_base += (gm->bytes >> 1);
-
-	return gm_base;
+	return bitmap_find_next_zero_area_off(reg->bitmap, reg->count, 0, alloc_nr, mask, offset);
 }
 
 static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
@@ -476,7 +443,6 @@ static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
 	buf_req->desc.bytes = dev_size;
 	buf_req->desc.asid = buf_req->asid;
 	buf_req->desc.region = reg->type;
-	buf_req->desc.gm_base = get_gm_base(mm, reg, buf_req);
 
 	dev_dbg(reg->dev,
 		"allocation in region done: iova 0x%llx, bytes 0x%llx, type %d\n",
@@ -1020,10 +986,7 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V1)
 		buf_req->asid = AIPU_BUF_ASID_0;
 
-	if (buf_req->region == AIPU_BUF_REGION_QOS_SLOW_GM ||
-	    buf_req->region == AIPU_BUF_REGION_QOS_FAST_GM) {
-		type = AIPU_MEM_REGION_TYPE_GM;
-	} else if (buf_req->region < AIPU_MEM_REGION_TYPE_MAX) {
+	if (buf_req->region < AIPU_MEM_REGION_TYPE_MAX) {
 		type = buf_req->region;
 	} else {
 		dev_err(mm->dev, "[malloc] invalid alloc request: region type %d",
@@ -1540,86 +1503,13 @@ void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap)
 	cap->asid3_base = aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_3);
 }
 
-static int aipu_mm_get_gm_region_no_lock(struct aipu_memory_manager *mm,
-					 struct aipu_buf_desc *buf,
-					 struct aipu_mem_region *gm)
+int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes)
 {
-	struct aipu_mem_region *reg = aipu_mm_find_region(mm, buf->pa, "get_gm");
-
-	if (!reg)
-		return -EINVAL;
-
-	gm->base_iova = buf->pa;
-	gm->base_pa = 0;
-	gm->base_va = (void *)((unsigned long *)reg->base_va + gm->base_iova - reg->base_iova);
-	gm->bytes = buf->bytes;
-	gm->base_pfn = PFN_DOWN(gm->base_iova);
-	gm->type = reg->type;
-	gm->reserved = reg->reserved;
-	gm->tcb_buf_head = NULL;
-	gm->dev = reg->dev;
-	gm->attrs = reg->attrs;
-	return aipu_mm_init_pages(mm, gm);
-}
-
-int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes, int cluster_id)
-{
-	int ret = 0;
-	struct aipu_buf_request buf_req;
-	struct aipu_mem_region *gm = NULL;
-
 	if (!mm || !bytes || mm->gm_policy == AIPU_GM_POLICY_NONE)
 		return -EINVAL;
 
-	buf_req.align_in_page = 1;
-	buf_req.data_type = AIPU_MM_DATA_TYPE_NONE;
-	buf_req.region = AIPU_BUF_REGION_DEFAULT;
-	buf_req.asid = AIPU_BUF_ASID_0;
-	buf_req.bytes = bytes;
-
-	ret = aipu_mm_alloc(mm, &buf_req, NULL);
-	if (ret) {
-		dev_err(mm->dev, "GM allocation failed: bytes 0x%x", bytes);
-		return ret;
-	}
-
-	gm = kmem_cache_zalloc(mm->reg_cache, GFP_KERNEL);
-	gm->cluster_id = cluster_id;
-	gm->qos = AIPU_GM_QOS_ALL;
-
-	ret = aipu_mm_get_gm_region_no_lock(mm, &buf_req.desc, gm);
-	if (ret) {
-		dev_err(mm->dev, "init GM region failed\n");
-		return ret;
-	}
-
-	mm->gm = gm;
-
-	dev_info(mm->dev, "cluster #%d GM region allocated: pa [0x%llx, 0x%llx]",
-		 cluster_id, gm->base_iova, gm->base_iova + gm->bytes - 1);
-
-	return ret;
-}
-
-void aipu_mm_deinit_gm(struct aipu_memory_manager *mm)
-{
-	struct aipu_buf_desc buf;
-
-	if (!mm || !mm->gm)
-		return;
-
-	if (mm->gm->pages) {
-		vfree(mm->gm->pages);
-			mm->gm->pages = NULL;
-	}
-
-	memset(&buf, 0, sizeof(buf));
-	buf.pa = mm->gm->base_iova;
-	buf.bytes = mm->gm->bytes;
-	aipu_mm_free(mm, &buf, NULL, true);
-
-	kmem_cache_free(mm->reg_cache, mm->gm);
-	mm->gm = NULL;
+	mm->gm_bytes = bytes;
+	return 0;
 }
 
 int aipu_mm_gm_policy_switch(struct aipu_memory_manager *mm, enum aipu_gm_policy next)
@@ -1640,25 +1530,17 @@ int aipu_mm_gm_policy_switch(struct aipu_memory_manager *mm, enum aipu_gm_policy
 
 void aipu_mm_get_gm(struct aipu_memory_manager *mm, struct aipu_cap *cap)
 {
-	if (!cap)
+	if (!mm || !cap)
 		return;
 
-	cap->gm0_base = 0;
 	cap->gm0_size = 0;
-	cap->gm1_base = 0;
 	cap->gm1_size = 0;
-
-	if (!mm || !mm->gm)
-		return;
-
-	cap->gm0_base = mm->gm->base_iova;
 
 	mutex_lock(&mm->lock);
 	if (mm->gm_policy == AIPU_GM_POLICY_SHARED) {
-		cap->gm0_size = mm->gm->bytes;
+		cap->gm0_size = mm->gm_bytes;
 	} else {
-		cap->gm0_size = mm->gm->bytes >> 1;
-		cap->gm1_base = cap->gm0_base + cap->gm0_size;
+		cap->gm0_size = mm->gm_bytes >> 1;
 		cap->gm1_size = cap->gm0_size;
 	}
 	mutex_unlock(&mm->lock);

@@ -129,8 +129,6 @@ struct aipu_partition_cap {
  * @asid3_base:     [kmd] ASID 3 base address
  * @dtcm_base:      [kmd][aipu v2(x1)/v3] DTCM base address
  * @dtcm_size:      [kmd][aipu v2(x1)/v3] DTCM size
- * @gm0_base:       [kmd][aipu v3 only] GM region 0 base address (valid if gm0_size > 0)
- * @gm1_base:       [kmd][aipu v3 only] GM region 1 base address (valid if gm1_size > 0)
  * @gm0_size:       [kmd][aipu v3 only] GM region 0 size (in bytes)
  * @gm1_size:       [kmd][aipu v3 only] GM region 1 size (in bytes)
  * @partition_cap:  [kmd] Capability of the single AIPU partition
@@ -154,8 +152,6 @@ struct aipu_cap {
 	__u64 asid3_base;
 	__u64 dtcm_base;
 	__u32 dtcm_size;
-	__u64 gm0_base;
-	__u64 gm1_base;
 	__u32 gm0_size;
 	__u32 gm1_size;
 	struct aipu_partition_cap partition_cap;
@@ -200,15 +196,11 @@ enum aipu_buf_region {
  * @AIPU_BUF_REGION_DEFAULT:     [aipu v1/v2/v3] default DDR region
  * @AIPU_BUF_REGION_SRAM:        [aipu v1/v2/v3] SRAM region
  * @AIPU_BUF_REGION_DTCM:        [aipu v2(x1)] DTCM region
- * @AIPU_BUF_REGION_QOS_SLOW_GM: [aipu v3 only] GM region
- * @AIPU_BUF_REGION_QOS_FAST_GM: [aipu v3 only] GM region
  */
 enum aipu_buf_region_type {
 	AIPU_BUF_REGION_DEFAULT     = 0,
 	AIPU_BUF_REGION_SRAM        = 1,
 	AIPU_BUF_REGION_DTCM        = 2,
-	AIPU_BUF_REGION_QOS_SLOW_GM = 3,
-	AIPU_BUF_REGION_QOS_FAST_GM = 4,
 };
 
 /**
@@ -219,7 +211,7 @@ enum aipu_buf_region_type {
  * @bytes:      [kmd] Buffer size in bytes
  * @region:     [kmd] this allocated buffer is in memory/SRAM/DTCM/GM region?
  * @asid:       [kmd] ASID region of this buffer
- * @gm_base:    [kmd] GM base address if the region member is QoS slow/fast GM
+ * @gm_base:    [kmd] GM base address (to be removed)
  */
 struct aipu_buf_desc {
 	__u64 pa;

@@ -20,13 +20,6 @@ enum aipu_gm_policy {
 	AIPU_GM_POLICY_HALF_DIVIDED = 2,
 };
 
-enum aipu_gm_qos {
-	AIPU_GM_QOS_NONE  = AIPU_BUF_REGION_DEFAULT,
-	AIPU_GM_QOS_SLOW  = AIPU_BUF_REGION_QOS_SLOW_GM,
-	AIPU_GM_QOS_FAST  = AIPU_BUF_REGION_QOS_FAST_GM,
-	AIPU_GM_QOS_ALL   = 3,
-};
-
 enum aipu_mem_region_type {
 	AIPU_MEM_REGION_TYPE_MEMORY = 0,
 	AIPU_MEM_REGION_TYPE_SRAM   = 1,
@@ -91,8 +84,6 @@ struct aipu_virt_page {
  * @dev: region specific device (for multiple DMA/CMA regions)
  * @attrs: attributes for DMA API
  * @tcb_buf_head: list head of tbuf
- * @cluster_id: the ID of the cluster owns this GM region
- * @qos: qos level of this GM region
  * @invalid: if this region is invalid (cannot be used) or not
  * @filp: pointer to struct file requesting this region
  * @obj: pointer to the region object
@@ -113,9 +104,6 @@ struct aipu_mem_region {
 	struct device *dev;
 	unsigned long attrs;
 	struct aipu_tcb_buf *tcb_buf_head;
-	/* for gm only */
-	int cluster_id;
-	int qos;
 	bool invalid;
 	struct file *filp;
 	struct aipu_mem_region_obj *obj;
@@ -171,7 +159,7 @@ struct aipu_sram_disable_per_fd {
  * @res_cnt: reserved region count
  * @mem: list of all reserved or allocated memory regions
  * @ase: array of reserved regions in different asids
- * @gm: V3 GM region
+ * @gm_bytes: V3 GM size (in bytes)
  * @gm_policy: GM policy determined by customer (AIPU_GM_POLICY_SHARED/AIPU_GM_POLICY_HALF_DIVIDED)
  * @gm_max_cnt: maximum count of GM region
  * @dtcm_max_cnt: maximum count of DTCM region
@@ -194,7 +182,7 @@ struct aipu_memory_manager {
 	int res_cnt;
 	struct aipu_mem_region_list mem;
 	struct aipu_mem_region_list ase[ZHOUYI_ASID_COUNT];
-	struct aipu_mem_region *gm;
+	int gm_bytes;
 	int gm_policy;
 	int gm_max_cnt;
 	int dtcm_max_cnt;
@@ -225,8 +213,7 @@ int aipu_mm_enable_sram_allocation(struct aipu_memory_manager *mm, struct file *
 void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap);
 u64 aipu_mm_get_asid_base(struct aipu_memory_manager *mm, u32 asid);
 u64 aipu_mm_get_asid_size(struct aipu_memory_manager *mm, u32 asid);
-int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes, int cluster_id);
-void aipu_mm_deinit_gm(struct aipu_memory_manager *mm);
+int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes);
 int aipu_mm_gm_policy_switch(struct aipu_memory_manager *mm, enum aipu_gm_policy next);
 void aipu_mm_get_gm(struct aipu_memory_manager *mm, struct aipu_cap *cap);
 void get_dtcm(struct aipu_memory_manager *mm, u64 *base, u32 *size);

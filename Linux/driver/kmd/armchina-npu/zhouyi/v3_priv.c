@@ -56,8 +56,7 @@ static int init_aipu_partition(struct aipu_partition *partition, u32 *clusters, 
 				get_gm_size(aipu_read32(partition->reg, DEBUG_CLUSTER_GM_CONTROL));
 			aipu_write32(partition->reg, DEBUG_PAGE_SELECTION_REG, DISABLE_DEBUG);
 			ret = aipu_mm_init_gm(&partition->priv->mm,
-					      partition->clusters[cluster_cnt - 1].gm_bytes,
-					      partition->clusters[cluster_cnt - 1].id);
+					      partition->clusters[cluster_cnt - 1].gm_bytes);
 		}
 	}
 
@@ -203,7 +202,6 @@ static void v3_destroy_partitions(struct aipu_priv *aipu)
 		aipu->reg.kern = NULL;
 		aipu->reg.phys = 0;
 		aipu->reg.size = 0;
-		aipu_mm_deinit_gm(&aipu->mm);
 		for (i = 0; i < aipu->partition_cnt; i++)
 			aipu_common_destroy_attr(aipu->partitions[i].dev,
 						 &aipu->partitions[i].reg_attr);
