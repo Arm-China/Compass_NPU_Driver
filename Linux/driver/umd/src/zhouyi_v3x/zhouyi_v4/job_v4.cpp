@@ -1022,13 +1022,32 @@ aipu_status_t aipudrv::JobV4::setup_tcb_task(uint32_t sg_id, uint32_t grid_id,
             case SUBG_DEPEND_NONE:
                 tcb->flag |= TCB_FLAG_DEP_TYPE_NONE;
                 break;
-            // Todo group depend
-            case SUBG_DEPEND_PREGROUPS:
+
+            case 1 ... 4:
+                uint16_t dep_group_id = 0;
+
                 tcb->flag |= TCB_FLAG_DEP_TYPE_GROUP;
+
+                for (int32_t i = 0; i < graph.m_subgraphs[sg_id].precursor_cnt; i++)
+                {
+                    if (graph.m_subgraphs[sg_id].precursors[i] > 0x7fff)
+                    {
+                        LOG(LOG_ERR, "Depend group id(%d) is invalid\n",
+                            graph.m_subgraphs[sg_id].precursors[i]);
+                        delete tcb;
+                        return AIPU_STATUS_ERROR_INVALID_GBIN;
+                    }
+
+                    dep_group_id = graph.m_subgraphs[sg_id].precursors[i] + m_start_group_id;
+                    dep_group_id &= 0x7FFF; // 15 bits group id field
+                    tcb->group_deps[i] = EN_GROUP_DEPEND | dep_group_id;
+                }
                 break;
+
             case SUBG_DEPEND_PREALL:
                 tcb->flag |= TCB_FLAG_DEP_TYPE_PRE_ALL;
                 break;
+
             default:
                 LOG(LOG_ERR, "subgraph %u, precursor_cnt=%d\n", sg_id,
                     graph.m_subgraphs[sg_id].precursor_cnt);

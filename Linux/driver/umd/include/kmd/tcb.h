@@ -432,6 +432,8 @@ struct tcb_t
 #define GM_SYNC_DDR_TO_GM              (1UL << 30)
 #define GM_SYNC_IGNORE_CFG             (3UL << 30)
 
+#define EN_GROUP_DEPEND                (1 << 15)
+
 #endif
 }
 
