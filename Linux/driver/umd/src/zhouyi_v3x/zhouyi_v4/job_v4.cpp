@@ -712,7 +712,7 @@ finish:
 aipu_status_t aipudrv::JobV4::specify_io_buffer(aipu_shared_tensor_info_t &tensor_info)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    const std::vector<struct GraphIOTensorDesc> *iobuffer_vec = nullptr;
+    const std::vector<struct JobIOBuffer> *iobuffer_vec = nullptr;
     BufferDesc *bufferDesc = nullptr;
     const char *str = "free_input";
     uint32_t reuse_index = 0;
@@ -731,11 +731,11 @@ aipu_status_t aipudrv::JobV4::specify_io_buffer(aipu_shared_tensor_info_t &tenso
     switch (type)
     {
     case AIPU_TENSOR_TYPE_INPUT:
-        iobuffer_vec = &get_graph().get_subgraph(0).io.inputs;
+        iobuffer_vec = &m_inputs;
         break;
 
     case AIPU_TENSOR_TYPE_OUTPUT:
-        iobuffer_vec = &get_graph().get_subgraph(0).io.outputs;
+        iobuffer_vec = &m_outputs;
         str = "free_output";
         break;
 
@@ -766,9 +766,7 @@ aipu_status_t aipudrv::JobV4::specify_io_buffer(aipu_shared_tensor_info_t &tenso
             if (idtensor_desc.ref_section_iter == reuse_index)
                 return AIPU_STATUS_ERROR_DMABUF_SHARED_IO;
         }
-    }
-    else
-    {
+    } else {
         for (uint32_t i = 0; i < get_graph().get_subgraph(0).io.inputs.size(); i++)
         {
             auto &idtensor_desc = get_graph().get_subgraph(0).io.inputs[i];
@@ -1024,23 +1022,24 @@ aipu_status_t aipudrv::JobV4::setup_tcb_task(uint32_t sg_id, uint32_t grid_id,
                 break;
 
             case 1 ... 4:
-                uint16_t dep_group_id = 0;
-
-                tcb->flag |= TCB_FLAG_DEP_TYPE_GROUP;
-
-                for (int32_t i = 0; i < graph.m_subgraphs[sg_id].precursor_cnt; i++)
                 {
-                    if (graph.m_subgraphs[sg_id].precursors[i] > 0x7fff)
-                    {
-                        LOG(LOG_ERR, "Depend group id(%d) is invalid\n",
-                            graph.m_subgraphs[sg_id].precursors[i]);
-                        delete tcb;
-                        return AIPU_STATUS_ERROR_INVALID_GBIN;
-                    }
+                    uint16_t dep_group_id = 0;
 
-                    dep_group_id = graph.m_subgraphs[sg_id].precursors[i] + m_start_group_id;
-                    dep_group_id &= 0x7FFF; // 15 bits group id field
-                    tcb->group_deps[i] = EN_GROUP_DEPEND | dep_group_id;
+                    tcb->flag |= TCB_FLAG_DEP_TYPE_GROUP;
+                    for (int32_t i = 0; i < graph.m_subgraphs[sg_id].precursor_cnt; i++)
+                    {
+                        if (graph.m_subgraphs[sg_id].precursors[i] > 0x7fff)
+                        {
+                            LOG(LOG_ERR, "Depend group id(%d) is invalid\n",
+                                graph.m_subgraphs[sg_id].precursors[i]);
+                            delete tcb;
+                            return AIPU_STATUS_ERROR_INVALID_GBIN;
+                        }
+
+                        dep_group_id = graph.m_subgraphs[sg_id].precursors[i] + m_start_group_id;
+                        dep_group_id &= 0x7FFF; // 15 bits group id field
+                        tcb->group_deps[i] = EN_GROUP_DEPEND | dep_group_id;
+                    }
                 }
                 break;
 
