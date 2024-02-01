@@ -360,8 +360,8 @@ void aipudrv::JobBase::create_io_buffers(std::vector<struct JobIOBuffer>& bufs,
         DEV_PA_64 align_asid_pa = reuses[sec_iter]->align_asid_pa + desc[i].offset_in_section;
         JobIOBuffer iobuf;
 
-        iobuf.init(desc[i].id, desc[i].size, AIPU_JOB_BUFFER_INTERNAL, pa, align_asid_pa,
-            desc[i].dmabuf_fd, desc[i].dmabuf_size, desc[i].offset_in_dmabuf, desc[i].dump_ignore_flag);
+        iobuf.init(desc[i].id, desc[i].size, AIPU_JOB_BUFFER_INTERNAL, pa,
+            align_asid_pa, sec_iter);
         bufs.push_back(iobuf);
     }
 }

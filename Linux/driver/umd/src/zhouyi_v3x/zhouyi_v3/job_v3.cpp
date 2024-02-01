@@ -852,7 +852,7 @@ finish:
 aipu_status_t aipudrv::JobV3::specify_io_buffer(aipu_shared_tensor_info_t &tensor_info)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    const std::vector<struct GraphIOTensorDesc> *iobuffer_vec = nullptr;
+    std::vector<struct JobIOBuffer> *iobuffer_vec = nullptr;
     BufferDesc *bufferDesc = nullptr;
     const char *str = "free_input";
     uint32_t reuse_index = 0;
@@ -868,11 +868,11 @@ aipu_status_t aipudrv::JobV3::specify_io_buffer(aipu_shared_tensor_info_t &tenso
     switch (type)
     {
         case AIPU_TENSOR_TYPE_INPUT:
-            iobuffer_vec = &get_graph().get_subgraph(0).io.inputs;
+            iobuffer_vec = &m_inputs;
             break;
 
         case AIPU_TENSOR_TYPE_OUTPUT:
-            iobuffer_vec = &get_graph().get_subgraph(0).io.outputs;
+            iobuffer_vec = &m_outputs;
             str = "free_output";
             break;
 
@@ -963,7 +963,6 @@ aipu_status_t aipudrv::JobV3::specify_io_buffer(aipu_shared_tensor_info_t &tenso
 
     if (update_ro)
     {
-        update_io_buffers(get_graph().m_subgraphs[0].io, m_sg_job[0].reuses);
         ret = setup_rodata_sg(0, get_graph().m_subgraphs[0].param_map,
             m_sg_job[0].reuses, *m_sg_job[0].weights, &m_sg_job[0].dma_buf_idx);
         if (AIPU_STATUS_SUCCESS != ret)

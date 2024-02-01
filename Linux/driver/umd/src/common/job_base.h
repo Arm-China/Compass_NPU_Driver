@@ -38,32 +38,46 @@ struct JobIOBuffer
     JOBIOBufferType type;
     DEV_PA_64 pa; /* used when type != AIPU_JOB_BUFFER_DMABUF_IMPORTED */
     DEV_PA_64 align_asid_pa; /* alignd buffer address relative to ASID base */
+    uint32_t ref_section_iter; /* index indicates IObuffer is which reuse buffer */
 
     /**
      * if this iobuffer comes from dma_buf, needs below information
      */
-    int  dmabuf_fd;
-    uint32_t dmabuf_size;
-    uint32_t offset_in_dmabuf;
+    mutable int  dmabuf_fd;
+    mutable uint32_t dmabuf_size;
+    mutable uint32_t offset_in_dmabuf;
 
     /**
      * if this buffer is managed by user self, it can't dump its data since UMD can't
      * get its mapped address.
      */
-    bool dump_ignore_flag;
+    mutable bool dump_ignore_flag;
 
     void init(uint32_t _id, uint32_t _size, JOBIOBufferType _type, DEV_PA_64 _pa,
-        DEV_PA_64 _align_asid_pa = 0, int _dmabuf_fd = -1, uint32_t _dmabuf_size = 0,
-        uint32_t _offset_in_dmabuf = 0, bool _dump_ignore_flag = false)
+        DEV_PA_64 _align_asid_pa = 0, uint32_t _ref_section_iter = 0, int _dmabuf_fd = -1,
+        uint32_t _dmabuf_size = 0, uint32_t _offset_in_dmabuf = 0, bool _dump_ignore_flag = false)
     {
         id   = _id;
         size = _size;
         type = _type;
         pa   = _pa;
         align_asid_pa = _align_asid_pa;
+        ref_section_iter = _ref_section_iter;
         dmabuf_fd   = _dmabuf_fd;
         dmabuf_size = _dmabuf_size;
         offset_in_dmabuf = _offset_in_dmabuf;
+        dump_ignore_flag = _dump_ignore_flag;
+    }
+
+    void set_dmabuf_info(int _fd, uint32_t _dmabuf_size, int _offset_in_dmabuf) const
+    {
+        dmabuf_fd = _fd;
+        dmabuf_size = _dmabuf_size;
+        offset_in_dmabuf = _offset_in_dmabuf;
+    }
+
+    void set_dump_ignore_flag(bool _dump_ignore_flag) const
+    {
         dump_ignore_flag = _dump_ignore_flag;
     }
 };

@@ -90,10 +90,6 @@ aipu_status_t aipudrv::ParserBase::fill_io_tensor_desc_inner(uint32_t reuse_sec_
     io_desc.scale = sub_section_load.scale;
     io_desc.zero_point = sub_section_load.zero_point;
     io_desc.data_type = (aipu_data_type_t)sub_section_load.data_type;
-    io_desc.dmabuf_fd = -1;
-    io_desc.dmabuf_size = 0;
-    io_desc.offset_in_dmabuf = 0;
-    io_desc.dump_ignore_flag = false;
 
     switch (sub_section_load.type)
     {
