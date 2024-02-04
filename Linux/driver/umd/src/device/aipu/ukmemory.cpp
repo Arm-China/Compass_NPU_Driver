@@ -88,7 +88,7 @@ aipu_status_t aipudrv::UKMemory::malloc(uint32_t size, uint32_t align, BufferDes
 
     (*desc)->init(base, buf_req.desc.pa,
         buf_req.desc.bytes, size, buf_req.desc.dev_offset,
-        buf_req.desc.region, buf_req.desc.gm_base);
+        buf_req.desc.region);
 
     buf.init(ptr, *desc);
     pthread_rwlock_wrlock(&m_lock);

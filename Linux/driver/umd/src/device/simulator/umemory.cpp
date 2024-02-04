@@ -177,7 +177,7 @@ aipu_status_t aipudrv::UMemory::malloc_internal(uint32_t size, uint32_t align, B
         if (j == i + malloc_page)
         {
             desc->init(get_asid_base(asid), m_memblock[asid][mem_region].base + i * AIPU_PAGE_SIZE,
-                malloc_size, size, 0, (asid << 8) | mem_region, m_memblock[asid][mem_region].base);
+                malloc_size, size, 0, (asid << 8) | mem_region);
             buf.init(new char[malloc_size], desc);
             memset(buf.va, 0, malloc_size);
             m_allocated[desc->pa] = buf;

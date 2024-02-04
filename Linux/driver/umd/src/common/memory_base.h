@@ -42,12 +42,11 @@ struct BufferDesc
     uint64_t  size;     /**< buffer size */
     uint64_t  req_size; /**< requested size (<= buffer size) */
     uint64_t  dev_offset;
-    DEV_PA_64 gm_base;  /**< GM base address for this buffer if allcated from GM */
     uint32_t  ram_region = AIPU_BUF_REGION_DEFAULT;
     int32_t   asid;     /**< ASID index */
 
     void init(DEV_PA_64 _asid_base, DEV_PA_64 _pa, uint64_t _size,
-        uint64_t _req_size, uint64_t _offset = 0, uint32_t _asid_ram_region = 0, DEV_PA_64 _gm_base = 0)
+        uint64_t _req_size, uint64_t _offset = 0, uint32_t _asid_ram_region = 0)
     {
         pa = _pa;
         asid_base = _asid_base;
@@ -57,7 +56,6 @@ struct BufferDesc
         req_size = _req_size;
         dev_offset = _offset;
         ram_region = _asid_ram_region & 0xff;
-        gm_base = _gm_base;
     }
 
     void reset()
@@ -69,7 +67,6 @@ struct BufferDesc
         req_size = 0;
         dev_offset = 0;
         ram_region = AIPU_BUF_REGION_DEFAULT;
-        gm_base = 0;
     }
 };
 
