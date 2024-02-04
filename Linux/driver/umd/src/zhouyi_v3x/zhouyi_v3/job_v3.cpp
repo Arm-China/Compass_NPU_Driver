@@ -927,6 +927,7 @@ aipu_status_t aipudrv::JobV3::specify_io_buffer(aipu_shared_tensor_info_t &tenso
         case AIPU_SHARE_BUF_IN_ONE_PROCESS:
             bufferDesc->init(m_mem->get_asid_base(0), buffer_pa,
                 bufferDesc->size, bufferDesc->req_size);
+            update_io_buffers(get_graph().m_subgraphs[0].io, m_sg_job[0].reuses);
             break;
         case AIPU_SHARE_BUF_CUSTOMED:
             bufferDesc->init(m_mem->get_asid_base(0), buffer_pa,
