@@ -50,9 +50,19 @@ namespace sim_aipu
 
         void enable_profiling(bool en);
 
+        void set_event_handler(void (*)(uint32_t event, uint64_t value, void *context),
+                               void *context);
     private:
         std::unique_ptr<class AipuImpl> impl_;
     };
 } //!sim_aipu
+
+#ifdef __cplusplus
+extern "C"
+{
+    typedef sim_aipu::Aipu* (*sim_convert_t) (void*);
+    sim_aipu::Aipu* sim_convert(void*);
+}
+#endif //!__cplusplus
 
 #endif //!__AIPU_H__

@@ -208,6 +208,11 @@ public:
         return m_id;
     }
 
+    uint16_t get_grid_id()
+    {
+        return m_grid_id;
+    }
+
     uint32_t get_part_id()
     {
         return m_partition_id;

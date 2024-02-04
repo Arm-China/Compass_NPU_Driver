@@ -70,6 +70,9 @@ namespace sim_aipu
         std::string plugin_filename;
         std::string json_filename;
     };
+
+    enum { AIPU_EV_GRID_END, };
+    using event_handler_t = void (*)(uint32_t event, uint64_t value, void *context);
 } //!sim_aipu
 
 #endif //!__AIPU_CONFIG_H__

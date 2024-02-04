@@ -8,8 +8,8 @@
  * @brief AIPU User Mode Driver (UMD) zhouyi aipu v4 simulator module header
  */
 
-#ifndef _SIMULATOR_V3_H_
-#define _SIMULATOR_V3_H_
+#ifndef _SIMULATOR_V4_H_
+#define _SIMULATOR_V4_H_
 
 #include <map>
 #include <set>
@@ -87,10 +87,14 @@ private:
     std::queue< job_queue_elem_t > m_buffer_queue;
 
     /* 2. move jobs from buffer queue to this queue */
-    std::set< void * > m_commit_queue;
+    std::map< uint16_t, void * > m_commit_map;
 
     /* 3. move jobs from commit queue to this queue when cmdpool done ready */
-    std::set< void * > m_done_queue;
+    std::set< void * > m_done_set;
+
+    /* 4. Simulator puts all done jobs to this queue */
+    static std::set< uint16_t > m_sim_done_grid_set;
+    static std::mutex m_sim_done_grid_mtx;
 
     volatile bool m_cmdpool_busy = false;
 
@@ -246,6 +250,7 @@ public:
     aipu_status_t fill_commit_queue();
     aipu_ll_status_t poll_status(uint32_t max_cnt, int32_t time_out,
         bool of_this_thread, void *jobbase = nullptr);
+    static void sim_cb_handler(uint32_t event, uint64_t value, void *context);
 
     aipu_status_t get_simulation_instance(void** simulator, void** memory)
     {
@@ -341,4 +346,4 @@ inline sim_aipu::config_t sim_create_config(int code, uint32_t log_level = 0,
 
 }
 
-#endif /* _SIMULATOR_V3_H_ */
+#endif /* _SIMULATOR_V4_H_ */

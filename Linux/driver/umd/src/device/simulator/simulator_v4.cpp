@@ -10,8 +10,27 @@
 
 #include <cstring>
 #include <unistd.h>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 #include "simulator_v4.h"
 #include "helper.h"
+
+/**
+ * The bellow are used for syncing between UMD and Simulator
+ * when some grid job is done. Simulator will directly call
+ * one callback to notify UMD and convey the done grid's ID to UMD.
+ */
+std::set< uint16_t > aipudrv::SimulatorV4::m_sim_done_grid_set = {};
+std::mutex aipudrv::SimulatorV4::m_sim_done_grid_mtx;
+std::mutex simv4_mtx;
+std::condition_variable simv4_cv;
+bool simv4_has_grid_done = false;
+
+bool has_some_grid_done()
+{
+    return simv4_has_grid_done;
+}
 
 aipudrv::SimulatorV4::SimulatorV4(const aipu_global_config_simulation_t* cfg)
 {
@@ -174,6 +193,7 @@ bool aipudrv::SimulatorV4::has_target(uint32_t arch, uint32_t version, uint32_t 
             m_partition_mode = POOL_SCP;
     }
 
+    m_aipu->set_event_handler((sim_aipu::event_handler_t)(SimulatorV4::sim_cb_handler), nullptr);
     parse_cluster_info();
     ret = true;
 
@@ -207,6 +227,7 @@ aipu_status_t aipudrv::SimulatorV4::schedule(const JobDesc& jobdesc)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     JobV4 *job = static_cast<JobV4 *>(jobdesc.jobbase);
+    uint16_t grid_id = job->get_grid_id();
     uint32_t part_id = job->get_part_id();
     uint32_t cmd_pool_id = 0, value = 0, cluster_idx = 0;
     uint32_t qos = job->get_qos();
@@ -243,7 +264,7 @@ aipu_status_t aipudrv::SimulatorV4::schedule(const JobDesc& jobdesc)
             m_buffer_queue.pop();
             job = (JobV4 *)job_queue_item.job;
             job_desc = job_queue_item.jobdesc;
-            m_commit_queue.insert(job_desc.jobbase);
+            m_commit_map[grid_id] = job_desc.jobbase;
 
             m_aipu->write_register(TSM_CMD_SCHED_ADDR_HI, get_high_32(job_desc.tcb_head));
             m_aipu->write_register(TSM_CMD_SCHED_ADDR_LO, get_low_32(job_desc.tcb_head));
@@ -277,12 +298,16 @@ aipu_status_t aipudrv::SimulatorV4::fill_commit_queue()
     else
         max = m_buffer_queue.size();
 
+    if (m_commit_map.size() >= 16)
+        return ret;
+
     for(uint32_t i = 0; i < max; i++)
     {
         job_queue_item = m_buffer_queue.front();
         JobBase *jobbase = (JobBase *)job_queue_item.job;
         JobDesc jobdesc = job_queue_item.jobdesc;
         JobV4 *job = static_cast<JobV4 *>(jobbase);
+        uint16_t grid_id = job->get_grid_id();
         uint32_t part_id = job->get_part_id();
         uint32_t cmd_pool_id = 0, value = 0;
         uint32_t qos = job->get_qos();
@@ -305,32 +330,19 @@ aipu_status_t aipudrv::SimulatorV4::fill_commit_queue()
         if (!is_cmdpool_full(qos, part_id, m_partition_mode,
             cluster_idx, reg_val))
         {
-            if (!m_cmdpool_busy)
-            {
-                m_cmdpool_busy = true;
-                m_aipu->write_register(TSM_CMD_SCHED_ADDR_HI, get_high_32(jobdesc.tcb_head));
-                m_aipu->write_register(TSM_CMD_SCHED_ADDR_LO, get_low_32(jobdesc.tcb_head));
-                m_aipu->write_register(TSM_CMD_TCB_NUMBER, get_low_32(jobdesc.tcb_number));
+            m_aipu->write_register(TSM_CMD_SCHED_ADDR_HI, get_high_32(jobdesc.tcb_head));
+            m_aipu->write_register(TSM_CMD_SCHED_ADDR_LO, get_low_32(jobdesc.tcb_head));
+            m_aipu->write_register(TSM_CMD_TCB_NUMBER, get_low_32(jobdesc.tcb_number));
 
-                /* specify cmdpool number & QoS */
-                value = (part_id << 19) | (cmd_pool_id << 16) | (qos << 8);
-                m_aipu->write_register(TSM_CMD_SCHED_CTRL, value | CREATE_CMD_POOL);
+            /* specify cmdpool number & QoS */
+            value = (part_id << 19) | (cmd_pool_id << 16) | (qos << 8);
+            // m_aipu->write_register(TSM_CMD_SCHED_CTRL, value | CREATE_CMD_POOL);
 
-                LOG(LOG_INFO, "triggering simulator...%lx", job->get_id());
-                m_aipu->write_register(TSM_CMD_SCHED_CTRL, DISPATCH_CMD_POOL);
-            } else {
-                m_aipu->write_register(TSM_CMD_SCHED_ADDR_HI, get_high_32(jobdesc.tcb_head));
-                m_aipu->write_register(TSM_CMD_SCHED_ADDR_LO, get_low_32(jobdesc.tcb_head));
-                m_aipu->write_register(TSM_CMD_TCB_NUMBER, get_low_32(jobdesc.tcb_number));
-
-                /* specify cmdpool number & QoS */
-                value = (part_id << 19) | (cmd_pool_id << 16) | (qos << 8);
-                m_aipu->write_register(TSM_CMD_SCHED_CTRL, value | DISPATCH_CMD_POOL);
-                LOG(LOG_INFO, "append job...%lx\n", job->get_id());
-            }
+            LOG(LOG_INFO, "triggering simulator...%lx", job->get_id());
+            m_aipu->write_register(TSM_CMD_SCHED_CTRL, value | DISPATCH_CMD_POOL);
 
             m_buffer_queue.pop();
-            m_commit_queue.insert(jobbase);
+            m_commit_map[grid_id] = jobbase;
         } else {
             LOG(LOG_ALERT, "CMD POOL %d, QOS %d [full]", cmd_pool_id, qos);
             break;
@@ -344,10 +356,8 @@ aipu_status_t aipudrv::SimulatorV4::fill_commit_queue()
 aipu_ll_status_t aipudrv::SimulatorV4::poll_status(uint32_t max_cnt, int32_t time_out,
     bool of_this_thread, void *jobbase)
 {
-    uint32_t value = 0;
     JobV4 *job = static_cast<JobV4 *>(jobbase);
-    uint32_t cmd_pool_id = job->m_bind_cmdpool_id;
-    uint32_t cmd_pool_status_reg = CMD_POOL0_STATUS + 0x40 * cmd_pool_id;
+    uint16_t grid_id = job->get_grid_id();
 
     LOG(LOG_INFO, "Enter %s...", __FUNCTION__);
 
@@ -360,9 +370,9 @@ aipu_ll_status_t aipudrv::SimulatorV4::poll_status(uint32_t max_cnt, int32_t tim
     while (1)
     {
         pthread_rwlock_wrlock(&m_lock);
-        if (m_done_queue.count(jobbase))
+        if (m_done_set.count(jobbase))
         {
-            m_done_queue.erase(jobbase);
+            m_done_set.erase(jobbase);
             job->update_job_status(AIPU_JOB_STATE_DONE);
             pthread_rwlock_unlock(&m_lock);
             break;
@@ -370,28 +380,35 @@ aipu_ll_status_t aipudrv::SimulatorV4::poll_status(uint32_t max_cnt, int32_t tim
         pthread_rwlock_unlock(&m_lock);
 
         m_poll_mtex.lock();
-        if (m_commit_queue.count(jobbase))
+        if (m_commit_map.count(grid_id))
         {
-            while (m_aipu->read_register(cmd_pool_status_reg, value) > 0)
+            if (m_sim_done_grid_set.count(grid_id) == 0)
             {
-                LOG(LOG_INFO, "wait for simulation execution, cmdpool sts=%x", value);
-                if (value & CMD_POOL0_IDLE)
-                {
-                    m_aipu->write_register(TSM_CMD_SCHED_CTRL, DESTROY_CMD_POOL);
-                    LOG(LOG_INFO, "simulation done.");
-                    break;
-                }
-                sleep(1);
+                LOG(LOG_INFO, "wait, sim doing...\n");
+                std::unique_lock<std::mutex> lck(simv4_mtx);
+                simv4_cv.wait(lck, has_some_grid_done);
+                simv4_has_grid_done = false;
+                LOG(LOG_INFO, "wakeup, sim done...\n");
             }
 
             pthread_rwlock_wrlock(&m_lock);
-            for(auto iter=m_commit_queue.begin(); iter!=m_commit_queue.end(); iter++)
+            std::vector <uint16_t> sim_done_grid_vec;
+            for (const auto done_gridid : m_sim_done_grid_set)
             {
-                m_done_queue.insert(*iter);
+                if (m_commit_map.count(done_gridid))
+                {
+                    m_done_set.insert(m_commit_map[done_gridid]);
+                    m_commit_map.erase(done_gridid);
+                    sim_done_grid_vec.push_back(done_gridid);
+                }
             }
-            m_commit_queue.clear();
-            m_cmdpool_busy = false;
-            LOG(LOG_INFO, "cmd_pool_destroy...\n");
+
+            // clear done grid record from sim_done_grid set
+            m_sim_done_grid_mtx.lock();
+            for (auto sim_done_grid_id : sim_done_grid_vec)
+                m_sim_done_grid_set.erase(sim_done_grid_id);
+            m_sim_done_grid_mtx.unlock();
+            LOG(LOG_INFO, "batch job done...\n");
 
             if (m_buffer_queue.size() > 0)
             {
@@ -410,4 +427,21 @@ aipu_ll_status_t aipudrv::SimulatorV4::poll_status(uint32_t max_cnt, int32_t tim
     LOG(LOG_INFO, "Exit %s...", __FUNCTION__);
 
     return AIPU_LL_STATUS_SUCCESS;
+}
+
+void aipudrv::SimulatorV4::sim_cb_handler(uint32_t event, uint64_t value, void *context)
+{
+    LOG(LOG_INFO, "Enter sim_cb_handler...\n");
+
+    if (event == sim_aipu::AIPU_EV_GRID_END)
+    {
+        m_sim_done_grid_mtx.lock();
+        m_sim_done_grid_set.insert(value);
+        std::unique_lock<std::mutex> lck(simv4_mtx);
+        simv4_has_grid_done = true;
+        simv4_cv.notify_one();
+        m_sim_done_grid_mtx.unlock();
+    } else {
+        LOG(LOG_ALERT, "sim_cn_handler has no event: %d\n", event);
+    }
 }
