@@ -37,7 +37,7 @@
 |   |   |-- v1.h
 |   |   |-- v2.c                    -> Zhouyi V2 specific
 |   |   |-- v2.h
-|   |   |-- v12_priv.c              -> Common for Zhouyi V1 & V2
+|   |   |-- v1v2_priv.c             -> Common for Zhouyi V1 & V2
 |   |   |-- v3.c                    -> Zhouyi V3 specific
 |   |   |-- v3.h
 |   |   |-- v3_priv.c

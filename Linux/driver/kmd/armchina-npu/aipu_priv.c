@@ -84,7 +84,7 @@ int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,
 
 #if (defined CONFIG_ARMCHINA_NPU_ARCH_V1) || (defined CONFIG_ARMCHINA_NPU_ARCH_V2)
 	if (version > 0 && version <= AIPU_ISA_VERSION_ZHOUYI_V2_2)
-		aipu->ops = get_v12_priv_ops();
+		aipu->ops = get_v1v2_priv_ops();
 #endif
 
 	if (!aipu->ops) {

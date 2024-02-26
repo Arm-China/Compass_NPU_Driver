@@ -20,11 +20,11 @@ COMM_OBJ := $(SRC_DIR)/armchina-npu/aipu.o \
 
 ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_V1)
     AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v1.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/v12_priv.o
+                $(SRC_DIR)/armchina-npu/zhouyi/v1v2_priv.o
     EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V1
 else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_V2)
     AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v2.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/v12_priv.o
+                $(SRC_DIR)/armchina-npu/zhouyi/v1v2_priv.o
     EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V2
 else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_V3)
     AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v3.o \
@@ -35,7 +35,7 @@ else
     AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v1.o \
                 $(SRC_DIR)/armchina-npu/zhouyi/v2.o \
                 $(SRC_DIR)/armchina-npu/zhouyi/v3.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/v12_priv.o \
+                $(SRC_DIR)/armchina-npu/zhouyi/v1v2_priv.o \
                 $(SRC_DIR)/armchina-npu/zhouyi/v3_priv.o
     EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V1 \
                     -DCONFIG_ARMCHINA_NPU_ARCH_V2 \

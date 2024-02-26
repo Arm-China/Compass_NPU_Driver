@@ -28,7 +28,7 @@
 #define ZHOUYI_L2_CACHE_FEATURE_REG_OFFSET    0x6C
 #define ZHOUYI_V1_MAX_REG_OFFSET              0x6C
 
-struct aipu_priv_operations *get_v12_priv_ops(void);
+struct aipu_priv_operations *get_v1v2_priv_ops(void);
 struct aipu_operations *get_zhouyi_v1_ops(void);
 
 #endif /* __V1_H__ */

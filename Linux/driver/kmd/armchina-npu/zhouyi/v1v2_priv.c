@@ -147,7 +147,7 @@ static void deinit_aipu_core(struct aipu_partition *core)
 	core->is_init = 0;
 }
 
-static struct aipu_partition *v12_create_partitions(struct aipu_priv *aipu,
+static struct aipu_partition *v1v2_create_partitions(struct aipu_priv *aipu,
 						    int id, struct platform_device *p_dev)
 {
 	int ret = 0;
@@ -212,7 +212,7 @@ finish:
 	return partition;
 }
 
-static void v12_destroy_partitions(struct aipu_priv *aipu)
+static void v1v2_destroy_partitions(struct aipu_priv *aipu)
 {
 	int par_iter = 0;
 
@@ -220,13 +220,13 @@ static void v12_destroy_partitions(struct aipu_priv *aipu)
 		deinit_aipu_core(&aipu->partitions[par_iter]);
 }
 
-static struct aipu_priv_operations v12_priv_ops = {
-	.create_partitions = v12_create_partitions,
-	.destroy_partitions = v12_destroy_partitions,
+static struct aipu_priv_operations v1v2_priv_ops = {
+	.create_partitions = v1v2_create_partitions,
+	.destroy_partitions = v1v2_destroy_partitions,
 	.global_soft_reset = NULL,
 };
 
-struct aipu_priv_operations *get_v12_priv_ops(void)
+struct aipu_priv_operations *get_v1v2_priv_ops(void)
 {
-	return &v12_priv_ops;
+	return &v1v2_priv_ops;
 }

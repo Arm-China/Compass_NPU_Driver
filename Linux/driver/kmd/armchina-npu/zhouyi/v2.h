@@ -48,7 +48,7 @@
 #define ZHOUYI_V2_SOFT_RESET_OFFSET         0x200
 #define ZHOUYI_V2_MAX_REG_OFFSET            (ZHOUYI_V2_SOFT_RESET_OFFSET)
 
-struct aipu_priv_operations *get_v12_priv_ops(void);
+struct aipu_priv_operations *get_v1v2_priv_ops(void);
 struct aipu_operations *get_zhouyi_v2_ops(void);
 
 #endif /* __V2_H__ */
