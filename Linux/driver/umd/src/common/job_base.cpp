@@ -78,6 +78,10 @@ aipu_status_t aipudrv::JobBase::get_status_blocking(aipu_job_status_t* status, i
     if (get_subgraph_cnt() == 0)
     {
         m_status = AIPU_JOB_STATE_DONE;
+        aipu_job_callback_func_t job_callback_func = get_job_cb();
+
+        if (job_callback_func != nullptr)
+            job_callback_func(get_id(), (aipu_job_status_t)m_status);
     } else {
         ret = convert_ll_status(m_dev->poll_status(1, time_out,
             m_hw_cfg->poll_in_commit_thread, this));
