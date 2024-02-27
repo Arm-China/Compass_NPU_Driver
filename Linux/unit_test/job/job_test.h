@@ -15,15 +15,18 @@
 #include <string>
 #include "doctest.h"
 #include "graph_v1v2.h"
-#include "graph_v3.h"
+#include "graph_v3x.h"
 #include "job_v1v2.h"
 #include "job_v3.h"
 #include "standard_api.h"
 #include "context.h"
 #include "ctx_ref_map.h"
 #ifdef SIMULATION
+#ifdef ZHOUYI_V12
 #include "simulator/simulator.h"
+#else
 #include "simulator/simulator_v3.h"
+#endif
 #else
 #include "aipu/aipu.h"
 #endif
@@ -203,7 +206,7 @@ public:
 #endif
 #if (defined ZHOUYI_V3)
         m_sim_cfg.log_level = 3;
-        m_sim_cfg.x2_arch_desc = "X2_1204";
+        m_sim_cfg.npu_arch_desc = "X2_1204";
 #endif
 #endif
 
@@ -231,7 +234,7 @@ public:
 #endif
 #if (defined ZHOUYI_V3)
         if (AIPU_LOADABLE_GRAPH_ELF_V0 == g_version) {
-            p_gobj = new GraphV3(p_ctx, _id, m_dev);
+            p_gobj = new GraphV3X(p_ctx, _id, m_dev);
             ret = p_gobj->load(gbin, fsize, m_do_vcheck);
             if (ret != AIPU_STATUS_SUCCESS) {
                 printf("load graphj fail");

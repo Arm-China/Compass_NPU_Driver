@@ -14,14 +14,17 @@
 #include <string>
 #include "doctest.h"
 #include "graph_v1v2.h"
-#include "graph_v3.h"
+#include "graph_v3x.h"
 #include "parser_v1v2.h"
 #include "parser_elf.h"
 #include "context.h"
 #include "helper.h"
 #ifdef SIMULATION
+#ifdef ZHOUYI_V12
 #include "simulator/simulator.h"
+#else
 #include "simulator/simulator_v3.h"
+#endif
 #else
 #include "aipu/aipu.h"
 #endif
@@ -130,6 +133,7 @@ public:
         p_ctx->init();
 
         m_sim_cfg.simulator = nullptr;
+        m_sim_cfg.npu_arch_desc = nullptr;
         m_sim_cfg.log_file_path = new char[1024];
         strcpy((char*)m_sim_cfg.log_file_path, "./");
         m_sim_cfg.log_level = 0;
@@ -156,7 +160,7 @@ public:
 #endif
 #if (defined ZHOUYI_V3)
         if (AIPU_LOADABLE_GRAPH_ELF_V0 == g_version) {
-            p_gobj = new GraphV3(p_ctx, _id, m_dev);
+            p_gobj = new GraphV3X(p_ctx, _id, m_dev);
             m_parser = new ParserELF();
         }
 #endif

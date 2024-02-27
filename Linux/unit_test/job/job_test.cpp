@@ -184,7 +184,7 @@ TEST_CASE_FIXTURE(JobTest, "specify_io_buffer")
 
     tensor_info.pa = share_buf.pa;
     tensor_info.tensor_idx = 0;
-    tensor_info.shared_case_type = 0x3;;
+    tensor_info.shared_case_type = 0x4;;
     tensor_info.type = AIPU_TENSOR_TYPE_INPUT;
     ret = p_job->specify_io_buffer(tensor_info);
     CHECK(ret == AIPU_STATUS_ERROR_INVALID_OP);

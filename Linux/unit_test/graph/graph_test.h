@@ -14,13 +14,16 @@
 #include <string>
 #include "doctest.h"
 #include "graph_v1v2.h"
-#include "graph_v3.h"
+#include "graph_v3x.h"
 #include "parser_base.h"
 #include "context.h"
 #include "helper.h"
 #ifdef SIMULATION
+#ifdef ZHOUYI_V12
 #include "simulator/simulator.h"
+#else
 #include "simulator/simulator_v3.h"
+#endif
 #else
 #include "aipu/aipu.h"
 #endif
@@ -45,7 +48,7 @@ public:
     uint32_t fsize = 0;
     bool m_do_vcheck = true;
 #if (defined ZHOUYI_V3)
-    GraphV3 *graphv3 = nullptr;
+    GraphV3X *graphv3 = nullptr;
 #endif
 
     uint32_t get_graph_bin_version(std::istream& gbin)
@@ -161,6 +164,7 @@ public:
         p_ctx->init();
 
         m_sim_cfg.simulator = nullptr;
+        m_sim_cfg.npu_arch_desc = nullptr;
         m_sim_cfg.log_file_path = new char[1024];
         strcpy((char*)m_sim_cfg.log_file_path, "./");
         m_sim_cfg.log_level = 0;
@@ -190,8 +194,8 @@ public:
         p_gobj = new GraphV12(p_ctx, _id, m_dev);
 #endif
 #if (defined ZHOUYI_V3)
-        p_gobj = new GraphV3(p_ctx, _id, m_dev);
-        graphv3 = static_cast<GraphV3 *>(p_gobj);
+        p_gobj = new GraphV3X(p_ctx, _id, m_dev);
+        graphv3 = static_cast<GraphV3X *>(p_gobj);
 #endif
         input_dest = (char *)help_map_file(input_file);
     }

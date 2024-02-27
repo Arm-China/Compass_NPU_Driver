@@ -31,19 +31,27 @@ RUNTIME_HEADER_PATH   :=
 RUNTIMR_TEST_SECTION += $(foreach VAR, $(TEST_UNIT), $(wildcard $(RUNTIME_TEST_SRC_PATH)/$(VAR)/*.cpp))
 RUNTIMR_TEST_HEADER_PATH += -I.
 RUNTIMR_SRCS_SECTION += $(foreach VAR, $(SRC_UNIT), $(wildcard $(RUNTIME_SRC_PATH)/$(VAR)/*.cpp))
+ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
+RUNTIMR_SRCS_SECTION += $(foreach VAR, $(SRC_UNIT), $(wildcard $(RUNTIME_SRC_PATH)/zhouyi_v3x/$(VAR)/*.cpp))
+endif
 RUNTIMR_SRCS_SECTION := $(filter-out ../driver/umd/src/common/export_py_api.cpp, $(RUNTIMR_SRCS_SECTION))
+RUNTIMR_SRCS_SECTION := $(filter-out ../driver/umd/src/device/simulator/simulator_v4.cpp, $(RUNTIMR_SRCS_SECTION))
+ifeq ($(BUILD_AIPU_VERSION), aipu_v1v2)
+	RUNTIMR_SRCS_SECTION := $(filter-out ../driver/umd/src/device/simulator/simulator_v3.cpp, $(RUNTIMR_SRCS_SECTION))
+endif
 RUNTIME_HEADER_PATH += $(foreach VAR, $(SRC_UNIT), -I$(RUNTIME_SRC_PATH)/$(VAR))
 RUNTIME_HEADER_PATH += -I../driver/umd/src
+RUNTIME_HEADER_PATH += -I../driver/umd/src/common
 RUNTIME_HEADER_PATH += -I../driver/umd/include
 RUNTIME_HEADER_PATH += -I../driver/umd/include/kmd
 RUNTIME_HEADER_PATH += -I../driver/umd/include/simulator
 RUNTIME_HEADER_PATH += -I../driver/umd/src/device/
 RUNTIME_HEADER_PATH += -I../driver/umd/src/device/aipu
 RUNTIME_HEADER_PATH += -I../driver/umd/src/device/simulator
+RUNTIME_HEADER_PATH += -I../driver/umd/src/zhouyi_legacy
+RUNTIME_HEADER_PATH += -I../driver/umd/src/zhouyi_v3x/common
+RUNTIME_HEADER_PATH += -I../driver/umd/src/zhouyi_v3x/zhouyi_v3
 RUNTIME_HEADER_PATH += -I../driver/umd/src/utils
-RUNTIME_HEADER_PATH += -I../driver/umd/src/common
-RUNTIME_HEADER_PATH += -I../driver/umd/src/zhouyi_v1v2
-RUNTIME_HEADER_PATH += -I../driver/umd/src/zhouyi_v3
 RUNTIME_HEADER_PATH += -I../driver/umd/3rdparty
 RUNTIME_HEADER_PATH += -I../driver/umd/3rdparty/elfio
 RUNTIME_HEADER_PATH += -I../driver/umd/3rdparty/numpy

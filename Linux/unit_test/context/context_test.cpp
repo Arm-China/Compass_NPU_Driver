@@ -136,7 +136,7 @@ TEST_CASE_FIXTURE(ContextTest, "config_simulation")
 #endif
 #if (defined ZHOUYI_V3)
     sim_glb_config.log_level = 3;
-    sim_glb_config.x2_arch_desc = "X2_1204";
+    sim_glb_config.npu_arch_desc = "X2_1204";
 #endif
 
     ret = p_ctx->config_simulation(AIPU_CONFIG_TYPE_SIMULATION, nullptr);
