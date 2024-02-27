@@ -18,6 +18,7 @@ properties:
       - const: armchina,zhouyi-v1
       - const: armchina,zhouyi-v2
       - const: armchina,zhouyi-v3
+      - const: armchina,zhouyi-v4
       - const: armchina,zhouyi
 
   reg:

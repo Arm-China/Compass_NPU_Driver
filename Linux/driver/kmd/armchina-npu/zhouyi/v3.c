@@ -41,7 +41,7 @@ static void zhouyi_v3_enable_core_cnt(struct aipu_partition *partition, u32 clus
 static void zhouyi_v3_enable_interrupt(struct aipu_partition *partition, bool en_tec_intr)
 {
 	u32 cmd_pool_id = partition->id;
-	u32 flag = EN_CORE_INTR | EN_CLUSTER_INTR | EN_ALL_TYPE_INTRS;
+	u32 flag = EN_CORE_INTR | EN_CLUSTER_INTR | EN_ALL_TYPE_INTRS_V3;
 
 	if (en_tec_intr)
 		flag |= EN_TEC_INTR;
@@ -134,7 +134,7 @@ static int zhouyi_v3_create_command_pool(struct aipu_partition *partition)
 	return ret;
 }
 
-static int zhouyi_v3_abort_command_pool(struct aipu_partition *partition)
+static int zhouyi_v3_abort_command_pool(struct aipu_partition *partition, int pool)
 {
 	u32 status = 0;
 
@@ -154,7 +154,7 @@ static int zhouyi_v3_abort_command_pool(struct aipu_partition *partition)
 	return 0;
 }
 
-static void zhouyi_v3_destroy_command_pool(struct aipu_partition *partition)
+static int zhouyi_v3_destroy_command_pool(struct aipu_partition *partition, int pool)
 {
 	u32 status = 0;
 
@@ -162,18 +162,21 @@ static void zhouyi_v3_destroy_command_pool(struct aipu_partition *partition)
 	status = aipu_read32(partition->reg, TSM_STATUS_REG);
 	if (IS_CMD_FAIL(status)) {
 		aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
-		zhouyi_v3_abort_command_pool(partition);
+		zhouyi_v3_abort_command_pool(partition, ZHOUYI_COMMAND_POOL_DEFAULT);
 		zhouyi_v3_destroy_command_pool_internal(partition);
-		if (IS_CMD_FAIL(status))
+		if (IS_CMD_FAIL(status)) {
 			aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
+			return -EFAULT;
+		}
 	}
 
 	/* disable tec interrupts by default */
 	zhouyi_v3_enable_interrupt(partition, false);
 	dev_dbg(partition->dev, "command pool #%d was destroyed\n", partition->id);
+	return 0;
 }
 
-static int get_qos(u32 exec_flag)
+int get_qos(u32 exec_flag)
 {
 	if (exec_flag & AIPU_JOB_EXEC_FLAG_QOS_FAST)
 		return TSM_QOS_FAST;
@@ -181,7 +184,7 @@ static int get_qos(u32 exec_flag)
 }
 
 static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_desc *udesc,
-			     int trigger_type)
+			     int trigger_type, int pool)
 {
 	int ret = 0;
 
@@ -198,9 +201,9 @@ static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_d
 		return -EFAULT;
 	}
 
-	if (trigger_type == ZHOUYI_V3_TRIGGER_TYPE_CREATE          ||
-	    trigger_type == ZHOUYI_V3_TRIGGER_TYPE_UPDATE_DISPATCH ||
-	    trigger_type == ZHOUYI_V3_TRIGGER_TYPE_DEBUG_DISPATCH) {
+	if (trigger_type == ZHOUYI_TRIGGER_TYPE_CREATE          ||
+	    trigger_type == ZHOUYI_TRIGGER_TYPE_UPDATE_DISPATCH ||
+	    trigger_type == ZHOUYI_TRIGGER_TYPE_DEBUG_DISPATCH) {
 		aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_HIGH_REG, udesc->head_tcb_pa >> 32);
 		aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_LOW_REG, (u32)udesc->head_tcb_pa);
 	}
@@ -210,7 +213,7 @@ static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_d
 
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_INFO_REG, (u16)udesc->job_id);
 
-	if (trigger_type == ZHOUYI_V3_TRIGGER_TYPE_DEBUG_DISPATCH) {
+	if (trigger_type == ZHOUYI_TRIGGER_TYPE_DEBUG_DISPATCH) {
 		aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
 			     TSM_DBG_DISPATCH_CMD_POOL(partition->id, get_qos(udesc->exec_flag),
 						       udesc->core_id));

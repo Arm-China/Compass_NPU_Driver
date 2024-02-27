@@ -46,7 +46,7 @@ struct aipu_operations {
 	void (*disable_interrupt)(struct aipu_partition *aipu);
 	void (*trigger)(struct aipu_partition *aipu);
 	int (*reserve)(struct aipu_partition *aipu, struct aipu_job_desc *udesc,
-		       int do_trigger);
+		       int do_trigger, int pool);
 	bool (*is_idle)(struct aipu_partition *aipu);
 	void (*print_hw_id_info)(struct aipu_partition *aipu);
 	int (*io_rw)(struct aipu_partition *aipu, struct aipu_io_req *io_req);
@@ -57,8 +57,8 @@ struct aipu_operations {
 #endif
 	int (*soft_reset)(struct aipu_partition *aipu, bool init_regs);
 	void (*initialize)(struct aipu_partition *aipu);
-	void (*destroy_command_pool)(struct aipu_partition *partition);
-	int (*abort_command_pool)(struct aipu_partition *partition);
+	int (*destroy_command_pool)(struct aipu_partition *partition, int pool);
+	int (*abort_command_pool)(struct aipu_partition *partition, int pool);
 	int (*exit_dispatch)(struct aipu_partition *partition, u32 job_flag, u64 tcb_pa);
 	void (*disable_tick_counter)(struct aipu_partition *partition);
 	void (*enable_tick_counter)(struct aipu_partition *partition);
@@ -105,6 +105,7 @@ struct cluster_info {
  * @dtcm_size:       DTCM size in bytes
  * @cluster_cnt:     cluster count
  * @clusters:        cluster information array
+ * @partition_mode:  partition mode in a cluster (for zhouyi v4 only)
  */
 struct aipu_partition {
 	u32 id;
@@ -129,6 +130,7 @@ struct aipu_partition {
 	u32 dtcm_size;
 	u32 cluster_cnt;
 	struct cluster_info clusters[8];
+	int partition_mode;
 };
 
 #endif /* __AIPU_PARTITION_H__ */

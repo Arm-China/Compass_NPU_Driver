@@ -998,7 +998,7 @@ int aipu_mm_alloc(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_r
 	if (mm->version < AIPU_ISA_VERSION_ZHOUYI_V2_2 && type == AIPU_MEM_REGION_TYPE_DTCM)
 		type = AIPU_MEM_REGION_TYPE_SRAM;
 
-	if ((mm->version != AIPU_ISA_VERSION_ZHOUYI_V3 || mm->gm_policy == AIPU_GM_POLICY_NONE) &&
+	if ((mm->version < AIPU_ISA_VERSION_ZHOUYI_V3 || mm->gm_policy == AIPU_GM_POLICY_NONE) &&
 	    type == AIPU_MEM_REGION_TYPE_GM)
 		type = AIPU_MEM_REGION_TYPE_SRAM;
 

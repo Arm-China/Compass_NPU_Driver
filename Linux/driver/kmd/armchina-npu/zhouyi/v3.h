@@ -126,7 +126,7 @@
 #define TSM_CMD_SCHD_ADDR_LOW_REG                   0xC
 
 /**
- * A1.1.9 TSM Confuguration Register
+ * A1.1.9 TSM Configuration Register
  *
  * [2:0] TSM scheduling policy (reserved)
  */
@@ -285,7 +285,7 @@
 #define EN_DONE_INTR                                BIT(0)
 #define EN_ALL_LEVEL_INTRS \
 	(EN_CMD_POOL_INTR | EN_CLUSTER_INTR | EN_CORE_INTR | EN_TEC_INTR)
-#define EN_ALL_TYPE_INTRS  \
+#define EN_ALL_TYPE_INTRS_V3  \
 	(EN_SIGNAL_INTR | EN_ERROR_INTR | EN_FAULT_INTR | EN_EXCEPTION_INTR | EN_DONE_INTR)
 #define EN_CMD_POOL_ALL_INTRS                       (EN_CMD_POOL_INTR | EN_ALL_TYPE_INTRS)
 #define EN_ALL_INTRS                                (EN_ALL_LEVEL_INTRS | EN_ALL_TYPE_INTRS)
@@ -423,6 +423,7 @@
 #define ZHOUYI_V3_MAX_REG_OFFSET                    0x322C
 
 u64 get_gm_size(u32 val);
+int get_qos(u32 exec_flag);
 struct aipu_operations *get_zhouyi_v3_ops(void);
 struct aipu_priv_operations *get_v3_priv_ops(void);
 

@@ -170,6 +170,10 @@ struct command_pool {
  * @is_suspend:      is suspended or not
  * @dbg_do_destroy:  do destroy flag (enabled after a debug-dispatch job ends)
  * @tec_intr_en:     is TEC interrupts enabled or not
+ * @grid_id:         the latest grid ID allocated for userspace
+ * @group_id_bmap:   gruop ID bitmap
+ * @group_id_num:    number of group IDs available
+ * @id_lock:         lock to protect the grid Id & group IDs
  */
 struct aipu_job_manager {
 	int version;
@@ -195,6 +199,10 @@ struct aipu_job_manager {
 	atomic_t is_suspend;
 	bool dbg_do_destroy;
 	bool tec_intr_en;
+	u16  grid_id;
+	unsigned long *group_id_bmap;
+	u16  group_id_num;
+	struct mutex id_lock; /* Protect grid & group IDs */
 };
 
 int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_manager *mm,
@@ -221,5 +229,10 @@ int aipu_job_manager_config_clusters(struct aipu_job_manager *manager,
 				     struct aipu_config_clusters *cfg);
 int aipu_job_manager_suspend(struct aipu_job_manager *manager);
 int aipu_job_manager_resume(struct aipu_job_manager *manager);
+int aipu_job_manager_alloc_grid_id(struct aipu_job_manager *manager);
+int aipu_job_manager_alloc_group_id(struct aipu_job_manager *manager,
+				    struct aipu_group_id_desc *desc);
+int aipu_job_manager_free_group_id(struct aipu_job_manager *manager,
+				   struct aipu_group_id_desc *desc);
 
 #endif /* __AIPU_JOB_MANAGER_H__ */

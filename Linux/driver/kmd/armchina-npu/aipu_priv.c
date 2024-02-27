@@ -8,6 +8,7 @@
 #include "v1.h"
 #include "v2.h"
 #include "v3.h"
+#include "v4.h"
 
 static int init_misc_dev(struct aipu_priv *aipu)
 {
@@ -76,6 +77,11 @@ int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,
 	dev_dbg(aipu->dev, "AIPU core0 ISA version %d, configuration %d\n", version, config);
 	aipu->version = version;
 	aipu->revision = revision;
+
+#ifdef CONFIG_ARMCHINA_NPU_ARCH_V4
+	if (version == AIPU_ISA_VERSION_ZHOUYI_V4)
+		aipu->ops = get_v4_priv_ops();
+#endif
 
 #ifdef CONFIG_ARMCHINA_NPU_ARCH_V3
 	if (version == AIPU_ISA_VERSION_ZHOUYI_V3)

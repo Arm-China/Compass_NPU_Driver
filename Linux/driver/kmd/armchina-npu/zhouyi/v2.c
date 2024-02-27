@@ -65,7 +65,7 @@ static void zhouyi_v2_trigger(struct aipu_partition *core)
 }
 
 static int zhouyi_v2_reserve(struct aipu_partition *core, struct aipu_job_desc *udesc,
-			     int do_trigger)
+			     int do_trigger, int pool)
 {
 	u32 start_pc = 0;
 	u32 enable_dtcm = 0;
@@ -354,11 +354,12 @@ int zhouyi_v2_soft_reset(struct aipu_partition *core, bool init_regs)
 	return ret;
 }
 
-static void zhouyi_v2_destroy_command_pool(struct aipu_partition *core)
+static int zhouyi_v2_destroy_command_pool(struct aipu_partition *core, int pool)
 {
+	return 0;
 }
 
-static int zhouyi_v2_abort_command_pool(struct aipu_partition *core)
+static int zhouyi_v2_abort_command_pool(struct aipu_partition *core, int pool)
 {
 	return 0;
 }

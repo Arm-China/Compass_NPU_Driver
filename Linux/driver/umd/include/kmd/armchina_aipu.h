@@ -407,6 +407,16 @@ struct aipu_hw_status {
 	} status;
 };
 
+/**
+ * struct aipu_group_id_desc - Group ID descriptor.
+ * @group_size: [umd] Size of the group (i.e. number of group IDs)
+ * @first_id:   [umd/kmd] The first group ID allocated by KMD or to free
+ */
+struct aipu_group_id_desc {
+	__u16 group_size;
+	__u16 first_id;
+};
+
 /*
  * AIPU IOCTL List
  */
@@ -608,5 +618,33 @@ struct aipu_hw_status {
  *   int fd:    filled by UMD
  */
 #define AIPU_IOCTL_DETACH_DMA_BUF _IOW(AIPU_IOCTL_MAGIC, 20, int)
+/**
+ * DOC: AIPU_IOCTL_ALLOC_GRID_ID
+ *
+ * @Description
+ *
+ * ioctl to get a unique grid ID (do not need to free)
+ */
+#define AIPU_IOCTL_ALLOC_GRID_ID _IOR(AIPU_IOCTL_MAGIC, 21, int)
+/**
+ * DOC: AIPU_IOCTL_ALLOC_GROUP_ID
+ *
+ * @Description
+ *
+ * ioctl to get a group of continuous unique group IDs
+ *   aipu_group_id_desc->group_size: filled by UMD
+ *   aipu_group_id_desc->first_id:   filled by KMD
+ */
+#define AIPU_IOCTL_ALLOC_GROUP_ID _IOWR(AIPU_IOCTL_MAGIC, 22, struct aipu_group_id_desc)
+/**
+ * DOC: AIPU_IOCTL_FREE_GROUP_ID
+ *
+ * @Description
+ *
+ * ioctl to free a group of allocated group IDs
+ *   aipu_group_id_desc->group_size: filled by UMD
+ *   aipu_group_id_desc->first_id:   filled by UMD
+ */
+#define AIPU_IOCTL_FREE_GROUP_ID _IOW(AIPU_IOCTL_MAGIC, 23, struct aipu_group_id_desc)
 
 #endif /* __UAPI_MISC_ARMCHINA_AIPU_H__ */

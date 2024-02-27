@@ -59,6 +59,7 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct aipu_config_clusters config_clusters;
 	struct aipu_dma_buf_request dmabuf_req;
 	struct aipu_dma_buf dmabuf_info;
+	struct aipu_group_id_desc group_id_desc;
 	int fd = 0;
 
 	u64 job_id;
@@ -209,8 +210,30 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			ret = -EINVAL;
 		break;
 	case AIPU_IOCTL_GET_DRIVER_VERSION:
-		ret = copy_to_user((char __user *)arg, KMD_VERSION,
-				   sizeof(KMD_VERSION));
+		ret = copy_to_user((char __user *)arg, KMD_VERSION, sizeof(KMD_VERSION));
+		break;
+	case AIPU_IOCTL_ALLOC_GRID_ID:
+		ret = aipu_job_manager_alloc_grid_id(manager);
+		if (ret >= 0)
+			ret = copy_to_user((char __user *)arg, &ret, sizeof(ret));
+		break;
+	case AIPU_IOCTL_ALLOC_GROUP_ID:
+		if (!copy_from_user(&group_id_desc, (struct aipu_group_id_desc __user *)arg,
+				    sizeof(group_id_desc))) {
+			ret = aipu_job_manager_alloc_group_id(manager, &group_id_desc);
+			if (!ret && copy_to_user((char __user *)arg, &group_id_desc,
+						 sizeof(group_id_desc)))
+				ret = -EINVAL;
+		} else {
+			ret = -EINVAL;
+		}
+		break;
+	case AIPU_IOCTL_FREE_GROUP_ID:
+		if (!copy_from_user(&group_id_desc, (struct aipu_group_id_desc __user *)arg,
+				    sizeof(group_id_desc)))
+			ret = aipu_job_manager_free_group_id(manager, &group_id_desc);
+		else
+			ret = -EINVAL;
 		break;
 	default:
 		ret = -ENOTTY;
