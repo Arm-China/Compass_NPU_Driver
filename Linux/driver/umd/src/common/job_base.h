@@ -189,6 +189,8 @@ protected:
     void dump_job_shared_buffers_after_run();
     void dump_job_private_buffers_after_run(BufferDesc& rodata, BufferDesc* descriptor);
     aipu_status_t validate_schedule_status();
+    aipu_status_t fill_special_output_buffer(std::vector<struct JobIOBuffer> &inputs,
+        std::vector<struct JobIOBuffer> &outputs);
 
 public:
     virtual aipu_status_t init(const aipu_global_config_simulation_t* cfg,
