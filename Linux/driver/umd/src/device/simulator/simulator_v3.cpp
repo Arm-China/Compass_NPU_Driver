@@ -80,6 +80,8 @@ aipu_status_t aipudrv::SimulatorV3::parse_config(uint32_t config, uint32_t &sim_
     } else {
         if (config == 1204) {
             key = "X2_1204";
+            LOG(LOG_ALERT, "Not support requested sim target: %s, switch to : %s\n",
+                m_arch_desc.c_str(), key.c_str());
         } else {
             LOG(LOG_ERR, "Only support: X2_1204/X2_1204MP3\n");
             return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;

@@ -96,6 +96,8 @@ aipu_status_t aipudrv::SimulatorV4::parse_config(uint32_t config, uint32_t &sim_
     } else {
         if (config == 1304) {
             key = "X3_1304";
+            LOG(LOG_ALERT, "Not support requested sim target: %s, switch to : %s\n",
+                m_arch_desc.c_str(), key.c_str());
         } else {
             LOG(LOG_ERR, "Only support: X3_1304/X3_1304MP4\n");
             return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
