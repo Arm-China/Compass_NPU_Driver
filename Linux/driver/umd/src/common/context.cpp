@@ -35,9 +35,11 @@
 #include "parser_base.h"
 
 volatile int32_t UMD_LOG_LEVEL = LOG_WARN;
+volatile char UMD_LOG_TIMESTAMP = 'n';
 aipudrv::MainContext::MainContext()
 {
     const char *umd_log_level_env = getenv("UMD_LOG_LEVEL");
+    const char *umd_log_timestamp_env = getenv("UMD_LOG_TIMESTAMP");
 
     m_dev = nullptr;
     m_dram = nullptr;
@@ -66,6 +68,11 @@ aipudrv::MainContext::MainContext()
         int32_t log_level = umd_log_level_env[0] - '0';
         if (log_level > LOG_WARN && log_level <= LOG_CLOSE)
             UMD_LOG_LEVEL = log_level;
+    }
+
+    if (umd_log_timestamp_env != nullptr)
+    {
+        UMD_LOG_TIMESTAMP = umd_log_timestamp_env[0];
     }
 }
 

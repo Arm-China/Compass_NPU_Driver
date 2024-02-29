@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include "helper.h"
 #include "debug.h"
 
 #define gettid() syscall(SYS_gettid)
@@ -34,7 +35,8 @@ enum LogLevel
 
 extern volatile int32_t UMD_LOG_LEVEL;
 #define LOG_DETAILED(flag, FMT, ARGS...) \
-    printf("%s%s:%d:%s: " FMT "\n", (flag), __FILE__, __LINE__, __PRETTY_FUNCTION__, ## ARGS);
+    printf("%s%s%s:%d:%s: " FMT "\n", umd_timestamp_helper(4).c_str(), \
+        (flag), __FILE__, __LINE__, __PRETTY_FUNCTION__, ## ARGS);
 /**
  * @brief Log macro
  * @param LogLevel log level
@@ -69,11 +71,11 @@ extern volatile int32_t UMD_LOG_LEVEL;
     else if (LogLevel==LOG_WARN) \
         LOG_DETAILED("[UMD WARN] ", FMT, ## ARGS) \
     else if (LogLevel==LOG_ALERT) \
-        printf("[UMD ALERT] <%ld> " FMT "\n", gettid(), ## ARGS); \
+        printf("%s [UMD ALERT] <%ld> " FMT "\n", umd_timestamp_helper(4).c_str(), gettid(), ## ARGS); \
     else if (LogLevel==LOG_INFO) \
-        printf("[UMD INFO] <%ld> " FMT "\n", gettid(), ## ARGS); \
+        printf("%s [UMD INFO] <%ld> " FMT "\n", umd_timestamp_helper(4).c_str(), gettid(), ## ARGS); \
     else if (LogLevel==LOG_DEBUG) \
-        printf("[UMD DEBUG] <%ld> " FMT "\n", gettid(), ## ARGS); \
+        printf("%s [UMD DEBUG] <%ld> " FMT "\n", umd_timestamp_helper(4).c_str(), gettid(), ## ARGS); \
     else if (LogLevel==LOG_DEFAULT) \
         printf("" FMT "\n", ## ARGS); \
     } while (0)

@@ -92,6 +92,11 @@ bool umd_is_valid_ptr(const void* lower_bound, const void* upper_bound,
 void dump_stack(void);
 
 /**
+ * @brief This function is used to get time stamp(ms,us,ns optionally)
+ */
+std::string umd_timestamp_helper(int time_stamp_type = 0);
+
+/**
  * @brief This class is for generating runtime.cfg for simulation.
  */
 class FileWrapper {
