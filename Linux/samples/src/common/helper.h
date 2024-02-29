@@ -108,5 +108,6 @@ int check_result(std::vector< std::shared_ptr<char> >outputs,
 
 extern std::shared_ptr<SemOp> semOp_sp;
 int help_create_dir(const char *path);
+std::string timestamp_helper(int time_stamp_type = 0);
 
 #endif /* _HELPER_H_ */

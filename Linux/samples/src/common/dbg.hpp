@@ -32,6 +32,7 @@ class DbgLogger {
             exit(-1);
         }
 
+        m_oss << timestamp_helper(4) << " ";
         m_oss << log_arr[m_loglevel] << "<" << gettid() << ">  ";
     }
 
@@ -45,6 +46,7 @@ class DbgLogger {
             exit(-1);
         }
 
+        m_oss << timestamp_helper(4) << " ";
         m_oss << log_arr[m_loglevel];
 
         int len = snprintf(nullptr, 0, format.c_str(), args...);

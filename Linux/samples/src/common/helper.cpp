@@ -2,15 +2,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-
+#include <iostream>
+#include <memory>
+#include <vector>
+#include <ctime>
+#include <string>
+#include <chrono>
+#include <sstream>
+#include <iostream>
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/mman.h>
-#include <iostream>
-#include <memory>
-#include <vector>
 #include <string.h>
 #include <errno.h>
 #include "helper.h"
@@ -272,4 +276,63 @@ int help_create_dir(const char *path)
 
     semOp_sp->semaphore_v();
     return 0 ;
+}
+
+std::string timestamp_helper(int time_stamp_type)
+{
+	std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+	std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);
+	std::tm* now_tm = std::localtime(&now_time_t);
+	char buffer[128] = {0};
+	std::ostringstream ss;
+	std::chrono::milliseconds ms;
+	std::chrono::microseconds us;
+	std::chrono::nanoseconds ns;
+
+    strftime(buffer, sizeof(buffer), "%F %T", now_tm);
+    ss.fill('0');
+
+	switch (time_stamp_type)
+	{
+        case 0:
+            ss << buffer;
+            break;
+
+        case 1:
+            ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now.time_since_epoch()) % 1000;
+            ss << buffer << ":" << ms.count();
+            break;
+
+        case 2:
+            ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now.time_since_epoch()) % 1000;
+            us = std::chrono::duration_cast<std::chrono::microseconds>(
+                now.time_since_epoch()) % 1000000;
+            ss << buffer << ":" << ms.count() << ":" << us.count() % 1000;
+            break;
+
+        case 3:
+            ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now.time_since_epoch()) % 1000;
+            us = std::chrono::duration_cast<std::chrono::microseconds>(
+                now.time_since_epoch()) % 1000000;
+            ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                now.time_since_epoch()) % 1000000000;
+            ss << buffer << ":" << ms.count() << ":" << us.count() % 1000
+                << ":" << ns.count() % 1000;
+            break;
+
+        case 4:
+            us = std::chrono::duration_cast<std::chrono::microseconds>(
+                now.time_since_epoch()) % 1000000;
+            ss << buffer << ":" << us.count();
+            break;
+
+        default:
+            ss << buffer;
+            break;
+	}
+
+	return ss.str();
 }
