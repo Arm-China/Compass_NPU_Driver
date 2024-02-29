@@ -20,9 +20,35 @@
 #include <fstream>
 #include <math.h>
 #include "standard_api.h"
+#include "kmd/armchina_aipu.h"
 #include "common/cmd_line_parsing.h"
 #include "common/helper.h"
 #include "common/dbg.hpp"
+
+/**
+ * @brief profile demo
+ *
+ * @note
+ *        this demo is for gaining profiling data of model running
+ *        on NPU. it has to run on real hardware platform. currently
+ *        it supports to collect profiling data for aipu v1/v2, also
+ *        for aipu v3/v4. but there is a little difference between
+ *        aipu v1/v2 and aipu v3/v4. that is: it needs to firstly
+ *        enable PMU's (Performance Monitor Unit) tick counter explicitly.
+ *        see macro AIPU_V3X.
+ */
+
+/**
+ * @note
+ *
+ * if run this case on aipu v3/v4, it has to define
+ * this macro as non-zero in order to firstly enable
+ * PMU's tick counter.
+ *
+ * 0: for aipu v1/v2
+ * 1: for aipu v3/v4
+ */
+#define AIPU_V3X 1
 
 using namespace std;
 
@@ -118,6 +144,17 @@ int main(int argc, char* argv[])
         goto finish;
     }
     AIPU_INFO()("aipu_init_context success\n");
+
+    #if AIPU_V3X
+    ret = aipu_ioctl(ctx, AIPU_IOCTL_ENABLE_TICK_COUNTER, nullptr);
+    if (ret != AIPU_STATUS_SUCCESS)
+    {
+        aipu_get_error_message(ctx, ret, &msg);
+        AIPU_ERR()("aipu_ioctl: %s\n", msg);
+        goto finish;
+    }
+    AIPU_INFO()("aipu_ioctl, enable tick counter success\n");
+    #endif
 
     ret = aipu_load_graph(ctx, opt.bin_file_name, &graph_id);
     if (ret != AIPU_STATUS_SUCCESS)
@@ -267,6 +304,17 @@ unload_graph:
     AIPU_INFO()("aipu_unload_graph success\n");
 
 deinit_ctx:
+    #if AIPU_V3X
+    ret = aipu_ioctl(ctx, AIPU_IOCTL_DISABLE_TICK_COUNTER, nullptr);
+    if (ret != AIPU_STATUS_SUCCESS)
+    {
+        aipu_get_error_message(ctx, ret, &msg);
+        AIPU_ERR()("aipu_ioctl: %s\n", msg);
+        goto finish;
+    }
+    AIPU_INFO()("aipu_ioctl, disable tick counter success\n");
+    #endif
+
     ret = aipu_deinit_context(ctx);
     if (ret != AIPU_STATUS_SUCCESS)
     {
