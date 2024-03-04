@@ -95,12 +95,6 @@ std::map<uint32_t, std::string> aipudrv::MainContext::umd_status_string =
         "The out shape tensor size is zero." },
     { AIPU_STATUS_ERROR_ALLOC_GROUP_ID,
         "Alloc Group ID fail." },
-    { AIPU_STATUS_ERROR_NO_MATCH_IO_NUMBER,
-        "Input tensor number doesn't equal output tensor number when subgraph is 0." },
-    { AIPU_STATUS_ERROR_MAP_DMABUF_FAIL,
-        "Map dmabuf failed." },
-    { AIPU_STATUS_ERROR_INVALID_ADDRESS,
-        "Invalid address." },
     { AIPU_STATUS_MAX,
         "Status Max value which should not be returned to application." },
     /* AIPU layer library runtime error code */

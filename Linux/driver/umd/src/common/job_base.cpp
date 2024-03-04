@@ -81,13 +81,7 @@ aipu_status_t aipudrv::JobBase::get_status_blocking(aipu_job_status_t* status, i
         aipu_job_callback_func_t job_callback_func = get_job_cb();
 
         if (job_callback_func != nullptr)
-        {
-            ret = fill_special_output_buffer(m_inputs, m_outputs);
-            if (ret != AIPU_STATUS_SUCCESS)
-                return ret;
-
             job_callback_func(get_id(), (aipu_job_status_t)m_status);
-        }
     } else {
         ret = convert_ll_status(m_dev->poll_status(1, time_out,
             m_hw_cfg->poll_in_commit_thread, this));
@@ -463,91 +457,6 @@ int aipudrv::JobBase::readwrite_dma_buf(struct JobIOBuffer &iobuf, void *data, b
         memcpy(va + iobuf.offset_in_dmabuf, data, iobuf.size);
 
     munmap(va, iobuf.dmabuf_size);
-out:
-    return ret;
-}
-
-aipu_status_t aipudrv::JobBase::fill_special_output_buffer(std::vector<struct JobIOBuffer> &inputs,
-    std::vector<struct JobIOBuffer> &outputs)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    char *in_va = nullptr, *out_va = nullptr;
-
-    if (inputs.size() != outputs.size())
-    {
-        ret = AIPU_STATUS_ERROR_NO_MATCH_IO_NUMBER;
-        goto out;
-    }
-
-    for (uint32_t i = 0; i < inputs.size(); i++)
-    {
-        if (inputs[i].dmabuf_fd > 0 || outputs[i].dmabuf_fd > 0)
-        {
-            if (inputs[i].dmabuf_fd < 0 && outputs[i].dmabuf_fd > 0) {
-                out_va = (char *)mmap(NULL, outputs[i].dmabuf_size,
-                    PROT_READ, MAP_SHARED, outputs[i].dmabuf_fd, 0);
-                if (MAP_FAILED == out_va)
-                {
-                    LOG(LOG_ERR, "%s: mmap out_buf fail\n", __FUNCTION__);
-                    ret = AIPU_STATUS_ERROR_MAP_DMABUF_FAIL;
-                    goto out;
-                }
-
-                if (m_mem->pa_to_va(inputs[i].pa, inputs[i].size, &in_va) != 0)
-                {
-                    ret = AIPU_STATUS_ERROR_INVALID_ADDRESS;
-                    munmap(out_va, outputs[i].dmabuf_size);
-                    goto out;
-                }
-
-                memcpy(out_va, in_va, inputs[i].size);
-                munmap(out_va, outputs[i].dmabuf_size);
-            } else if (inputs[i].dmabuf_fd > 0 && outputs[i].dmabuf_fd > 0) {
-                in_va = (char *)mmap(NULL, inputs[i].dmabuf_size,
-                    PROT_READ, MAP_SHARED, inputs[i].dmabuf_fd, 0);
-                if (MAP_FAILED == in_va)
-                {
-                    LOG(LOG_ERR, "%s: mmap in_buf fail\n", __FUNCTION__);
-                    ret = AIPU_STATUS_ERROR_MAP_DMABUF_FAIL;
-                    goto out;
-                }
-
-                out_va = (char *)mmap(NULL, outputs[i].dmabuf_size,
-                    PROT_READ, MAP_SHARED, outputs[i].dmabuf_fd, 0);
-                if (MAP_FAILED == out_va)
-                {
-                    LOG(LOG_ERR, "%s: mmap out_buf fail\n", __FUNCTION__);
-                    ret = AIPU_STATUS_ERROR_MAP_DMABUF_FAIL;
-                    munmap(in_va, inputs[i].dmabuf_size);
-                    goto out;
-                }
-
-                memcpy(out_va, in_va, inputs[i].size);
-                munmap(in_va, inputs[i].dmabuf_size);
-                munmap(out_va, outputs[i].dmabuf_size);
-            } else if (inputs[i].dmabuf_fd > 0 && outputs[i].dmabuf_fd < 0) {
-                in_va = (char *)mmap(NULL, inputs[i].dmabuf_size,
-                    PROT_READ, MAP_SHARED, inputs[i].dmabuf_fd, 0);
-                if (MAP_FAILED == in_va)
-                {
-                    LOG(LOG_ERR, "%s: mmap in_buf fail\n", __FUNCTION__);
-                    ret = AIPU_STATUS_ERROR_MAP_DMABUF_FAIL;
-                    goto out;
-                }
-
-                if (m_mem->pa_to_va(outputs[i].pa, outputs[i].size, &out_va) != 0)
-                {
-                    ret = AIPU_STATUS_ERROR_INVALID_ADDRESS;
-                    munmap(in_va, inputs[i].dmabuf_size);
-                    goto out;
-                }
-
-                memcpy(out_va, in_va, inputs[i].size);
-                munmap(in_va, inputs[i].dmabuf_size);
-            }
-        }
-    }
-
 out:
     return ret;
 }
