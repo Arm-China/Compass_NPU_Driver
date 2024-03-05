@@ -71,6 +71,7 @@ void pipeline()
     vector<char*> gt;
     aipu_status_t aipu_sts = AIPU_STATUS_SUCCESS;
     aipu_job_status_t aipu_job_sts = AIPU_JOB_STATUS_NO_STATUS;
+    aipu_create_job_cfg_t create_job_cfg = {0};
     int pass = 0;
 
     AIPU_DBG() << "pipeline()";
@@ -160,7 +161,7 @@ void pipeline()
      */
     for (uint32_t i = 0; i < GRAPH_NUM; i++)
     {
-        ret = aipu_create_job(ctx, infer_info[i].graph_id, &infer_info[i].job_id);
+        ret = aipu_create_job(ctx, infer_info[i].graph_id,&infer_info[i].job_id, &create_job_cfg);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(ctx, ret, &msg);
