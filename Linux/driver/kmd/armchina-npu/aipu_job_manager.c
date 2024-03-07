@@ -748,7 +748,6 @@ void aipu_job_manager_set_partitions_info(struct aipu_job_manager *manager, int 
 	manager->partitions = partitions;
 	manager->pools = devm_kzalloc(partitions[0].dev, partition_cnt * sizeof(*manager->pools),
 				      GFP_KERNEL);
-	kfree(manager->idle_bmap);
 	manager->idle_bmap = kmalloc_array(partition_cnt, sizeof(bool), GFP_KERNEL);
 	memset(manager->idle_bmap, 1, partition_cnt);
 }
