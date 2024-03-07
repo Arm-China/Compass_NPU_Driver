@@ -211,7 +211,6 @@ enum aipu_buf_region_type {
  * @bytes:      [kmd] Buffer size in bytes
  * @region:     [kmd] this allocated buffer is in memory/SRAM/DTCM/GM region?
  * @asid:       [kmd] ASID region of this buffer
- * @gm_base:    [kmd] GM base address (to be removed)
  */
 struct aipu_buf_desc {
 	__u64 pa;
@@ -219,7 +218,6 @@ struct aipu_buf_desc {
 	__u64 bytes;
 	__u8  region;
 	__u8  asid;
-	__u64 gm_base;
 };
 
 /**
