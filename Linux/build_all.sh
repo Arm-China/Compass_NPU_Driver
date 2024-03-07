@@ -35,7 +35,6 @@ build_help() {
     echo "                    - v1"
     echo "                    - v2"
     echo "                    - v3"
-    echo "                    - v4"
     echo "-a, --api         Build UMD API type (optional, by default standard api):"
     echo "                    - standard_api"
     echo "                    - python_api"
@@ -151,14 +150,11 @@ if [ "$BUILD_AIPU_VERSION"x == "v1"x ]  ||
     BUILD_AIPU_VERSION=aipu_v1v2
 elif [ "$BUILD_AIPU_VERSION"x == "v3"x ] || [ "$BUILD_AIPU_VERSION"x == "all"x ]; then
     BUILD_AIPU_VERSION=aipu_v3
-elif [ "$BUILD_AIPU_VERSION"x == "v4"x ]; then
-    BUILD_AIPU_VERSION=aipu_v4
 elif [ "$BUILD_AIPU_VERSION"x != "v1"x ] &&
      [ "$BUILD_AIPU_VERSION"x != "v2"x ] &&
-     [ "$BUILD_AIPU_VERSION"x != "v3"x ] &&
-     [ "$BUILD_AIPU_VERSION"x != "v4"x ]; then
+     [ "$BUILD_AIPU_VERSION"x != "v3"x ]; then
     echo -e "$COMPASS_DRV_BRENVAR_ERROR Invalid AIPU version $BUILD_AIPU_VERSION," \
-        "specify target: -v [v2|v3|v4]"
+        "specify target: -v [v2|v3]"
     exit 2
 fi
 
