@@ -85,8 +85,8 @@ aipu_status_t aipudrv::SimulatorV4::parse_config(uint32_t config, uint32_t &sim_
     } arch_item_t;
     std::map<std::string, arch_item_t> npu_arch_map =
     {
-        {"X3_1304", { 1304, 1, 1, sim_aipu::config_t::X3_1304}},
-        {"X3_1304MP4", { 1304, 4, 1, sim_aipu::config_t::X3_1304MP4}}
+        {"tbd1", { 1304, 1, 1, 3}},
+        {"tbd2", { 1304, 4, 1, 4}}
     };
 
     if (!m_arch_desc.empty() && npu_arch_map.count(m_arch_desc) > 0)
@@ -95,11 +95,11 @@ aipu_status_t aipudrv::SimulatorV4::parse_config(uint32_t config, uint32_t &sim_
         key = m_arch_desc;
     } else {
         if (config == 1304) {
-            key = "X3_1304";
+            key = "tbd1";
             LOG(LOG_ALERT, "Not support requested sim target: %s, switch to : %s\n",
                 m_arch_desc.c_str(), key.c_str());
         } else {
-            LOG(LOG_ERR, "Only support: X3_1304/X3_1304MP4\n");
+            LOG(LOG_ERR, "Only support: tbd1/tbd2\n");
             return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
         }
 
@@ -114,7 +114,7 @@ aipu_status_t aipudrv::SimulatorV4::parse_config(uint32_t config, uint32_t &sim_
 
     if (npu_arch_map[key].config != 1304)
     {
-        LOG(LOG_ERR, "Only support: X3_1304/X3_1304MP4\n");
+        LOG(LOG_ERR, "Only support: tbd1/tbd2\n");
         return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
     }
 
@@ -156,7 +156,7 @@ bool aipudrv::SimulatorV4::has_target(uint32_t arch, uint32_t version, uint32_t 
         goto unlock;
     }
 
-    if (sim_code == sim_aipu::config_t::X3_1304 || sim_code == sim_aipu::config_t::X3_1304MP4)
+    if (sim_code == sim_aipu::config_t::tbd1 || sim_code == sim_aipu::config_t::tbd2)
         m_dram->gm_init(m_config.gm_size);
 
     if (umd_asid_base != nullptr)

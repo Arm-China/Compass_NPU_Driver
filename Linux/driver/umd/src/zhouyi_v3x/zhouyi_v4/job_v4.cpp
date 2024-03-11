@@ -1387,7 +1387,7 @@ aipu_status_t aipudrv::JobV4::dump_for_emulation()
     ofs << "[COMMON]\n";
 
     /* runtime.cfg: config */
-    ofs << "#configuration 1:X3_1304 2:X3_1304MP4\n";
+    ofs << "#configuration 1:tbd1 2:tbd2\n";
     if (m_dev->get_config_code() != nullptr)
         ofs << "CONFIG=" << m_dev->get_config_code() << "\n";
 

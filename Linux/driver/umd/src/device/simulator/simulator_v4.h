@@ -267,14 +267,14 @@ public:
     {
         std::map<uint32_t, const char *> npu_sim_codetoname =
         {
-            {sim_aipu::config_t::X3_1304, "X3_1304"},
-            {sim_aipu::config_t::X3_1304MP4, "X3_1304MP4"}
+            {3, "tbd1"},
+            {4, "tbd2"}
         };
 
         if (npu_sim_codetoname.count(m_config.code) == 1)
             return npu_sim_codetoname[m_config.code];
         else
-            return npu_sim_codetoname[sim_aipu::config_t::X3_1304];
+            return npu_sim_codetoname[sim_aipu::config_t::tbd1];
     }
 
 public:
