@@ -93,6 +93,8 @@ std::map<uint32_t, std::string> aipudrv::MainContext::umd_status_string =
         "The out shape count doesn't match with original out tensor count." },
     { AIPU_STATUS_ERROR_ZERO_TENSOR_SIZE,
         "The out shape tensor size is zero." },
+    { AIPU_STATUS_ERROR_ALLOC_GRIP_ID,
+        "Alloc Grip ID fail." },
     { AIPU_STATUS_ERROR_ALLOC_GROUP_ID,
         "Alloc Group ID fail." },
     { AIPU_STATUS_MAX,

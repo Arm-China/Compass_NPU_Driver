@@ -533,3 +533,38 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
 out:
     return ret;
 }
+
+int aipudrv::Aipu::get_grid_id(uint16_t &grid_id)
+{
+    int ret = 0;
+
+    grid_id = 0;
+    if (ioctl(m_fd, AIPU_IOCTL_ALLOC_GRID_ID, &grid_id) < 0)
+    {
+        LOG(LOG_ERR, "Alloc grid id [fail]");
+        ret = -1;
+        goto out;
+    }
+
+out:
+    return ret;
+}
+
+int aipudrv::Aipu::get_start_group_id(int group_cnt, uint16_t &start_group_id)
+{
+    int ret = 0;
+    struct aipu_group_id_desc id_desc = {0};
+
+    id_desc.group_size = group_cnt;
+    if (ioctl(m_fd, AIPU_IOCTL_ALLOC_GROUP_ID, &id_desc) < 0)
+    {
+        LOG(LOG_ERR, "Alloc group id [fail]");
+        ret = -1;
+        goto out;
+    }
+
+    start_group_id = id_desc.first_id;
+
+out:
+    return ret;
+}

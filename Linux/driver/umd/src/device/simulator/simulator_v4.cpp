@@ -74,6 +74,54 @@ aipudrv::SimulatorV4::~SimulatorV4()
     m_dram = nullptr;
 }
 
+int aipudrv::SimulatorV4::get_grid_id(uint16_t &grid_id)
+{
+    grid_id = m_grid_id++;
+    return 0;
+}
+
+int aipudrv::SimulatorV4::get_start_group_id(int group_cnt, uint16_t &start_group_id)
+{
+    int ret = 0;
+
+    m_group_id_mtx.lock();
+    for (int i = 0; i < MAX_GROUP_ID; i++)
+    {
+        if (m_group_id_bitmap[i] == false)
+        {
+            int j = 0;
+
+            if (i + group_cnt >= MAX_GROUP_ID)
+            {
+                ret = -1;
+                LOG(LOG_ERR, "Group ID bit map overflow\n");
+                goto out;
+            }
+
+            for (j = i; j < i + group_cnt; j++)
+            {
+                if (m_group_id_bitmap[j] == true)
+                {
+                    ret = -1;
+                    break;
+                }
+            }
+
+            start_group_id = i;
+            ret = 0;
+
+            for (j = i; j < i + group_cnt; j++)
+                m_group_id_bitmap[j] = true;
+
+            break;
+        }
+    }
+
+out:
+    m_group_id_mtx.unlock();
+    return ret;
+}
+
 aipu_status_t aipudrv::SimulatorV4::parse_config(uint32_t config, uint32_t &sim_code)
 {
     std::string key = "null";

@@ -42,6 +42,8 @@ public:
 
 public:
     virtual aipu_ll_status_t ioctl_cmd(uint32_t cmd, void *arg);
+    virtual int get_grid_id(uint16_t &grid_id);
+    virtual int get_start_group_id(int group_cnt, uint16_t &start_group_id);
 
 public:
     static aipu_status_t get_aipu(DeviceBase** dev)

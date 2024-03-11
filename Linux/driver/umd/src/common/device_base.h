@@ -336,7 +336,7 @@ public:
     virtual void enable_profiling(bool en) {}
 
 public:
-    virtual uint16_t get_grid_id()
+    virtual int get_grid_id(uint16_t &grid_id)
     {
         return 0;
     }

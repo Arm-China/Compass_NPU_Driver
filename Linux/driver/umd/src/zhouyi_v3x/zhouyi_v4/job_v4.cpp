@@ -1185,10 +1185,15 @@ aipu_status_t aipudrv::JobV4::init(const aipu_global_config_simulation_t *cfg,
     m_cfg = cfg;
     m_hw_cfg = hw_cfg;
 
-    m_grid_id = m_dev->get_grid_id();
     m_dev->get_core_count(m_partition_id, 0, &m_core_cnt);
     set_job_params(get_graph().m_subgraphs.size(), 4,
                    get_graph().m_remap_flag, m_core_cnt);
+
+    if (m_dev->get_grid_id(m_grid_id) < 0)
+    {
+        ret = AIPU_STATUS_ERROR_ALLOC_GRIP_ID;
+        goto finish;
+    }
 
     if (m_dev->get_start_group_id(m_sg_cnt, m_start_group_id) < 0)
     {
