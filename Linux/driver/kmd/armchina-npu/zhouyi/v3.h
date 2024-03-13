@@ -91,8 +91,6 @@
 
 #define TSM_MAP_SINGLE                              _TSM_MAP(0x0)
 #define TSM_MAP_ALL                                 _TSM_MAP(0x1)
-#define TSM_QOS_SLOW                                _TSM_QOS(0x0)
-#define TSM_QOS_FAST                                _TSM_QOS(0x2)
 #define TSM_CREATE_CMD_POOL(pool, map)              (_TSM_CREATE | _TSM_POOL(pool) | (map))
 #define TSM_DESTROY_CMD_POOL(pool)                  (_TSM_DESTROY | _TSM_POOL(pool))
 #define TSM_ABORT_CMD_POOL(pool)                    (_TSM_ABORT | _TSM_POOL(pool))
@@ -423,7 +421,6 @@
 #define ZHOUYI_V3_MAX_REG_OFFSET                    0x322C
 
 u64 get_gm_size(u32 val);
-int get_qos(u32 exec_flag);
 struct aipu_operations *get_zhouyi_v3_ops(void);
 struct aipu_priv_operations *get_v3_priv_ops(void);
 

@@ -4,6 +4,7 @@
 #include <linux/irqreturn.h>
 #include <linux/bitops.h>
 #include "aipu_priv.h"
+#include "zhouyi.h"
 #include "v1.h"
 #include "aipu_io.h"
 #include "aipu_common.h"

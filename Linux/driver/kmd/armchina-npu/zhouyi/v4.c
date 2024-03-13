@@ -6,6 +6,7 @@
 #include <linux/mutex.h>
 #include <linux/delay.h>
 #include "aipu_priv.h"
+#include "zhouyi.h"
 #include "v4.h"
 #include "aipu_io.h"
 #include "config.h"

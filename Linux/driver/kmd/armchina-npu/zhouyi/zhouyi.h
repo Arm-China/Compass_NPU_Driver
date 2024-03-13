@@ -42,6 +42,12 @@
 #define ZHOUYI_SOFT_RESET_DONE                BIT(1)
 
 /*
+ * QoS
+ */
+#define TSM_QOS_SLOW                          0
+#define TSM_QOS_FAST                          (2 << 8)
+
+/*
  * Command Pool
  */
 #define ZHOUYI_COMMAND_POOL_DEFAULT           0
@@ -93,5 +99,6 @@ int zhouyi_sysfs_show(struct io_region *io, char *buf);
 int zhouyi_get_hw_version_number(struct io_region *io, int *rev);
 int zhouyi_get_hw_config_number(struct io_region *io);
 int zhouyi_soft_reset(struct io_region *io, int offset, int delay_us);
+int get_qos(u32 exec_flag);
 
 #endif /* __AIPU_ZHOUYI_H__ */

@@ -172,3 +172,10 @@ int zhouyi_soft_reset(struct io_region *io, int offset, int delay_us)
 
 	return ret;
 }
+
+int get_qos(u32 exec_flag)
+{
+	if (exec_flag & AIPU_JOB_EXEC_FLAG_QOS_FAST)
+		return TSM_QOS_FAST;
+	return TSM_QOS_SLOW;
+}

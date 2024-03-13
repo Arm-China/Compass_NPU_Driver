@@ -6,6 +6,7 @@
 #include <linux/mutex.h>
 #include <linux/delay.h>
 #include "aipu_priv.h"
+#include "zhouyi.h"
 #include "v3.h"
 #include "aipu_io.h"
 #include "config.h"
@@ -174,13 +175,6 @@ static int zhouyi_v3_destroy_command_pool(struct aipu_partition *partition, int 
 	zhouyi_v3_enable_interrupt(partition, false);
 	dev_dbg(partition->dev, "command pool #%d was destroyed\n", partition->id);
 	return 0;
-}
-
-int get_qos(u32 exec_flag)
-{
-	if (exec_flag & AIPU_JOB_EXEC_FLAG_QOS_FAST)
-		return TSM_QOS_FAST;
-	return TSM_QOS_SLOW;
 }
 
 static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_desc *udesc,
