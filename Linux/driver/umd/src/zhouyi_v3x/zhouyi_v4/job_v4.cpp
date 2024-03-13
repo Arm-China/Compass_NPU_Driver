@@ -1240,11 +1240,11 @@ aipu_status_t aipudrv::JobV4::schedule()
         return ret;
     }
 
-    if (m_err_code.size() == 1)
-        m_mem->zeroize(m_err_code[0].pa, m_err_code[0].size);
-
     if (get_subgraph_cnt() == 0)
         return ret;
+
+    if (m_err_code.size() == 1)
+        m_mem->zeroize(m_err_code[0].pa, m_err_code[0].size);
 
     /* with the backup tcbchain if run the job again */
     if (m_backup_tcb != nullptr && m_backup_tcb_used == true)
@@ -1282,23 +1282,10 @@ aipu_status_t aipudrv::JobV4::schedule()
     }
 
     desc.kdesc.enable_poll_opt = !m_hw_cfg->poll_in_commit_thread;
-
-    desc.kdesc.profile_fd = m_profile_fd;
-    if (m_profiler.size() > 0)
-    {
-        desc.kdesc.profile_pa = m_profiler[0].pa;
-        desc.kdesc.profile_sz = m_profiler[0].size;
-    }
     desc.kdesc.aipu_version = get_graph().m_hw_version;
     desc.kdesc.partition_id = m_partition_id;
-
-    desc.kdesc.exec_flag |= (m_segmmu_num > 0) ? AIPU_JOB_EXEC_FLAG_SEG_MMU : 0;
-    desc.kdesc.exec_flag |= (m_sg_cnt == 1) ? AIPU_JOB_EXEC_FLAG_SINGLE_GROUP : AIPU_JOB_EXEC_FLAG_MULTI_GROUP;
-
     desc.kdesc.head_tcb_pa = m_init_tcb.pa;
-    desc.kdesc.first_task_tcb_pa = m_sg_job[0].tasks[0].tcb.pa;
-    desc.kdesc.last_task_tcb_pa = m_sg_job[m_sg_cnt - 1].tasks[m_task_per_sg - 1].tcb.pa;
-    desc.kdesc.tail_tcb_pa = m_sg_job[m_sg_cnt - 1].tasks[m_task_per_sg - 1].tcb.pa + sizeof(tcb_t);
+    desc.kdesc.tail_tcb_pa = m_sg_job[m_sg_cnt - 1].tasks[m_task_per_sg - 1].tcb.pa;
 
     /* for debugger */
     desc.kdesc.is_defer_run = m_is_defer_run;
