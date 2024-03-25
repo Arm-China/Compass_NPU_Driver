@@ -145,9 +145,11 @@ bool aipudrv::Aipu::has_target(uint32_t arch, uint32_t version, uint32_t config,
 {
     for (uint32_t i = 0; i < m_part_caps.size(); i++)
     {
-        if ((arch == m_part_caps[i].arch) &&
-            (version == m_part_caps[i].version) &&
-            ((version == AIPU_ISA_VERSION_ZHOUYI_V3) || (config == m_part_caps[i].config)))
+        if ((arch == m_part_caps[i].arch)
+            && (version == m_part_caps[i].version)
+            && ((version == AIPU_ISA_VERSION_ZHOUYI_V3)
+                || (version == AIPU_ISA_VERSION_ZHOUYI_V4)
+                || (config == m_part_caps[i].config)))
             return true;
     }
 
