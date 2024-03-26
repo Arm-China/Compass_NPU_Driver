@@ -17,10 +17,7 @@ aipudrv::JobV12::JobV12(MainContext* ctx, GraphBase& graph,
     JobBase(ctx, graph, dev)
 {
     if (config != nullptr)
-    {
         m_fm_mem_region = config->fm_mem_region;
-        graph.set_weight_region(config->wt_mem_region);
-    }
 }
 
 aipudrv::JobV12::~JobV12()
@@ -202,10 +199,7 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
         goto finish;
     }
 
-    /* 5. init weights address */
-    if ((ret = get_graph().alloc_weight_buffer(get_graph().m_static_sections)) != AIPU_STATUS_SUCCESS)
-        goto finish;
-
+    /* 5. init weights address, share a common copy */
     m_weights = &get_graph().m_weights;
 
     /* 6. update rodata & dcr */

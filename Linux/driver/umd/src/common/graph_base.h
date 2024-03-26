@@ -90,9 +90,6 @@ protected:
     JOB_ID add_job(JobBase* job);
     aipu_status_t destroy_jobs();
 
-protected:
-    pthread_rwlock_t m_alloc_wt_lock;
-
 public:
     uint32_t m_input_cnt = 0;
     uint32_t m_output_cnt = 0;
@@ -107,7 +104,8 @@ public:
 
 public:
     virtual void print_parse_info() = 0;
-    virtual aipu_status_t load(std::istream& gbin, uint32_t size, bool ver_check = true) = 0;
+    virtual aipu_status_t load(std::istream& gbin, uint32_t size, bool ver_check = true,
+        aipu_load_graph_cfg_t *config = nullptr) = 0;
     virtual aipu_status_t unload() = 0;
     virtual aipu_status_t create_job(JOB_ID* id, const aipu_global_config_simulation_t* cfg,
         aipu_global_config_hw_t* hw_cfg, aipu_create_job_cfg_t *config = nullptr) = 0;
@@ -198,21 +196,6 @@ public:
     uint32_t get_buildversion()
     {
         return m_aipubin_buildversion;
-    }
-
-    void set_weight_region(uint32_t mem_region)
-    {
-        m_wt_mem_region = mem_region;
-    }
-
-    void set_weight_idx(std::set<uint32_t> &_weight_idx)
-    {
-        m_wt_idxes = _weight_idx;
-    }
-
-    uint32_t get_weight_region()
-    {
-        return m_wt_mem_region;
     }
 
 public:

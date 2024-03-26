@@ -162,11 +162,13 @@ public:
     virtual void set_gmconfig(BinSection &gm_section) {}
     virtual void set_segmmu(BinSection &segmmu_section) {}
     virtual aipu_status_t extract_gm_info(int sg_id) { return AIPU_STATUS_SUCCESS; }
+    virtual std::vector<struct GraphSectionDesc> & get_static_section_ref() = 0;
 
 
 public:
     virtual void print_parse_info() = 0;
-    virtual aipu_status_t load(std::istream& gbin, uint32_t size, bool ver_check = true);
+    virtual aipu_status_t load(std::istream& gbin, uint32_t size, bool ver_check = true,
+        aipu_load_graph_cfg_t *config = nullptr);
     virtual aipu_status_t unload();
     virtual aipu_status_t create_job(JOB_ID* id, const aipu_global_config_simulation_t* cfg,
         aipu_global_config_hw_t* hw_cfg, aipu_create_job_cfg_t *config = nullptr) = 0;
@@ -175,7 +177,8 @@ public:
         uint32_t tensor, aipu_tensor_desc_t* desc) = 0;
     virtual void add_const_section(uint32_t sg_id, struct GraphSectionDesc section) {};
     virtual void add_zerocpy_const_section(uint32_t sg_id, struct GraphSectionDesc section) {};
-    aipu_status_t alloc_weight_buffer(std::vector<struct GraphSectionDesc> &static_sections);
+    aipu_status_t alloc_weight_buffer(std::vector<struct GraphSectionDesc> &static_sections,
+        aipu_load_graph_cfg_t *config = nullptr);
 
 public:
     /* Set functions */

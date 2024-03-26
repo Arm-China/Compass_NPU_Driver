@@ -126,7 +126,6 @@ private:
     std::vector<SubGraphTask *> m_sgt_allocated;
 
     std::set<uint32_t> m_fm_idxes;
-    std::set<uint32_t> m_wt_idxes;
 
     /**
      * optimize reuse and priv_buffer allocation,
@@ -136,15 +135,6 @@ private:
     BufferDesc *m_top_reuse_buf = nullptr;
     std::set<uint32_t> m_top_reuse_idx;
     bool m_top_priv_buf_freed = false;
-
-    /**
-     * the buffer for storing exit instruction machine code.
-     * this exit instruction is run as a standalone task TCB
-     * which is for passing the next new TCB via TCB appending
-     * method. this avoids the data non-conherence issue due to
-     * cache writeback operation of NPU side.
-     */
-    BufferDesc *m_exit_inst_encode = nullptr;
 
 public:
     GraphV3X& get_graph()

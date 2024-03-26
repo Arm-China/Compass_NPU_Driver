@@ -166,7 +166,8 @@ finish:
     return ret;
 }
 
-aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph_file, uint64_t* id)
+aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph_file,
+    uint64_t* id, aipu_load_graph_cfg_t *config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
@@ -182,13 +183,14 @@ aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph_fi
     if (nullptr == p_ctx)
         ret = AIPU_STATUS_ERROR_INVALID_CTX;
     else
-        ret = p_ctx->load_graph(graph_file, id);
+        ret = p_ctx->load_graph(graph_file, id, config);
 
 finish:
     return ret;
 }
 
-aipu_status_t aipu_load_graph_helper(const aipu_ctx_handle_t* ctx, const char* graph_buf, uint32_t graph_size, uint64_t* id)
+aipu_status_t aipu_load_graph_helper(const aipu_ctx_handle_t* ctx, const char* graph_buf,
+    uint32_t graph_size, uint64_t* id, aipu_load_graph_cfg_t *config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
@@ -204,7 +206,7 @@ aipu_status_t aipu_load_graph_helper(const aipu_ctx_handle_t* ctx, const char* g
     if (nullptr == p_ctx)
         ret = AIPU_STATUS_ERROR_INVALID_CTX;
     else
-        ret = p_ctx->load_graph(graph_buf, graph_size, id);
+        ret = p_ctx->load_graph(graph_buf, graph_size, id, config);
 
 finish:
     return ret;

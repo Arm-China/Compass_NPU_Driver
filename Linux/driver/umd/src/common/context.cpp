@@ -181,7 +181,7 @@ uint64_t aipudrv::MainContext::create_unique_graph_id_inner() const
 }
 
 aipu_status_t aipudrv::MainContext::create_graph_object(std::istream& gbin, uint32_t size,
-    uint64_t id, GraphBase** gobj)
+    uint64_t id, GraphBase** gobj, aipu_load_graph_cfg_t *config)
 {
     static std::mutex mtex;
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
@@ -220,7 +220,7 @@ aipu_status_t aipudrv::MainContext::create_graph_object(std::istream& gbin, uint
         goto finish;
     }
 
-    ret = p_gobj->load(gbin, size, m_do_vcheck);
+    ret = p_gobj->load(gbin, size, m_do_vcheck, config);
     if (AIPU_STATUS_SUCCESS != ret)
     {
         destroy_graph_object(&p_gobj);
@@ -276,7 +276,8 @@ finish:
     return ret;
 }
 
-aipu_status_t aipudrv::MainContext::load_graph(const char* graph_file, GRAPH_ID* id)
+aipu_status_t aipudrv::MainContext::load_graph(const char* graph_file, GRAPH_ID* id,
+    aipu_load_graph_cfg_t *config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     GraphBase* gobj = nullptr;
@@ -304,7 +305,7 @@ aipu_status_t aipudrv::MainContext::load_graph(const char* graph_file, GRAPH_ID*
     m_graphs[_id] = nullptr;
     pthread_rwlock_unlock(&m_glock);
 
-    ret = create_graph_object(gbin, fsize, _id, &gobj);
+    ret = create_graph_object(gbin, fsize, _id, &gobj, config);
     if (AIPU_STATUS_SUCCESS != ret)
     {
         pthread_rwlock_wrlock(&m_glock);
@@ -324,7 +325,8 @@ finish:
     return ret;
 }
 
-aipu_status_t aipudrv::MainContext::load_graph(const char* graph_buf, uint32_t graph_size, GRAPH_ID* id)
+aipu_status_t aipudrv::MainContext::load_graph(const char* graph_buf, uint32_t graph_size,
+    GRAPH_ID* id, aipu_load_graph_cfg_t *config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     GraphBase* gobj = nullptr;
@@ -354,7 +356,7 @@ aipu_status_t aipudrv::MainContext::load_graph(const char* graph_buf, uint32_t g
     m_graphs[_id] = nullptr;
     pthread_rwlock_unlock(&m_glock);
 
-    ret = create_graph_object(gbin, graph_size, _id, &gobj);
+    ret = create_graph_object(gbin, graph_size, _id, &gobj, config);
     if (AIPU_STATUS_SUCCESS != ret)
     {
         pthread_rwlock_wrlock(&m_glock);

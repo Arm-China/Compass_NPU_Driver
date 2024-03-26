@@ -28,7 +28,8 @@ aipudrv::Graph::~Graph()
 {
 }
 
-aipu_status_t aipudrv::Graph::load(std::istream& gbin, uint32_t size, bool ver_check)
+aipu_status_t aipudrv::Graph::load(std::istream& gbin, uint32_t size,bool ver_check,
+    aipu_load_graph_cfg_t *config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
@@ -62,7 +63,10 @@ aipu_status_t aipudrv::Graph::load(std::istream& gbin, uint32_t size, bool ver_c
         m_mem->write(m_crodata->pa, m_bcrodata.va, m_bcrodata.size);
     }
 
-    /* alloc and load weight buffer */
+    ret = alloc_weight_buffer(get_static_section_ref(), config);
+    if (ret != AIPU_STATUS_SUCCESS)
+        goto finish;
+
     // if (m_bweight.size != 0)
     // {
     //     ret = m_mem->malloc(m_bweight.size, 0, &m_weight, "weight");
@@ -86,22 +90,33 @@ finish:
  *        put them more to specific region. the rest of buffer that
  *        can't be allocated from SRAM/DTCM is from ASID0 default.
  */
-aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectionDesc> &static_sections)
+aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectionDesc> &static_sections,
+    aipu_load_graph_cfg_t *config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     struct GraphSectionDesc *static_section = nullptr;
 
-    pthread_rwlock_wrlock(&m_alloc_wt_lock);
-    if (m_weights.size() != 0)
-        goto finish;
+     /**
+     * decide weight allocation strategy
+     */
+    if (config != nullptr)
+    {
+        m_wt_mem_region = config->wt_mem_region;
+        if (config->wt_idxes)
+        {
+            for (int i = 0; i < config->wt_idxes_cnt; i++)
+                m_wt_idxes.insert(config->wt_idxes[i]);
+        }
+    }
 
-    if (get_weight_region() == AIPU_MEM_REGION_DEFAULT)
+    if (m_wt_mem_region == AIPU_MEM_REGION_DEFAULT)
     {
         uint32_t asid = 0;
 
         if (m_bweight.size != 0)
         {
-            if (m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3)
+            if (m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3
+                || m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V4)
                 asid = 1;
 
             /**
@@ -162,7 +177,7 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
 
                 if (m_wt_idxes.count(i) == 1)
                     ret = m_mem->malloc(static_section->size, static_section->align_in_page, &buf, str.c_str(),
-                        get_weight_region());
+                        m_wt_mem_region);
                 else
                     ret = m_mem->malloc(static_section->size, static_section->align_in_page, &buf, str.c_str(),
                         AIPU_MEM_REGION_DEFAULT);
@@ -180,7 +195,6 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
     }
 
 finish:
-    pthread_rwlock_unlock(&m_alloc_wt_lock);
     return ret;
 }
 

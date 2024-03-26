@@ -44,21 +44,10 @@ aipudrv::JobV4::JobV4(MainContext *ctx, GraphBase &graph, DeviceBase *dev,
     if (m_mem->get_asid_base(0) != m_mem->get_asid_base(1))
         m_same_asid = false;
 
-    graph.set_weight_region(config->wt_mem_region);
-
     if (config->fm_idxes)
     {
         for (int i = 0; i < config->fm_idxes_cnt; i++)
             m_fm_idxes.insert(config->fm_idxes[i]);
-    }
-
-    if (config->wt_idxes)
-    {
-        for (int i = 0; i < config->wt_idxes_cnt; i++)
-            m_wt_idxes.insert(config->wt_idxes[i]);
-
-        if (m_wt_idxes.size() > 0)
-            graph.set_weight_idx(m_wt_idxes);
     }
 }
 
@@ -279,47 +268,8 @@ aipu_status_t aipudrv::JobV4::alloc_subgraph_buffers()
                 }
             }
 
-/* init task weights address */
-#if 0
-            for (uint32_t w = 0; w < get_graph().m_subgraphs[0].static_sections.size(); w++)
-            {
-                const GraphSectionDesc &section_desc = get_graph().m_subgraphs[0].static_sections[w];
-                BufferDesc buf;
-
-                if (m_gm->gm_is_gm_buffer(w, GM_BUF_TYPE_WEIGHT))
-                {
-                    std::string buf_name = "weight_" + std::to_string(w);
-                    ret = m_gm->gm_malloc(sg_idx, w, GM_BUF_TYPE_WEIGHT, buf_name, buf);
-                    if (AIPU_STATUS_SUCCESS != ret)
-                        goto add_sg;
-
-                    if (buf.ram_region == AIPU_BUF_REGION_DEFAULT)
-                    {
-                        /**
-                         * allocate buffer fail from GM_V4, use weight's original DDR buffer
-                         */
-                        buf.init(get_graph().m_weight.asid_base, get_graph().m_weight.pa + section_desc.offset,
-                            section_desc.size, section_desc.size);
-                    } else {
-                        /**
-                         * copy weight from original buffer to GM_V4 DDR buffer,
-                         * then sync GM_V4 DDR buffer to GM_V4 SRAM via TCB sync config.
-                         */
-                        m_mem->write(buf.pa, section_desc.load_src, section_desc.size);
-                    }
-                } else {
-                    buf.init(get_graph().m_weight.asid_base, get_graph().m_weight.pa + section_desc.offset,
-                        section_desc.size, section_desc.size);
-                }
-                sg.weights.push_back(buf);
-            }
-#else
-            ret = get_graph().alloc_weight_buffer(get_graph().m_subgraphs[0].static_sections);
-            if (ret != AIPU_STATUS_SUCCESS)
-                goto add_sg;
-
+            /* init task weights address, share a common copy */
             sg.weights = &get_graph().m_weights;
-#endif
         }
 
     add_sg:
@@ -495,14 +445,7 @@ int aipudrv::JobV4::alloc_subgraph_buffers_optimized()
                 }
             }
 
-            /* init task weights address */
-            ret = get_graph().alloc_weight_buffer(get_graph().m_subgraphs[0].static_sections);
-            if (ret != AIPU_STATUS_SUCCESS)
-            {
-                retval = -5;
-                goto add_sg;
-            }
-
+            /* init task weights address, share a common copy */
             sg.weights = &get_graph().m_weights;
         }
 
@@ -918,11 +861,6 @@ aipu_status_t aipudrv::JobV4::free_job_buffers()
 
     if (m_tcbs && m_tcbs->size != 0)
         m_mem->free(&m_tcbs, "tcbs");
-
-#ifndef SIMULATION
-    if (m_exit_inst_encode && m_exit_inst_encode->size > 0)
-        m_mem->free(&m_exit_inst_encode, "exit_inst_mc");
-#endif
 
     if (m_pprint && m_pprint->size != 0)
         m_mem->free(&m_pprint, "printf");

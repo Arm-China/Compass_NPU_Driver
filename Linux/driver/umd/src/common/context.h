@@ -49,7 +49,8 @@ private:
 
 private:
     uint64_t create_unique_graph_id_inner() const;
-    aipu_status_t create_graph_object(std::istream& gbin, uint32_t size, uint64_t id, GraphBase** gobj);
+    aipu_status_t create_graph_object(std::istream& gbin, uint32_t size, uint64_t id,
+        GraphBase** gobj, aipu_load_graph_cfg_t *config = nullptr);
     aipu_status_t destroy_graph_object(GraphBase** gobj);
 
 private:
@@ -66,8 +67,10 @@ public:
     GraphBase*    get_graph_object(GRAPH_ID id);
     JobBase*      get_job_object(JOB_ID id);
     aipu_status_t get_status_msg(aipu_status_t status, const char** msg);
-    aipu_status_t load_graph(const char* graph_file, GRAPH_ID* id);
-    aipu_status_t load_graph(const char* graph_buf, uint32_t graph_size, GRAPH_ID* id);
+    aipu_status_t load_graph(const char* graph_file, GRAPH_ID* id,
+        aipu_load_graph_cfg_t *config = nullptr);
+    aipu_status_t load_graph(const char* graph_buf, uint32_t graph_size,
+        GRAPH_ID* id, aipu_load_graph_cfg_t *config = nullptr);
     aipu_status_t unload_graph(GRAPH_ID id);
     aipu_status_t get_simulation_instance(void** simulator, void** memory);
     aipu_status_t create_job(GRAPH_ID graph, JOB_ID* id, aipu_create_job_cfg_t *config);

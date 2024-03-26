@@ -158,6 +158,11 @@ public:
     aipu_status_t get_tensor_count(aipu_tensor_type_t type, uint32_t* cnt);
     aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor, aipu_tensor_desc_t* desc);
 
+    virtual std::vector<struct GraphSectionDesc> &get_static_section_ref()
+    {
+        return m_subgraphs[0].static_sections;
+    }
+
 public:
     virtual aipu_status_t update_dynamic_io_tensor_size(aipu_tensor_type_t type);
 

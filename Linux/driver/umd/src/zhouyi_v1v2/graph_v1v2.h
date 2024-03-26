@@ -39,6 +39,11 @@ public:
     virtual aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type,
         uint32_t tensor, aipu_tensor_desc_t* desc);
 
+    virtual std::vector<struct GraphSectionDesc> &get_static_section_ref()
+    {
+        return m_static_sections;
+    }
+
 public:
     void set_enrty(uint32_t offset)
     {

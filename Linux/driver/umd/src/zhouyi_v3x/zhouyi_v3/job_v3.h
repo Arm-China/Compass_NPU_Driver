@@ -124,7 +124,6 @@ private:
     std::vector<SubGraphTask *> m_sgt_allocated;
 
     std::set<uint32_t> m_fm_idxes;
-    std::set<uint32_t> m_wt_idxes;
 
     /**
      * optimize reuse and priv_buffer allocation,

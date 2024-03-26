@@ -205,6 +205,42 @@ typedef enum {
 } aipu_mem_region_t;
 
 /**
+ * @union aipu_load_graph_cfg
+ *
+ * @brief support some configuration done in loading graph stage.
+ *
+ * @note wt_mem_region
+ *       if config weight buffer region for aipu v1/v2, just ignore partition_id & qos_level,
+ *       set them as 0 and only set fm_mem_region field.
+ *       the buffer is allocated successfully only if there's enough space in
+ *       region marked by `fm_mem_region`.
+ *
+ *       usually it only needs to set `fm_mem_region` in struct aipu_create_job_cfg to
+ *       control feature map buffer allocated from which memory region.
+ *       if it's sure that the region's free space is enough large, you can set
+ *       `wt_mem_region` to try to allocate buffer from it. if it fail to allocate
+ *       buffer from marked region, it will try according to region order: DTCM->SRAM->DDR.
+ *
+ *       if it hopes to allcate weight buffer from SRAM, it has to confirm the SRAM range locates in
+ *       ASID1 address scope.
+ *
+ * @note wt_idxes
+ *       the indexes of weight tensors, those tensor buffers firstly try to be allocated from
+ *       region specified in 'wt_mem_region'.
+ */
+typedef struct aipu_load_graph_cfg {
+    union {
+        uint32_t misc = 0;
+        struct {
+            uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
+        };
+    };
+
+    int32_t *wt_idxes;      /**< specify weights allocated from 'wt_mem_region' */
+    int32_t wt_idxes_cnt;   /**< the emement number in wt_idxes */
+} aipu_load_graph_cfg_t;
+
+/**
  * @union aipu_create_job_cfg
  *
  * @brief config job's partition, qos(priority), feature map
@@ -214,27 +250,11 @@ typedef enum {
  *       set them as 0 and only set fm_mem_region field.
  *       the buffer is allocated successfully only if there's enough space in
  *       region marked by `fm_mem_region`.
- * @note wt_mem_region
- *       if config weight buffer region for aipu v1/v2, just ignore partition_id & qos_level,
- *       set them as 0 and only set fm_mem_region field.
- *       the buffer is allocated successfully only if there's enough space in
- *       region marked by `fm_mem_region`.
- *
- *       usually it only needs to set `fm_mem_region`. if it's sure that the region's
- *       free space is enough large, you can set `wt_mem_region` to try to allocate
- *       buffer from it. if it fail to allocate buffer from marked region, it will try
- *       according to region order: DTCM->SRAM->DDR.
- *
- *       if it hopes to allcate weight buffer from SRAM, it has to confirm the SRAM range locates in
- *       ASID1 address scope.
  *
  * @note fm_idxes
  *       the indexes of feature map tensors, those tensor buffers will firstly try to be allocated from
  *       region specified in 'fm_mem_region'.
  *
- * @note wt_idxes
- *       the indexes of weight tensors, those tensor buffers firstly try to be allocated from
- *       region specified in 'wt_mem_region'.
  *
  * @note dbg_dispatch and dbg_core_id
  *       it can dispatch job to some core for debug. it needs not to set them in normal cases.
@@ -255,8 +275,6 @@ typedef struct aipu_create_job_cfg {
 
     int32_t *fm_idxes;      /**< specify feature maps allocated from 'fm_mem_region' */
     int32_t fm_idxes_cnt;   /**< the emement number in fm_idxes */
-    int32_t *wt_idxes;      /**< specify weights allocated from 'wt_mem_region' */
-    int32_t wt_idxes_cnt;   /**< the emement number in wt_idxes */
 } aipu_create_job_cfg_t;
 
 typedef enum {
@@ -633,6 +651,7 @@ aipu_status_t aipu_config_global(const aipu_ctx_handle_t* ctx, uint64_t types, v
  * @param[in]  garph Executable graph binary file path
  * @param[out] id    Pointer to a memory location allocated by application where UMD stores the
  *                       graph ID
+ * @param[in]  config Pointer to specific configuration struct
  *
  * @retval AIPU_STATUS_SUCCESS
  * @retval AIPU_STATUS_ERROR_NULL_PTR
@@ -647,7 +666,8 @@ aipu_status_t aipu_config_global(const aipu_ctx_handle_t* ctx, uint64_t types, v
  * @retval AIPU_STATUS_ERROR_RESERVE_SRAM_FAIL
  * @retval AIPU_STATUS_ERROR_INVALID_GM
  */
-aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph, uint64_t* id);
+aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph,
+    uint64_t* id, aipu_load_graph_cfg_t *config = nullptr);
 
 /**
  * @brief This API loads a graph with the form of AIPU executable graph binary array.
@@ -657,6 +677,7 @@ aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph, u
  * @param[in]  graph_size The byte size of graph binary data in 'graph_buf'
  * @param[out] id    Pointer to a memory location allocated by application where UMD stores the
  *                       graph ID
+ * @param[in]  config Pointer to specific configuration struct
  *
  * @retval AIPU_STATUS_SUCCESS
  * @retval AIPU_STATUS_ERROR_NULL_PTR
@@ -673,7 +694,7 @@ aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph, u
  * @retval AIPU_STATUS_ERROR_INVALID_GM
  */
 aipu_status_t aipu_load_graph_helper(const aipu_ctx_handle_t* ctx, const char* graph_buf,
-    uint32_t graph_size, uint64_t* id);
+    uint32_t graph_size, uint64_t* id, aipu_load_graph_cfg_t *config = nullptr);
 
 /**
  * @brief This API is used to unload a loaded graph
