@@ -204,12 +204,17 @@ class NPU
      * @brief This API loads an offline built AIPU executable graph binary from file system.
      *
      * @param[in]  graph_bin Executable graph binary file path
-     *
-     * return value map
-     * {
-     *     "ret": retval
-     *     "data": graph_id
-     * }
+     * @param[in]  load_cfg  Configuration in loading graph stage
+     *             {
+     *                 "wt_mem_region" : preferred weight allocation region (AIPU_MEM_REGION_SRAM)
+     *             }
+     * @param[in]  wt_idxes  Weight buffer index indicating which buffer is allocated from
+     *                       specified memory region
+     * @retval     return value map
+     *             {
+     *                  "ret": retval
+     *                  "data": graph_id
+     *             }
      *
      * @retval AIPU_STATUS_SUCCESS
      * @retval AIPU_STATUS_ERROR_NULL_PTR
@@ -224,20 +229,41 @@ class NPU
      * @retval AIPU_STATUS_ERROR_RESERVE_SRAM_FAIL
      * @retval AIPU_STATUS_ERROR_INVALID_GM
      */
-    std::map<std::string, uint64_t> aipu_load_graph_py(std::string &graph_bin)
+    std::map<std::string, uint64_t> aipu_load_graph_py(std::string &graph_bin,
+        std::map<std::string, int> load_cfg, std::vector<int> wt_idxes)
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         const char *status_msg = nullptr;
+        aipu_load_graph_cfg_t load_grach_cfg = {0};
         std::map<std::string, uint64_t> retmap;
         uint64_t graph_id = -1;
 
-        ret = aipu_load_graph(m_ctx, graph_bin.c_str(), &graph_id);
+        load_grach_cfg.wt_mem_region = AIPU_MEM_REGION_DEFAULT;
+        if (load_cfg.size() > 0)
+        {
+            if (load_cfg.count("wt_mem_region") > 0)
+                load_grach_cfg.wt_mem_region = load_cfg["wt_mem_region"];
+
+            if (wt_idxes.size() > 0)
+            {
+                load_grach_cfg.wt_idxes_cnt = wt_idxes.size();
+                load_grach_cfg.wt_idxes = new int[load_grach_cfg.wt_idxes_cnt];
+
+                for (int i = 0; i < load_grach_cfg.wt_idxes_cnt; i++)
+                    load_grach_cfg.wt_idxes[i] = wt_idxes[i];
+            }
+        }
+
+        ret = aipu_load_graph(m_ctx, graph_bin.c_str(), &graph_id, &load_grach_cfg);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(m_ctx, ret, &status_msg);
             fprintf(stderr, "[PY UMD ERROR] aipu_load_graph: %s\n", status_msg);
             graph_id = -1;
         }
+
+        if (load_grach_cfg.wt_idxes != nullptr)
+            delete []load_grach_cfg.wt_idxes;
 
         retmap["ret"] = ret;
         retmap["data"] = graph_id;
@@ -249,12 +275,18 @@ class NPU
      *
      * @param[in]  graph_buf The start address of buffer which stores graph binary data
      * @param[in]  graph_size The byte size of graph binary data in 'graph_buf'
+     * @param[in]  load_cfg  Configuration in loading graph stage
+     *             {
+     *                 "wt_mem_region" : preferred weight allocation region (AIPU_MEM_REGION_SRAM)
+     *             }
+     * @param[in]  wt_idxes  Weight buffer index indicating which buffer is allocated from
+     *                       specified memory region
      *
-     * return value map
-     * {
-     *     "ret": retval
-     *     "data": graph_id
-     * }
+     * @retval     return value map
+     *             {
+     *                 "ret": retval
+     *                 "data": graph_id
+     *             }
      *
      * @retval AIPU_STATUS_SUCCESS
      * @retval AIPU_STATUS_ERROR_NULL_PTR
@@ -270,20 +302,41 @@ class NPU
      * @retval AIPU_STATUS_ERROR_RESERVE_SRAM_FAIL
      * @retval AIPU_STATUS_ERROR_INVALID_GM
      */
-    std::map<std::string, uint64_t> aipu_load_graph_helper_py(const char *graph_buffer, uint32_t graph_size)
+    std::map<std::string, uint64_t> aipu_load_graph_helper_py(const char *graph_buffer,
+        uint32_t graph_size, std::map<std::string, int> load_cfg, std::vector<int> wt_idxes)
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         const char *status_msg = nullptr;
+        aipu_load_graph_cfg_t load_grach_cfg = {0};
         std::map<std::string, uint64_t> retmap;
         uint64_t graph_id = -1;
 
-        ret = aipu_load_graph_helper(m_ctx, graph_buffer, graph_size, &graph_id);
+        load_grach_cfg.wt_mem_region = AIPU_MEM_REGION_DEFAULT;
+        if (load_cfg.size() > 0)
+        {
+            if (load_cfg.count("wt_mem_region") > 0)
+                load_grach_cfg.wt_mem_region = load_cfg["wt_mem_region"];
+
+            if (wt_idxes.size() > 0)
+            {
+                load_grach_cfg.wt_idxes_cnt = wt_idxes.size();
+                load_grach_cfg.wt_idxes = new int[load_grach_cfg.wt_idxes_cnt];
+
+                for (int i = 0; i < load_grach_cfg.wt_idxes_cnt; i++)
+                    load_grach_cfg.wt_idxes[i] = wt_idxes[i];
+            }
+        }
+
+        ret = aipu_load_graph_helper(m_ctx, graph_buffer, graph_size, &graph_id, &load_grach_cfg);
         if (ret != AIPU_STATUS_SUCCESS)
         {
             aipu_get_error_message(m_ctx, ret, &status_msg);
             fprintf(stderr, "[PY UMD ERROR] aipu_load_graph: %s\n", status_msg);
             graph_id = -1;
         }
+
+        if (load_grach_cfg.wt_idxes != nullptr)
+            delete []load_grach_cfg.wt_idxes;
 
         retmap["ret"] = ret;
         retmap["data"] = graph_id;
@@ -323,18 +376,16 @@ class NPU
      *          "partition_id" : "0-3",
      *          "dbg_dispatch" : "0|1",
      *          "dbg_core_id" : "0-2",
-                "qos_level" : "0|1",
-                "fm_mem_region" : "feature map priority allocation region",
-                "wt_mem_region" : "weight priority allocation region",
+     *          "qos_level" : "0|1",
+     *          "fm_mem_region" : "feature map priority allocation region",
      *      }
      * @param[in] fm_idxes: specify which feature maps are allocated from specific region
-     * @param[in] wt_idxes: specify which weight maps are allocated from specific region
      *
-     * return value map
-     * {
-     *     "ret": retval
-     *     "data": job_id
-     * }
+     * @retval    return value map
+     *            {
+     *                "ret": retval
+     *                "data": job_id
+     *            }
      *
      * @retval AIPU_STATUS_SUCCESS
      * @retval AIPU_STATUS_ERROR_NULL_PTR
@@ -343,7 +394,7 @@ class NPU
      * @retval AIPU_STATUS_ERROR_BUF_ALLOC_FAIL
      */
     std::map<std::string, uint64_t> aipu_create_job_py(uint64_t graph_id, std::map<std::string, int> job_cfg,
-        std::vector<int> fm_idxes, std::vector<int> wt_idxes)
+        std::vector<int> fm_idxes)
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         const char *status_msg = nullptr;
@@ -351,7 +402,7 @@ class NPU
         uint64_t job_id = -1;
         aipu_create_job_cfg_t create_job_config = {0};
         std::string keys[] = {"partition_id", "dbg_dispatch", "dbg_core_id",
-            "qos_level", "fm_mem_region", "wt_mem_region"};
+            "qos_level", "fm_mem_region"};
 
         create_job_config.misc = 0;
         if (job_cfg.count(keys[0]))
@@ -369,9 +420,6 @@ class NPU
         if (job_cfg.count(keys[4]))
             create_job_config.fm_mem_region = job_cfg[keys[4]];
 
-        if (job_cfg.count(keys[5]))
-            create_job_config.wt_mem_region = job_cfg[keys[5]];
-
         if (fm_idxes.size() > 0)
         {
             create_job_config.fm_idxes_cnt = fm_idxes.size();
@@ -379,15 +427,6 @@ class NPU
 
             for (int i = 0; i < create_job_config.fm_idxes_cnt; i++)
                 create_job_config.fm_idxes[i] = fm_idxes[i];
-        }
-
-        if (wt_idxes.size() > 0)
-        {
-            create_job_config.wt_idxes_cnt = wt_idxes.size();
-            create_job_config.wt_idxes = new int[create_job_config.wt_idxes_cnt];
-
-            for (int i = 0; i < create_job_config.wt_idxes_cnt; i++)
-                create_job_config.wt_idxes[i] = wt_idxes[i];
         }
 
         ret = aipu_create_job(m_ctx, graph_id, &job_id, &create_job_config);
@@ -401,9 +440,6 @@ class NPU
         /* free job config items */
         if (create_job_config.fm_idxes)
             delete []create_job_config.fm_idxes;
-
-        if (create_job_config.wt_idxes)
-            delete []create_job_config.wt_idxes;
 
         retmap["ret"] = ret;
         retmap["data"] = job_id;
@@ -566,11 +602,11 @@ class NPU
      *                     timeout = 0: non-blocking and return job's status immediately.
      *                     timeout = -1: blocking until job is really done or exception.
      *
-     * return value map
-     * {
-     *     "ret": retval
-     *     "data": job status
-     * }
+     * @retval     return value map
+     *             {
+     *                 "ret": retval
+     *                 "data": job status
+     *             }
      *
      * @retval AIPU_STATUS_SUCCESS
      * @retval AIPU_STATUS_ERROR_NULL_PTR
@@ -632,11 +668,11 @@ class NPU
      * @param[in]  id   Job ID returned by aipu_create_job, or graph ID returned by aipu_load_graph
      * @param[in]  type Tensor type
      *
-     * return value map:
-     * {
-     *     "ret" : retval
-     *     "data" : tensor count
-     * }
+     * @retval     return value map:
+     *             {
+     *                 "ret" : retval
+     *                 "data" : tensor count
+     *             }
      *
      * @retval AIPU_STATUS_SUCCESS
      * @retval AIPU_STATUS_ERROR_NULL_PTR
@@ -886,11 +922,11 @@ class NPU
      * @param[in]  type   Tensor type
      * @param[in]  tensor Input tensor ID
      *
-     * return value map
-     * {
-     *     "ret": {retval}
-     *     "data": {out data}
-     * }
+     * @retval     return value map
+     *             {
+     *                 "ret": {retval}
+     *                 "data": {out data}
+     *             }
      *
      * @retval AIPU_STATUS_SUCCESS
      * @retval AIPU_STATUS_ERROR_NULL_PTR
@@ -1472,6 +1508,14 @@ PYBIND11_MODULE(libaipudrv, m) {
         .value("AIPU_STATUS_ERROR_NO_BATCH_QUEUE", aipu_status_t::AIPU_STATUS_ERROR_NO_BATCH_QUEUE)
         .value("AIPU_STATUS_ERROR_MARK_SHARED_TENSOR", aipu_status_t::AIPU_STATUS_ERROR_MARK_SHARED_TENSOR)
         .value("AIPU_STATUS_ERROR_SET_SHARED_TENSOR", aipu_status_t::AIPU_STATUS_ERROR_SET_SHARED_TENSOR)
+        .value("AIPU_STATUS_ERROR_DMABUF_SHARED_IO", aipu_status_t::AIPU_STATUS_ERROR_DMABUF_SHARED_IO)
+        .value("AIPU_STATUS_ERROR_GET_SHAPE_FAILED", aipu_status_t::AIPU_STATUS_ERROR_GET_SHAPE_FAILED)
+        .value("AIPU_STATUS_ERROR_SET_SHAPE_FAILED", aipu_status_t::AIPU_STATUS_ERROR_SET_SHAPE_FAILED)
+        .value("AIPU_STATUS_ERROR_NOT_CONFIG_SHAPE", aipu_status_t::AIPU_STATUS_ERROR_NOT_CONFIG_SHAPE)
+        .value("AIPU_STATUS_ERROR_UNMATCH_OUT_SHAPE", aipu_status_t::AIPU_STATUS_ERROR_UNMATCH_OUT_SHAPE)
+        .value("AIPU_STATUS_ERROR_ZERO_TENSOR_SIZE", aipu_status_t::AIPU_STATUS_ERROR_ZERO_TENSOR_SIZE)
+        .value("AIPU_STATUS_ERROR_ALLOC_GRIP_ID", aipu_status_t::AIPU_STATUS_ERROR_ALLOC_GRIP_ID)
+        .value("AIPU_STATUS_ERROR_ALLOC_GROUP_ID", aipu_status_t::AIPU_STATUS_ERROR_ALLOC_GROUP_ID)
         .value("AIPU_STATUS_MAX", aipu_status_t::AIPU_STATUS_MAX)
         .value("AIPU_STATUS_ERROR_UNKNOWN_ERROR", aipu_status_t::AIPU_STATUS_ERROR_UNKNOWN_ERROR)
         .value("AIPU_STATUS_ERROR_KEYBOARD_INTERRUPT", aipu_status_t::AIPU_STATUS_ERROR_KEYBOARD_INTERRUPT)
