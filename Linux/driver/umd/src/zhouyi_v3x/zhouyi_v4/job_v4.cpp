@@ -1059,6 +1059,7 @@ aipu_status_t aipudrv::JobV4::setup_tcb_task(uint32_t sg_id, uint32_t grid_id,
     tcb->groupid = (uint16_t)m_group_id_idx;
     tcb->gridid = (uint16_t)grid_id;
     tcb->taskid = (uint16_t)task_id;
+    tcb->ica_warmup_len = graph.m_subgraphs[sg_id].warmup_len;
     tcb->grid_dim_x = 1;
     tcb->grid_dim_y = 1;
     tcb->grid_dim_z = 1;
@@ -1695,7 +1696,7 @@ aipu_status_t aipudrv::JobV4::dump_for_emulation()
             ofsmt << "group_id: " << std::dec << tcb.groupid << "\n";
             ofsmt << "grid_id: " << tcb.gridid << "\n";
             ofsmt << "task_id: " << tcb.taskid << "\n";
-            ofsmt << "warm_len: " << tcb.warm_len << "\n";
+            ofsmt << "warm_len: " << tcb.ica_warmup_len << "\n";
 
             ofsmt << "grid_dim_x: " << tcb.grid_dim_x << "\n";
             ofsmt << "grid_dim_y: " << tcb.grid_dim_y << "\n";

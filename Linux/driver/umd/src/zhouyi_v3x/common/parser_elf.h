@@ -83,7 +83,7 @@ struct ElfSubGraphDesc
     uint32_t printfifo_size;
     uint32_t profiler_buf_size;
     uint32_t private_data_size;
-    uint32_t reserve1;
+    uint32_t warmup_len;   // the warmup len for subgraph
     uint32_t reserve2;
     uint32_t reserve3;
     int32_t precursor_cnt; // count of ElfPrecursorDesc

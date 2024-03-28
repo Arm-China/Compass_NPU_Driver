@@ -273,7 +273,7 @@ struct tcb_t
             uint16_t group_id;
             uint16_t grid_id;
             uint16_t task_id;
-            uint16_t warm_len;
+            uint16_t warmup_len;
             uint16_t grid_dim_x;
             uint16_t grid_dim_y;
             uint16_t grid_dim_z;
@@ -343,7 +343,7 @@ struct tcb_t
 #define groupid      __data.noninit.group_id
 #define gridid       __data.noninit.grid_id
 #define taskid       __data.noninit.task_id
-#define warm_len     __data.noninit.warm_len
+#define ica_warmup_len   __data.noninit.warmup_len
 #define grid_dim_x   __data.noninit.grid_dim_x
 #define grid_dim_y   __data.noninit.grid_dim_y
 #define grid_dim_z   __data.noninit.grid_dim_z

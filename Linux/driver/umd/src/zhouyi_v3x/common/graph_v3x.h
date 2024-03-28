@@ -120,6 +120,7 @@ struct Subgraph {
     uint32_t printfifo_size;
     uint32_t profiler_buf_size;
     uint32_t private_data_size;
+    uint32_t warmup_len;
     std::vector<uint32_t> precursors;
     int32_t precursor_cnt;
     uint32_t stack_size;

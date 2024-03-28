@@ -148,11 +148,11 @@ aipu_status_t aipudrv::ParserELF::parse_subgraph(char* start, uint32_t id, Graph
 
     LOG(LOG_ALERT, "sug_graph: <id=%d, type=%d, text_offset=0x%x, fm_desc_offset=0x%x, "
         "rodata_offset=0x%x, rodata_size=0x%x, dcr_offset=0x%x, dcr_size=0x%x, "
-        "pfifo_size=0x%x, prof_buf_offset=0x%x, prec_cnt=0x%x, priv_cnt=0x%x>",
+        "pfifo_size=0x%x, prof_buf_offset=0x%x, warm_len=0x%x, prec_cnt=0x%x, priv_cnt=0x%x>",
         gbin_sg_desc.id, gbin_sg_desc.type, gbin_sg_desc.text_offset, gbin_sg_desc.fm_desc_offset,
         gbin_sg_desc.rodata_offset, gbin_sg_desc.rodata_size, gbin_sg_desc.dcr_offset,
         gbin_sg_desc.dcr_size, gbin_sg_desc.printfifo_size, gbin_sg_desc.profiler_buf_size,
-        gbin_sg_desc.precursor_cnt, gbin_sg_desc.private_buffer_cnt);
+        gbin_sg_desc.warmup_len, gbin_sg_desc.precursor_cnt, gbin_sg_desc.private_buffer_cnt);
 
     sg.id = id;
     sg.text.load(nullptr, gbin_sg_desc.text_offset, 0);
@@ -161,6 +161,7 @@ aipu_status_t aipudrv::ParserELF::parse_subgraph(char* start, uint32_t id, Graph
     sg.printfifo_size    = gbin_sg_desc.printfifo_size;
     sg.profiler_buf_size = gbin_sg_desc.profiler_buf_size;
     sg.private_data_size = gbin_sg_desc.private_data_size;
+    sg.warmup_len = gbin_sg_desc.warmup_len;
     sg.precursor_cnt = gbin_sg_desc.precursor_cnt;
 
     start += sizeof(gbin_sg_desc);
