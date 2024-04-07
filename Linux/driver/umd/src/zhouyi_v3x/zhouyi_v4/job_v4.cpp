@@ -1225,6 +1225,7 @@ aipu_status_t aipudrv::JobV4::schedule()
     desc.kdesc.partition_id = m_partition_id;
     desc.kdesc.head_tcb_pa = m_init_tcb.pa;
     desc.kdesc.tail_tcb_pa = m_sg_job[m_sg_cnt - 1].tasks[m_task_per_sg - 1].tcb.pa;
+    desc.kdesc.last_task_tcb_pa = m_sg_job[m_sg_cnt - 1].tasks[m_task_per_sg - 1].tcb.pa;
 
     /* for debugger */
     desc.kdesc.is_defer_run = m_is_defer_run;
