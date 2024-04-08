@@ -406,6 +406,7 @@ struct tcb_t
 #define TCB_FLAG_CORE_NUM(n)           ((n & 0xF) << 16)
 #define TCB_FLAG_BROADCAST_START       (1 << 20)
 #define TCB_FLAG_GRID_INIT             (1 << 21)
+#define TCB_FLAG_L2D_FLUSH             (1 << 22)
 
 /* task tcb interrupt */
 #define EN_INTERRUPT_TEC_DONE          (1 << 0)
