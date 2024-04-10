@@ -1015,6 +1015,23 @@ class NPU
         return retmap;
     }
 
+    /**
+     * @brief This API is used to send specific command to NPU driver.
+     *
+     * @param[in] cmd cmd
+     * @param[inout] py_arg input or output argument according to 'cmd'
+     *
+     * @retval     return value map
+     *             {
+     *                 "ret": {retval}
+     *                 "data": {out data}, optional output
+     *             }
+     *
+     * @retval AIPU_STATUS_SUCCESS
+     * @retval AIPU_STATUS_ERROR_NULL_PTR
+     * @retval AIPU_STATUS_ERROR_INVALID_CTX
+     * @retval AIPU_STATUS_ERROR_DEV_ABNORMAL
+     */
     std::map<std::string, std::vector<uint64_t> > aipu_ioctl_py(uint32_t cmd,
         std::map<std::string, uint64_t> py_arg)
     {
@@ -1145,20 +1162,14 @@ class NPU
                 retmap["data"].push_back((uint64_t)p->data[i]);
 
             delete []p->data;
-        }
-        else if (cmd == AIPU_IOCTL_ALLOC_DMABUF)
-        {
+        } else if (cmd == AIPU_IOCTL_ALLOC_DMABUF) {
             struct aipu_dma_buf_request *p = (struct aipu_dma_buf_request *)arg;
             retmap["data"].push_back((uint64_t)p->fd);
-        }
-        else if (cmd == AIPU_IOCTL_ALLOC_SHARE_BUF)
-        {
+        } else if (cmd == AIPU_IOCTL_ALLOC_SHARE_BUF) {
             aipu_share_buf_t *p = (aipu_share_buf_t *)arg;
             retmap["data"].push_back(p->pa);
             retmap["data"].push_back(p->va);
-        }
-        else
-        {
+        } else {
             retmap["data"] = {};
         }
 
@@ -1166,6 +1177,116 @@ class NPU
         retmap["ret"] = {ret};
         if (arg)
             free(arg);
+        return retmap;
+    }
+
+    /**
+     * @brief This API is used to send specific command to config dynamic shape.
+     *
+     * @param[in] cmd cmd
+     * @param[inout] py_arg0 input or output argument according to 'cmd', map type
+     * @param[inout] py_arg1 input or output argument according to 'cmd', vector<map> type
+     *
+     * @retval     return value map
+     *             {
+     *                 "ret": {retval}
+     *                 "data": {out data}, optional output
+     *             }
+     *
+     * @retval AIPU_STATUS_SUCCESS
+     * @retval AIPU_STATUS_ERROR_NULL_PTR
+     * @retval AIPU_STATUS_ERROR_INVALID_CTX
+     * @retval AIPU_STATUS_ERROR_DEV_ABNORMAL
+     */
+    std::map<std::string, std::vector<uint64_t> > aipu_ioctl_dshape_py(uint32_t cmd,
+        std::map<std::string, uint64_t> py_arg0, std::vector<std::vector<uint64_t>> py_arg1)
+    {
+        void *arg = nullptr;
+        std::map<std::string, std::vector<uint64_t> > retmap;
+        aipu_status_t ret = AIPU_STATUS_SUCCESS;
+        const char *status_msg = nullptr;
+
+        switch (cmd)
+        {
+            case AIPU_IOCTL_SET_DS_INFO:
+                {
+                    /**
+                     * each input tensor has corresponding shape, and all shape information
+                     * is set in one aipu_ioctl calling.
+                     *
+                     * dynamical shape example:
+                     *
+                     * py_arg0 = {
+                     *    "graph_id" = 0x100000001,
+                     * }
+                     *
+                     * "shape_items"
+                     * py_arg1 = [
+                     *     [1,2,3,4],
+                     *     [11,22,33,44]
+                     * ]
+                     *
+                     */
+
+                    std::string shape_param_key[] = {"graph_id", "input_shape_cnt", "shape_items"};
+                    aupu_dynshape_param_t *ds_param = nullptr;
+                    uint32_t shape_items_num = 0;
+
+                    arg = new aupu_dynshape_param_t;
+                    ds_param = (aupu_dynshape_param_t *)arg;
+
+                    ds_param->graph_id = py_arg0[shape_param_key[0]];
+
+                    shape_items_num = py_arg1.size();
+                    ds_param->input_shape_cnt = shape_items_num;
+                    ds_param->shape_items = new aupu_dynshape_item_t[shape_items_num];
+
+                    for(uint32_t i = 0; i < shape_items_num; i++)
+                    {
+                        uint32_t shape_data_item_num = py_arg1[i].size();
+
+                        ds_param->shape_items[i].ds_idx = i;
+                        ds_param->shape_items[i].ds_data = new uint32_t[shape_data_item_num];
+
+                        for (uint32_t j = 0; j < shape_data_item_num; j++)
+                            ds_param->shape_items[i].ds_data[j] = py_arg1[i][j];
+                    }
+                }
+                break;
+
+            default:
+                fprintf(stderr, "[PY UMD ERROR] aipu_ioctl invalid cmd\n");
+                retmap["data"] = {};
+                ret = AIPU_STATUS_ERROR_INVALID_OP;
+                goto finish;
+
+        }
+
+        ret = aipu_ioctl(m_ctx, cmd, arg);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(m_ctx, ret, &status_msg);
+            fprintf(stderr, "[PY UMD ERROR] aipu_ioctl: %s\n", status_msg);
+            retmap["data"] = {};
+            goto finish;
+        }
+
+        if (cmd == AIPU_IOCTL_SET_DS_INFO) {
+            uint32_t shape_items_num = py_arg1.size();
+            aupu_dynshape_param_t *ds_param = (aupu_dynshape_param_t *)arg;
+
+            for(uint32_t i = 0; i < shape_items_num; i++)
+                delete[] ds_param->shape_items[i].ds_data;
+
+            delete[] ds_param->shape_items;
+            delete ds_param;
+            retmap["data"] = {};
+        } else {
+            retmap["data"] = {};
+        }
+
+    finish:
+        retmap["ret"] = {ret};
         return retmap;
     }
 
@@ -1438,14 +1559,53 @@ PYBIND11_MODULE(libaipudrv, m) {
         .def_readwrite("dmabuf_fd", &aipu_shared_tensor_info_t::dmabuf_fd)
         .def_readwrite("offset_in_dmabuf", &aipu_shared_tensor_info_t::offset_in_dmabuf);
 
+    py::class_<aipu_dynshape_num_t>(m, "aipu_dynshape_num_t")
+        .def(py::init<>())
+        .def_readwrite("graph_id", &aipu_dynshape_num_t::graph_id)
+        .def_readwrite("ds_num", &aipu_dynshape_num_t::ds_num);
+
+    py::class_<aipu_dynshape_dim_num_t>(m, "aipu_dynshape_dim_num_t")
+        .def(py::init<>())
+        .def_readwrite("graph_id", &aipu_dynshape_dim_num_t::graph_id)
+        .def_readwrite("ds_idx", &aipu_dynshape_dim_num_t::ds_idx)
+        .def_readwrite("max_threshhold", &aipu_dynshape_dim_num_t::max_threshhold)
+        .def_readwrite("ds_dim_num", &aipu_dynshape_dim_num_t::ds_dim_num);
+
+    py::class_<aipu_dynshape_info_t>(m, "aipu_dynshape_info_t")
+        .def(py::init<>())
+        .def_readwrite("graph_id", &aipu_dynshape_info_t::graph_id)
+        .def_readwrite("ds_idx", &aipu_dynshape_info_t::ds_idx)
+        .def_readwrite("max_threshhold", &aipu_dynshape_info_t::max_threshhold)
+        .def_readwrite("ds_data", &aipu_dynshape_info_t::ds_data);
+
+    py::class_<aupu_dynshape_item_t>(m, "aupu_dynshape_item_t")
+        .def(py::init<>())
+        .def_readwrite("ds_idx", &aupu_dynshape_item_t::ds_idx)
+        .def_readwrite("ds_data", &aupu_dynshape_item_t::ds_data);
+
+    py::class_<aupu_dynshape_param_t>(m, "aupu_dynshape_param_t")
+        .def(py::init<>())
+        .def_readwrite("graph_id", &aupu_dynshape_param_t::graph_id)
+        .def_readwrite("input_shape_cnt", &aupu_dynshape_param_t::input_shape_cnt)
+        .def_readwrite("shape_items", &aupu_dynshape_param_t::shape_items);
+
     py::enum_<aipu_ioctl_cmd_t>(m, "aipu_ioctl_cmd_t")
+        .value("AIPU_IOCTL_SET_PROFILE", aipu_ioctl_cmd_t::AIPU_IOCTL_SET_PROFILE)
+        .value("AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION", aipu_ioctl_cmd_t::AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION)
+        .value("AIPU_IOCTL_GET_DS_NUM", aipu_ioctl_cmd_t::AIPU_IOCTL_GET_DS_NUM)
+        .value("AIPU_IOCTL_GET_DS_DIM_NUM", aipu_ioctl_cmd_t::AIPU_IOCTL_GET_DS_DIM_NUM)
+        .value("AIPU_IOCTL_GET_DS_INFO", aipu_ioctl_cmd_t::AIPU_IOCTL_GET_DS_INFO)
+        .value("AIPU_IOCTL_SET_DS_INFO", aipu_ioctl_cmd_t::AIPU_IOCTL_SET_DS_INFO)
+        .value("AIPU_IOCTL_IS_DYNAMIC_SHAPE", aipu_ioctl_cmd_t::AIPU_IOCTL_IS_DYNAMIC_SHAPE)
         .value("AIPU_IOCTL_ALLOC_SHARE_BUF", aipu_ioctl_cmd_t::AIPU_IOCTL_ALLOC_SHARE_BUF)
         .value("AIPU_IOCTL_FREE_SHARE_BUF", aipu_ioctl_cmd_t::AIPU_IOCTL_FREE_SHARE_BUF)
-        .value("AIPU_IOCTL_SET_PROFILE", aipu_ioctl_cmd_t::AIPU_IOCTL_SET_PROFILE)
         .value("AIPU_IOCTL_ALLOC_DMABUF", aipu_ioctl_cmd_t::AIPU_IOCTL_ALLOC_DMABUF)
         .value("AIPU_IOCTL_FREE_DMABUF", aipu_ioctl_cmd_t::AIPU_IOCTL_FREE_DMABUF)
         .value("AIPU_IOCTL_WRITE_DMABUF", aipu_ioctl_cmd_t::AIPU_IOCTL_WRITE_DMABUF)
         .value("AIPU_IOCTL_READ_DMABUF", aipu_ioctl_cmd_t::AIPU_IOCTL_READ_DMABUF)
+        .value("AIPU_IOCTL_ATTACH_DMABUF", aipu_ioctl_cmd_t::AIPU_IOCTL_ATTACH_DMABUF)
+        .value("AIPU_IOCTL_DETACH_DMABUF", aipu_ioctl_cmd_t::AIPU_IOCTL_DETACH_DMABUF)
+        .value("AIPU_IOCTL_GET_VERSION", aipu_ioctl_cmd_t::AIPU_IOCTL_GET_VERSION)
         .export_values();
 
     py::enum_<aipu_share_case_type_t>(m, "aipu_share_case_type_t")
@@ -1563,6 +1723,7 @@ PYBIND11_MODULE(libaipudrv, m) {
         .def("aipu_load_tensor", &NPU::aipu_load_tensor_numpyarray_py)
         .def("aipu_get_tensor", &NPU::aipu_get_tensor_py, py::return_value_policy::copy)
         .def("aipu_ioctl", &NPU::aipu_ioctl_py, py::return_value_policy::copy)
+        .def("aipu_ioctl", &NPU::aipu_ioctl_dshape_py, py::return_value_policy::copy)
         .def("aipu_ioctl", &NPU::aipu_ioctl_write_dmabuf_py)
         .def("aipu_specify_iobuf", &NPU::aipu_specify_iobuf_py);
 }
