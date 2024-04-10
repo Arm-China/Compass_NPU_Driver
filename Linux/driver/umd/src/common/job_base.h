@@ -23,20 +23,13 @@
 
 namespace aipudrv
 {
-enum JOBIOBufferType
-{
-    AIPU_JOB_BUFFER_VOID = 0,
-    AIPU_JOB_BUFFER_INTERNAL,
-    AIPU_JOB_BUFFER_DMABUF_IMPORTED,
-    AIPU_JOB_BUFFER_DMABUF_EXPORTED,
-};
 
 struct JobIOBuffer
 {
     uint32_t  id;
     uint32_t  size;
-    JOBIOBufferType type;
-    DEV_PA_64 pa; /* used when type != AIPU_JOB_BUFFER_DMABUF_IMPORTED */
+    uint32_t  type;
+    DEV_PA_64 pa;
     DEV_PA_64 align_asid_pa; /* alignd buffer address relative to ASID base */
     uint32_t ref_section_iter; /* index indicates IObuffer is which reuse buffer */
 
@@ -53,7 +46,7 @@ struct JobIOBuffer
      */
     mutable bool dump_ignore_flag;
 
-    void init(uint32_t _id, uint32_t _size, JOBIOBufferType _type, DEV_PA_64 _pa,
+    void init(uint32_t _id, uint32_t _size, uint32_t _type, DEV_PA_64 _pa,
         DEV_PA_64 _align_asid_pa = 0, uint32_t _ref_section_iter = 0, int _dmabuf_fd = -1,
         uint32_t _dmabuf_size = 0, uint32_t _offset_in_dmabuf = 0, bool _dump_ignore_flag = false)
     {

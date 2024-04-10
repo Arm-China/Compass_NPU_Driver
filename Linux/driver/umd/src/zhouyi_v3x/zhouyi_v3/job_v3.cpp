@@ -2173,6 +2173,10 @@ aipu_status_t aipudrv::JobV3::parse_dynamic_out_shape()
                     goto out;
                 }
 
+                if (m_outputs_shape[i].type == AIPU_DATA_TYPE_U16
+                    || m_outputs_shape[i].type == AIPU_DATA_TYPE_S16)
+                    size <<= 1;
+
                 get_graph().set_config_out_tensor_size(i, size);
             }
 
