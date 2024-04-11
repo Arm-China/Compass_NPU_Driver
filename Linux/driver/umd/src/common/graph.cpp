@@ -302,7 +302,7 @@ bool aipudrv::Graph::set_dynamic_shape_data(aupu_dynshape_param_t *shape_param)
         aupu_dynshape_item_t *shape_item = &shape_param->shape_items[i];
         uint32_t idx = shape_item->ds_idx;
 
-        if (idx >= 0 && idx < m_input_shape_constraint[idx].size())
+        if (idx >= 0 && idx < m_input_shape_constraint.size())
         {
             uint32_t size = 1;
 
@@ -336,7 +336,6 @@ bool aipudrv::Graph::set_dynamic_shape_data(aupu_dynshape_param_t *shape_param)
             LOG(LOG_ERR, "input %d invalid index\n", idx);
             return false;
         }
-
     }
 
     if (m_parsed_shape.size() != get_dynamic_shape_num())

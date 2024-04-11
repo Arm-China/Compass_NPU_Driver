@@ -1198,11 +1198,10 @@ class NPU
      * @retval AIPU_STATUS_ERROR_INVALID_CTX
      * @retval AIPU_STATUS_ERROR_DEV_ABNORMAL
      */
-    std::map<std::string, std::vector<uint64_t> > aipu_ioctl_dshape_py(uint32_t cmd,
+    aipu_status_t aipu_ioctl_dshape_py(uint32_t cmd,
         std::map<std::string, uint64_t> py_arg0, std::vector<std::vector<uint64_t>> py_arg1)
     {
         void *arg = nullptr;
-        std::map<std::string, std::vector<uint64_t> > retmap;
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         const char *status_msg = nullptr;
 
@@ -1256,7 +1255,6 @@ class NPU
 
             default:
                 fprintf(stderr, "[PY UMD ERROR] aipu_ioctl invalid cmd\n");
-                retmap["data"] = {};
                 ret = AIPU_STATUS_ERROR_INVALID_OP;
                 goto finish;
 
@@ -1267,7 +1265,6 @@ class NPU
         {
             aipu_get_error_message(m_ctx, ret, &status_msg);
             fprintf(stderr, "[PY UMD ERROR] aipu_ioctl: %s\n", status_msg);
-            retmap["data"] = {};
             goto finish;
         }
 
@@ -1280,14 +1277,10 @@ class NPU
 
             delete[] ds_param->shape_items;
             delete ds_param;
-            retmap["data"] = {};
-        } else {
-            retmap["data"] = {};
         }
 
     finish:
-        retmap["ret"] = {ret};
-        return retmap;
+        return ret;
     }
 
     aipu_status_t aipu_ioctl_write_dmabuf_py(uint32_t cmd,
