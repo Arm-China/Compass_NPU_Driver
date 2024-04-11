@@ -153,6 +153,11 @@ public:
         return AIPU_STATUS_SUCCESS;
     }
 
+    virtual aipu_data_type_t get_io_tensor_type(int idx)
+    {
+        return AIPU_DATA_TYPE_S8;
+    }
+
 public:
     virtual void set_stack(uint32_t sg_id, uint32_t size, uint32_t align) = 0;
     virtual void add_param(uint32_t sg_id, struct GraphParamMapLoadDesc param) = 0;
@@ -320,7 +325,7 @@ public:
 
     void clear_config_out_tensor_size()
     {
-        m_config_out_tensor_size.clear();;
+        m_config_out_tensor_size.clear();
     }
 
     // false: not updated yet

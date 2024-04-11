@@ -165,6 +165,10 @@ public:
 
 public:
     virtual aipu_status_t update_dynamic_io_tensor_size(aipu_tensor_type_t type);
+    virtual aipu_data_type_t get_io_tensor_type(int idx)
+    {
+        return m_subgraphs[0].io.inputs[idx].data_type;
+    }
 
 public:
     void set_subgraph(struct Subgraph sg)

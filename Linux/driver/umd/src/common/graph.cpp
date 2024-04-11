@@ -322,6 +322,14 @@ bool aipudrv::Graph::set_dynamic_shape_data(aupu_dynshape_param_t *shape_param)
             }
 
             m_config_in_tensor_size[idx] = size;
+            if (get_io_tensor_type(idx) == AIPU_DATA_TYPE_U16
+                || get_io_tensor_type(idx) == AIPU_DATA_TYPE_S16
+                || get_io_tensor_type(idx) == AIPU_DATA_TYPE_f16)
+                m_config_in_tensor_size[idx] <<= 1;
+            else if (get_io_tensor_type(idx) == AIPU_DATA_TYPE_U32
+                || get_io_tensor_type(idx) == AIPU_DATA_TYPE_S32
+                || get_io_tensor_type(idx) == AIPU_DATA_TYPE_f32)
+                m_config_in_tensor_size[idx] <<= 2;
         } else {
             m_parsed_shape.clear();
             m_config_in_tensor_size.clear();
