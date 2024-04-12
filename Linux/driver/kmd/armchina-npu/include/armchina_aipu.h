@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
-/* Copyright (c) 2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
 
 #ifndef __UAPI_MISC_ARMCHINA_AIPU_H__
 #define __UAPI_MISC_ARMCHINA_AIPU_H__
