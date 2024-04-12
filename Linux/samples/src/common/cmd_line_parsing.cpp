@@ -50,7 +50,7 @@ void help(void)
         "   -t: test flush or finish job time(flush | finish), only for basic_time_test\n"
         "   -l: simulator log level(0-3)\n"
         "   -v: simulator verbose(0, 1)\n"
-        "   -r: dynamic real input shape(eg: 1,480,640,3)\n";
+        "   -r: dynamic real input shape(eg: 1,480,640,3;if multi tensors, use'/' for isolation: 1,480,640,3/1,480,640,3)\n";
 
     std::cout << help_info;
     exit(0);

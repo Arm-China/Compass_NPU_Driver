@@ -32,6 +32,28 @@
 
 using namespace std;
 
+char * g_remain_char = NULL;
+
+char * aipu_strtok( char * s,const char * ct)
+{
+    char *sbegin, *send;
+    sbegin  = s ? s : g_remain_char;
+    if (!sbegin) {
+        return NULL;
+    }
+    sbegin += strspn(sbegin,ct);
+    if (*sbegin == '\0') {
+        g_remain_char = NULL;
+        return (NULL);
+    }
+    send = strpbrk(sbegin, ct);
+    if (send && *send != '\0') {
+        *send++ = '\0';
+    }
+    g_remain_char = send;
+    return (sbegin);
+}
+
 int main(int argc, char* argv[])
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
@@ -40,27 +62,37 @@ int main(int argc, char* argv[])
     const char *msg = nullptr;
     uint32_t output_cnt;
     vector<uint32_t> input_shape_vec;
+    vector<vector<uint32_t>> input_shape_vec_vec;
     aipu_dynshape_num_t dynshape_num = {0};
     vector<aipu_dynshape_dim_num_t> dim_num_vec;
     aipu_create_job_cfg create_job_cfg = {0};
+    aupu_dynshape_param_t dynshape_param = {0};
+    aipu_job_config_dump_t mem_dump_config = {0};
     vector<aipu_tensor_desc_t> output_desc;
     vector<char*> output_data;
     cmd_opt_t opt;
-    int pass = -1;
-    char* temp = nullptr;
+    int pass = 0;
+    char* temp_l = nullptr;
+    char* temp_s = nullptr;
 
     if (init_test_bench(argc, argv, &opt, "dynamic_shape_test")) {
         AIPU_ERR()("invalid command line options/args\n");
         goto finish;
     }
 
-    temp = strtok(opt.input_shape, ",");
-    input_shape_vec.push_back(stoi(temp));
-    while (temp)
-    {
-        temp = strtok(nullptr, ",");
-        if (temp != nullptr)
-            input_shape_vec.push_back(stoi(temp));
+    temp_l = aipu_strtok(opt.input_shape, "/");
+    while (temp_l) {
+        temp_s = strtok(temp_l, ",");
+        input_shape_vec.push_back(stoi(temp_s));
+        while (temp_s)
+        {
+            temp_s = strtok(nullptr, ",");
+            if (temp_s != nullptr)
+                input_shape_vec.push_back(stoi(temp_s));
+        }
+        input_shape_vec_vec.push_back(input_shape_vec);
+        input_shape_vec.clear();
+        temp_l = aipu_strtok(NULL, "/");
     }
 
     ret = aipu_init_context(&ctx);
@@ -101,6 +133,10 @@ int main(int argc, char* argv[])
      *     max_threshhold = false return min shape info
      * AIPU_IOCTL_SET_DS_INFO: set shape info to benchmark
      */
+    dynshape_param.graph_id = graph_id;
+    dynshape_param.input_shape_cnt = *dynshape_num.ds_num;
+    dynshape_param.shape_items = (aupu_dynshape_item_t *)malloc(sizeof(aupu_dynshape_item_t) * (*dynshape_num.ds_num));
+
     for (uint32_t  id = 0 ; id < *dynshape_num.ds_num; id++) {
         aipu_dynshape_dim_num_t dynshape_dim_num = {0};
         dynshape_dim_num.graph_id = graph_id;
@@ -127,33 +163,41 @@ int main(int argc, char* argv[])
             goto unload_graph;
         }
 
-        aupu_dynshape_param_t dynshape_param = {0};
-        dynshape_param.graph_id = graph_id;
-        dynshape_param.input_shape_cnt = *dynshape_num.ds_num;
-        dynshape_param.shape_items = (aupu_dynshape_item_t *)malloc(sizeof(aupu_dynshape_item_t));
-        dynshape_param.shape_items->ds_idx = id;
-        dynshape_param.shape_items->ds_data = (uint32_t *)malloc(sizeof(uint32_t) * (*dynshape_dim_num.ds_dim_num));
+        dynshape_param.shape_items[id].ds_idx = id;
+        dynshape_param.shape_items[id].ds_data = (uint32_t *)malloc(sizeof(uint32_t) * (*dynshape_dim_num.ds_dim_num));
         for (uint32_t dim_id = 0; dim_id < *dynshape_dim_num.ds_dim_num; dim_id++) {
             AIPU_DBG()("dynamic shape max shape: %d\n", *(dynshape_info.ds_data + dim_id));
-            AIPU_DBG()("dynamic shape set shape: %d\n", input_shape_vec[dim_id]);
-            *(dynshape_param.shape_items->ds_data + dim_id) = input_shape_vec[dim_id];
-        }
-        ret = aipu_ioctl(ctx, AIPU_IOCTL_SET_DS_INFO, &dynshape_param);
-        if (ret != AIPU_STATUS_SUCCESS) {
-            aipu_get_error_message(ctx, ret, &msg);
-            AIPU_ERR()("aipu_ioctl: %s\n", msg);
-            goto unload_graph;
+            AIPU_DBG()("dynamic shape set shape: %d\n", input_shape_vec_vec[id][dim_id]);
+            *(dynshape_param.shape_items[id].ds_data + dim_id) = input_shape_vec_vec[id][dim_id];
         }
     }
 
+    ret = aipu_ioctl(ctx, AIPU_IOCTL_SET_DS_INFO, &dynshape_param);
+    if (ret != AIPU_STATUS_SUCCESS) {
+        aipu_get_error_message(ctx, ret, &msg);
+        AIPU_ERR()("aipu_ioctl: %s\n", msg);
+        goto unload_graph;
+    }
+    AIPU_INFO()("aipu set dynshape_param success\n");
+
     ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
-    if (ret != AIPU_STATUS_SUCCESS)
-    {
+    if (ret != AIPU_STATUS_SUCCESS) {
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_create_job: %s\n", msg);
         goto unload_graph;
     }
     AIPU_INFO()("aipu_create_job success\n");
+
+    mem_dump_config.dump_dir = opt.dump_dir;
+    if (opt.dump_opt > 0) {
+        ret = aipu_config_job(ctx, job_id, opt.dump_opt, &mem_dump_config);
+        if (ret != AIPU_STATUS_SUCCESS) {
+            aipu_get_error_message(ctx, ret, &msg);
+            AIPU_ERR()("aipu_config_job: %s\n", msg);
+            goto clean_job;
+        }
+        AIPU_INFO()("set dump config success\n");
+    }
 
     for (uint32_t id = 0; id < *dynshape_num.ds_num; id++) {
         ret = aipu_load_tensor(ctx, job_id, id, opt.inputs[id]);
@@ -167,8 +211,7 @@ int main(int argc, char* argv[])
     }
 
     ret = aipu_finish_job(ctx, job_id, -1);
-    if (ret != AIPU_STATUS_SUCCESS)
-    {
+    if (ret != AIPU_STATUS_SUCCESS) {
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_finish_job: %s\n", msg);
         goto clean_job;
@@ -199,7 +242,7 @@ int main(int argc, char* argv[])
 
     /* alloc output tensor space */
     for (uint32_t i = 0; i < output_desc.size(); i++) {
-        char* output = new char[output_desc[i].size];
+        char* output = new char[output_desc[i].size * 2];
         output_data.push_back(output);
     }
 
