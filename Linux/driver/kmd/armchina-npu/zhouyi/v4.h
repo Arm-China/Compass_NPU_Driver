@@ -102,6 +102,26 @@
  */
 #define TSM_COMMAND_SCHEDULE_TCB_NUM_REG            0x1C
 
+/**************************************************************************************
+ *                             Debug Link Access Registers
+ *************************************************************************************/
+/**
+ * A1.1.28 AHB Internal CSR Selection Control Register
+ *
+ * [12]   debug enable
+ * [11:4] cluster selection
+ * [3:0]  core selection
+ */
+#define _ENABLE_DEBUG                               BIT(12)
+#define _SET_DBG_CLUSTER(id)                        (((id) & 0xFF) << 4)
+#define _SET_DBG_CORE(id)                           ((id) & 0xF)
+#define SELECT_DEBUG_CORE(cluster, core)            (_ENABLE_DEBUG | _SET_DBG_CLUSTER(cluster) | \
+						     _SET_DBG_CORE(core))
+#define DISABLE_DEBUG                               0
+#define AHB_INTERNAL_CSR_SELECTION_CTRL_REG                    0x1F00
+
+
+
 /**
  * A1.1.8 TSM Revision Register (Read-Only)
  *
@@ -123,11 +143,81 @@
 #define GET_V4_IRQS_BITS(status)                    ((status) & 0xFFFF)
 
 #define TSM_INTERRUPT_STATUS_REG                    0x80
+#define TSM_IRQ_MAX_NUM                             16
 
 /**************************************************************************************
  *                             TSM Command Pool (PCP) Registers
  *************************************************************************************/
 #define _TSM_PCP_REGISTERS_BASE                     0x800
+
+
+
+/**************************************************************************************
+ *                             HOST TSM PMU Register
+ *************************************************************************************/
+/**
+ * A1.1.32 PMU TOP Soft Reset
+ *
+ * [1] soft reset status bit
+ *     1) host write 0 to launch AIPU soft reset
+ *     2) AIPU write 1 when a soft reset is done
+ * [0] soft reset config bit
+ *     1) host write 1 to launch AIPU soft reset
+ *     2) AIPU write 0 when a soft reset is done
+ */
+#define PMU_TOP_SOFT_RESET_REG                          (0x20)
+
+/**
+ * A1.1.33 PMU Cluster Soft Reset
+ *
+ * [7:4] soft reset status bit
+ *     1) host write 0 to clear it after reading
+ *     2) AIPU write 1 when a soft reset is done
+ * [3:0] cluster soft reset config bit
+ *     1) host write 1 to launch AIPU soft reset
+ *     2) AIPU write 0 when a soft reset is done
+ */
+#define PMU_CLUSTER_RESET_REG                           (0x24)
+
+/**
+ * A1.1.34 PMU Core Soft Reset
+ *
+ * [31:16] soft reset status bit
+ *     1) host write 0 to clear it after reading
+ *     2) AIPU write 1 when a soft reset is done
+ * [15:0] cluster soft reset config bit
+ *     1) host write 1 to launch AIPU soft reset
+ *     2) AIPU write 0 when a soft reset is done
+ */
+#define PMU_CORE_RESET_REG                              (0x28)
+
+/**
+ * A1.1.35 PMU Reset Timeout
+ *
+ * [31:16] core reset timeout flag bit
+ *     1) host write 0 to clear it after reading
+ *     2) AIPU write 1 when there is reset request.
+ * [3:0] Cluster reset timeout flag
+ *     1) host write 0 to clear it after reading
+ *     2) AIPU write 1 when there is reset request.
+ */
+#define PMU_RESET_TIMEOUT_REG                           (0x2c)
+
+/**
+ * A1.1.36 PMU Top Clock and Power Control Register
+ *
+ * [31:3] reserved
+ * [2]    secure/non-secure mode (0/1)
+ * [1]    clock gating disabled/enabled (0/1)
+ * [0]    PMU disabled/enabled (0/1)
+ */
+#define PMU_SECURE_MODE                             BIT(2)
+#define PMU_NONSECURE_MODE                          0
+#define PMU_ENABLE_CLOCK_GATING                     BIT(1)
+#define PMU_DISABLE_CLOCK_GATING                    0
+#define PMU_ENABLE                                  BIT(0)
+#define PMU_DISABLE                                 0
+#define PMU_TOP_CLOCK_POWER_CTRL_REG                0x30
 
 /**
  * TSM Command Pool [N] Status PCP Register
@@ -199,8 +289,9 @@
 #define _GET_PER_INTERRUPT_REGISTER_OFFSET(id)      (0xA00 + 0x10 * (id))
 
 /**
- * TSM Interrupt Type Info Register [N]
- *
+ * A1.1.14 TSM Interrupt Type Info Register [N]
+ * [31:28] cmd pool ID
+ * [27:24] Cluster physical ID
  * [23:20] core physical ID
  * [19:16] TEC physical ID
  * [11]    pool interrupt status
@@ -214,8 +305,10 @@
  * [2]     exception bit
  * [0]     done bit
  */
-#define GET_INTERRUPT_CORE_ID(status_32)            (((status_32) >> 20) & 0xF)
-#define GET_INTERRUPT_TEC_ID(status_32)             (((status_32) >> 16) & 0xF)
+#define GET_INTR_POOL_ID_V4(status_32)                 (((status_32) >> 28) & 0xF)
+#define GET_INTR_CLUSTER_ID_V4(status_32)              (((status_32) >> 24) & 0xF)
+#define GET_INTR_CORE_ID_V4(status_32)            (((status_32) >> 20) & 0xF)
+#define GET_INTR_TEC_ID_V4(status_32)             (((status_32) >> 16) & 0xF)
 #define IS_TIMEOUT_INTR_V4(status_32)               (((status_32) >> 6) & 0x1)
 #define IS_SIGNAL_INTR_V4(status_32)                (((status_32) >> 5) & 0x1)
 #define IS_ERROR_INTR_V4(status_32)                 (((status_32) >> 4) & 0x1)

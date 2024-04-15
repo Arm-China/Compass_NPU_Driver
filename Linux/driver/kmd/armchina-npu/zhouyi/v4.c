@@ -275,12 +275,14 @@ static int zhouyi_v4_upper_half(void *data)
 	memset(&info, 0, sizeof(info));
 
 	irqs = GET_V4_IRQS_BITS(aipu_read32(cluster->reg, TSM_INTERRUPT_STATUS_REG));
-	for (id = 0; id < 16 && test_bit(id, &irqs); id++) {
+	for (id = 0; id < TSM_IRQ_MAX_NUM; id++) {
+		if (!test_bit(id, &irqs))
+			continue;
 		status = aipu_read32(cluster->reg, INTERRUPT_TYPE_INFO_REG(id));
 		info.tail_tcbp = aipu_read32(cluster->reg, INTERRUPT_TCB_PTR_REG(id));
-		info.cluster_id = 0;
-		info.core_id = GET_INTR_CORE_ID(status);
-		info.tec_id = GET_INTR_TEC_ID(status);
+		info.cluster_id = GET_INTR_CLUSTER_ID_V4(status);
+		info.core_id = GET_INTR_CORE_ID_V4(status);
+		info.tec_id = GET_INTR_TEC_ID_V4(status);
 
 		if (IS_ERROR_INTR_V4(status) &&
 		    (IS_POOL_ERROR(aipu_read32(cluster->reg, COMMAND_POOL_PCP_STATUS_REG)) ||
