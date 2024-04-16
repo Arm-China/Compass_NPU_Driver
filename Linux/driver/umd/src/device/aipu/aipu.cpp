@@ -450,6 +450,7 @@ aipu_ll_status_t aipudrv::Aipu::ioctl_cmd(uint32_t cmd, void *arg)
                 m_dram->add_tracking(dma_buf.pa, dma_buf.bytes,
                     MemOperationFree, name.c_str(), false, 0);
                 m_dma_buf_map.erase(dma_buf_fd);
+                close(dma_buf_fd);
             }
             }
             break;
