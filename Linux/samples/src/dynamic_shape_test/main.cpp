@@ -126,6 +126,13 @@ int main(int argc, char* argv[])
         goto unload_graph;
     }
 
+    if (!(*dynshape_num.ds_num)) {
+        AIPU_ERR()("dynamic shape tensor num = 0, please check aipu.bin\n");
+        goto unload_graph;
+    } else {
+        AIPU_DBG()("dynamic shape num: %d\n", *(dynshape_num.ds_num));
+    }
+
     /**
      * AIPU_IOCTL_GET_DS_DIM_NUM: get input tensor dim num
      * AIPU_IOCTL_GET_DS_INFO: get input tensor shape info
