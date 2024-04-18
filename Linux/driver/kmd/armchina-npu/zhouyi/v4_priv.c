@@ -40,10 +40,10 @@ static int init_aipu_cluster(struct aipu_partition *cluster, struct aipu_priv *a
 	atomic_set(&cluster->disable, 0);
 
 	cluster->cluster_cnt = 1;
-	val = aipu_read32(cluster->reg, CLUSTER_CONFIG_REG(0));
-	cluster->clusters[0].core_cnt = GET_AIPU_CORE_NUM(val);
-	atomic_set(&cluster->clusters[0].en_core_cnt, GET_AIPU_CORE_NUM(val));
-	cluster->clusters[0].tec_cnt = GET_TEC_NUM(val);
+	val = aipu_read32(cluster->reg, CLUSTER_CONFIG_REG_V4(0));
+	cluster->clusters[0].core_cnt = 1; //GET_AIPU_CORE_NUM(val); to be fixed;
+	atomic_set(&cluster->clusters[0].en_core_cnt, GET_AIPU_CORE_NUM_V4(val));
+	cluster->clusters[0].tec_cnt = GET_TEC_NUM_V4(val);
 
 	/* get partition mode before initialize() */
 	ret = of_property_count_u32_elems(p_dev->dev.of_node, "partition-mode");

@@ -11,6 +11,7 @@
 #include "aipu_priv.h"
 #include "aipu_common.h"
 #include "zhouyi.h"
+#include "v3.h"
 
 static struct aipu_thread_wait_queue *do_create_thread_wait_queue(int uthread_id, struct file *filp)
 {

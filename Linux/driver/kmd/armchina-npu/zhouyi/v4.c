@@ -14,18 +14,18 @@
 static void zhouyi_v4_enable_core_cnt(struct aipu_partition *cluster, u32 cluster_id,
 				      u32 en_core_cnt)
 {
-	u32 nums = GET_NUMS(aipu_read32(cluster->reg, CLUSTER_CONFIG_REG(cluster_id)));
-	u32 en_aiff_cnt = GET_AIFF_NUM(nums);
-	u32 config = CONFIG_CLUSTER_V4(cluster->id, en_core_cnt, en_aiff_cnt,
-				       cluster->partition_mode);
+	u32 nums = GET_NUMS_V4(aipu_read32(cluster->reg, CLUSTER_CONFIG_REG_V4(cluster_id)));
+	u32 en_aiff_cnt = GET_AIFF_NUM_V4(nums);
+	u32 config = CONFIG_CLUSTER_V4(0xf, en_core_cnt, en_aiff_cnt,
+				       4, cluster->partition_mode);
 	u32 status = 0;
 
 	config |= ((1 << en_core_cnt) - 1) << 24;
-	aipu_write32(cluster->reg, CLUSTER_CONTROL_REG(cluster_id), config);
+	aipu_write32(cluster->reg, CLUSTER_CONTROL_REG_V4(cluster_id), config);
 
-	status = aipu_read32(cluster->reg, TSM_STATUS_REG);
-	if (!en_core_cnt && IS_CMD_FAIL(status))
-		aipu_write32(cluster->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
+	status = aipu_read32(cluster->reg, TSM_STATUS_REG_V4);
+	if (!en_core_cnt && IS_CMD_FAIL_V4(status))
+		aipu_write32(cluster->reg, TSM_STATUS_REG_V4, CLEAR_CMD_FAIL_V4(status));
 
 	atomic_set(&cluster->clusters[cluster_id].en_core_cnt, en_core_cnt);
 	dev_info(cluster->dev, "configure cluster #%u done: en_core_cnt %u (0x%x)\n",
@@ -34,11 +34,11 @@ static void zhouyi_v4_enable_core_cnt(struct aipu_partition *cluster, u32 cluste
 
 static void zhouyi_v4_enable_interrupt(struct aipu_partition *cluster, bool en_tec_intr)
 {
-	u32 flag = EN_CMD_POOL_INTR | EN_CLUSTER_INTR | EN_CORE_INTR | EN_ALL_TYPE_INTRS_V4;
+	u32 flag = EN_CMD_POOL_INTR_V4 | EN_CLUSTER_INTR_V4 | EN_CORE_INTR_V4 | EN_ALL_TYPE_INTRS_V4;
 
 	/* TEC interrupts to be updated based on the x3 design */
 	if (en_tec_intr)
-		flag |= EN_TEC_INTR;
+		flag |= EN_TEC_INTR_V4;
 
 	dev_dbg(cluster->dev, "configure interrupt flag 0x%x\n", flag);
 	aipu_write32(cluster->reg, COMMAND_POOL_PCP_INTERRUPT_CONTROL_REG, flag);
@@ -47,8 +47,8 @@ static void zhouyi_v4_enable_interrupt(struct aipu_partition *cluster, bool en_t
 
 static void zhouyi_v4_disable_interrupt(struct aipu_partition *cluster)
 {
-	aipu_write32(cluster->reg, COMMAND_POOL_PCP_INTERRUPT_CONTROL_REG, DISABLE_ALL_INTRS);
-	aipu_write32(cluster->reg, COMMAND_POOL_SCP_INTERRUPT_CONTROL_REG, DISABLE_ALL_INTRS);
+	aipu_write32(cluster->reg, COMMAND_POOL_PCP_INTERRUPT_CONTROL_REG, DISABLE_ALL_INTRS_V4);
+	aipu_write32(cluster->reg, COMMAND_POOL_SCP_INTERRUPT_CONTROL_REG, DISABLE_ALL_INTRS_V4);
 }
 
 static void zhouyi_v4_trigger(struct aipu_partition *cluster)
@@ -73,11 +73,11 @@ static int zhouyi_v4_create_command_pool(struct aipu_partition *cluster, int poo
 		return -EINVAL;
 	}
 
-	aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
-		     TSM_CREATE_CMD_POOL(cluster->id, TSM_MAP_ALL) | pool);
+	aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG_V4,
+		     TSM_CREATE_CMD_POOL_V4(cluster->id, TSM_MAP_SINGLE_V4) | pool);
 
-	status = aipu_read32(cluster->reg, TSM_STATUS_REG);
-	if (IS_CMD_FAIL(status)) {
+	status = aipu_read32(cluster->reg, TSM_STATUS_REG_V4);
+	if (IS_CMD_FAIL_V4(status)) {
 		dev_err(cluster->dev, "create command pool failed\n");
 		return -EFAULT;
 	}
@@ -102,19 +102,19 @@ static int zhouyi_v4_abort_command_pool(struct aipu_partition *cluster, int pool
 			return -EINVAL;
 	}
 
-	aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
-		     TSM_ABORT_CMD_POOL(cluster->id) | pool);
+	aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG_V4,
+		     TSM_ABORT_CMD_POOL_V4(cluster->id) | pool);
 
-	status = aipu_read32(cluster->reg, TSM_STATUS_REG);
-	if (IS_CMD_FAIL(status)) {
+	status = aipu_read32(cluster->reg, TSM_STATUS_REG_V4);
+	if (IS_CMD_FAIL_V4(status)) {
 		dev_err(cluster->dev, "abort command pool failed\n");
-		aipu_write32(cluster->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
+		aipu_write32(cluster->reg, TSM_STATUS_REG_V4, CLEAR_CMD_FAIL_V4(status));
 		return -EFAULT;
 	}
 
 	for (cnt = 0; cnt < 5; cnt++) {
-		if (IS_ABORT_DONE(aipu_read32(cluster->reg, TSM_STATUS_REG), abort_done_bit)) {
-			aipu_write32(cluster->reg, TSM_STATUS_REG, CLEAR_ABORT(abort_done_bit));
+		if (IS_ABORT_DONE(aipu_read32(cluster->reg, TSM_STATUS_REG_V4), abort_done_bit)) {
+			aipu_write32(cluster->reg, TSM_STATUS_REG_V4, CLEAR_ABORT(abort_done_bit));
 			dev_dbg(cluster->dev, "command pool was aborted\n");
 			return 0;
 		}
@@ -140,12 +140,12 @@ static int zhouyi_v4_destroy_command_pool(struct aipu_partition *cluster, int po
 	}
 
 try_again:
-	aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
-		     TSM_DESTROY_CMD_POOL(cluster->id) | pool);
+	aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG_V4,
+		     TSM_DESTROY_CMD_POOL_V4(cluster->id) | pool);
 
-	status = aipu_read32(cluster->reg, TSM_STATUS_REG);
-	if (IS_CMD_FAIL(status)) {
-		aipu_write32(cluster->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
+	status = aipu_read32(cluster->reg, TSM_STATUS_REG_V4);
+	if (IS_CMD_FAIL_V4(status)) {
+		aipu_write32(cluster->reg, TSM_STATUS_REG_V4, CLEAR_CMD_FAIL_V4(status));
 
 		if (try_again) {
 			dev_err(cluster->dev, "destroy command pool failed\n");
@@ -172,7 +172,7 @@ static int zhouyi_v4_reserve(struct aipu_partition *cluster, struct aipu_job_des
 	if (ret)
 		return ret;
 
-	status = aipu_read32(cluster->reg, TSM_STATUS_REG);
+	status = aipu_read32(cluster->reg, TSM_STATUS_REG_V4);
 	if ((pool == ZHOUYI_COMMAND_POOL_PCP && IS_PCP_FULL(status, qos == TSM_QOS_FAST)) ||
 	    (pool == ZHOUYI_COMMAND_POOL_SCP && IS_SCP_FULL(status, qos == TSM_QOS_FAST))) {
 		dev_info(cluster->dev, "command pool is full\n");
@@ -182,17 +182,17 @@ static int zhouyi_v4_reserve(struct aipu_partition *cluster, struct aipu_job_des
 	dev_dbg(cluster->dev, "[Job 0x%llx] scheduler: TCB head 0x%llx\n",
 		udesc->job_id, udesc->head_tcb_pa);
 
-	aipu_write32(cluster->reg, TSM_CMD_SCHD_ADDR_HIGH_REG, udesc->head_tcb_pa >> 32);
-	aipu_write32(cluster->reg, TSM_CMD_SCHD_ADDR_LOW_REG, (u32)udesc->head_tcb_pa);
-	aipu_write32(cluster->reg, TSM_COMMAND_SCHEDULE_TCB_NUM_REG,
+	aipu_write32(cluster->reg, TSM_CMD_SCHD_ADDR_HIGH_REG_V4, udesc->head_tcb_pa >> 32);
+	aipu_write32(cluster->reg, TSM_CMD_SCHD_ADDR_LOW_REG_V4, (u32)udesc->head_tcb_pa);
+	aipu_write32(cluster->reg, TSM_COMMAND_SCHEDULE_TCB_NUM_REG_V4,
 		     ((udesc->tail_tcb_pa - udesc->head_tcb_pa) >> 7) + 1);
 
-	aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
+	aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG_V4,
 		     TSM_DISPATCH_CMD_POOL_V4(pool, qos));
 
-	status = aipu_read32(cluster->reg, TSM_STATUS_REG);
-	if (IS_CMD_FAIL(status)) {
-		aipu_write32(cluster->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
+	status = aipu_read32(cluster->reg, TSM_STATUS_REG_V4);
+	if (IS_CMD_FAIL_V4(status)) {
+		aipu_write32(cluster->reg, TSM_STATUS_REG_V4, CLEAR_CMD_FAIL_V4(status));
 		dev_err(cluster->dev, "dispatch task failed\n");
 		return -EINVAL;
 	}
@@ -262,6 +262,8 @@ static void zhouyi_v4_initialize(struct aipu_partition *cluster)
 {
 	zhouyi_v4_enable_core_cnt(cluster, 0, cluster->clusters[0].core_cnt);
 	zhouyi_v4_enable_interrupt(cluster, false);
+	aipu_write32(cluster->reg, AHB_INTERNAL_CSR_SELECTION_CTRL_REG, SELECT_DEBUG_CORE_V4(0, 0));
+	aipu_write32(cluster->reg, PMU_TOP_CLOCK_POWER_CTRL_REG, 0x5); /* workaround for h/w */
 }
 
 static int zhouyi_v4_upper_half(void *data)
@@ -284,12 +286,23 @@ static int zhouyi_v4_upper_half(void *data)
 		info.core_id = GET_INTR_CORE_ID_V4(status);
 		info.tec_id = GET_INTR_TEC_ID_V4(status);
 
+		/* log print to be removed */
+		if (IS_CLUSTER_IRQ_V4(status)) {
+			pr_info("IRQ (id = %d): cluster status 0x%x, tcbp 0x%x\n", id, status, info.tail_tcbp);
+		} else if (IS_CORE_IRQ_V4(status)) {
+			pr_info("IRQ (id = %d): core status 0x%x, tcbp 0x%x\n", id, status, info.tail_tcbp);
+			continue;
+		} else if (IS_TEC_IRQ_V4(status)) {
+			pr_info("IRQ (id = %d): tec status 0x%x, tcbp 0x%x\n", id, status, info.tail_tcbp);
+			continue;
+		}
+
 		if (IS_ERROR_INTR_V4(status) &&
 		    (IS_POOL_ERROR(aipu_read32(cluster->reg, COMMAND_POOL_PCP_STATUS_REG)) ||
 		     IS_POOL_ERROR(aipu_read32(cluster->reg, COMMAND_POOL_SCP_STATUS_REG))))
 			dev_dbg(cluster->dev, "TCB format error or bus error in PCP or SCP");
 
-		aipu_job_manager_irq_upper_half(cluster, GET_INTR_TYPE(status), &info);
+		aipu_job_manager_irq_upper_half(cluster, GET_INTR_TYPE_V4(status), &info);
 		aipu_irq_schedulework(cluster->irq_obj);
 
 		aipu_write32(cluster->reg, TSM_INTERRUPT_STATUS_REG, BIT(id));
@@ -306,8 +319,97 @@ static void zhouyi_v4_bottom_half(void *data)
 #ifdef CONFIG_SYSFS
 static int zhouyi_v4_sysfs_show(struct aipu_partition *cluster, char *buf)
 {
-	/* to be implemented */
-	return 0;
+	int ret = 0;
+	char tmp[128];
+
+	if (unlikely(!cluster || !buf))
+		return -EINVAL;
+
+	snprintf(tmp, 128, "--- TCB Dispatch ---\n");
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "TCB Address High",
+				     TSM_CMD_SCHD_ADDR_HIGH_REG_V4);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "TCB Address Low",
+				     TSM_CMD_SCHD_ADDR_LOW_REG_V4);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "TCB Number",
+				     TSM_COMMAND_SCHEDULE_TCB_NUM_REG_V4);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "CMD Schedule Ctrl Handle",
+				     TSM_CMD_SCHD_CTRL_HANDLE_REG_V4);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "TSM Status",
+				     TSM_STATUS_REG_V4);
+	strcat(buf, tmp);
+
+	snprintf(tmp, 512, "\n--- Interrupts ---\n");
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "[TSM] Intr Status",
+				     TSM_INTERRUPT_STATUS_REG);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "[PCP] Pool Status",
+				     COMMAND_POOL_PCP_STATUS_REG);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "[PCP] Intr Control",
+				     COMMAND_POOL_PCP_INTERRUPT_CONTROL_REG);
+	strcat(buf, tmp);
+
+	snprintf(tmp, 512, "\n--- Debug Links ---\n");
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Debug Link Enable",
+				     0x1f00);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Cluster Control",
+				     CLUSTER_CONTROL_REG_V4(0));
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Cluster Status",
+				     0x2000 + 0x4);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core Status",
+				     0x3000 + 0x4);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core Idle Status",
+				     0x3000 + 0x8);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core Config0",
+				     0x3000 + 0x20);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core Config1",
+				     0x3000 + 0x24);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core TCBP",
+				     0x3000 + 0x54);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core Start Control",
+				     0x3000 + 0x80);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core Start PC",
+				     0x3000 + 0x84);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core Intr Control",
+				     0x3000 + 0x90);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core ASE #0 Low",
+				     0x3000 + 0xe0);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core ASE #0 High",
+				     0x3000 + 0xe4);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core ASE #1 Low",
+				     0x3000 + 0xe8);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core ASE #1 High",
+				     0x3000 + 0xec);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core ASE #2 Low",
+				     0x3000 + 0xf0);
+	strcat(buf, tmp);
+	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Core ASE #2 High",
+				     0x3000 + 0xf4);
+	strcat(buf, tmp);
+
+	return ret;
 }
 #endif
 

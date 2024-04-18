@@ -12,7 +12,6 @@
 #include <armchina_aipu.h>
 #include "aipu_partition.h"
 #include "aipu_mm.h"
-#include "v3.h"
 
 enum aipu_state_kern {
 	AIPU_JOB_STATE_IDLE,
