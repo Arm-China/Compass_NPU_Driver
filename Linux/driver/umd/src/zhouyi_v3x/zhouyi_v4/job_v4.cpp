@@ -1124,7 +1124,7 @@ aipu_status_t aipudrv::JobV4::setup_tcbs()
 
     /* 1. Grid init TCB 0 */
     memset(tcb, 0, sizeof(tcb_t));
-    tcb->flag = TCB_FLAG_TASK_TYPE_GRID_INIT | TCB_FLAG_L2D_FLUSH;
+    tcb->flag = TCB_FLAG_TASK_TYPE_GRID_INIT /*| TCB_FLAG_L2D_FLUSH*/;
     tcb->group_num = m_sg_cnt;
     tcb->grid_intrrupt_en = EN_INTERRUPT_GRID_ALL;
     tcb->grid_gridid = m_grid_id;
