@@ -34,7 +34,7 @@ static void zhouyi_v4_enable_core_cnt(struct aipu_partition *cluster, u32 cluste
 
 static void zhouyi_v4_enable_interrupt(struct aipu_partition *cluster, bool en_tec_intr)
 {
-	u32 flag = EN_CMD_POOL_INTR_V4 | EN_CLUSTER_INTR_V4 | EN_CORE_INTR_V4 | EN_ALL_TYPE_INTRS_V4;
+	u32 flag = EN_ALL_LEVEL_INTRS_V4 | EN_SIGNAL_INTR_V4 | EN_DONE_INTR_V4;
 
 	/* TEC interrupts to be updated based on the x3 design */
 	if (en_tec_intr)
@@ -282,6 +282,7 @@ static int zhouyi_v4_upper_half(void *data)
 			continue;
 		status = aipu_read32(cluster->reg, INTERRUPT_TYPE_INFO_REG(id));
 		info.tail_tcbp = aipu_read32(cluster->reg, INTERRUPT_TCB_PTR_REG(id));
+		info.sig_flag = aipu_read32(cluster->reg,  INTERRUPT_SIGNAL_FLAG_REG(id));
 		info.cluster_id = GET_INTR_CLUSTER_ID_V4(status);
 		info.core_id = GET_INTR_CORE_ID_V4(status);
 		info.tec_id = GET_INTR_TEC_ID_V4(status);
@@ -292,7 +293,7 @@ static int zhouyi_v4_upper_half(void *data)
 		} else if (IS_CORE_IRQ_V4(status)) {
 			pr_info("IRQ (id = %d): core status 0x%x, tcbp 0x%x\n", id, status, info.tail_tcbp);
 			continue;
-		} else if (IS_TEC_IRQ_V4(status)) {
+		} else if (IS_TEC_IRQ_V4(status) && IS_DONE_IRQ_V4(status)) {
 			pr_info("IRQ (id = %d): tec status 0x%x, tcbp 0x%x\n", id, status, info.tail_tcbp);
 			continue;
 		}

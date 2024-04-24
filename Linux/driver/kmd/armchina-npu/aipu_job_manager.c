@@ -12,6 +12,7 @@
 #include "aipu_common.h"
 #include "zhouyi.h"
 #include "v3.h"
+#include "v4.h"
 
 static struct aipu_thread_wait_queue *do_create_thread_wait_queue(int uthread_id, struct file *filp)
 {
@@ -1009,6 +1010,13 @@ static bool do_abortion(int flag, struct job_irq_info *info)
 	return IS_SERIOUS_ERR(flag) || IS_EXCEPTION_SIGNAL(info->sig_flag);
 }
 
+static bool do_abortion_V4(int flag, struct job_irq_info *info)
+{
+	if (!info)
+		return false;
+
+	return IS_SERIOUS_ERR_V4(flag) || IS_EXCEPTION_SIGNAL_V4(info->sig_flag);
+}
 static bool is_job_end(struct aipu_job *job, struct aipu_partition *partition,
 		       struct job_irq_info *info, u64 asid_base, int flag)
 {
@@ -1049,24 +1057,47 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 
 	manager = get_job_manager(partition);
 
-	if (IS_SIGNAL_IRQ(flag)) {
-		if (IS_PRINTF_SIGNAL(info->sig_flag))
-			aipu_job_manager_real_time_printk(manager, partition, info);
+	if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V4) {
+		if (IS_SIGNAL_IRQ_V4(flag)) {
+			if (IS_PRINTF_SIGNAL_V4(info->sig_flag))
+				aipu_job_manager_real_time_printk(manager, partition, info);
 
 #if AIPU_CONFIG_ENABLE_INTR_PROFILING
-		if (IS_PROFILER_SIGNAL(info->sig_flag)) {
-			pr_info("profiler signal intr...\n");
-			aipu_job_manager_real_time_get_pdata(manager, info);
-		}
+			if (IS_PROFILER_SIGNAL_V4(info->sig_flag)) {
+				pr_info("profiler signal intr...\n");
+				aipu_job_manager_real_time_get_pdata(manager, info);
+			}
 #endif
-		return;
+			return;
+		}
+	} else if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+		if (IS_SIGNAL_IRQ(flag)) {
+			if (IS_PRINTF_SIGNAL(info->sig_flag))
+				aipu_job_manager_real_time_printk(manager, partition, info);
+
+#if AIPU_CONFIG_ENABLE_INTR_PROFILING
+			if (IS_PROFILER_SIGNAL(info->sig_flag)) {
+				pr_info("profiler signal intr...\n");
+				aipu_job_manager_real_time_get_pdata(manager, info);
+			}
+#endif
+			return;
+		}
 	}
 
 	spin_lock(&manager->lock);
-	if (do_abortion(flag, info)) {
-		partition->ops->abort_command_pool(partition, 0);
-		if (manager->pools)
-			manager->pools[partition->id].aborted = true;
+	if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V4) {
+		if (do_abortion_V4(flag, info)) {
+			partition->ops->abort_command_pool(partition, 0);
+			if (manager->pools)
+				manager->pools[partition->id].aborted = true;
+		}
+	} else if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+		if (do_abortion(flag, info)) {
+			partition->ops->abort_command_pool(partition, 0);
+			if (manager->pools)
+				manager->pools[partition->id].aborted = true;
+		}
 	}
 
 	list_for_each_entry(curr, &manager->scheduled_head->node, node) {

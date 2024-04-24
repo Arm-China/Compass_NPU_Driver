@@ -331,7 +331,7 @@
 
 /**
  * A1.1.20 TSM Command Pool [N] Interrupt Control PCP Register
- *
+ * [31:12] Reserved (RO)
  * [11] command pool interrupt enable
  * [10] cluster interrupt enable
  * [9]  core interrupt enable
@@ -347,11 +347,11 @@
 #define EN_CLUSTER_INTR_V4                             BIT(10)
 #define EN_CORE_INTR_V4                                BIT(9)
 #define EN_TEC_INTR_V4                                 BIT(8)
-#define EN_TIMEOUT_INTR_V4                             BIT(6)  /* shared with SCP */
-#define EN_SIGNAL_INTR_V4                              BIT(5)
+#define EN_TIMEOUT_INTR_V4                             BIT(5)  /* shared with SCP */
 #define EN_ERROR_INTR_V4                               BIT(4)
 #define EN_FAULT_INTR_V4                               BIT(3)
 #define EN_EXCEPTION_INTR_V4                           BIT(2)
+#define EN_SIGNAL_INTR_V4                              BIT(1)
 #define EN_DONE_INTR_V4                                BIT(0)
 
 #define EN_ALL_TYPE_INTRS_V4   \
@@ -412,10 +412,10 @@
 #define IS_CLUSTER_IRQ_V4(status_32)                   (((status_32) >> 10) & 0x1)
 #define IS_CORE_IRQ_V4(status_32)                      (((status_32) >> 9) & 0x1)
 #define IS_TEC_IRQ_V4(status_32)                       (((status_32) >> 8) & 0x1)
-#define IS_SIGNAL_IRQ_V4(status_32)                    (((status_32) >> 5) & 0x1)
 #define IS_ERROR_IRQ_V4(status_32)                     (((status_32) >> 4) & 0x1)
 #define IS_FAULT_IRQ_V4(status_32)                     (((status_32) >> 3) & 0x1)
 #define IS_EXCEPTION_IRQ_V4(status_32)                 (((status_32) >> 2) & 0x1)
+#define IS_SIGNAL_IRQ_V4(status_32)                    (((status_32) >> 1) & 0x1)
 #define IS_DONE_IRQ_V4(status_32)                      ((status_32) & 0x1)
 #define IS_ABNORMAL_V4(status_32)                      (((status_32) >> 2) & 0x7)
 #define IS_SERIOUS_ERR_V4(status_32)                   (((status_32) >> 3) & 0x3) /* error or fault */
@@ -434,19 +434,19 @@
  * [10]    cluster interrupt status
  * [9]     core interrupt status
  * [8]     TEC interrupt status
- * [6]     timeout bit
- * [5]     signal bit
+ * [5]     timeout bit
  * [4]     pool error bit
  * [3]     fault bit
  * [2]     exception bit
+ * [1]     irq_signal bit
  * [0]     done bit
  */
 #define GET_INTR_POOL_ID_V4(status_32)              (((status_32) >> 28) & 0xF)
-#define IS_TIMEOUT_INTR_V4(status_32)               (((status_32) >> 6) & 0x1)
-#define IS_SIGNAL_INTR_V4(status_32)                (((status_32) >> 5) & 0x1)
+#define IS_TIMEOUT_INTR_V4(status_32)               (((status_32) >> 5) & 0x1)
 #define IS_ERROR_INTR_V4(status_32)                 (((status_32) >> 4) & 0x1)
 #define IS_FAULT_INTR_V4(status_32)                 (((status_32) >> 3) & 0x1)
 #define IS_EXCEPTION_INTR_V4(status_32)             (((status_32) >> 2) & 0x1)
+#define IS_SIGNAL_INTR_V4(status_32)                (((status_32) >> 1) & 0x1)
 #define IS_DONE_INTR_V4(status_32)                  ((status_32) & 0x1)
 
 #define INTERRUPT_TYPE_INFO_REG(id)                 (_GET_PER_INTERRUPT_REGISTER_OFFSET(id) + 0x0)
@@ -457,6 +457,35 @@
  * [31:0] TCBP (RO)
  */
 #define INTERRUPT_TCB_PTR_REG(id)                   (_GET_PER_INTERRUPT_REGISTER_OFFSET(id) + 0x4)
+
+
+/**
+ * TSM Interrupt Signal Register [N]
+ *
+ * [31:15]   reserved
+ * [14:0]    irq signal id
+ */
+#define INTERRUPT_SIGNAL_REG(id)                    (_GET_PER_INTERRUPT_REGISTER_OFFSET(id) + 0x8)
+
+
+/**
+ * TSM Interrupt Signal flag Register [N]
+ *
+ * [31:0]    irq signal flag
+ */
+#define IS_HW_EXCEPTION_SIGNAL_V4(flag)                ((flag) >> 31)
+#define IS_SW_EXCEPTION_SIGNAL_V4(flag)                (((flag) >> 30) & 0x1)
+#define IS_EXCEPTION_SIGNAL_V4(flag)                   ((flag) >> 30)
+#define IS_PRINTF_SIGNAL_V4(flag)                      (((flag) >> 29) & 0x1)
+#define IS_PROFILER_SIGNAL_V4(flag)                    (((flag) >> 28) & 0x1)
+#define IS_COREDUMP_SIGNAL_V4(flag)                    (((flag) >> 27) & 0x1)
+#define GET_ERR_CODE_V4(flag)                          ((flag) & 0xFFFF)
+#define GET_PRINF_SIZE_V4(flag)                        ((flag) & 0xFFFF)
+#define GET_PROFILER_BUF_PA_V4(flag)                   (((flag) & 0xFFFFF) << 12)
+
+#define INTERRUPT_SIGNAL_FLAG_REG(id)               (_GET_PER_INTERRUPT_REGISTER_OFFSET(id) + 0xc)
+
+
 
 #define ZHOUYI_V4_MAX_REG_OFFSET                    0x322C /* to be updated */
 
