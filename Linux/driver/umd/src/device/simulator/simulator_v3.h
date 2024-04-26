@@ -468,6 +468,10 @@ inline sim_aipu::config_t sim_create_config(int code, uint32_t log_level = 0,
     config.gm_size = gm_size;
     config.plugin_filename = plugin_filename;
     config.json_filename = json_filename;
+    config.freq_mhz = 1000;
+    config.ddr_latency_rd = 0;
+    config.ddr_latency_wr = 0;
+    config.ddr_bw = 256;
 
     LOG(LOG_DEBUG, "\nconfig.code = %d\n"
         "config.enable_calloc = %d\n"
