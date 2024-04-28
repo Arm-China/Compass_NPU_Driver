@@ -87,7 +87,15 @@ struct ElfSubGraphDesc
     uint32_t reserve2;
     uint32_t reserve3;
     int32_t precursor_cnt; // count of ElfPrecursorDesc
+    /**
+     * vector<uint32_t> precursors;
+     * some graph depending information may exist here in vector format
+     */
     int32_t private_buffer_cnt; // count of private BSSReuseSectionDesc
+    /**
+     * vector<BssBufferDescriptor> private_buffers;
+     * some private buffer information may exist here in vector format
+     */
 };
 
 struct ElfPrecursorDesc
