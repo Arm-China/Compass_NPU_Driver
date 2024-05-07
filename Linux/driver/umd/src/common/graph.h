@@ -250,10 +250,10 @@ public:
                 {
                      size *= shape_vec[k];
 
-                     if (size == 0)
+                     if (shape_vec[k] == 0)
                      {
                         LOG(LOG_ALERT, "input shape %d, dim %d is 0\n", i/2, k);
-                        return false;
+                        // return false;
                      }
                 }
 
