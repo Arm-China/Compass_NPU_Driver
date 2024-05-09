@@ -1015,26 +1015,35 @@ static bool do_abortion_V4(int flag, struct job_irq_info *info)
 	if (!info)
 		return false;
 
-	return IS_SERIOUS_ERR_V4(flag) || IS_EXCEPTION_SIGNAL_V4(info->sig_flag);
+	return IS_EXCEPTION_SIGNAL_V4(info->sig_flag);
 }
+
 static bool is_job_end(struct aipu_job *job, struct aipu_partition *partition,
 		       struct job_irq_info *info, u64 asid_base, int flag)
 {
 	if (job->state != AIPU_JOB_STATE_RUNNING)
 		return false;
 
-	if (job->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3 ||
-	    job->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V4)
+	if (job->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3) {
 		return is_v3v4_job_done_or_excep(job, info, asid_base, flag) ||
 			do_abortion(flag, info);
+	} else if (job->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V4) {
+		return is_v3v4_job_done_or_excep(job, info, asid_base, flag) ||
+			IS_ERROR_IRQ_V4(flag) || IS_TIMEOUT_IRQ_V4(flag) ||
+			IS_FAULT_IRQ_V4(flag) || do_abortion_V4(flag, info);
+	}
+
 	return job->core_id == partition->id;
 }
 
-static bool is_job_abnormal(struct aipu_job *job, int flag, struct job_irq_info *info)
+static bool is_job_abnormal(struct aipu_job *job, int flag,
+			    struct job_irq_info *info)
 {
-	if (job->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3 ||
-	    job->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V4)
+	if (job->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3)
 		return IS_ABNORMAL(flag) || IS_EXCEPTION_SIGNAL(info->sig_flag);
+	else if (job->desc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V4)
+		return IS_ABNORMAL_V4(flag) || IS_EXCEPTION_SIGNAL_V4(info->sig_flag);
+
 	return flag != 0;
 }
 

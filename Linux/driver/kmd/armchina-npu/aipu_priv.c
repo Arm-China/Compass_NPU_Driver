@@ -79,8 +79,10 @@ int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,
 	aipu->revision = revision;
 
 #ifdef CONFIG_ARMCHINA_NPU_ARCH_V4
-	if (version == AIPU_ISA_VERSION_ZHOUYI_V4)
+	if (version == AIPU_ISA_VERSION_ZHOUYI_V4) {
 		aipu->ops = get_v4_priv_ops();
+		aipu->core_reset_delay_us = AIPU_CONFIG_CORE_RESET_DELAY_US;
+	}
 #endif
 
 #ifdef CONFIG_ARMCHINA_NPU_ARCH_V3

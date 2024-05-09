@@ -180,8 +180,8 @@ static int zhouyi_v4_reserve(struct aipu_partition *cluster, struct aipu_job_des
 		return ZHOUYI_V4_COMMAND_POOL_FULL;
 	}
 
-	dev_dbg(cluster->dev, "[Job 0x%llx] scheduler: TCB head 0x%llx\n",
-		udesc->job_id, udesc->head_tcb_pa);
+	dev_info(cluster->dev, "[Job 0x%llx] scheduler: TCB head 0x%llx\n",
+		 udesc->job_id, udesc->head_tcb_pa);
 
 	aipu_write32(cluster->reg, TSM_CMD_SCHD_ADDR_HIGH_REG_V4, udesc->head_tcb_pa >> 32);
 	aipu_write32(cluster->reg, TSM_CMD_SCHD_ADDR_LOW_REG_V4, (u32)udesc->head_tcb_pa);
@@ -198,9 +198,9 @@ static int zhouyi_v4_reserve(struct aipu_partition *cluster, struct aipu_job_des
 		return -EINVAL;
 	}
 
-	dev_dbg(cluster->dev, "dispatch user job 0x%llx (0x%llx - 0x%llx, tcbp 0x%llx)",
-		udesc->job_id, udesc->head_tcb_pa, udesc->tail_tcb_pa,
-		udesc->last_task_tcb_pa);
+	dev_info(cluster->dev, "dispatch user job 0x%llx (0x%llx - 0x%llx, tcbp 0x%llx)",
+		 udesc->job_id, udesc->head_tcb_pa, udesc->tail_tcb_pa,
+		 udesc->last_task_tcb_pa);
 
 	return 0;
 }
@@ -267,6 +267,28 @@ static void zhouyi_v4_initialize(struct aipu_partition *cluster)
 	aipu_write32(cluster->reg, PMU_TOP_CLOCK_POWER_CTRL_REG, 0x5); /* workaround for h/w */
 }
 
+static int zhouyi_v4_soft_reset_type(struct aipu_partition *cluster,
+				     struct job_irq_info *info, int status)
+{
+	int ret = 0;
+
+	// no partition for one cluster
+	if (cluster->partition_mode == PARTITION_MODE_NONE ||
+	    cluster->partition_mode == PARTITION_MODE_CORE3_SCP) {
+		if (IS_CLUSTER_IRQ_V4(status) && IS_FAULT_IRQ_V4(status)) {
+			pr_info("v4 cluster fault global reset.\n");
+			ret = cluster->ops->soft_reset(cluster, cluster->reg);
+		} else if (IS_POOL_IRQ_V4(status) && (IS_TIMEOUT_IRQ_V4(status) ||
+				   IS_ERROR_IRQ_V4(status))) {
+			//global reset for pool err/timeout
+			pr_info("v4 pool error/timeout global reset.\n");
+			ret = cluster->ops->soft_reset(cluster, cluster->reg);
+		}
+	}
+
+	return ret;
+}
+
 static int zhouyi_v4_upper_half(void *data)
 {
 	struct aipu_partition *cluster = (struct aipu_partition *)data;
@@ -291,22 +313,31 @@ static int zhouyi_v4_upper_half(void *data)
 
 		/* log print to be removed */
 		if (IS_CLUSTER_IRQ_V4(status)) {
-			pr_info("IRQ (id = %d): cluster status 0x%x, tcbp 0x%x\n", id, status, info.tail_tcbp);
+			pr_info("IRQ (id = %d): cluster status 0x%x, tcbp 0x%x\n",
+				id, status, info.tail_tcbp);
 		} else if (IS_CORE_IRQ_V4(status)) {
-			pr_info("IRQ (id = %d): SKIP core status 0x%x, tcbp 0x%x\n", id, status, info.tail_tcbp);
+			pr_info("IRQ (id = %d): SKIP core status 0x%x, tcbp 0x%x\n",
+				id, status, info.tail_tcbp);
 			continue;
 		/* Update Fault IRQ based on X3 hardware design */
-		} else if (IS_TEC_IRQ_V4(status) && (IS_DONE_IRQ_V4(status) || IS_FAULT_IRQ_V4(status))) {
-			pr_info("IRQ (id = %d): SKIP tec d/f status 0x%x, tcbp 0x%x\n", id, status, info.tail_tcbp);
+		} else if (IS_TEC_IRQ_V4(status) && (IS_DONE_IRQ_V4(status) ||
+				  IS_FAULT_IRQ_V4(status))) {
+			pr_info("IRQ (id = %d): SKIP tec d/f status 0x%x, tcbp 0x%x\n",
+				id, status, info.tail_tcbp);
 			continue;
 		}
 
-		if (IS_ERROR_INTR_V4(status) &&
+		if (IS_ERROR_IRQ_V4(status) &&
 		    (IS_POOL_ERROR(aipu_read32(cluster->reg, COMMAND_POOL_PCP_STATUS_REG)) ||
 		     IS_POOL_ERROR(aipu_read32(cluster->reg, COMMAND_POOL_SCP_STATUS_REG))))
 			dev_dbg(cluster->dev, "TCB format error or bus error in PCP or SCP");
 
-		aipu_job_manager_irq_upper_half(cluster, GET_INTR_TYPE_V4(status), &info);
+		//check if do global soft reset
+		if (IS_RESET(status)) {
+			if (zhouyi_v4_soft_reset_type(cluster, &info, status))
+				dev_err(cluster->dev, "global reset fail.\n");
+		}
+		aipu_job_manager_irq_upper_half(cluster, status, &info);
 		aipu_irq_schedulework(cluster->irq_obj);
 
 		aipu_write32(cluster->reg, TSM_INTERRUPT_STATUS_REG, BIT(id));
@@ -419,7 +450,15 @@ static int zhouyi_v4_sysfs_show(struct aipu_partition *cluster, char *buf)
 
 int zhouyi_v4_soft_reset(struct aipu_partition *cluster, bool init_regs)
 {
-	/* to be implemented */
+	int ret = 0;
+	struct aipu_priv *aipu = cluster->priv;
+
+	/* NOTE: this is a global soft-reset, not per-partition! */
+	ret = aipu->ops->global_soft_reset(aipu);
+	if (ret)
+		return ret;
+
+	cluster->ops->initialize(cluster);
 	return 0;
 }
 

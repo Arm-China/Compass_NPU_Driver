@@ -69,6 +69,7 @@ struct aipu_priv {
 	struct aipu_memory_manager   mm;
 	struct aipu_priv_operations  *ops;
 	int reset_delay_us;
+	int core_reset_delay_us;
 	bool is_init;
 };
 

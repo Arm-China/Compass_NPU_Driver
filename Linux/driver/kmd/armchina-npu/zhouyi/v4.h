@@ -4,7 +4,6 @@
 #ifndef __V4_H__
 #define __V4_H__
 
-
 /**************************************************************************************
  *                             Cluster [N] Registers
  *************************************************************************************/
@@ -35,7 +34,7 @@
 #define GET_NUMS_V4(config_32)                         ((config_32) & 0xFFF)
 #define CLUSTER_CONFIG_REG_V4(id)                      (_GET_CLUSTER_OFFSET_V4(id) + 0x0)
 
- /**
+/*
  * A1.1.2 Cluster Control Register
  * [31:24] core enable bits (27:24: core 3 - core 0; )
  * [23:14] reserved (RO)
@@ -57,19 +56,17 @@
 	(EN_NUMS_V4(nums) | _ENABLE_CLUSTER_V4)
 #define DISABLE_CLUSTER_V4                             _DISABLE_CLUSTER_V4
 #define CONFIG_CLUSTER_V4(core_en, en_core_num, en_aiff, en_tec, par_mode) \
-     (_ENABLE_CORE_V4(core_en)     | \
+	(_ENABLE_CORE_V4(core_en) | \
 	 _EN_CORE_NUM_V4(en_core_num) | \
-	 _EN_AIFF_NUM_V4(en_aiff)     | \
-	 _EN_TEC_NUM_V4(en_tec)       | \
-	 _ENABLE_CLUSTER_V4           | \
-	 par_mode)
+	 _EN_AIFF_NUM_V4(en_aiff) | \
+	 _EN_TEC_NUM_V4(en_tec) | \
+	 _ENABLE_CLUSTER_V4 | (par_mode))
 
 #define CLUSTER_CONTROL_REG_V4(id)                     (_GET_CLUSTER_OFFSET_V4(id) + 0x4)
 
-
-/**************************************************************************************
+/*****************************************************************************
  *                             TSM Registers
- *************************************************************************************/
+ *****************************************************************************/
 /**
  * TSM Command Schedule Control Handle Register
  *
@@ -91,7 +88,7 @@
  * [11:10] Reserved (RO)
  * [9:8]   QOS 0 slow, 1 Media, 2 fast (reserved in LIN), 3 reserved
  * [7:4]   Reserved (RO)
- * [3:0]   command tpye:0 none, 1 create, 2 destory, 3 Abortion,
+ * [3:0]   command tpye:0 none, 1 create, 2 destroy, 3 Abortion,
  *                      4 Dispatch,5 direct dispatch, 6 Others.
  */
 #define _TSM_DIRECT_CLUSTER_V4(cluser)                  ((cluster) << 28)
@@ -110,13 +107,11 @@
 #define TSM_CREATE_CMD_POOL_V4(pool, map)              (_TSM_CREATE_V4 | _TSM_POOL_V4(pool) | (map))
 #define TSM_DESTROY_CMD_POOL_V4(pool)                  (_TSM_DESTROY_V4 | _TSM_POOL_V4(pool))
 #define TSM_ABORT_CMD_POOL_V4(pool)                    (_TSM_ABORT_V4 | _TSM_POOL_V4(pool))
-//#define TSM_DISPATCH_CMD_POOL_V4(pool, qos)            (_TSM_DISPATCH_V4 | (qos) | _TSM_POOL_V4(pool))
 #define TSM_DBG_DISPATCH_CMD_POOL_V4(pool, qos, core)  (_TSM_DEBUG_DISPATCH_V4 | (qos) | \
 						     _TSM_POOL_V4(pool) | _TSM_DIRECT_CORE_V4(core))
 
 #define TSM_CMD_SCHD_CTRL_HANDLE_REG_V4             0x0
 #define TSM_DISPATCH_CMD_POOL_V4(pool, qos)         (_TSM_DISPATCH_V4 | (qos) | (pool))
-
 
 /**
  * A1.1.6 TSM Command Schedule Address High Register
@@ -128,7 +123,8 @@
 /**
  * A1.1.7 TSM Command Schedule Address Low Register
  *
- * [31:12] Write to set the address[31:12] of head of a TCB chain to be dispatched
+ * [31:12] Write to set the address[31:12] of head of a TCB chain to
+ *         be dispatched
  *         1) this address shall be 4k page aligned
  */
 #define TSM_CMD_SCHD_ADDR_LOW_REG_V4                0xC
@@ -177,7 +173,7 @@
  *
  * [31:0] TCB number of chain
  */
-#define TSM_COMMAND_SCHEDULE_TCB_NUM_REG_V4            0x1C
+#define TSM_COMMAND_SCHEDULE_TCB_NUM_REG_V4         0x1C
 
 /**************************************************************************************
  *                             Debug Link Access Registers
@@ -189,14 +185,13 @@
  * [11:4] cluster selection
  * [3:0]  core selection
  */
-#define _ENABLE_DEBUG_V4                               BIT(12)
-#define _SET_DBG_CLUSTER_V4(id)                        (((id) & 0xFF) << 4)
-#define _SET_DBG_CORE_V4(id)                           ((id) & 0xF)
-#define SELECT_DEBUG_CORE_V4(cluster, core)            (_ENABLE_DEBUG_V4 | _SET_DBG_CLUSTER_V4(cluster) | \
-						     _SET_DBG_CORE_V4(core))
-#define DISABLE_DEBUG_V4                               0
-#define AHB_INTERNAL_CSR_SELECTION_CTRL_REG            0x1F00
-
+#define _ENABLE_DEBUG_V4                            BIT(12)
+#define _SET_DBG_CLUSTER_V4(id)                     (((id) & 0xFF) << 4)
+#define _SET_DBG_CORE_V4(id)                        ((id) & 0xF)
+#define SELECT_DEBUG_CORE_V4(cluster, core)         (_ENABLE_DEBUG_V4 | \
+			_SET_DBG_CLUSTER_V4(cluster) | _SET_DBG_CORE_V4(core))
+#define DISABLE_DEBUG_V4                            0
+#define AHB_INTERNAL_CSR_SELECTION_CTRL_REG         0x1F00
 
 /**
  * A1.1.8 TSM Revision Register (Read-Only)
@@ -207,10 +202,10 @@
  * [7:4]   major revision ID
  * [3:0]   minor number
  */
-#define _IS_TSM_ARCH_V4(rev_32)                      (((rev_32) >> 16) & 0x1)
+#define _IS_TSM_ARCH_V4(rev_32)                     (((rev_32) >> 16) & 0x1)
 #define _IS_V4_ARCH(rev_32)                         ((((rev_32) >> 8) & 0x1))
 
-#define TSM_REVISION_REG_V4                            0x50
+#define TSM_REVISION_REG_V4                         0x50
 
 /**
  * A1.1.22 Tick Counter Control Status Register
@@ -219,12 +214,12 @@
  * [1] clear
  * [0] enable
  */
-#define IS_COUNTER_OVERFLOW_V4(status_32)              (((status_32) >> 8) & 0x1)
-#define CLEAR_COUNTER_V4                               BIT(1)
-#define ENABLE_COUNTER_V4                              0x0
-#define DISABLE_COUNTER_V4                             ((CLEAR_COUNTER_V4) | 0x1)
+#define IS_COUNTER_OVERFLOW_V4(status_32)           (((status_32) >> 8) & 0x1)
+#define CLEAR_COUNTER_V4                            BIT(1)
+#define ENABLE_COUNTER_V4                           0x0
+#define DISABLE_COUNTER_V4                          ((CLEAR_COUNTER_V4) | 0x1)
 
-#define TICK_COUNTER_CONTROL_STATUS_REG_V4             0x68
+#define TICK_COUNTER_CONTROL_STATUS_REG_V4          0x68
 
 /**
  * TSM Interrupt Status Register
@@ -242,8 +237,6 @@
  *************************************************************************************/
 #define _TSM_PCP_REGISTERS_BASE                     0x800
 
-
-
 /**************************************************************************************
  *                             HOST TSM PMU Register
  *************************************************************************************/
@@ -257,7 +250,7 @@
  *     1) host write 1 to launch AIPU soft reset
  *     2) AIPU write 0 when a soft reset is done
  */
-#define PMU_TOP_SOFT_RESET_REG                          (0x20)
+#define PMU_TOP_SOFT_RESET_REG                      (0x20)
 
 /**
  * A1.1.33 PMU Cluster Soft Reset
@@ -269,7 +262,9 @@
  *     1) host write 1 to launch AIPU soft reset
  *     2) AIPU write 0 when a soft reset is done
  */
-#define PMU_CLUSTER_RESET_REG                           (0x24)
+#define CONFIG_PMU_CLUSTER_RESET(cluster)           (1 << ((cluster) & 0xF))
+#define PMU_CLUSTER_RESET_DONE(cluster)			(1 << (((cluster) & 0xF) + 4))
+#define PMU_CLUSTER_RESET_REG                       (0x24)
 
 /**
  * A1.1.34 PMU Core Soft Reset
@@ -281,7 +276,11 @@
  *     1) host write 1 to launch AIPU soft reset
  *     2) AIPU write 0 when a soft reset is done
  */
-#define PMU_CORE_RESET_REG                              (0x28)
+#define CONFIG_PMU_CORE_RESET(cluster, core)	(1 << (((core) & 0xFF) + \
+								((cluster) & 0xF) * 4))
+#define PMU_CORE_RESET_DONE(cluster, core)		(1 << (((core) & 0xFF) + \
+								(((cluster) & 0xF) * 4) + 16))
+#define PMU_CORE_RESET_REG                          (0x28)
 
 /**
  * A1.1.35 PMU Reset Timeout
@@ -293,7 +292,7 @@
  *     1) host write 0 to clear it after reading
  *     2) AIPU write 1 when there is reset request.
  */
-#define PMU_RESET_TIMEOUT_REG                           (0x2c)
+#define PMU_RESET_TIMEOUT_REG                       (0x2c)
 
 /**
  * A1.1.36 PMU Top Clock and Power Control Register
@@ -343,27 +342,27 @@
  * [2]  exception interrupt enable
  * [0]  done interrupt enable
  */
-#define EN_CMD_POOL_INTR_V4                            BIT(11)
-#define EN_CLUSTER_INTR_V4                             BIT(10)
-#define EN_CORE_INTR_V4                                BIT(9)
-#define EN_TEC_INTR_V4                                 BIT(8)
-#define EN_TIMEOUT_INTR_V4                             BIT(5)  /* shared with SCP */
-#define EN_ERROR_INTR_V4                               BIT(4)
-#define EN_FAULT_INTR_V4                               BIT(3)
-#define EN_EXCEPTION_INTR_V4                           BIT(2)
-#define EN_SIGNAL_INTR_V4                              BIT(1)
-#define EN_DONE_INTR_V4                                BIT(0)
+#define EN_CMD_POOL_INTR_V4                         BIT(11)
+#define EN_CLUSTER_INTR_V4                          BIT(10)
+#define EN_CORE_INTR_V4                             BIT(9)
+#define EN_TEC_INTR_V4                              BIT(8)
+#define EN_TIMEOUT_INTR_V4                          BIT(5) /* shared with SCP */
+#define EN_ERROR_INTR_V4                            BIT(4)
+#define EN_FAULT_INTR_V4                            BIT(3)
+#define EN_EXCEPTION_INTR_V4                        BIT(2)
+#define EN_SIGNAL_INTR_V4                           BIT(1)
+#define EN_DONE_INTR_V4                             BIT(0)
 
-#define EN_ALL_TYPE_INTRS_V4   \
-                     (EN_SIGNAL_INTR_V4 | EN_ERROR_INTR_V4 | EN_FAULT_INTR_V4 \
-					 | EN_EXCEPTION_INTR_V4 | EN_DONE_INTR_V4 | EN_TIMEOUT_INTR_V4)
+#define EN_ALL_TYPE_INTRS_V4 \
+						(EN_SIGNAL_INTR_V4 | EN_ERROR_INTR_V4 | \
+						EN_FAULT_INTR_V4 | EN_EXCEPTION_INTR_V4 | \
+						EN_DONE_INTR_V4 | EN_TIMEOUT_INTR_V4)
 
 #define EN_ALL_LEVEL_INTRS_V4 \
-	(EN_CMD_POOL_INTR_V4 | EN_CLUSTER_INTR_V4 | EN_CORE_INTR_V4 | EN_TEC_INTR_V4)
-/*#define EN_ALL_TYPE_INTRS_V3  \
-	(EN_SIGNAL_INTR | EN_ERROR_INTR | EN_FAULT_INTR | EN_EXCEPTION_INTR_V4 | EN_DONE_INTR_V4)*/
-#define EN_CMD_POOL_ALL_INTRS_V4                       (EN_CMD_POOL_INTR_V4 | EN_ALL_TYPE_INTRS_V4)
-#define EN_ALL_INTRS_V4                                (EN_ALL_LEVEL_INTRS_V4 | EN_ALL_TYPE_INTRS_V4)
+						(EN_CMD_POOL_INTR_V4 | EN_CLUSTER_INTR_V4 | \
+						 EN_CORE_INTR_V4 | EN_TEC_INTR_V4)
+#define EN_CMD_POOL_ALL_INTRS_V4  (EN_CMD_POOL_INTR_V4 | EN_ALL_TYPE_INTRS_V4)
+#define EN_ALL_INTRS_V4           (EN_ALL_LEVEL_INTRS_V4 | EN_ALL_TYPE_INTRS_V4)
 #define DISABLE_ALL_INTRS_V4                           0
 
 #define COMMAND_POOL_PCP_INTERRUPT_CONTROL_REG      (_TSM_PCP_REGISTERS_BASE + 0x8)
@@ -405,22 +404,6 @@
  * ...
  * 0xAf0: interrupt 15
  */
-#define GET_INTR_CLUSTER_ID_V4(status_32)              (((status_32) >> 24) & 0xFF)
-#define GET_INTR_CORE_ID_V4(status_32)                 (((status_32) >> 20) & 0xF)
-#define GET_INTR_TEC_ID_V4(status_32)                  (((status_32) >> 16) & 0xF)
-#define IS_CMD_POOL_IRQ_V4(status_32)                  (((status_32) >> 11) & 0x1)
-#define IS_CLUSTER_IRQ_V4(status_32)                   (((status_32) >> 10) & 0x1)
-#define IS_CORE_IRQ_V4(status_32)                      (((status_32) >> 9) & 0x1)
-#define IS_TEC_IRQ_V4(status_32)                       (((status_32) >> 8) & 0x1)
-#define IS_ERROR_IRQ_V4(status_32)                     (((status_32) >> 4) & 0x1)
-#define IS_FAULT_IRQ_V4(status_32)                     (((status_32) >> 3) & 0x1)
-#define IS_EXCEPTION_IRQ_V4(status_32)                 (((status_32) >> 2) & 0x1)
-#define IS_SIGNAL_IRQ_V4(status_32)                    (((status_32) >> 1) & 0x1)
-#define IS_DONE_IRQ_V4(status_32)                      ((status_32) & 0x1)
-#define IS_ABNORMAL_V4(status_32)                      (((status_32) >> 2) & 0x7)
-#define IS_SERIOUS_ERR_V4(status_32)                   (((status_32) >> 3) & 0x3) /* error or fault */
-#define GET_INTR_TYPE_V4(status_32)                    ((status_32) & 0x3F)
-#define IS_IRQ_TO_HANDLE_V4(status_32)                 ((status_32) & 0xF1F)
 
 #define _GET_PER_INTERRUPT_REGISTER_OFFSET(id)      (0xA00 + 0x10 * (id))
 
@@ -441,13 +424,24 @@
  * [1]     irq_signal bit
  * [0]     done bit
  */
-#define GET_INTR_POOL_ID_V4(status_32)              (((status_32) >> 28) & 0xF)
-#define IS_TIMEOUT_INTR_V4(status_32)               (((status_32) >> 5) & 0x1)
-#define IS_ERROR_INTR_V4(status_32)                 (((status_32) >> 4) & 0x1)
-#define IS_FAULT_INTR_V4(status_32)                 (((status_32) >> 3) & 0x1)
-#define IS_EXCEPTION_INTR_V4(status_32)             (((status_32) >> 2) & 0x1)
-#define IS_SIGNAL_INTR_V4(status_32)                (((status_32) >> 1) & 0x1)
-#define IS_DONE_INTR_V4(status_32)                  ((status_32) & 0x1)
+#define IS_RESET(status_32)                         (((status_32) >> 3) & 0x7)
+#define GET_INTR_CLUSTER_ID_V4(status_32)           (((status_32) >> 24) & 0xFF)
+#define GET_INTR_CORE_ID_V4(status_32)              (((status_32) >> 20) & 0xF)
+#define GET_INTR_TEC_ID_V4(status_32)               (((status_32) >> 16) & 0xF)
+#define IS_POOL_IRQ_V4(status_32)                   (((status_32) >> 11) & 0x1)
+#define IS_CLUSTER_IRQ_V4(status_32)                (((status_32) >> 10) & 0x1)
+#define IS_CORE_IRQ_V4(status_32)                   (((status_32) >> 9) & 0x1)
+#define IS_TEC_IRQ_V4(status_32)                    (((status_32) >> 8) & 0x1)
+#define IS_TIMEOUT_IRQ_V4(status_32)                (((status_32) >> 5) & 0x1)
+#define IS_ERROR_IRQ_V4(status_32)                  (((status_32) >> 4) & 0x1)
+#define IS_FAULT_IRQ_V4(status_32)                  (((status_32) >> 3) & 0x1)
+#define IS_EXCEPTION_IRQ_V4(status_32)              (((status_32) >> 2) & 0x1)
+#define IS_SIGNAL_IRQ_V4(status_32)                 (((status_32) >> 1) & 0x1)
+#define IS_DONE_IRQ_V4(status_32)                   ((status_32) & 0x1)
+#define IS_ABNORMAL_V4(status_32)                   (((status_32) >> 2) & 0xF)
+#define IS_SERIOUS_ERR_V4(status_32)                (((status_32) >> 3) & 0x7)
+#define GET_INTR_TYPE_V4(status_32)                 ((status_32) & 0x3F)
+#define IS_IRQ_TO_HANDLE_V4(status_32)              ((status_32) & 0xF1F)
 
 #define INTERRUPT_TYPE_INFO_REG(id)                 (_GET_PER_INTERRUPT_REGISTER_OFFSET(id) + 0x0)
 
@@ -458,7 +452,6 @@
  */
 #define INTERRUPT_TCB_PTR_REG(id)                   (_GET_PER_INTERRUPT_REGISTER_OFFSET(id) + 0x4)
 
-
 /**
  * TSM Interrupt Signal Register [N]
  *
@@ -467,25 +460,22 @@
  */
 #define INTERRUPT_SIGNAL_REG(id)                    (_GET_PER_INTERRUPT_REGISTER_OFFSET(id) + 0x8)
 
-
 /**
  * TSM Interrupt Signal flag Register [N]
  *
  * [31:0]    irq signal flag
  */
-#define IS_HW_EXCEPTION_SIGNAL_V4(flag)                ((flag) >> 31)
-#define IS_SW_EXCEPTION_SIGNAL_V4(flag)                (((flag) >> 30) & 0x1)
-#define IS_EXCEPTION_SIGNAL_V4(flag)                   ((flag) >> 30)
-#define IS_PRINTF_SIGNAL_V4(flag)                      (((flag) >> 29) & 0x1)
-#define IS_PROFILER_SIGNAL_V4(flag)                    (((flag) >> 28) & 0x1)
-#define IS_COREDUMP_SIGNAL_V4(flag)                    (((flag) >> 27) & 0x1)
-#define GET_ERR_CODE_V4(flag)                          ((flag) & 0xFFFF)
-#define GET_PRINF_SIZE_V4(flag)                        ((flag) & 0xFFFF)
-#define GET_PROFILER_BUF_PA_V4(flag)                   (((flag) & 0xFFFFF) << 12)
+#define IS_HW_EXCEPTION_SIGNAL_V4(flag)             ((flag) >> 31)
+#define IS_SW_EXCEPTION_SIGNAL_V4(flag)             (((flag) >> 30) & 0x1)
+#define IS_EXCEPTION_SIGNAL_V4(flag)                ((flag) >> 30)
+#define IS_PRINTF_SIGNAL_V4(flag)                   (((flag) >> 29) & 0x1)
+#define IS_PROFILER_SIGNAL_V4(flag)                 (((flag) >> 28) & 0x1)
+#define IS_COREDUMP_SIGNAL_V4(flag)                 (((flag) >> 27) & 0x1)
+#define GET_ERR_CODE_V4(flag)                       ((flag) & 0xFFFF)
+#define GET_PRINF_SIZE_V4(flag)                     ((flag) & 0xFFFF)
+#define GET_PROFILER_BUF_PA_V4(flag)                (((flag) & 0xFFFFF) << 12)
 
 #define INTERRUPT_SIGNAL_FLAG_REG(id)               (_GET_PER_INTERRUPT_REGISTER_OFFSET(id) + 0xc)
-
-
 
 #define ZHOUYI_V4_MAX_REG_OFFSET                    0x322C /* to be updated */
 
