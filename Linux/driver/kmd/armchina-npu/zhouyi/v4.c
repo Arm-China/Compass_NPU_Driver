@@ -74,11 +74,16 @@ static int zhouyi_v4_create_command_pool(struct aipu_partition *cluster, int poo
 		return -EINVAL;
 	}
 
+	if (IS_POOL_BUSY(aipu_read32(cluster->reg, COMMAND_POOL_PCP_STATUS_REG)) ||
+	    IS_POOL_BUSY(aipu_read32(cluster->reg, COMMAND_POOL_SCP_STATUS_REG)))
+		return 0;
+
 	aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG_V4,
 		     TSM_CREATE_CMD_POOL_V4(cluster->id, TSM_MAP_SINGLE_V4) | pool);
 
 	status = aipu_read32(cluster->reg, TSM_STATUS_REG_V4);
 	if (IS_CMD_FAIL_V4(status)) {
+		aipu_write32(cluster->reg, TSM_STATUS_REG_V4, CLEAR_CMD_FAIL_V4(status));
 		dev_err(cluster->dev, "create command pool failed\n");
 		return -EFAULT;
 	}
@@ -169,10 +174,14 @@ static int zhouyi_v4_reserve(struct aipu_partition *cluster, struct aipu_job_des
 	int status = 0;
 	int qos = get_qos(udesc->exec_flag);
 
-	ret = zhouyi_v4_create_command_pool(cluster, pool);
-	if (ret)
-		return ret;
+	//create pool
+	if (trigger_type == ZHOUYI_TRIGGER_TYPE_CREATE) {
+		ret = zhouyi_v4_create_command_pool(cluster, pool);
+		if (ret)
+			return ret;
+	}
 
+	//dispatch pool
 	status = aipu_read32(cluster->reg, TSM_STATUS_REG_V4);
 	if ((pool == ZHOUYI_COMMAND_POOL_PCP && IS_PCP_FULL(status, qos == TSM_QOS_FAST)) ||
 	    (pool == ZHOUYI_COMMAND_POOL_SCP && IS_SCP_FULL(status, qos == TSM_QOS_FAST))) {

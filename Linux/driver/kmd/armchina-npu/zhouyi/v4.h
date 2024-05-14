@@ -160,12 +160,12 @@
 #define PCP_ABORT_DONE_BIT                          16
 #define SCP_ABORT_DONE_BIT                          20
 #define IS_ABORT_DONE(status_32, done_bit)          (((status_32) >> (done_bit)) & 0x1)
-#define CLEAR_ABORT(done_bit)                       BIT(done_bit)
+#define CLEAR_ABORT(done_bit)                       ((~(1 << (done_bit))) & (0x7FFFFFFF))
 #define IS_PCP_FULL(status, high)                   (((status) >> ((high) ? 8 : 0)) & 0x1)
 #define IS_SCP_FULL(status, high)                   (((status) >> (4 + ((high) ? 8 : 0))) & 0x1)
 #define IS_CMD_FAIL_V4(status_32)                   ((status_32) >> 31)
 #define IS_CMD_POOL_FULL_V4(status_32)              ((status_32) & 0xFF)
-#define CLEAR_CMD_FAIL_V4(status_32)                ((status_32) & 0x7FFFFFFF)
+#define CLEAR_CMD_FAIL_V4(status_32)                ((status_32) & 0xFFFFFFFF)
 #define TSM_STATUS_REG_V4                           0x18
 
 /**

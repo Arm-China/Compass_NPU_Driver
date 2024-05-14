@@ -404,6 +404,9 @@ static int schedule_v4_job_no_lock(struct aipu_job_manager *manager, struct aipu
 	int ret = 0;
 	struct aipu_partition *cluster = &manager->partitions[0];
 	int pool_type = ZHOUYI_COMMAND_POOL_PCP;
+	int partition_id = job->desc.partition_id;
+	int trigger_type = ZHOUYI_TRIGGER_TYPE_CREATE;
+	struct command_pool *pool = &manager->pools[partition_id];
 
 	if (job->desc.partition_id == 0) {
 		pool_type = ZHOUYI_COMMAND_POOL_PCP;
@@ -415,7 +418,25 @@ static int schedule_v4_job_no_lock(struct aipu_job_manager *manager, struct aipu
 		return -EINVAL;
 	}
 
-	ret = cluster->ops->reserve(cluster, &job->desc, 0, pool_type);
+	if (!pool->created)
+		trigger_type = ZHOUYI_TRIGGER_TYPE_CREATE;
+	else
+		trigger_type = ZHOUYI_TRIGGER_TYPE_DISPATCH;
+
+	ret = cluster->ops->reserve(cluster, &job->desc, trigger_type, pool_type);
+	if (!ret) {
+		if (trigger_type == ZHOUYI_TRIGGER_TYPE_CREATE ||
+		    trigger_type == ZHOUYI_TRIGGER_TYPE_DEBUG_DISPATCH) {
+			pr_info("cmd pool created true.\n");
+			pool->created = true;
+		}
+
+		if (trigger_type == ZHOUYI_TRIGGER_TYPE_DEBUG_DISPATCH)
+			pool->debug = true;
+
+		if (pool->aborted)
+			pool->aborted = false;
+	}
 
 	return ret;
 }
@@ -810,7 +831,8 @@ void aipu_job_manager_set_partitions_info(struct aipu_job_manager *manager, int 
 	WARN_ON(!manager || !partition_cnt || !partitions);
 	manager->partition_cnt = partition_cnt;
 	manager->partitions = partitions;
-	if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+	if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V3 ||
+	    manager->version == AIPU_ISA_VERSION_ZHOUYI_V4) {
 		manager->pools = devm_kzalloc(partitions[0].dev,
 					      partition_cnt * sizeof(*manager->pools),
 					      GFP_KERNEL);
@@ -1190,14 +1212,19 @@ static void aipu_job_manager_destroy_command_pool_no_lock(struct aipu_job_manage
 				aipu_mm_unlink_tcb(manager->mm, q_fast_tail, false);
 		}
 
-		partition->ops->destroy_command_pool(partition, 0);
-		memset(pool->qlist, 0, sizeof(*pool->qlist) * AIPU_JOB_QOS_MAX);
-		pool->created = false;
-		pool->debug = false;
-		manager->tec_intr_en = false;
-	} else if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V4) {
-		partition->ops->destroy_command_pool(partition, 0);
-		manager->tec_intr_en = false;
+		if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+			partition->ops->destroy_command_pool(partition, 0);
+			memset(pool->qlist, 0, sizeof(*pool->qlist) * AIPU_JOB_QOS_MAX);
+			pool->created = false;
+			pool->debug = false;
+			manager->tec_intr_en = false;
+		} else if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V4) {
+			partition->ops->destroy_command_pool(partition, 0);
+			memset(pool->qlist, 0, sizeof(*pool->qlist) * AIPU_JOB_QOS_MAX);
+			manager->tec_intr_en = false;
+			pool->created = false;
+			pool->debug = false;
+		}
 	}
 }
 
