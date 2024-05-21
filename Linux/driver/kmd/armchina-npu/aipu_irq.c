@@ -11,7 +11,12 @@ static irqreturn_t aipu_irq_handler_upper_half(int irq, void *dev_id)
 {
 	struct aipu_partition *partition =
 		(struct aipu_partition *)(((struct device *)dev_id)->driver_data);
-	return partition->ops->upper_half(partition);
+
+	if (partition && partition->ops && partition->ops->upper_half)
+		return partition->ops->upper_half(partition);
+
+	pr_info("unexpected interrupt enter before finish zhouyi's initialization.\n");
+	return IRQ_NONE;
 }
 
 static void aipu_irq_handler_bottom_half(struct work_struct *work)
