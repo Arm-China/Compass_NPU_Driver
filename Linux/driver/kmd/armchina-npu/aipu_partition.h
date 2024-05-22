@@ -106,6 +106,7 @@ struct cluster_info {
  * @cluster_cnt:     cluster count
  * @clusters:        cluster information array
  * @partition_mode:  partition mode in a cluster (for zhouyi v4 only)
+ * @event_type:      interrupt's event type (for zhouyi v4 only)
  */
 struct aipu_partition {
 	u32 id;
@@ -131,6 +132,7 @@ struct aipu_partition {
 	u32 cluster_cnt;
 	struct cluster_info clusters[8];
 	int partition_mode;
+	int event_type;
 };
 
 #endif /* __AIPU_PARTITION_H__ */

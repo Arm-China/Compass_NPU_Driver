@@ -192,6 +192,8 @@
 			_SET_DBG_CLUSTER_V4(cluster) | _SET_DBG_CORE_V4(core))
 #define DISABLE_DEBUG_V4                            0
 #define AHB_INTERNAL_CSR_SELECTION_CTRL_REG         0x1F00
+#define CLUSTER_MMR_WIN_BASE                        (0x2000)
+#define CORE_MMR_WIN_BASE                           (0x3000)
 
 /**
  * A1.1.8 TSM Revision Register (Read-Only)

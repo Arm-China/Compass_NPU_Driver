@@ -1247,6 +1247,23 @@ void aipu_job_manager_irq_bottom_half(struct aipu_partition *core)
 	manager = get_job_manager(core);
 
 	spin_lock_irqsave(&manager->lock, flags);
+
+	//global reset in bottom half and set all job exception
+	if (core->version == AIPU_ISA_VERSION_ZHOUYI_V4) {
+		if (core->event_type == AIPU_IRQ_EVENT_RESET) {
+			if (core->ops->soft_reset(core, core->reg)) {
+				dev_err(core->dev, "global reset fails in bottom half.\n");
+			} else {
+				list_for_each_entry_safe(curr, next,
+							 &manager->scheduled_head->node, node) {
+					curr->state = AIPU_JOB_STATE_EXCEP;
+				}
+				core->event_type = AIPU_IRQ_EVENT_NONE;
+				manager->pools->created = false;
+			}
+		}
+	}
+
 	list_for_each_entry_safe(curr, next, &manager->scheduled_head->node, node) {
 		if (curr->state >= AIPU_JOB_STATE_EXCEP && !curr->wake_up &&
 		    (curr->desc.aipu_version >= AIPU_ISA_VERSION_ZHOUYI_V3 ||

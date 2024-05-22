@@ -35,7 +35,7 @@ static void zhouyi_v4_enable_core_cnt(struct aipu_partition *cluster, u32 cluste
 static void zhouyi_v4_enable_interrupt(struct aipu_partition *cluster, bool en_tec_intr)
 {
 	/* TEC fault interrupts to be updated based on the x3 design */
-	u32 flag = EN_ALL_LEVEL_INTRS_V4 | EN_SIGNAL_INTR_V4 | EN_DONE_INTR_V4;
+	u32 flag = EN_ALL_LEVEL_INTRS_V4 | EN_ALL_TYPE_INTRS_V4;
 
 	/* TEC interrupts to be updated based on the x3 design */
 	if (en_tec_intr)
@@ -101,11 +101,11 @@ static int zhouyi_v4_abort_command_pool(struct aipu_partition *cluster, int pool
 		abort_done_bit = SCP_ABORT_DONE_BIT;
 
 	if (pool == ZHOUYI_COMMAND_POOL_PCP) {
-		if (IS_POOL_IDLE(aipu_read32(cluster->reg, COMMAND_POOL_PCP_STATUS_REG)))
-			return -EINVAL;
+		if (IS_POOL_BUSY(aipu_read32(cluster->reg, COMMAND_POOL_PCP_STATUS_REG)))
+			return -EBUSY;
 	} else if (pool == ZHOUYI_COMMAND_POOL_SCP) {
-		if (IS_POOL_IDLE(aipu_read32(cluster->reg, COMMAND_POOL_SCP_STATUS_REG)))
-			return -EINVAL;
+		if (IS_POOL_BUSY(aipu_read32(cluster->reg, COMMAND_POOL_SCP_STATUS_REG)))
+			return -EBUSY;
 	}
 
 	aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG_V4,
@@ -119,8 +119,10 @@ static int zhouyi_v4_abort_command_pool(struct aipu_partition *cluster, int pool
 	}
 
 	for (cnt = 0; cnt < 5; cnt++) {
-		if (IS_ABORT_DONE(aipu_read32(cluster->reg, TSM_STATUS_REG_V4), abort_done_bit)) {
-			aipu_write32(cluster->reg, TSM_STATUS_REG_V4, CLEAR_ABORT(abort_done_bit));
+		status = aipu_read32(cluster->reg, TSM_STATUS_REG_V4);
+		if (IS_ABORT_DONE(status, abort_done_bit)) {
+			aipu_write32(cluster->reg, TSM_STATUS_REG_V4,
+				     status & CLEAR_ABORT(abort_done_bit));
 			dev_dbg(cluster->dev, "command pool was aborted\n");
 			return 0;
 		}
@@ -285,13 +287,12 @@ static int zhouyi_v4_soft_reset_type(struct aipu_partition *cluster,
 	if (cluster->partition_mode == PARTITION_MODE_NONE ||
 	    cluster->partition_mode == PARTITION_MODE_CORE3_SCP) {
 		if (IS_CLUSTER_IRQ_V4(status) && IS_FAULT_IRQ_V4(status)) {
-			pr_info("v4 cluster fault global reset.\n");
-			ret = cluster->ops->soft_reset(cluster, cluster->reg);
+			pr_info("v4 cluster fault global reset event.\n");
+			cluster->event_type = AIPU_IRQ_EVENT_RESET;
 		} else if (IS_POOL_IRQ_V4(status) && (IS_TIMEOUT_IRQ_V4(status) ||
 				   IS_ERROR_IRQ_V4(status))) {
-			//global reset for pool err/timeout
-			pr_info("v4 pool error/timeout global reset.\n");
-			ret = cluster->ops->soft_reset(cluster, cluster->reg);
+			pr_info("v4 pool error/timeout global reset event.\n");
+			cluster->event_type = AIPU_IRQ_EVENT_RESET;
 		}
 	}
 
@@ -402,7 +403,7 @@ static int zhouyi_v4_sysfs_show(struct aipu_partition *cluster, char *buf)
 	snprintf(tmp, 512, "\n--- Debug Links ---\n");
 	strcat(buf, tmp);
 	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Debug Link Enable",
-				     0x1f00);
+				     AHB_INTERNAL_CSR_SELECTION_CTRL_REG);
 	strcat(buf, tmp);
 	ret += zhouyi_print_reg_info(cluster->reg, tmp, "Cluster Control",
 				     CLUSTER_CONTROL_REG_V4(0));

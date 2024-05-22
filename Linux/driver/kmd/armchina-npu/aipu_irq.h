@@ -12,6 +12,12 @@ typedef void (*aipu_irq_bhandler_t) (void *arg);
 typedef void (*aipu_irq_trigger_t) (void *arg);
 typedef void (*aipu_irq_ack_t) (void *arg);
 
+enum irq_event_type {
+	AIPU_IRQ_EVENT_NONE,
+	AIPU_IRQ_EVENT_PRINT,
+	AIPU_IRQ_EVENT_RESET,
+};
+
 /**
  * struct aipu_irq_object - interrupt object for every single AIPU instance
  * @irqnum:    interrupt number used to request IRQ
