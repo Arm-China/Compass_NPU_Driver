@@ -1118,11 +1118,8 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 
 	spin_lock(&manager->lock);
 	if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V4) {
-		if (do_abortion_V4(flag, info)) {
-			partition->ops->abort_command_pool(partition, 0);
-			if (manager->pools)
-				manager->pools[partition->id].aborted = true;
-		}
+		if (do_abortion_V4(flag, info))
+			pr_warn("Signal exception happened.\n");
 	} else if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
 		if (do_abortion(flag, info)) {
 			partition->ops->abort_command_pool(partition, 0);
