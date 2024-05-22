@@ -176,10 +176,10 @@ aipu_status_t aipudrv::GraphV3X::create_job(JOB_ID* id, const aipu_global_config
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     #if (defined ZHOUYI_V3)
-    JobV3 *job = nullptr;    
+    JobV3 *job = nullptr;
     #elif (defined ZHOUYI_V4)
     JobV4 *job = nullptr;
-    #endif    
+    #endif
     uint32_t part_cnt = 0;
 
     if (nullptr == job_config)
@@ -199,6 +199,14 @@ aipu_status_t aipudrv::GraphV3X::create_job(JOB_ID* id, const aipu_global_config
             job_config->qos_level, AIPU_JOB_QOS_HIGH);
         return AIPU_STATUS_ERROR_INVALID_QOS;
     }
+
+    #if (defined ZHOUYI_V4)
+    if (job_config->dbg_dispatch && (job_config->qos_level == AIPU_JOB_QOS_HIGH))
+    {
+        LOG(LOG_ERR, "Can't dispatch one high QoS job and bind to a core\n");
+        return AIPU_STATUS_ERROR_INVALID_QOS;
+    }
+    #endif
 
     #if (defined ZHOUYI_V3)
     job = new JobV3((MainContext*)m_ctx, *this, m_dev, job_config);
