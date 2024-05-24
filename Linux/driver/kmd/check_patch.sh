@@ -20,6 +20,10 @@ cd $KMD_SRC_PATH
 make clean
 cd -
 
+if [ $# -eq 1 ];then
+	KMD_SRC_PATH=$1
+fi
+
 echo "#################### KMD Source Coding Style Checking ######################"
 echo "Checking Script(s): checkpatch.pl, Linux kernel 5.x"
 check_in_dir $KMD_SRC_PATH
