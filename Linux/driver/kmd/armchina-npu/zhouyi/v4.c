@@ -74,10 +74,6 @@ static int zhouyi_v4_create_command_pool(struct aipu_partition *cluster, int poo
 		return -EINVAL;
 	}
 
-	if (IS_POOL_BUSY(aipu_read32(cluster->reg, COMMAND_POOL_PCP_STATUS_REG)) ||
-	    IS_POOL_BUSY(aipu_read32(cluster->reg, COMMAND_POOL_SCP_STATUS_REG)))
-		return 0;
-
 	aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG_V4,
 		     TSM_CREATE_CMD_POOL_V4(cluster->id, TSM_MAP_SINGLE_V4) | pool);
 
@@ -199,8 +195,19 @@ static int zhouyi_v4_reserve(struct aipu_partition *cluster, struct aipu_job_des
 	aipu_write32(cluster->reg, TSM_COMMAND_SCHEDULE_TCB_NUM_REG_V4,
 		     ((udesc->tail_tcb_pa - udesc->head_tcb_pa) >> 7) + 1);
 
-	aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG_V4,
-		     TSM_DISPATCH_CMD_POOL_V4(pool, qos));
+	if (udesc->exec_flag & AIPU_JOB_EXEC_FLAG_DBG_DISPATCH) {
+		aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG_V4,
+			     TSM_DBG_DISPATCH_CMD_POOL_V4(pool, qos, udesc->core_id));
+		dev_info(cluster->dev, "debug-dispatch user job 0x%llx (0x%llx - 0x%llx, tcbp 0x%llx) core %d",
+			 udesc->job_id, udesc->head_tcb_pa, udesc->tail_tcb_pa,
+			 udesc->last_task_tcb_pa, udesc->core_id);
+	} else {
+		aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG_V4,
+			     TSM_DISPATCH_CMD_POOL_V4(pool, qos));
+		dev_info(cluster->dev, "dispatch user job 0x%llx (0x%llx - 0x%llx, tcbp 0x%llx)",
+			 udesc->job_id, udesc->head_tcb_pa, udesc->tail_tcb_pa,
+			 udesc->last_task_tcb_pa);
+	}
 
 	status = aipu_read32(cluster->reg, TSM_STATUS_REG_V4);
 	if (IS_CMD_FAIL_V4(status)) {
@@ -208,10 +215,6 @@ static int zhouyi_v4_reserve(struct aipu_partition *cluster, struct aipu_job_des
 		dev_err(cluster->dev, "dispatch task failed\n");
 		return -EINVAL;
 	}
-
-	dev_info(cluster->dev, "dispatch user job 0x%llx (0x%llx - 0x%llx, tcbp 0x%llx)",
-		 udesc->job_id, udesc->head_tcb_pa, udesc->tail_tcb_pa,
-		 udesc->last_task_tcb_pa);
 
 	return 0;
 }

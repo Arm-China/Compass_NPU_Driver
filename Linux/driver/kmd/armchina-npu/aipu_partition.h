@@ -135,4 +135,17 @@ struct aipu_partition {
 	int event_type;
 };
 
+/**
+ * @AIPU_PARTITION_ID_0   partition id number 0
+ * @AIPU_PARTITION_ID_1   partition id number 1
+ * @AIPU_PARTITION_ID_2   partition id number 2
+ * @AIPU_PARTITION_ID_3   partition id number 3
+ */
+enum partition_id_num {
+	AIPU_PARTITION_ID_0,
+	AIPU_PARTITION_ID_1,
+	AIPU_PARTITION_ID_2,
+	AIPU_PARTITION_ID_3,
+};
+
 #endif /* __AIPU_PARTITION_H__ */

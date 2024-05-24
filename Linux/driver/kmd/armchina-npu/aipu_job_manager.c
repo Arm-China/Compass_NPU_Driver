@@ -408,9 +408,9 @@ static int schedule_v4_job_no_lock(struct aipu_job_manager *manager, struct aipu
 	int trigger_type = ZHOUYI_TRIGGER_TYPE_CREATE;
 	struct command_pool *pool = &manager->pools[partition_id];
 
-	if (job->desc.partition_id == 0) {
+	if (job->desc.partition_id == AIPU_PARTITION_ID_0) {
 		pool_type = ZHOUYI_COMMAND_POOL_PCP;
-	} else if (job->desc.partition_id == 1 &&
+	} else if (job->desc.partition_id == AIPU_PARTITION_ID_1 &&
 		   cluster->partition_mode == PARTITION_MODE_CORE3_SCP) {
 		pool_type = ZHOUYI_COMMAND_POOL_SCP;
 	} else {
@@ -420,18 +420,19 @@ static int schedule_v4_job_no_lock(struct aipu_job_manager *manager, struct aipu
 
 	if (!pool->created)
 		trigger_type = ZHOUYI_TRIGGER_TYPE_CREATE;
+	else if (pool->aborted)
+		trigger_type = ZHOUYI_TRIGGER_TYPE_UPDATE_DISPATCH;
 	else
 		trigger_type = ZHOUYI_TRIGGER_TYPE_DISPATCH;
 
 	ret = cluster->ops->reserve(cluster, &job->desc, trigger_type, pool_type);
 	if (!ret) {
-		if (trigger_type == ZHOUYI_TRIGGER_TYPE_CREATE ||
-		    trigger_type == ZHOUYI_TRIGGER_TYPE_DEBUG_DISPATCH) {
+		if (trigger_type == ZHOUYI_TRIGGER_TYPE_CREATE) {
 			pr_info("cmd pool created true.\n");
 			pool->created = true;
 		}
 
-		if (trigger_type == ZHOUYI_TRIGGER_TYPE_DEBUG_DISPATCH)
+		if (job->desc.exec_flag & AIPU_JOB_EXEC_FLAG_DBG_DISPATCH)
 			pool->debug = true;
 
 		if (pool->aborted)
