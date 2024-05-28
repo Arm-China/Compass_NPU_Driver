@@ -2175,11 +2175,12 @@ aipu_status_t aipudrv::JobV3::parse_dynamic_out_shape()
 
                 if (m_outputs[i].type == AIPU_DATA_TYPE_U16
                     || m_outputs[i].type == AIPU_DATA_TYPE_S16
-                    || m_outputs[i].type == AIPU_DATA_TYPE_f16)
+                    || m_outputs[i].type == AIPU_DATA_TYPE_F16
+                    || m_outputs[i].type == AIPU_DATA_TYPE_BF16)
                     size <<= 1;
                 else if (m_outputs[i].type == AIPU_DATA_TYPE_U32
                     || m_outputs[i].type == AIPU_DATA_TYPE_S32
-                    || m_outputs[i].type == AIPU_DATA_TYPE_f32)
+                    || m_outputs[i].type == AIPU_DATA_TYPE_F32)
                     size <<= 2;
 
                 get_graph().set_config_out_tensor_size(i, size);

@@ -36,9 +36,23 @@ typedef enum {
     AIPU_DATA_TYPE_S32  = 7,
     AIPU_DATA_TYPE_U64  = 8,
     AIPU_DATA_TYPE_S64  = 9,
-    AIPU_DATA_TYPE_f16  = 10,
-    AIPU_DATA_TYPE_f32  = 11,
-    AIPU_DATA_TYPE_f64  = 12,
+    AIPU_DATA_TYPE_F16  = 0xa,
+    AIPU_DATA_TYPE_F32  = 0xb,
+    AIPU_DATA_TYPE_F64  = 0xc,
+    AIPU_DATA_TYPE_BF16 = 0xd,
+
+    // byte-aligned u/int4
+    AIPU_DATA_TYPE_ALIGNED_U4  = 0x12,
+    AIPU_DATA_TYPE_ALIGNED_S4  = 0x13,
+
+    // byte-aligned u/int12
+    AIPU_DATA_TYPE_ALIGNED_U12 = 0x14,
+    AIPU_DATA_TYPE_ALIGNED_S12 = 0x15,
+
+    AIPU_DATA_TYPE_COMPACT_U4  = 0x20,
+    AIPU_DATA_TYPE_COMPACT_S4  = 0x21,
+    AIPU_DATA_TYPE_COMPACT_U12 = 0x22,
+    AIPU_DATA_TYPE_COMPACT_S12 = 0x23,
 } aipu_data_type_t;
 
 typedef enum {
