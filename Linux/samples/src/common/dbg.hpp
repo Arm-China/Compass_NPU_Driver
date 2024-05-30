@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <iomanip>
 #include <memory>
 #include <thread>
 #include <mutex>
@@ -32,7 +33,7 @@ class DbgLogger {
             exit(-1);
         }
 
-        m_oss << timestamp_helper(4) << " ";
+        m_oss << std::setw(26) << timestamp_helper(4) << " ";
         m_oss << log_arr[m_loglevel] << "<" << gettid() << ">  ";
     }
 
@@ -46,21 +47,21 @@ class DbgLogger {
             exit(-1);
         }
 
-        m_oss << timestamp_helper(4) << " ";
+        m_oss << std::setw(26) << timestamp_helper(4) << " ";
         m_oss << log_arr[m_loglevel];
 
         int len = snprintf(nullptr, 0, format.c_str(), args...);
         std::unique_ptr<char[]> buffer(new char[len]);
         if (buffer) {
             snprintf(buffer.get(), len, format.c_str(), args...);
-            m_oss << buffer.get();
+            m_oss << buffer.get() << std::endl;
         }
     }
 
     ~DbgLogger()
     {
         std::lock_guard<std::mutex> lck(m_mtx);
-        std::cout << m_oss.str() << std::endl;
+        std::cout << m_oss.str();
     }
 
     template <typename T>
@@ -84,7 +85,7 @@ class DbgLogger {
         std::unique_ptr<char[]> buffer(new char[len]);
         if (buffer) {
             snprintf(buffer.get(), len, format.c_str(), args...);
-            m_oss << buffer.get();
+            m_oss << buffer.get() << std::endl;
         }
 
         return *this;
