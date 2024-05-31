@@ -1228,17 +1228,17 @@ class NPU
                      */
 
                     std::string shape_param_key[] = {"graph_id", "input_shape_cnt", "shape_items"};
-                    aupu_dynshape_param_t *ds_param = nullptr;
+                    aipu_dynshape_param_t *ds_param = nullptr;
                     uint32_t shape_items_num = 0;
 
-                    arg = new aupu_dynshape_param_t;
-                    ds_param = (aupu_dynshape_param_t *)arg;
+                    arg = new aipu_dynshape_param_t;
+                    ds_param = (aipu_dynshape_param_t *)arg;
 
                     ds_param->graph_id = py_arg0[shape_param_key[0]];
 
                     shape_items_num = py_arg1.size();
                     ds_param->input_shape_cnt = shape_items_num;
-                    ds_param->shape_items = new aupu_dynshape_item_t[shape_items_num];
+                    ds_param->shape_items = new aipu_dynshape_item_t[shape_items_num];
 
                     for(uint32_t i = 0; i < shape_items_num; i++)
                     {
@@ -1270,7 +1270,7 @@ class NPU
 
         if (cmd == AIPU_IOCTL_SET_DS_INFO) {
             uint32_t shape_items_num = py_arg1.size();
-            aupu_dynshape_param_t *ds_param = (aupu_dynshape_param_t *)arg;
+            aipu_dynshape_param_t *ds_param = (aipu_dynshape_param_t *)arg;
 
             for(uint32_t i = 0; i < shape_items_num; i++)
                 delete[] ds_param->shape_items[i].ds_data;
@@ -1571,16 +1571,16 @@ PYBIND11_MODULE(libaipudrv, m) {
         .def_readwrite("max_threshhold", &aipu_dynshape_info_t::max_threshhold)
         .def_readwrite("ds_data", &aipu_dynshape_info_t::ds_data);
 
-    py::class_<aupu_dynshape_item_t>(m, "aupu_dynshape_item_t")
+    py::class_<aipu_dynshape_item_t>(m, "aipu_dynshape_item_t")
         .def(py::init<>())
-        .def_readwrite("ds_idx", &aupu_dynshape_item_t::ds_idx)
-        .def_readwrite("ds_data", &aupu_dynshape_item_t::ds_data);
+        .def_readwrite("ds_idx", &aipu_dynshape_item_t::ds_idx)
+        .def_readwrite("ds_data", &aipu_dynshape_item_t::ds_data);
 
-    py::class_<aupu_dynshape_param_t>(m, "aupu_dynshape_param_t")
+    py::class_<aipu_dynshape_param_t>(m, "aipu_dynshape_param_t")
         .def(py::init<>())
-        .def_readwrite("graph_id", &aupu_dynshape_param_t::graph_id)
-        .def_readwrite("input_shape_cnt", &aupu_dynshape_param_t::input_shape_cnt)
-        .def_readwrite("shape_items", &aupu_dynshape_param_t::shape_items);
+        .def_readwrite("graph_id", &aipu_dynshape_param_t::graph_id)
+        .def_readwrite("input_shape_cnt", &aipu_dynshape_param_t::input_shape_cnt)
+        .def_readwrite("shape_items", &aipu_dynshape_param_t::shape_items);
 
     py::enum_<aipu_ioctl_cmd_t>(m, "aipu_ioctl_cmd_t")
         .value("AIPU_IOCTL_SET_PROFILE", aipu_ioctl_cmd_t::AIPU_IOCTL_SET_PROFILE)

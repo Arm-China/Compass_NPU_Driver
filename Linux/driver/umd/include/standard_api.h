@@ -460,21 +460,21 @@ typedef struct aipu_dynshape_info
 } aipu_dynshape_info_t;
 
 /**
- * @struct aupu_dynshape_param
+ * @struct aipu_dynshape_param
  *
  * @brief dynamic shape information to be confirgured for one graph.
  *
  * @note 'ds_data' is uint32 array indicates a shape, eg:
  *        N*H*W*C => [u32_N, u32_H, u32_W, u32_C], total 4 words.
  */
-typedef struct aupu_dynshape_item
+typedef struct aipu_dynshape_item
 {
     uint32_t ds_idx;      /**< the dynamic shape index */
     uint32_t *ds_data;    /**< the dynamic shape information of configured */
-} aupu_dynshape_item_t;
+} aipu_dynshape_item_t;
 
 /**
- * @struct aupu_dynshape_param
+ * @struct aipu_dynshape_param
  *
  * @brief dynamic shape information to be confirgured for one graph.
  *
@@ -482,12 +482,12 @@ typedef struct aupu_dynshape_item
  *       shape_items is an array of all input shape items.
  *
  */
-typedef struct aupu_dynshape_param
+typedef struct aipu_dynshape_param
 {
     uint64_t graph_id;    /**< the graph id to be searched */
     uint32_t input_shape_cnt; /**< input shape counter which equals input tensors number */
-    aupu_dynshape_item_t *shape_items; /**< configured input shape info for all input tensors */
-} aupu_dynshape_param_t;
+    aipu_dynshape_item_t *shape_items; /**< configured input shape info for all input tensors */
+} aipu_dynshape_param_t;
 
 /**
  * @brief ioctl commands to operate shared tensor buffer for KMD

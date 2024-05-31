@@ -147,7 +147,7 @@ protected:
 public:
     virtual int32_t get_dynamic_shape_dim_num(uint32_t idx, bool max_shape_dim);
     virtual bool get_dynamic_shape_data(uint32_t idx, bool max_shape_dim, uint32_t *data);
-    virtual bool set_dynamic_shape_data(aupu_dynshape_param_t *shape_param);
+    virtual bool set_dynamic_shape_data(aipu_dynshape_param_t *shape_param);
     virtual aipu_status_t update_dynamic_io_tensor_size(aipu_tensor_type_t type)
     {
         return AIPU_STATUS_SUCCESS;

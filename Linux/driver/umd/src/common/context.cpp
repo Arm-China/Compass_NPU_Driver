@@ -1065,7 +1065,7 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
 
             case AIPU_IOCTL_SET_DS_INFO:
                 {
-                    aupu_dynshape_param_t *ds_param = (aupu_dynshape_param_t *)arg;
+                    aipu_dynshape_param_t *ds_param = (aipu_dynshape_param_t *)arg;
 
                     if (!aipudrv::valid_graph_id(ds_param->graph_id))
                         return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;

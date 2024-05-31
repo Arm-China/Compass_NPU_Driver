@@ -66,7 +66,7 @@ int main(int argc, char* argv[])
     aipu_dynshape_num_t dynshape_num = {0};
     vector<aipu_dynshape_dim_num_t> dim_num_vec;
     aipu_create_job_cfg create_job_cfg = {0};
-    aupu_dynshape_param_t dynshape_param = {0};
+    aipu_dynshape_param_t dynshape_param = {0};
     aipu_job_config_dump_t mem_dump_config = {0};
     vector<aipu_tensor_desc_t> output_desc;
     vector<char*> output_data;
@@ -142,7 +142,7 @@ int main(int argc, char* argv[])
      */
     dynshape_param.graph_id = graph_id;
     dynshape_param.input_shape_cnt = *dynshape_num.ds_num;
-    dynshape_param.shape_items = (aupu_dynshape_item_t *)malloc(sizeof(aupu_dynshape_item_t) * (*dynshape_num.ds_num));
+    dynshape_param.shape_items = (aipu_dynshape_item_t *)malloc(sizeof(aipu_dynshape_item_t) * (*dynshape_num.ds_num));
 
     for (uint32_t  id = 0 ; id < *dynshape_num.ds_num; id++) {
         aipu_dynshape_dim_num_t dynshape_dim_num = {0};

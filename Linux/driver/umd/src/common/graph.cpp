@@ -280,7 +280,7 @@ bool aipudrv::Graph::get_dynamic_shape_data(uint32_t idx, bool max_shape_dim, ui
     return true;
 }
 
-bool aipudrv::Graph::set_dynamic_shape_data(aupu_dynshape_param_t *shape_param)
+bool aipudrv::Graph::set_dynamic_shape_data(aipu_dynshape_param_t *shape_param)
 {
     if (!is_dynamic_shape())
         return false;
@@ -299,7 +299,7 @@ bool aipudrv::Graph::set_dynamic_shape_data(aupu_dynshape_param_t *shape_param)
 
     for (uint32_t i = 0; i < shape_param->input_shape_cnt; i++)
     {
-        aupu_dynshape_item_t *shape_item = &shape_param->shape_items[i];
+        aipu_dynshape_item_t *shape_item = &shape_param->shape_items[i];
         uint32_t idx = shape_item->ds_idx;
 
         if (idx >= 0 && idx < m_input_shape_constraint.size())
