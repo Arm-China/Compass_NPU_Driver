@@ -9,8 +9,9 @@ CC:= $(CROSS_COMPILE)gcc
 LD:= $(CROSS_COMPILE)ld
 
 PWD := $(shell pwd)
-MODULE_NAME := importer
-obj-m := importer.o
+MODULE_NAME := importer_dma
+obj-m := ${MODULE_NAME}.o
+${MODULE_NAME}-objs=importer.o
 
 all: modules
 
