@@ -924,8 +924,8 @@ class NPU
      *
      * @retval     return value map
      *             {
-     *                 "ret": {retval}
-     *                 "data": {out data}
+     *                 "ret": [retval]
+     *                 "data": [out data]
      *             }
      *
      * @retval AIPU_STATUS_SUCCESS
@@ -1023,8 +1023,8 @@ class NPU
      *
      * @retval     return value map
      *             {
-     *                 "ret": {retval}
-     *                 "data": {out data}, optional output
+     *                 "ret": [retval]
+     *                 "data": [out data], optional output
      *             }
      *
      * @retval AIPU_STATUS_SUCCESS
@@ -1427,9 +1427,22 @@ PYBIND11_MODULE(libaipudrv, m) {
         .value("AIPU_DATA_TYPE_S32", aipu_data_type_t::AIPU_DATA_TYPE_S32)
         .value("AIPU_DATA_TYPE_U64", aipu_data_type_t::AIPU_DATA_TYPE_U64)
         .value("AIPU_DATA_TYPE_S64", aipu_data_type_t::AIPU_DATA_TYPE_S64)
-        .value("AIPU_DATA_TYPE_f16", aipu_data_type_t::AIPU_DATA_TYPE_f16)
-        .value("AIPU_DATA_TYPE_f32", aipu_data_type_t::AIPU_DATA_TYPE_f32)
-        .value("AIPU_DATA_TYPE_f64", aipu_data_type_t::AIPU_DATA_TYPE_f64)
+        .value("AIPU_DATA_TYPE_F16", aipu_data_type_t::AIPU_DATA_TYPE_F16)
+        .value("AIPU_DATA_TYPE_F32", aipu_data_type_t::AIPU_DATA_TYPE_F32)
+        .value("AIPU_DATA_TYPE_F64", aipu_data_type_t::AIPU_DATA_TYPE_F64)
+        .value("AIPU_DATA_TYPE_BF16", aipu_data_type_t::AIPU_DATA_TYPE_BF16)
+
+        /* byte-aligned u/int4 */
+        .value("AIPU_DATA_TYPE_ALIGNED_U4", aipu_data_type_t::AIPU_DATA_TYPE_ALIGNED_U4)
+        .value("AIPU_DATA_TYPE_ALIGNED_S4", aipu_data_type_t::AIPU_DATA_TYPE_ALIGNED_S4)
+
+        /* byte-aligned u/int12 */
+        .value("AIPU_DATA_TYPE_ALIGNED_U12", aipu_data_type_t::AIPU_DATA_TYPE_ALIGNED_U12)
+        .value("AIPU_DATA_TYPE_ALIGNED_S12", aipu_data_type_t::AIPU_DATA_TYPE_ALIGNED_S12)
+        .value("AIPU_DATA_TYPE_COMPACT_U4", aipu_data_type_t::AIPU_DATA_TYPE_COMPACT_U4)
+        .value("AIPU_DATA_TYPE_COMPACT_S4", aipu_data_type_t::AIPU_DATA_TYPE_COMPACT_S4)
+        .value("AIPU_DATA_TYPE_COMPACT_U12", aipu_data_type_t::AIPU_DATA_TYPE_COMPACT_U12)
+        .value("AIPU_DATA_TYPE_COMPACT_S12", aipu_data_type_t::AIPU_DATA_TYPE_COMPACT_S12)
         .export_values();
 
     py::enum_<aipu_tensor_type_t>(m, "aipu_tensor_type_t")
@@ -1440,6 +1453,7 @@ PYBIND11_MODULE(libaipudrv, m) {
         .value("AIPU_TENSOR_TYPE_PROFILER", aipu_tensor_type_t::AIPU_TENSOR_TYPE_PROFILER)
         .value("AIPU_TENSOR_TYPE_LAYER_COUNTER", aipu_tensor_type_t::AIPU_TENSOR_TYPE_LAYER_COUNTER)
         .value("AIPU_TENSOR_TYPE_ERROR_CODE", aipu_tensor_type_t::AIPU_TENSOR_TYPE_ERROR_CODE)
+        .value("AIPU_TENSOR_TYPE_OUT_TENSOR_SHAPE", aipu_tensor_type_t::AIPU_TENSOR_TYPE_OUT_TENSOR_SHAPE)
         .export_values();
 
     py::class_<aipu_tensor_desc_t>(m, "aipu_tensor_desc_t")
@@ -1550,7 +1564,13 @@ PYBIND11_MODULE(libaipudrv, m) {
         .def_readwrite("id", &aipu_shared_tensor_info_t::id)
         .def_readwrite("pa", &aipu_shared_tensor_info_t::pa)
         .def_readwrite("dmabuf_fd", &aipu_shared_tensor_info_t::dmabuf_fd)
-        .def_readwrite("offset_in_dmabuf", &aipu_shared_tensor_info_t::offset_in_dmabuf);
+        .def_readwrite("offset_in_dmabuf", &aipu_shared_tensor_info_t::offset_in_dmabuf)
+        .def_readwrite("shared_case_type", &aipu_shared_tensor_info_t::shared_case_type);
+
+    py::class_<aipu_bin_buildversion_t>(m, "aipu_bin_buildversion_t")
+        .def(py::init<>())
+        .def_readwrite("graph_id", &aipu_bin_buildversion_t::graph_id)
+        .def_readwrite("aipubin_buildversion", &aipu_bin_buildversion_t::aipubin_buildversion);
 
     py::class_<aipu_dynshape_num_t>(m, "aipu_dynshape_num_t")
         .def(py::init<>())
@@ -1605,6 +1625,7 @@ PYBIND11_MODULE(libaipudrv, m) {
         .value("AIPU_SHARE_BUF_IN_ONE_PROCESS", aipu_share_case_type_t::AIPU_SHARE_BUF_IN_ONE_PROCESS)
         .value("AIPU_SHARE_BUF_DMABUF", aipu_share_case_type_t::AIPU_SHARE_BUF_DMABUF)
         .value("AIPU_SHARE_BUF_CUSTOMED", aipu_share_case_type_t::AIPU_SHARE_BUF_CUSTOMED)
+        .value("AIPU_SHARE_BUF_ATTACH_DMABUF", aipu_share_case_type_t::AIPU_SHARE_BUF_ATTACH_DMABUF)
         .export_values();
 
     py::enum_<aipu_ioctl_tickcounter_t>(m, "aipu_ioctl_tickcounter_t")
