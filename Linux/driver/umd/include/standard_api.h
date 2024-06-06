@@ -283,7 +283,6 @@ typedef struct aipu_create_job_cfg {
             uint8_t dbg_core_id:3;   /**< specify debug core id, [0, max_core_id in cluster] */
             uint8_t qos_level:4;     /**< defalut 0, low priority, only for aipu v3 */
             uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
-            uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
         };
     };
 
