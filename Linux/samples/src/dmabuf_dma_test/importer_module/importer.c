@@ -8,13 +8,16 @@
 #include <linux/dma-buf.h>
 #include <linux/dma-buf-map.h>
 #include <linux/version.h>
+#include <linux/platform_device.h>
+#include <linux/of.h>
+
+static struct platform_device *importer_dev;
 
 static int importer_test(struct dma_buf *dmabuf)
 {
 	const char *magic = "This is string filled by kernel module!";
 	struct dma_buf_attachment *attachment;
 	struct sg_table *table;
-	struct device *dev;
 	unsigned int reg_addr, reg_size;
 	void *vaddr = NULL;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(5, 11, 0) && \
@@ -23,13 +26,9 @@ static int importer_test(struct dma_buf *dmabuf)
 #endif
 
 	printk(KERN_INFO "enter %s\n", __func__);
+	dev_set_name(&importer_dev->dev, "importer");
 
-	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
-	dev->coherent_dma_mask = DMA_BIT_MASK(32);
-	dev->dma_mask = &dev->coherent_dma_mask;
-	dev_set_name(dev, "importer");
-
-	attachment = dma_buf_attach(dmabuf, dev);
+	attachment = dma_buf_attach(dmabuf, &importer_dev->dev);
 	printk(KERN_INFO "after dma_buf_attach\n");
 	table = dma_buf_map_attachment(attachment, DMA_BIDIRECTIONAL);
 	printk(KERN_INFO "after dma_buf_map_attachment\n");
@@ -96,18 +95,47 @@ static struct miscdevice mdev = {
 	.fops = &importer_fops,
 };
 
-static int __init importer_init(void)
+static int importer_probe(struct platform_device *p_dev)
 {
-	printk(KERN_INFO "enter %s\n", __func__);
-	return misc_register(&mdev);
+	pr_info("zhouyi importer probe.\n");
+	importer_dev = p_dev;
+	if (misc_register(&mdev)) {
+		dev_err(&p_dev->dev, "zhouyi importer fail to register misc dev.\n");
+		return -1;
+	}
+	return 0;
 }
 
-static void __exit importer_exit(void)
+static int importer_remove(struct platform_device *p_dev)
 {
-	printk(KERN_INFO "exit %s\n", __func__);
+	pr_info("zhouyi importer removed.\n");
 	misc_deregister(&mdev);
+	return 0;
 }
 
-module_init(importer_init);
-module_exit(importer_exit);
-MODULE_LICENSE("GPL");
+#ifdef CONFIG_OF
+static const struct of_device_id importer_of_match[] = {
+	{
+		.compatible = "armchina,importer",
+	},
+	{}
+};
+
+MODULE_DEVICE_TABLE(of, importer_of_match);
+#endif
+
+static struct platform_driver importer_platform_driver = {
+	.probe = importer_probe,
+	.remove = importer_remove,
+	.driver = {
+		.name = "armchina-importer",
+		.owner = THIS_MODULE,
+#ifdef CONFIG_OF
+		.of_match_table = of_match_ptr(importer_of_match),
+#endif
+	},
+};
+
+module_platform_driver(importer_platform_driver);
+MODULE_LICENSE("GPL v2");
+MODULE_DESCRIPTION("ArmChina Zhouyi dma buffer test driver");
