@@ -769,7 +769,6 @@ aipu_status_t aipudrv::JobV4::specify_io_buffer(aipu_shared_tensor_info_t &tenso
 
     if (update_ro)
     {
-        update_io_buffers(get_graph().m_subgraphs[0].io, m_sg_job[0].reuses);
         ret = setup_rodata_sg(0, get_graph().m_subgraphs[0].param_map,
                               m_sg_job[0].reuses, *m_sg_job[0].weights, &m_sg_job[0].dma_buf_idx);
         if (AIPU_STATUS_SUCCESS != ret)
