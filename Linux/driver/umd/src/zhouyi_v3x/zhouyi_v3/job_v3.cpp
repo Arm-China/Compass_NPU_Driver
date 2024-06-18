@@ -73,7 +73,8 @@ void aipudrv::JobV3::set_job_params(uint32_t sg_cnt, uint32_t task_per_sg,
     if (m_segmmu_num > 0 || !m_same_asid)
         m_tot_tcb_cnt += (m_segmmu_tcb_num + 1) / 2;
 
-    m_backup_tcb.reset(new char[m_tot_tcb_cnt * sizeof(tcb_t)]);
+    m_backup_tcb[0].reset(new char[m_tot_tcb_cnt * sizeof(tcb_t)]);
+    m_backup_tcb[1].reset(new char[m_tot_tcb_cnt * sizeof(tcb_t)]);
 
     /**
      * case: only disable GM for multiple core NPU when multiple small models
@@ -724,6 +725,32 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
         m_mem->free(&tmp_holdDesc);
     }
 
+    ret = m_mem->malloc(m_tot_tcb_cnt * sizeof(tcb_t), 0, &m_tcbs_bkup, "tcbs");
+    if (AIPU_STATUS_SUCCESS != ret)
+        goto finish;
+
+    if (m_tcbs_bkup->align_asid_pa == 0 || m_tcbs_bkup->pa == 0)
+    {
+        BufferDesc *tmp_holdDesc = nullptr;
+
+        /* free the orginal buffer starting from addr 0x0 */
+        m_mem->free(&m_tcbs_bkup);
+
+        ret = m_mem->malloc(0x1000, 0, &tmp_holdDesc, "holdDesc");
+        if (AIPU_STATUS_SUCCESS != ret)
+            goto finish;
+
+        ret = m_mem->malloc(m_tot_tcb_cnt * sizeof(tcb_t), 0, &m_tcbs_bkup, "tcbs");
+        if (AIPU_STATUS_SUCCESS != ret)
+        {
+            m_mem->free(&tmp_holdDesc);
+            goto finish;
+        }
+
+        m_mem->free(&tmp_holdDesc);
+    }
+
+    m_mem->zeroize(m_tcbs_bkup->pa, m_tot_tcb_cnt * sizeof(tcb_t));
     m_mem->zeroize(m_tcbs->pa, m_tot_tcb_cnt * sizeof(tcb_t));
     m_init_tcb.init(m_tcbs->pa);
 
@@ -997,6 +1024,9 @@ aipu_status_t aipudrv::JobV3::free_job_buffers()
 
     if (m_tcbs && m_tcbs->size != 0)
         m_mem->free(&m_tcbs, "tcbs");
+
+    if (m_tcbs_bkup && m_tcbs_bkup->size != 0)
+        m_mem->free(&m_tcbs_bkup, "tcbs");
 
     #ifndef SIMULATION
     if (m_exit_inst_encode && m_exit_inst_encode->size > 0)
@@ -1396,8 +1426,19 @@ aipu_status_t aipudrv::JobV3::init(const aipu_global_config_simulation_t* cfg,
     if (AIPU_STATUS_SUCCESS != ret)
         goto finish;
 
-    if (m_backup_tcb != nullptr)
-        m_mem->read(m_init_tcb.pa, m_backup_tcb.get(), m_tot_tcb_cnt * sizeof(tcb_t));
+    if (m_backup_tcb[0] != nullptr) {
+        m_mem->read(m_init_tcb.pa, m_backup_tcb[0].get(), m_tot_tcb_cnt * sizeof(tcb_t));
+        m_mem->read(m_init_tcb.pa, m_backup_tcb[1].get(), m_tot_tcb_cnt * sizeof(tcb_t));
+
+        for (uint32_t i = 0; i < m_tot_tcb_cnt - 1; i++)
+        {
+            tcb_t *tcb = nullptr;
+
+            tcb = (tcb_t *)(m_backup_tcb[1].get() + i * sizeof(tcb_t));
+            tcb->next = get_low_32(m_tcbs_bkup->pa + (i + 1) * sizeof(tcb_t));
+            tcb->tcbp = get_low_32(m_tcbs_bkup->pa + i * sizeof(tcb_t) - m_tcbs->asid_base);
+        }
+    }
 
 finish:
     return ret;
@@ -1422,8 +1463,17 @@ aipu_status_t aipudrv::JobV3::schedule()
         return ret;
 
     /* with the backup tcbchain if run the job again */
-    if (m_backup_tcb != nullptr && m_backup_tcb_used == true)
-        m_mem->write(m_init_tcb.pa, m_backup_tcb.get(), m_tot_tcb_cnt * sizeof(tcb_t));
+    if (m_backup_tcb[0] != nullptr && m_backup_tcb_used == true)
+    {
+        if (m_tcb_toggle) {
+            m_init_tcb.init(m_tcbs_bkup->pa);
+            m_mem->write(m_init_tcb.pa, m_backup_tcb[1].get(), m_tot_tcb_cnt * sizeof(tcb_t));
+        } else {
+            m_init_tcb.init(m_tcbs->pa);
+            m_mem->write(m_init_tcb.pa, m_backup_tcb[0].get(), m_tot_tcb_cnt * sizeof(tcb_t));
+        }
+        m_tcb_toggle = !m_tcb_toggle;
+    }
     m_backup_tcb_used = true;
 
     dump_job_shared_buffers();
@@ -1438,7 +1488,9 @@ aipu_status_t aipudrv::JobV3::schedule()
     desc.kdesc.aipu_config = get_graph().m_hw_config;
     desc.jobbase = this;
     desc.tcb_head = m_init_tcb.pa;
-    desc.tcb_tail = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa;
+
+    /* last task tcb pa for sim */
+    desc.tcb_tail = m_init_tcb.pa + (m_tot_tcb_cnt - 2) * sizeof(tcb_t);
 
     /* for HW */
     desc.kdesc.exec_flag = (m_qos == AIPU_JOB_QOS_HIGH)
@@ -1470,9 +1522,9 @@ aipu_status_t aipudrv::JobV3::schedule()
         AIPU_JOB_EXEC_FLAG_SINGLE_GROUP : AIPU_JOB_EXEC_FLAG_MULTI_GROUP;
 
     desc.kdesc.head_tcb_pa = m_init_tcb.pa;
-    desc.kdesc.first_task_tcb_pa = m_sg_job[0].tasks[0].tcb.pa;
-    desc.kdesc.last_task_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa;
-    desc.kdesc.tail_tcb_pa = m_sg_job[m_sg_cnt-1].tasks[m_task_per_sg-1].tcb.pa + sizeof(tcb_t);
+    desc.kdesc.first_task_tcb_pa = m_init_tcb.pa + sizeof(tcb_t);
+    desc.kdesc.last_task_tcb_pa = m_init_tcb.pa + (m_tot_tcb_cnt - 2) * sizeof(tcb_t);
+    desc.kdesc.tail_tcb_pa = m_init_tcb.pa + (m_tot_tcb_cnt - 1) * sizeof(tcb_t);
 
     /* for debugger */
     desc.kdesc.is_defer_run = m_is_defer_run;

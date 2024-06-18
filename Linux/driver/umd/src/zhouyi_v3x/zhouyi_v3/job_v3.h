@@ -100,8 +100,10 @@ private:
 
 private:
     BufferDesc *m_tcbs = nullptr;
+    BufferDesc *m_tcbs_bkup = nullptr;
+    bool m_tcb_toggle = true;
     TCB m_init_tcb;
-    std::unique_ptr<char []> m_backup_tcb;
+    std::unique_ptr<char []> m_backup_tcb[2];
     bool m_backup_tcb_used = false;
     std::vector<SubGraphTask> m_sg_job;
     std::map<uint32_t, GM_info_desc> m_gm_info[2];
