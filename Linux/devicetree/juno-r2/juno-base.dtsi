@@ -892,5 +892,5 @@
 
 		compatible = "armchina,importer";
 		dma-ranges = <0x0 0x20000000 0x0 0xA0000000 0x10000000>; /* for kernel version < 6.1 */
-	}
+	};
 };
