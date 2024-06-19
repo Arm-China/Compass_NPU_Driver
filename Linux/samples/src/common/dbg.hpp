@@ -94,7 +94,7 @@ class DbgLogger {
     private:
     int m_loglevel;
     std::ostringstream m_oss;
-    std::string log_arr[EM_MAX] = {"[Err] ", "[Crit] ", "[Info] ", "[Dbg] "};
+    std::string log_arr[EM_MAX] = {"[Err] ", "[Cri] ", "[Inf] ", "[Dbg] "};
 };
 
 #define AIPU_ERR()  (DbgLogger(0))

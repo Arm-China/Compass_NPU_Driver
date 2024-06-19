@@ -67,15 +67,15 @@ extern volatile int32_t UMD_LOG_LEVEL;
     if (LogLevel > UMD_LOG_LEVEL) \
         break; \
     if (LogLevel==LOG_ERR) \
-        LOG_DETAILED("[UMD ERROR] ", FMT, ## ARGS) \
+        LOG_DETAILED("[UMD ERR] ", FMT, ## ARGS) \
     else if (LogLevel==LOG_WARN) \
-        LOG_DETAILED("[UMD WARN] ", FMT, ## ARGS) \
+        LOG_DETAILED("[UMD WAR] ", FMT, ## ARGS) \
     else if (LogLevel==LOG_ALERT) \
-        printf("%s [UMD ALERT] <%ld> " FMT "\n", umd_timestamp_helper(4).c_str(), gettid(), ## ARGS); \
+        printf("%s [UMD ALT] <%ld> " FMT "\n", umd_timestamp_helper(4).c_str(), gettid(), ## ARGS); \
     else if (LogLevel==LOG_INFO) \
-        printf("%s [UMD INFO] <%ld> " FMT "\n", umd_timestamp_helper(4).c_str(), gettid(), ## ARGS); \
+        printf("%s [UMD INF] <%ld> " FMT "\n", umd_timestamp_helper(4).c_str(), gettid(), ## ARGS); \
     else if (LogLevel==LOG_DEBUG) \
-        printf("%s [UMD DEBUG] <%ld> " FMT "\n", umd_timestamp_helper(4).c_str(), gettid(), ## ARGS); \
+        printf("%s [UMD DBG] <%ld> " FMT "\n", umd_timestamp_helper(4).c_str(), gettid(), ## ARGS); \
     else if (LogLevel==LOG_DEFAULT) \
         printf("" FMT "\n", ## ARGS); \
     } while (0)
