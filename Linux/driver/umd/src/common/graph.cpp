@@ -297,6 +297,7 @@ bool aipudrv::Graph::set_dynamic_shape_data(aipu_dynshape_param_t *shape_param)
         return false;
     }
 
+    m_parsed_shape.clear();
     for (uint32_t i = 0; i < shape_param->input_shape_cnt; i++)
     {
         aipu_dynshape_item_t *shape_item = &shape_param->shape_items[i];
