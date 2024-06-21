@@ -1874,6 +1874,7 @@ aipu_status_t aipudrv::JobV4::debugger_run()
     if (ret != AIPU_STATUS_SUCCESS)
         return ret;
 
+    m_status = AIPU_JOB_STATUS_SCHED;
     ret = get_status_blocking(&status, -1);
     if ((AIPU_STATUS_SUCCESS == ret) && (AIPU_JOB_STATUS_DONE != status))
         ret = AIPU_STATUS_ERROR_JOB_EXCEPTION;

@@ -237,6 +237,13 @@ aipu_ll_status_t aipudrv::Aipu::get_status(uint32_t max_cnt, bool of_this_thread
         done_job = job->get_base_graph().get_job(status_query.status[i].job_id);
         if (done_job != nullptr)
         {
+            /**
+             * it must ensure the job's status changing flow obeys
+             * AIPU_JOB_STATUS_SCHED->AIPU_JOB_STATUS_DONE/EXCEPTION
+             * in asyncronous IO. actually this only costs little time
+             * to toggle status. it's absolute not a bottleneck.
+             */
+            while (done_job->get_job_status() != AIPU_JOB_STATUS_SCHED);
             done_job->update_job_status(status_query.status[i].state);
             job_callback_func = done_job->get_job_cb();
 
@@ -285,6 +292,14 @@ aipu_ll_status_t aipudrv::Aipu::poll_status(uint32_t max_cnt, int32_t time_out,
 
     do
     {
+        /**
+         * it has to ensure the job is in AIPU_JOB_STATUS_SCHED.
+         * if lack the checking and when use specific polling thread which may
+         * modify job's status as AIPU_JOB_STATUS_DONE before AIPU_JOB_STATUS_SCHED.
+         */
+        if (job->get_job_status() != AIPU_JOB_STATUS_SCHED)
+            continue;
+
         kret = poll(&poll_list, 1, time_out);
         if (kret < 0)
         {
