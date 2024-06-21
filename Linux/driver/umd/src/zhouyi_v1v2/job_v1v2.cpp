@@ -523,6 +523,9 @@ aipu_status_t aipudrv::JobV12::schedule()
 #if (defined SIMULATION)
         m_status = AIPU_JOB_STATUS_DONE;
 #else
+    if ((m_is_defer_run == true) && (m_do_trigger == false))
+        m_status = AIPU_JOB_STATUS_BIND;
+    else
         m_status = AIPU_JOB_STATUS_SCHED;
 #endif
     } else {
@@ -567,8 +570,6 @@ aipu_status_t aipudrv::JobV12::bind_core(uint32_t core_id)
     m_do_trigger = false;
     m_bind_core_id = core_id;
     ret = schedule();
-    if (AIPU_STATUS_SUCCESS == ret)
-        m_status = AIPU_JOB_STATUS_BIND;
 
     return ret;
 }
@@ -587,7 +588,6 @@ aipu_status_t aipudrv::JobV12::debugger_run()
     if (ret != AIPU_STATUS_SUCCESS)
         return ret;
 
-    m_status = AIPU_JOB_STATUS_SCHED;
     ret = get_status_blocking(&status, -1);
     if ((AIPU_STATUS_SUCCESS == ret) && (AIPU_JOB_STATUS_DONE != status))
         ret = AIPU_STATUS_ERROR_JOB_EXCEPTION;

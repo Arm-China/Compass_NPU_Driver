@@ -241,7 +241,7 @@ aipu_ll_status_t aipudrv::Aipu::get_status(uint32_t max_cnt, bool of_this_thread
              * it must ensure the job's status changing flow obeys
              * AIPU_JOB_STATUS_SCHED->AIPU_JOB_STATUS_DONE/EXCEPTION
              * in asyncronous IO. actually this only costs little time
-             * to toggle status. it's absolute not a bottleneck.
+             * to toggle status. it's absolutely not a bottleneck.
              */
             while (done_job->get_job_status() != AIPU_JOB_STATUS_SCHED);
             done_job->update_job_status(status_query.status[i].state);

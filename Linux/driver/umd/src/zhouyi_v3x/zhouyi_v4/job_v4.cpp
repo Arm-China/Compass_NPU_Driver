@@ -1239,7 +1239,10 @@ aipu_status_t aipudrv::JobV4::schedule()
     if (ret != AIPU_STATUS_SUCCESS)
         return ret;
 
-    m_status = AIPU_JOB_STATUS_SCHED;
+    if ((m_is_defer_run == true) && (m_do_trigger == false))
+        m_status = AIPU_JOB_STATUS_BIND;
+    else
+        m_status = AIPU_JOB_STATUS_SCHED;
 
     return ret;
 }
@@ -1852,8 +1855,6 @@ aipu_status_t aipudrv::JobV4::bind_core(uint32_t partition_id)
     m_do_trigger = false;
     m_partition_id = partition_id;
     ret = schedule();
-    if (AIPU_STATUS_SUCCESS == ret)
-        m_status = AIPU_JOB_STATUS_BIND;
 
     return ret;
 }
@@ -1872,7 +1873,6 @@ aipu_status_t aipudrv::JobV4::debugger_run()
     if (ret != AIPU_STATUS_SUCCESS)
         return ret;
 
-    m_status = AIPU_JOB_STATUS_SCHED;
     ret = get_status_blocking(&status, -1);
     if ((AIPU_STATUS_SUCCESS == ret) && (AIPU_JOB_STATUS_DONE != status))
         ret = AIPU_STATUS_ERROR_JOB_EXCEPTION;
