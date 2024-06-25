@@ -44,10 +44,6 @@ aipudrv::MemoryBase::MemoryBase()
         mem_dump.open(m_file_name.c_str(), std::ofstream::out | std::ofstream::app);
     }
 
-    #if (defined ZHOUYI_V4)
-    set_gm_enable(false);
-    #endif
-
     if (gm_enable != nullptr)
     {
         if (gm_enable[0] == 'y' || gm_enable[0] == 'Y')
