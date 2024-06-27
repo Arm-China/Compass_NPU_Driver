@@ -72,7 +72,12 @@ or
 # source bash_env_setup.sh (for bash env)
 or
 # source env_setup.sh (for csh env)
-# ./build_all.sh -p juno -a python_api [-d]
+
+-- for aipu v1/v2/v3
+# ./build_all.sh -p juno -v v3 -a python_api [-d]
+
+-- for aipu v4
+# ./build_all.sh -p juno -v v4 -a python_api [-d]
 ```
 
 - 如果以上命令成功执行，一个驱动加载模块aipu.ko和一个用户态动态链接库libaipudrv.so将产生，并且被存放在bin文件夹中。
@@ -135,7 +140,12 @@ or
 # source bash_env_setup.sh (for bash env)
 or
 # source env_setup.sh (for csh env)
-# ./build_all.sh -p juno -a python_api [-d]
+
+-- for aipu v1/v2/v3
+# ./build_all.sh -p sim -v v3 -a python_api [-d]
+
+-- for aipu v4
+# ./build_all.sh -p sim -v v4 -a python_api [-d]
 ```
 
 - 如果以上命令成功执行，一个驱动加载模块aipu.ko和一个用户态动态链接库libaipudrv.so将产生，并且被存放在bin文件夹中。

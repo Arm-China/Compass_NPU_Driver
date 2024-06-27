@@ -75,7 +75,12 @@ or
 # source bash_env_setup.sh (for bash env)
 or
 # source env_setup.sh (for csh env)
-# ./build_all.sh -p juno -a python_api [-d]
+
+-- for aipu v1/v2/v3
+# ./build_all.sh -p juno -v v3 -a python_api [-d]
+
+-- for aipu v4
+# ./build_all.sh -p juno -v v4 -a python_api [-d]
 ```
 
 - If the command run normally, a folder named 'bin' is created, the corresponding KMD driver(aipu.ko) and UMD library(libaipudrv.so) are generated and stored in it.
@@ -140,7 +145,12 @@ or
 # source bash_env_setup.sh (for bash env)
 or
 # source env_setup.sh (for csh env)
-# ./build_all.sh -p sim -a python_api [-d]
+
+-- for aipu v1/v2/v3
+# ./build_all.sh -p sim -v v3 -a python_api [-d]
+
+-- for aipu v4
+# ./build_all.sh -p sim -v v4 -a python_api [-d]
 ```
 
 - If the command run normally, a folder named 'bin' is created, the UMD library(libaipudrv.so)
