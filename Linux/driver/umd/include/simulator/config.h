@@ -80,6 +80,7 @@ namespace sim_aipu
         uint32_t ddr_latency_rd = 0;        //!< fast evaluation: ddr latency read setting
         uint32_t ddr_latency_wr = 0;        //!< fast evaluation: ddr latency write setting
         uint32_t ddr_bw = 256;              //!< fast evaluation: ddr bandwidth setting, indicate how may bits of the axi data bus
+        float ddr_bw_ratio = 1.0;           //!< fast evaluation: ddr bandwidth ratio setting
         std::string perf_report;            //!< fast evaluation: performance report
     };
 
