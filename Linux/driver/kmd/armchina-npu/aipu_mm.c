@@ -1374,6 +1374,7 @@ int aipu_mm_link_tcb(struct aipu_memory_manager *mm, u64 prev_tail, u32 next_hea
 	struct aipu_tcb_buf *tbuf = NULL;
 	unsigned long flags;
 	int ret = 0;
+	u32 temp = 0;
 
 	spin_lock_irqsave(&mm->slock, flags);
 
@@ -1396,6 +1397,7 @@ int aipu_mm_link_tcb(struct aipu_memory_manager *mm, u64 prev_tail, u32 next_hea
 
 	tbuf->tail_tcb->next = next_head_32;
 	tbuf->dep_job_id = next_job_id;
+	temp = tbuf->tail_tcb->next;
 
 	dev_dbg(mm->dev, "link tcb 0x%x to prev 0x%llx\n", next_head_32, prev_tail);
 
@@ -1418,6 +1420,7 @@ int aipu_mm_unlink_tcb(struct aipu_memory_manager *mm, u64 prev_tail, bool free_
 	struct aipu_buf_desc buf;
 	unsigned long flags;
 	int ret = 0;
+	u32 temp = 0;
 
 	spin_lock_irqsave(&mm->slock, flags);
 	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, prev_tail, "unlink_tcb");
@@ -1438,6 +1441,7 @@ int aipu_mm_unlink_tcb(struct aipu_memory_manager *mm, u64 prev_tail, bool free_
 	tbuf->tail_tcb->next = 0;
 	tbuf->dep_job_id = 0;
 	tbuf->pinned = false;
+	temp = tbuf->tail_tcb->next;
 
 unlock:
 	spin_unlock_irqrestore(&mm->slock, flags);

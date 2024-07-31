@@ -44,7 +44,7 @@ struct smmu_conf_t {
 
 struct aipu_tcb {
 	u32 flag;
-	u32 next;
+	volatile u32 next;
 	union {
 		struct {
 			u32 loop_count;
