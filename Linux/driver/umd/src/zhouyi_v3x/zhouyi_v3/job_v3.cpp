@@ -644,10 +644,10 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
     /* 0. allocate and set model global parameter if need */
     if (get_graph().is_dynamic_shape() && get_graph().get_config_shape_sz() > 0)
     {
-        uint32_t input_shape[96] = {0};
-        uint32_t *shape_ptr = input_shape;
+        DS_ModelGlobalParam *modelGlobalParam = (DS_ModelGlobalParam *)get_graph().m_bglobalparam.va;
+        uint32_t input_shape_offset = modelGlobalParam->input_shape_offset;
 
-        ret = m_mem->malloc(sizeof(DS_ModelGlobalParam), 0,
+        ret = m_mem->malloc(get_graph().m_bglobalparam.size, 0,
             &m_model_global_param, "modelparam");
         if (AIPU_STATUS_SUCCESS != ret)
         {
@@ -655,8 +655,9 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
             goto finish;
         }
 
+        /* store original section data */
         m_mem->write(m_model_global_param->pa, get_graph().m_bglobalparam.va,
-            get_graph().m_bglobalparam.size);
+            sizeof(DS_ModelGlobalParam));
 
         for (uint32_t input_idx = 0; input_idx < get_graph().get_config_shape_sz();
             input_idx++)
@@ -667,7 +668,11 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
                     dim_idx < get_graph().get_config_shape_dim_sz(input_idx);
                     dim_idx++)
                 {
-                    *shape_ptr++ = get_graph().get_config_shape_item(input_idx, dim_idx);
+                    uint32_t shape_item = get_graph().get_config_shape_item(input_idx, dim_idx);
+
+                    m_mem->write(m_model_global_param->pa + input_shape_offset,
+                        &shape_item, sizeof(uint32_t));
+                    input_shape_offset += sizeof(uint32_t);
                 }
             } else {
                 ret = AIPU_STATUS_ERROR_NOT_CONFIG_SHAPE;
@@ -675,8 +680,6 @@ aipu_status_t aipudrv::JobV3::alloc_load_job_buffers()
                 goto finish;
             }
         }
-
-        m_mem->write(m_model_global_param->pa + 32 * 4, input_shape, 96 * 4);
     }
 
     /* 1. allocate and load job rodata */

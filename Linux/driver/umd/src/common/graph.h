@@ -229,6 +229,15 @@ public:
 
     void set_modle_global_param(BinSection mgp_section)
     {
+        uint32_t input_shape_offset = *(uint32_t *)mgp_section.va;
+
+        if (input_shape_offset >= mgp_section.size)
+        {
+            m_dynamic_shape = false;
+            LOG(LOG_WARN, "ModelGlobalParam input_shape_offset [invalid]");
+            return;
+        }
+
         m_bglobalparam = mgp_section;
         m_dynamic_shape = true;
     }

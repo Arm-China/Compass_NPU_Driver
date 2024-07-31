@@ -56,10 +56,11 @@ enum
 /* section: .note.aipu.globalparam */
 struct DS_ModelGlobalParam
 {
-    uint32_t reserve0[32];
-    uint32_t input_shape[96];
-    uint32_t reserve1[128];
+    uint32_t input_shape_offset;
+    uint32_t num_params;
+    /* std::vector<uint32_t> params; */
 };
+
 
 struct GM_info_desc {
     uint32_t gm_buf_type; // 0: ignore, 1: input, 2: output

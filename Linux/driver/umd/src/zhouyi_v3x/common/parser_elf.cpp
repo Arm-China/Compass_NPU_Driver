@@ -370,12 +370,7 @@ aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size,
     if (m_aipu_compile_msg.flag & (1 << 6))
     {
         if (sections[ELFSectionGlobalParam].size != 0)
-        {
-            if (sections[ELFSectionGlobalParam].size == sizeof(DS_ModelGlobalParam))
-                gobj.set_modle_global_param(sections[ELFSectionGlobalParam]);
-            else
-                LOG(LOG_ALERT, "Section ModelGlobalParam violation\n");
-        }
+            gobj.set_modle_global_param(sections[ELFSectionGlobalParam]);
 
         if (sections[ELFSectionInputShapeConstraint].size != 0)
         {
