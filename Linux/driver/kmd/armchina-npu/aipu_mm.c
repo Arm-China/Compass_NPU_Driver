@@ -272,6 +272,12 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 		goto err;
 	}
 
+#if (KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE)
+	reg->dev->bus_dma_limit = 0xc0000000 - 1;
+#elif (KERNEL_VERSION(4, 19, 0) <= LINUX_VERSION_CODE)
+	reg->dev->bus_dma_mask = 0xc0000000 - 1;
+#endif
+
 	va = dma_alloc_attrs(reg->dev, reg->bytes, &reg->base_pa, GFP_KERNEL, reg->attrs);
 	if (!va) {
 		dev_err(reg->dev, "dma_alloc_attrs failed: idx %d (bytes: 0x%llx, attrs %ld)\n",
