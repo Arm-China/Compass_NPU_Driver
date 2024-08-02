@@ -248,9 +248,9 @@ unlock:
     return ret;
 }
 
-int aipudrv::MemoryBase::mem_read(uint64_t addr, void *dest, size_t size) const
+int64_t aipudrv::MemoryBase::mem_read(uint64_t addr, void *dest, size_t size) const
 {
-    int ret = -1;
+    int64_t ret = -1;
     char* src = nullptr;
     if(size == 0)
         return 0;
@@ -265,9 +265,9 @@ int aipudrv::MemoryBase::mem_read(uint64_t addr, void *dest, size_t size) const
     return ret;
 }
 
-int aipudrv::MemoryBase::mem_write(uint64_t addr, const void *src, size_t size)
+int64_t aipudrv::MemoryBase::mem_write(uint64_t addr, const void *src, size_t size)
 {
-    int ret = -1;
+    int64_t ret = -1;
     char* dest = nullptr;
     if(size == 0)
         return 0;

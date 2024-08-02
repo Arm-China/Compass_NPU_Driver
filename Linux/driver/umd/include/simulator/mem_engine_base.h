@@ -22,11 +22,11 @@ namespace sim_aipu
     public:
         virtual ~IMemEngine() = default;
 
-        virtual int read(uint64_t addr, void *dest, size_t size) const = 0;
+        virtual int64_t read(uint64_t addr, void *dest, size_t size) const = 0;
 
-        virtual int write(uint64_t addr, const void *src, size_t size) = 0;
+        virtual int64_t write(uint64_t addr, const void *src, size_t size) = 0;
 
-        virtual int zeroize(uint64_t addr, size_t size) = 0;
+        virtual int64_t zeroize(uint64_t addr, size_t size) = 0;
 
         virtual size_t size() const = 0;
 

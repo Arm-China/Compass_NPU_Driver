@@ -31,15 +31,15 @@ public:
     virtual aipu_status_t reserve_mem(DEV_PA_32 addr, uint32_t size, BufferDesc** desc,
         const char* str = nullptr);
     aipu_status_t free_all(void);
-    virtual int read(uint64_t addr, void *dest, size_t size) const
+    virtual int64_t read(uint64_t addr, void *dest, size_t size) const
     {
         return mem_read(addr, dest, size);
     };
-    virtual int write(uint64_t addr, const void *src, size_t size)
+    virtual int64_t write(uint64_t addr, const void *src, size_t size)
     {
         return mem_write(addr, src, size);
     };
-    virtual int zeroize(uint64_t addr, size_t size)
+    virtual int64_t zeroize(uint64_t addr, size_t size)
     {
         return mem_bzero(addr, size);
     };

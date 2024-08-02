@@ -216,8 +216,8 @@ protected:
         return floor((double)pa/AIPU_PAGE_SIZE);
     }
 
-    int mem_read(uint64_t addr, void *dest, size_t size) const;
-    int mem_write(uint64_t addr, const void *src, size_t size);
+    int64_t mem_read(uint64_t addr, void *dest, size_t size) const;
+    int64_t mem_write(uint64_t addr, const void *src, size_t size);
     std::map<aipudrv::DEV_PA_64, aipudrv::Buffer>::iterator
         get_allocated_buffer(std::map<DEV_PA_64, Buffer> *buffer_pool, uint64_t addr) const;
 
@@ -289,9 +289,9 @@ public:
     virtual void free_bufferdesc(BufferDesc** desc);
     virtual aipu_status_t free_phybuffer(BufferDesc* desc, const char* str = nullptr) = 0;
     virtual aipu_status_t reserve_mem(DEV_PA_32 addr, uint32_t size, BufferDesc** desc, const char* str = nullptr) = 0;
-    virtual int read(uint64_t addr, void *dest, size_t size) const = 0;
-    virtual int write(uint64_t addr, const void *src, size_t size) = 0;
-    virtual int zeroize(uint64_t addr, size_t size) = 0;
+    virtual int64_t read(uint64_t addr, void *dest, size_t size) const = 0;
+    virtual int64_t write(uint64_t addr, const void *src, size_t size) = 0;
+    virtual int64_t zeroize(uint64_t addr, size_t size) = 0;
     virtual aipu_status_t dump_file(DEV_PA_64 src, const char* name, uint32_t size);
     virtual aipu_status_t load_file(DEV_PA_64 dest, const char* name, uint32_t size);
     virtual void gm_init(uint32_t gm_size_idx) {}
