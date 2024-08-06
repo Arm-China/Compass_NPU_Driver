@@ -215,7 +215,7 @@ public:
     }
 
 public:
-    std::tuple<std::string, uint32_t, uint32_t> m_dump_tcb_info[2];
+    std::tuple<std::string, uint64_t, uint32_t> m_dump_tcb_info[2];
     /* Set functions */
     void set_id(JOB_ID id)
     {

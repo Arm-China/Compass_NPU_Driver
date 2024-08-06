@@ -1782,7 +1782,7 @@ aipu_status_t aipudrv::JobV3::dump_for_emulation()
     }
 
     /* dump temp.tcb */
-    dump_pa = m_tcbs->pa;
+    dump_pa = m_init_tcb.pa;
     dump_size = m_tot_tcb_cnt * sizeof(tcb_t);
     snprintf(dump_name, 128, "%s/%s.tcb", m_dump_dir.c_str(), m_dump_prefix.c_str());
     m_dump_tcb_info[0] = std::make_tuple(m_dump_dir + "/init.tcb", dump_pa,
