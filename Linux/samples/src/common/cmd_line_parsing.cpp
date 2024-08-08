@@ -63,6 +63,7 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
     int opt_idx = 0;
     int c = 0;
     char* temp = nullptr;
+    char* optarg_bkup = nullptr;
     char* dest = nullptr;
     uint32_t size = 0;
     std::stringstream dump_opt;
@@ -79,31 +80,70 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
         if (-1 == c)
             break;
 
+        optarg_bkup = optarg;
         switch (c)
         {
         case 0:
             if (opts[opt_idx].flag != 0)
-            {
                 break;
-            }
+
             fprintf (stdout, "option %s", opts[opt_idx].name);
             if (optarg)
-            {
                 printf (" with arg %s", optarg);
-            }
             printf ("\n");
             break;
 
         case 'b':
-            strcpy(opt->bin_file_name, optarg);
+            temp = strtok(optarg_bkup, ",");
+            opt->bin_files.push_back(temp);
+            while (temp)
+            {
+                temp = strtok(nullptr, ",");
+                if (temp != nullptr)
+                    opt->bin_files.push_back(temp);
+            }
             break;
 
         case 'i':
-            strcpy(opt->inputs_file_name, optarg);
+            temp = strtok(optarg_bkup, ",");
+            opt->input_files.push_back(temp);
+            while (temp)
+            {
+                temp = strtok(nullptr, ",");
+                if (temp != nullptr)
+                    opt->input_files.push_back(temp);
+            }
+
+            for (uint32_t i = 0; i < opt->input_files.size(); i++)
+            {
+                ret = load_file_helper(opt->input_files[i].c_str(), &dest, &size);
+                if (ret != 0)
+                    goto finish;
+
+                opt->inputs.push_back(dest);
+                opt->inputs_size.push_back(size);
+            }
             break;
 
         case 'c':
-            strcpy(opt->gts_file_name, optarg);
+            temp = strtok(optarg_bkup, ",");
+            opt->gt_files.push_back(temp);
+            while (temp)
+            {
+                temp = strtok(nullptr, ",");
+                if (temp != nullptr)
+                    opt->gt_files.push_back(temp);
+            }
+
+            for (uint32_t i = 0; i < opt->gt_files.size(); i++)
+            {
+                ret = load_file_helper(opt->gt_files[i].c_str(), &dest, &size);
+                if (ret != 0)
+                    goto finish;
+
+                opt->gts.push_back(dest);
+                opt->gts_size.push_back(size);
+            }
             break;
 
         case 'd':
@@ -153,54 +193,6 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
         default:
             break;
         }
-    }
-
-    /* support multiple model binary */
-    temp = strtok(opt->bin_file_name, ",");
-    opt->bin_files.push_back(temp);
-    while (temp)
-    {
-        temp = strtok(nullptr, ",");
-        if (temp != nullptr)
-            opt->bin_files.push_back(temp);
-    }
-
-    temp = strtok(opt->inputs_file_name, ",");
-    opt->input_files.push_back(temp);
-    while (temp)
-    {
-        temp = strtok(nullptr, ",");
-        if (temp != nullptr)
-            opt->input_files.push_back(temp);
-    }
-
-    for (uint32_t i = 0; i < opt->input_files.size(); i++)
-    {
-        ret = load_file_helper(opt->input_files[i].c_str(), &dest, &size);
-        if (ret != 0)
-            goto finish;
-
-        opt->inputs.push_back(dest);
-        opt->inputs_size.push_back(size);
-    }
-
-    temp = strtok(opt->gts_file_name, ",");
-    opt->gt_files.push_back(temp);
-    while (temp)
-    {
-        temp = strtok(nullptr, ",");
-        if (temp != nullptr)
-            opt->gt_files.push_back(temp);
-    }
-
-    for (uint32_t i = 0; i < opt->gt_files.size(); i++)
-    {
-        ret = load_file_helper(opt->gt_files[i].c_str(), &dest, &size);
-        if (ret != 0)
-            goto finish;
-
-        opt->gts.push_back(dest);
-        opt->gts_size.push_back(size);
     }
 
     semOp_sp = std::make_shared<SemOp>();

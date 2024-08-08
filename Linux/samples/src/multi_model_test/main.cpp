@@ -86,7 +86,7 @@ void pipeline()
         uint64_t graph_id = 0;
         infer_info[i].graph_id = 0;
         infer_info[i].job_id = 0;
-        infer_info[i].aipubin = opt.bin_file_name;
+        infer_info[i].aipubin = opt.bin_files[0].c_str();
         infer_info[i].inputbins.assign(opt.input_files.begin(), opt.input_files.end());
         infer_info[i].gt_data = opt.gts[0];
         infer_info[i].gt_size = opt.gts_size[0];

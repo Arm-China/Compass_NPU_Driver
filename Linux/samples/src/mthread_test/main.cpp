@@ -73,12 +73,12 @@ void non_pipeline()
     path = path + "/" + std::to_string(gettid());
     help_create_dir(path.c_str());
 
-    ret = aipu_load_graph(ctx, opt.bin_file_name, &graph_id);
+    ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id);
     if (ret != AIPU_STATUS_SUCCESS)
     {
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_load_graph_helper: %s (%s)\n",
-            msg, opt.bin_file_name);
+            msg, opt.bin_files[0].c_str());
         goto finish;
     }
     AIPU_INFO() << "Graph id= " << std::hex << graph_id;
@@ -299,12 +299,12 @@ void pipeline()
     path = path + "/" + std::to_string(gettid());
     AIPU_DBG() << path;
 
-    ret = aipu_load_graph(ctx, opt.bin_file_name, &graph_id);
+    ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id);
     if (ret != AIPU_STATUS_SUCCESS)
     {
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_load_graph_helper: %s (%s)\n",
-            msg, opt.bin_file_name);
+            msg, opt.bin_files[0].c_str());
         goto finish;
     }
     AIPU_INFO() << "Graph id= " << std::hex << graph_id;

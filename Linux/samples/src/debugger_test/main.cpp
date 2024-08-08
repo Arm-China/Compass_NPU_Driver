@@ -214,7 +214,7 @@ int main(int argc, char* argv[])
 
     // misc_test(ctx);
 
-    gbin.open(opt.bin_file_name, std::ifstream::in | std::ifstream::binary);
+    gbin.open(opt.bin_files[0].c_str(), std::ifstream::in | std::ifstream::binary);
     if (!gbin.is_open())
     {
         return AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
@@ -228,16 +228,16 @@ int main(int argc, char* argv[])
     gbin.read(gbin_buf, fsize);
     gbin.seekg (0, gbin.beg);
 
-    // ret = aipu_load_graph(ctx, opt.bin_file_name, &graph_id);
+    // ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id);
     ret = aipu_load_graph_helper(ctx, gbin_buf, fsize, &graph_id);
     if (ret != AIPU_STATUS_SUCCESS)
     {
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_load_graph_helper: %s (%s)\n",
-            msg, opt.bin_file_name);
+            msg, opt.bin_files[0].c_str());
         goto finish;
     }
-    AIPU_INFO()("aipu_load_graph_helper success: %s\n", opt.bin_file_name);
+    AIPU_INFO()("aipu_load_graph_helper success: %s\n", opt.bin_files[0].c_str());
 
     ret = aipu_get_tensor_count(ctx, graph_id, AIPU_TENSOR_TYPE_INPUT, &input_cnt);
     if (ret != AIPU_STATUS_SUCCESS)
