@@ -57,6 +57,7 @@ namespace sim_aipu
             X2_1204MP3,
             tbd1,
             tbd2,
+            tbd3,
         };
         int code;                           //!< select one core(1204) or tree core(1204MP3).
         bool enable_avx;                    //!< use Intel avx instruction (not yet).
