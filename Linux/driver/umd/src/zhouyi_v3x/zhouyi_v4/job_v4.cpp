@@ -79,7 +79,7 @@ void aipudrv::JobV4::setup_gm_sync_from_ddr(tcb_t *tcb)
     if (!m_gm->gm_need_remap())
         return;
 
-    tcb->gm_ctrl = GM_CTRL_REMAP_EN | GM_CTRL_REMAP_MODE_TIME_PRIOR;
+    tcb->gm_ctrl = GM_CTRL_REMAP_EN;
     tcb->gm_addr_low = get_low_32(m_gm->m_gm_buf_base);
     tcb->gm_addr_high = get_high_32(m_gm->m_gm_buf_base);
 

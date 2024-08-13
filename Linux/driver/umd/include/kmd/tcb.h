@@ -426,7 +426,7 @@ struct tcb_t
 #define EN_INTERRUPT_GROUP_DONE        (1 << 0)
 
 #define GM_CTRL_REMAP_EN               (0x1)
-#define GM_CTRL_REMAP_MODE_TIME_PRIOR  (0x2)
+#define GM_CTRL_REMAP_MODE_RES_PRIOR   (0x2)
 #define GM_MAX_SIZE                    (8 << 20)
 
 #define GM_SYNC_ONLY_UPDATE_REG        (0 << 30)
