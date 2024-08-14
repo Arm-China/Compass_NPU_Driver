@@ -1479,6 +1479,10 @@ aipu_status_t aipudrv::JobV3::schedule()
     }
     m_backup_tcb_used = true;
 
+    ret = dump_for_emulation();
+    if (ret != AIPU_STATUS_SUCCESS)
+        return ret;
+
     dump_job_shared_buffers();
     dump_job_private_buffers(*m_rodata, m_descriptor);
     dump_specific_buffers();
@@ -1535,12 +1539,11 @@ aipu_status_t aipudrv::JobV3::schedule()
 
     if (get_graph().m_text->size == 0)
         LOG(LOG_WARN, "Graph text size is 0\n");
-    else
+    else {
         ret = m_dev->schedule(desc);
-
-    dump_for_emulation();
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
+        if (ret != AIPU_STATUS_SUCCESS)
+            return ret;
+    }
 
     if ((m_is_defer_run == true) && (m_do_trigger == false))
         m_status = AIPU_JOB_STATUS_BIND;
