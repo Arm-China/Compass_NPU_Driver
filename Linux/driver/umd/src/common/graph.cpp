@@ -95,6 +95,7 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     struct GraphSectionDesc *static_section = nullptr;
+    int pad_sz = 0;
 
      /**
      * decide weight allocation strategy
@@ -108,6 +109,9 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
                 m_wt_idxes.insert(config->wt_idxes[i]);
         }
     }
+
+    if (m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3)
+        pad_sz = 0x800;
 
     if (m_wt_mem_region == AIPU_MEM_REGION_DEFAULT)
     {
@@ -123,7 +127,7 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
              * allocate weight from ASID1 region defalut.if all ASIDs are configured
              * with the same base addr, it's also equal to allocate from ASID0.
              */
-            ret = m_mem->malloc(get_const_size(), 0, &m_weight, "weight",
+            ret = m_mem->malloc(get_const_size() + pad_sz, 0, &m_weight, "weight",
                 (asid << 8) | AIPU_MEM_REGION_DEFAULT);
             if (AIPU_STATUS_SUCCESS != ret)
             {
@@ -133,7 +137,7 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
 
             if (get_zerocpy_const_size() > 0)
             {
-                ret = m_mem->malloc(get_zerocpy_const_size(), 0, &m_zerocpy_const, "zerocpy_const",
+                ret = m_mem->malloc(get_zerocpy_const_size() + pad_sz, 0, &m_zerocpy_const, "zerocpy_const",
                     AIPU_MEM_REGION_DEFAULT);
                 if (AIPU_STATUS_SUCCESS != ret)
                 {
@@ -176,10 +180,10 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
                 static_section = &static_sections[i];
 
                 if (m_wt_idxes.count(i) == 1)
-                    ret = m_mem->malloc(static_section->size, static_section->align_in_page, &buf, str.c_str(),
+                    ret = m_mem->malloc(static_section->size + pad_sz, static_section->align_in_page, &buf, str.c_str(),
                         m_wt_mem_region);
                 else
-                    ret = m_mem->malloc(static_section->size, static_section->align_in_page, &buf, str.c_str(),
+                    ret = m_mem->malloc(static_section->size + pad_sz, static_section->align_in_page, &buf, str.c_str(),
                         AIPU_MEM_REGION_DEFAULT);
 
                 if (AIPU_STATUS_SUCCESS != ret)

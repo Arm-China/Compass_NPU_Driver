@@ -63,6 +63,7 @@ aipu_status_t aipudrv::GM_V3::gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t b
     uint32_t gm_region_sz = (m_job.m_qos == AIPU_JOB_QOS_SLOW)
         ? m_job.m_mem->get_gm_size(AIPU_JOB_QOS_SLOW) : m_job.m_mem->get_gm_size(AIPU_JOB_QOS_HIGH);
     uint32_t buf_size = section_desc[idx].size, gm_size = 0;
+    int pad_sz = 0x800;
 
     /* check which GM region the buffer comes from */
     #if 0
@@ -83,7 +84,7 @@ aipu_status_t aipudrv::GM_V3::gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t b
     if (buf_size < gm_size)
         buf_size = gm_size;
 
-    ret = m_job.m_mem->malloc(buf_size,
+    ret = m_job.m_mem->malloc(buf_size + pad_sz,
         section_desc[idx].align_in_page, &buf, buf_name.c_str(), (asid << 8) | mem_region);
     if (AIPU_STATUS_SUCCESS != ret)
         goto out;
