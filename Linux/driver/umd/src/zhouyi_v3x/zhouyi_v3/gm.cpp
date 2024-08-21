@@ -63,7 +63,11 @@ aipu_status_t aipudrv::GM_V3::gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t b
     uint32_t gm_region_sz = (m_job.m_qos == AIPU_JOB_QOS_SLOW)
         ? m_job.m_mem->get_gm_size(AIPU_JOB_QOS_SLOW) : m_job.m_mem->get_gm_size(AIPU_JOB_QOS_HIGH);
     uint32_t buf_size = section_desc[idx].size, gm_size = 0;
+    #ifndef SIMULATION
     int pad_sz = 0x800;
+    #else
+    int pad_sz = 0;
+    #endif
 
     /* check which GM region the buffer comes from */
     #if 0

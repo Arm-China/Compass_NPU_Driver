@@ -110,8 +110,10 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
         }
     }
 
+    #ifndef SIMULATION
     if (m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3)
         pad_sz = 0x800;
+    #endif
 
     if (m_wt_mem_region == AIPU_MEM_REGION_DEFAULT)
     {
