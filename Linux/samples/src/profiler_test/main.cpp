@@ -32,8 +32,8 @@
  *        this demo is for gaining profiling data of model running
  *        on NPU. it has to run on real hardware platform. currently
  *        it supports to collect profiling data for aipu v1/v2, also
- *        for aipu v3/v4. but there is a little difference between
- *        aipu v1/v2 and aipu v3/v4. that is: it needs to firstly
+ *        for aipu v3/v3_1. but there is a little difference between
+ *        aipu v1/v2 and aipu v3/v3_1. that is: it needs to firstly
  *        enable PMU's (Performance Monitor Unit) tick counter explicitly.
  *        see macro AIPU_V3X.
  */
@@ -41,12 +41,12 @@
 /**
  * @note
  *
- * if run this case on aipu v3/v4, it has to define
+ * if run this case on aipu v3/v3_1, it has to define
  * this macro as non-zero in order to firstly enable
  * PMU's tick counter.
  *
  * 0: for aipu v1/v2
- * 1: for aipu v3/v4
+ * 1: for aipu v3/v3_1
  */
 #define AIPU_V3X 1
 
@@ -145,7 +145,7 @@ int main(int argc, char* argv[])
     }
     AIPU_INFO()("aipu_init_context success\n");
 
-    #if AIPU_V3X
+#if AIPU_V3X
     ret = aipu_ioctl(ctx, AIPU_IOCTL_ENABLE_TICK_COUNTER, nullptr);
     if (ret != AIPU_STATUS_SUCCESS)
     {
@@ -154,7 +154,7 @@ int main(int argc, char* argv[])
         goto finish;
     }
     AIPU_INFO()("aipu_ioctl, enable tick counter success\n");
-    #endif
+#endif
 
     ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id);
     if (ret != AIPU_STATUS_SUCCESS)
@@ -280,7 +280,7 @@ int main(int argc, char* argv[])
                 i, i+1, output_cnt);
         }
 
-        pass = check_result_helper(output_data, output_desc, opt.gts[0], opt.gts_size[0]);
+        pass = check_result_helper(output_data, output_desc, opt.gts, opt.gts_size);
     }
 
 clean_job:
@@ -304,7 +304,7 @@ unload_graph:
     AIPU_INFO()("aipu_unload_graph success\n");
 
 deinit_ctx:
-    #if AIPU_V3X
+#if AIPU_V3X
     ret = aipu_ioctl(ctx, AIPU_IOCTL_DISABLE_TICK_COUNTER, nullptr);
     if (ret != AIPU_STATUS_SUCCESS)
     {
@@ -313,7 +313,7 @@ deinit_ctx:
         goto finish;
     }
     AIPU_INFO()("aipu_ioctl, disable tick counter success\n");
-    #endif
+#endif
 
     ret = aipu_deinit_context(ctx);
     if (ret != AIPU_STATUS_SUCCESS)
@@ -329,7 +329,10 @@ finish:
         pass = -1;
 
     for (uint32_t i = 0; i < output_data.size(); i++)
+    {
         delete[] output_data[i];
+        output_data[i] = nullptr;
+    }
 
     deinit_test_bench(&opt);
 

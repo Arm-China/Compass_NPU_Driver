@@ -61,6 +61,8 @@ setenv CONFIG_DRV_BTENVAR_JUNO_4_9_KPATH     ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/
 setenv CONFIG_DRV_BTENVAR_JUNO_KPATH         ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/kernel/linux-5.11.18
 setenv CONFIG_DRV_BTENVAR_6CG_KPATH          ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/kernel/linux-xlnx-armchina
 setenv CONFIG_DRV_BTENVAR_ANDROID_KPATH      ${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/linux-kernel/linux-android-4.14.59
+setenv CONFIG_DRV_BTENVAR_ANDROID12_KPATH    ${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/linux-kernel/kernel-5.10.117
+
 # add kernel path(s) here for your target platform(s):
 # setenv CONFIG_DRV_BTENVAR_[platform]_[kernel major]_[kernel minor]_KPATH XXX (kernel major/minor are optional)
 
@@ -68,7 +70,7 @@ setenv CONFIG_DRV_BTENVAR_ANDROID_KPATH      ${CONFIG_DRV_BTENVAR_BASE_DIR}/tool
 setenv CONFIG_DRV_BTENVAR_CROSS_CXX_PATH     ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/toolchain/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu/bin
 setenv CONFIG_DRV_BTENVAR_ANDROID_NDK_PATH   ${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/build_env/android_ndk/android-ndk-r20b
 setenv CONFIG_DRV_BTENVAR_ANDROID_CXX_PATH   ${CONFIG_DRV_BTENVAR_ANDROID_NDK_PATH}/toolchains/llvm/prebuilt/linux-x86_64/bin
-setenv CONFIG_DRV_BTENVAR_CROSS_CXX_ANDROID_PATH ${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/build_env/aarch64-linux-android-4.9/bin
+setenv CONFIG_DRV_BTENVAR_CROSS_CXX_ANDROID_PATH    ${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/build_env/aarch64-linux-android-4.9/bin
 # add C/C++ libs path(s) here for your platform(s)
 
 # 1.3. Other paths
@@ -127,6 +129,7 @@ setenv COMPASS_DRV_BRENVAR_X3_SIM_LNAME      aipu_simulator_x3
 setenv COMPASS_DRV_BTENVAR_UMD_DIR           driver/umd
 setenv COMPASS_DRV_BTENVAR_KMD_DIR           driver/kmd
 setenv COMPASS_DRV_BTENVAR_TEST_DIR          ./samples
+setenv COMPASS_DRV_BTENVAR_DEMO_DIR          ./out_of_box
 
 setenv COMPASS_DRV_BRENVAR_ODIR_TOP          `pwd`/bin
 setenv COMPASS_DRV_BTENVAR_UMD_BUILD_DIR     `pwd`/build/umd
@@ -135,14 +138,14 @@ setenv COMPASS_DRV_BTENVAR_TEST_BUILD_DIR    `pwd`/build/samples/
 
 # Driver naming
 setenv COMPASS_DRV_BTENVAR_UMD_V_MAJOR 5
-setenv COMPASS_DRV_BTENVAR_UMD_V_MINOR 9.0
+setenv COMPASS_DRV_BTENVAR_UMD_V_MINOR 10.0
 setenv COMPASS_DRV_BTENVAR_UMD_SO_NAME       libaipudrv.so
 setenv COMPASS_DRV_BTENVAR_UMD_SO_NAME_MAJOR ${COMPASS_DRV_BTENVAR_UMD_SO_NAME}.${COMPASS_DRV_BTENVAR_UMD_V_MAJOR}
 setenv COMPASS_DRV_BTENVAR_UMD_SO_NAME_FULL  ${COMPASS_DRV_BTENVAR_UMD_SO_NAME_MAJOR}.${COMPASS_DRV_BTENVAR_UMD_V_MINOR}
 setenv COMPASS_DRV_BTENVAR_UMD_A_NAME        libaipudrv.a
 setenv COMPASS_DRV_BTENVAR_UMD_A_NAME_MAJOR  ${COMPASS_DRV_BTENVAR_UMD_A_NAME}.${COMPASS_DRV_BTENVAR_UMD_V_MAJOR}
 setenv COMPASS_DRV_BTENVAR_UMD_A_NAME_FULL   ${COMPASS_DRV_BTENVAR_UMD_A_NAME_MAJOR}.${COMPASS_DRV_BTENVAR_UMD_V_MINOR}
-setenv COMPASS_DRV_BTENVAR_KMD_VERSION 5.9.0
+setenv COMPASS_DRV_BTENVAR_KMD_VERSION 5.10.0
 
 setenv COMPASS_DRV_BRENVAR_ERROR             "\033[31;1m[DRV ERROR]\033[0m"
 setenv COMPASS_DRV_BRENVAR_WARN              "\033[31;1m[DRV WARN]\033[0m"

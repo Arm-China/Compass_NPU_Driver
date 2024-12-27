@@ -33,6 +33,7 @@ typedef struct cmd_opt {
     uint32_t dump_opt;
     bool verbose = false;
     bool flush_time = false;
+    std::string extra_weight_dir;
 } cmd_opt_t;
 
 int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_case);

@@ -11,9 +11,12 @@ TARGET := $(BUILD_AIPU_DRV_ODIR)/aipu_$(BUILD_TEST_CASE)
 CXXFLAGS := -Wall -Werror -std=c++14 -I$(SRC_ROOT) -I$(UMD_INC)
 LDFLAGS = -L$(BUILD_AIPU_DRV_ODIR) -laipudrv
 ANDROIDCXXFLAGS := --target=aarch64-none-linux-android21 \
+                   -I$(BUILD_ANDROID_NDK)/sysroot/usr/include \
                    --gcc-toolchain=$(BUILD_ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64 \
                    --sysroot=$(BUILD_ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/sysroot \
-                   -DGTEST_HAS_RTTI=0 -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -DANDROID -Wno-error
+                   -DGTEST_HAS_RTTI=0 -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -DANDROID -Wno-error \
+                   -Wno-non-pod-varargs -Wno-missing-braces -Wno-inconsistent-missing-override -Wno-unused-variable -Wno-overloaded-virtual \
+                   -Wno-tautological-pointer-compare -Wno-unused-command-line-argument
 ANDROIDLDFLAGS := -Wl,-O3 -Wl,--gc-sections \
                   -Wl,--exclude-libs,$(BUILD_ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/aarch64-linux-android/4.9.x/libgcc.a \
                   -Wl,--exclude-libs,$(BUILD_ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/aarch64-linux-android/lib64/libatomic.a \
@@ -24,7 +27,7 @@ ifeq ($(BUILD_TARGET_PLATFORM), sim)
         LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X2_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X2_SIM_LNAME)
     endif
 
-    ifeq ($(BUILD_AIPU_VERSION), aipu_v4)
+    ifeq ($(BUILD_AIPU_VERSION), aipu_v3_1)
         LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X3_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X3_SIM_LNAME)
     endif
 endif
@@ -48,13 +51,13 @@ ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
     CXXFLAGS += -DZHOUYI_V3
 endif
 
-ifeq ($(BUILD_AIPU_VERSION), aipu_v4)
+ifeq ($(BUILD_AIPU_VERSION), aipu_v3_1)
     CXXFLAGS += -DZHOUYI_V12
-    CXXFLAGS += -DZHOUYI_V4
+    CXXFLAGS += -DZHOUYI_V3_1
 endif
 
 ifneq ($(BUILD_ANDROID_NDK), )
-    LDFLAGS += -pthread
+    LDFLAGS += -pthread -llog -ldl
     CXXFLAGS += $(ANDROIDCXXFLAGS)
     LDFLAGS += $(ANDROIDCXXFLAGS) $(ANDROIDLDFLAGS)
 else
@@ -100,15 +103,12 @@ $(COMPASS_DRV_BTENVAR_TEST_BUILD_DIR)/%.o: $(SRC_ROOT)/%.cpp
 ifeq ($(BUILD_TEST_CASE), dmabuf_producer_consumer_test)
 $(TARGET_PRODUCER): $(OBJS_PRODUCER)
 	$(CXX) $^ $(LDFLAGS) -o $@
-	$(RM) $(OBJS_PRODUCER)
 
 $(TARGET_CONSUMER): $(OBJS_CONSUMER)
 	$(CXX) $^ $(LDFLAGS) -o $@
-	$(RM) $(OBJS_CONSUMER)
 
 $(TARGET_MAIN): $(OBJS_MAIN)
 	$(CXX) $^ $(LDFLAGS) -o $@
-	$(RM) $(OBJS_MAIN)
 else
 $(TARGET): $(OBJS)
 	$(CXX) $^ $(LDFLAGS) -o $@

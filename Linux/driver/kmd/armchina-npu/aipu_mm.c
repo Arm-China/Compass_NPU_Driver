@@ -20,6 +20,14 @@
 #include "aipu_dma_buf.h"
 #include "v2.h"
 
+#define EXIT_ENCODE_BUF_SIZE (1024)
+static struct aipu_mem_region *aipu_mm_find_region_no_lock(struct aipu_memory_manager *mm,
+							   u64 iova, char *log_str);
+static struct aipu_tcb_buf *aipu_mm_find_tbuf_in_region_no_lock(struct aipu_memory_manager *mm,
+								struct aipu_mem_region *reg,
+								u64 iova);
+static struct aipu_mem_region *aipu_mm_find_region(struct aipu_memory_manager *mm,
+						   u64 iova, char *log_str);
 static struct device *aipu_mm_create_child_dev(struct device *dev, u32 idx)
 {
 	struct device *child = NULL;
@@ -60,6 +68,238 @@ err:
 	return NULL;
 }
 
+int aipu_mm_hold_tcb_buf_alloc(struct aipu_memory_manager *mm, struct aipu_job *kern_job)
+{
+	struct aipu_hold_tcb_buf *htbuf = NULL;
+	struct aipu_hold_tcb_buf *htbuf_head = mm->hold_tcb_head;
+	struct aipu_tcb_buf *prev_tbuf = NULL;
+	struct aipu_tcb_buf *curr_tbuf = NULL;
+	struct aipu_mem_region *reg = NULL;
+	struct aipu_buf_request buf;
+	unsigned long flags;
+	int ret = 0;
+	struct aipu_job_desc *desc = &kern_job->desc;
+	struct aipu_tcb *tcb = NULL;
+	struct aipu_tcb *prev = NULL;
+	char *va = NULL;
+	u64 encode_offset = sizeof(struct aipu_tcb) * 2;
+	int malloc_flag = 0;
+	bool find_htbuf = false;
+	unsigned char exit_encode[] = {
+		0x00, 0x80, 0x4f, 0x01,
+		0xff, 0x7f, 0x0c, 0x40,
+		0xff, 0x7f, 0x0c, 0x40,
+		0xff, 0x7f, 0x0c, 0x40
+	};
+
+	// find idle hold tcb buffer
+	spin_lock_irqsave(&mm->shlock, flags);
+	list_for_each_entry(htbuf, &htbuf_head->node, node) {
+		if (htbuf->status == AIPU_MEM_HOLD_TYPE_IDLE &&
+		    htbuf->index != htbuf_head->hold_index) {
+			htbuf->status = AIPU_MEM_HOLD_TYPE_LINKING;
+			find_htbuf = true;
+			dev_dbg(mm->dev, "found hold index %d tcb  0x%llx from list.\n",
+				htbuf->index, htbuf->head);
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&mm->shlock, flags);
+
+	// malloc new hold tcb buffer
+	if (!find_htbuf) {
+		htbuf = kmem_cache_zalloc(mm->hold_tbuf_cache, GFP_KERNEL);
+		if (!htbuf) {
+			ret = -ENOMEM;
+			dev_err(mm->dev, "alloc cache hold tcb buffer failed");
+			goto CACHE_FAIL;
+		}
+
+		INIT_LIST_HEAD(&htbuf->node);
+		memset(&buf, 0, sizeof(buf));
+		buf.bytes = sizeof(struct aipu_tcb) + EXIT_ENCODE_BUF_SIZE;
+		buf.align_in_page = 1;
+		buf.region = AIPU_BUF_REGION_DEFAULT;
+		buf.data_type = AIPU_MM_DATA_TYPE_TCB;
+		buf.asid = AIPU_BUF_ASID_0;
+		ret = aipu_mm_alloc(mm, &buf, NULL);
+		if (ret) {
+			dev_err(mm->dev, "alloc hold tcb buffer failed");
+			ret = -ENOMEM;
+			goto MALLOC_TCB_FAIL;
+		}
+
+		malloc_flag = 1;
+		spin_lock_irqsave(&mm->shlock, flags);
+		htbuf->desc = buf.desc;
+		htbuf->head = buf.desc.pa;
+		htbuf->next_head = 0;
+		htbuf->prev_tail = 0;
+		htbuf->prev_head = 0;
+		htbuf->prev_hold_tcb = 0;
+		htbuf->status = AIPU_MEM_HOLD_TYPE_LINKING;
+		htbuf->index = htbuf_head->nums;
+		htbuf_head->nums++;
+		list_add(&htbuf->node, &htbuf_head->node);
+		spin_unlock_irqrestore(&mm->shlock, flags);
+
+		va = aipu_mm_get_va(mm, htbuf->head + encode_offset);
+		if (!va) {
+			dev_err(mm->dev, "get encode va failed.");
+			ret = -EFAULT;
+			goto VA_FAIL;
+		}
+
+		memcpy(va, exit_encode, 16);
+		dev_dbg(mm->dev, "malloc hold index %d\n", htbuf->index);
+	}
+
+	tcb = aipu_mm_get_tcb(mm, htbuf->head);
+	if (!tcb) {
+		dev_err(mm->dev, "get hold tcb buffer failed");
+		ret = -EFAULT;
+		goto VA_FAIL;
+	}
+
+	prev = aipu_mm_get_tcb(mm, desc->last_task_tcb_pa);
+	if (!prev) {
+		dev_err(mm->dev, "get prev tcb buffer failed");
+		ret = -EFAULT;
+		goto VA_FAIL;
+	}
+
+	// Modify hold tcb data
+	spin_lock_irqsave(&mm->shlock, flags);
+	memcpy(tcb, prev, sizeof(struct aipu_tcb));
+	tcb->flag = TCB_FLAG_TASK_TYPE_TASK;
+	tcb->flag |= TCB_FLAG_END_TYPE_GROUP_END;
+	tcb->next = 0;
+	tcb->spc = lower_32_bits(htbuf->head + encode_offset -
+				 aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_0));
+	tcb->tcbp = lower_32_bits(htbuf->head - aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_0));
+	spin_unlock_irqrestore(&mm->shlock, flags);
+
+	reg = aipu_mm_find_region(mm, htbuf->head, "find_tcb hold");
+	if (!reg) {
+		dev_err(mm->dev, "Can't found region at iova 0x%llx", htbuf->head);
+		ret = -EFAULT;
+		goto VA_FAIL;
+	}
+
+	spin_lock_irqsave(&mm->slock, flags);
+	curr_tbuf = aipu_mm_find_tbuf_in_region_no_lock(mm, reg, htbuf->head);
+	if (!curr_tbuf) {
+		dev_err(mm->dev, "no TCB buffer is found at iova 0x%llx", htbuf->head);
+		ret = -EFAULT;
+		goto VA_FAIL;
+	}
+
+	spin_unlock_irqrestore(&mm->slock, flags);
+
+	reg = aipu_mm_find_region(mm, desc->last_task_tcb_pa, "find_tcb task");
+	if (!reg) {
+		dev_err(mm->dev, "no TCB buffer is found at iova 0x%llx", desc->last_task_tcb_pa);
+		ret = -EFAULT;
+		goto VA_FAIL;
+	}
+
+	spin_lock_irqsave(&mm->slock, flags);
+	prev_tbuf = aipu_mm_find_tbuf_in_region_no_lock(mm, reg, desc->last_task_tcb_pa);
+	if (!prev_tbuf) {
+		dev_err(mm->dev, "no TCB buffer is found at iova 0x%llx", desc->last_task_tcb_pa);
+		ret = -EFAULT;
+		goto VA_FAIL;
+	}
+	spin_unlock_irqrestore(&mm->slock, flags);
+
+	spin_lock_irqsave(&mm->shlock, flags);
+	curr_tbuf->tail = htbuf->head;
+	curr_tbuf->tail_tcb = tcb;
+	curr_tbuf->dep_job_id = 0;
+	curr_tbuf->pinned = false;
+	prev_tbuf->tail = desc->last_task_tcb_pa;
+	prev_tbuf->tail_tcb = prev;
+	prev->next = htbuf->head;
+	htbuf->status = AIPU_MEM_HOLD_TYPE_LINK_PREV;
+	htbuf->hold_tcb = tcb;
+	htbuf->prev_tail = desc->last_task_tcb_pa;
+	htbuf->prev_head = desc->head_tcb_pa;
+	kern_job->curr_hold_tcb = htbuf->head;
+	htbuf->prev_tbuf = prev_tbuf;
+	spin_unlock_irqrestore(&mm->shlock, flags);
+
+	return ret;
+
+VA_FAIL:
+	if (malloc_flag == 1) {
+		aipu_mm_free(mm, &buf.desc, NULL, true);
+		htbuf_head->nums--;
+		kmem_cache_free(mm->hold_tbuf_cache, htbuf);
+	}
+	return ret;
+MALLOC_TCB_FAIL:
+	kmem_cache_free(mm->hold_tbuf_cache, htbuf);
+CACHE_FAIL:
+	return ret;
+}
+
+void aipu_mm_hold_tcb_buf_free(struct aipu_memory_manager *mm)
+{
+	struct aipu_hold_tcb_buf *htbuf_head = mm->hold_tcb_head;
+	struct aipu_hold_tcb_buf *htbuf = NULL;
+	struct aipu_hold_tcb_buf *next = NULL;
+	struct aipu_buf_desc buf;
+
+	if (!htbuf_head)
+		return;
+
+	list_for_each_entry_safe(htbuf, next, &htbuf_head->node, node) {
+		dev_info(mm->dev, "t %d i %d s %d f %d ch 0x%llx pht 0x%llx pt 0x%llx ph 0x%llx nh 0x%llx\n",
+			 htbuf_head->nums, htbuf->index,  htbuf->status,
+			 htbuf_head->hold_index, htbuf->head, htbuf->prev_hold_tcb,
+			 htbuf->prev_tail, htbuf->prev_head, htbuf->next_head);
+		memset(&buf, 0, sizeof(buf));
+		buf.pa = htbuf->head;
+		buf.region = AIPU_BUF_REGION_DEFAULT;
+		buf.asid = AIPU_BUF_ASID_0;
+		aipu_mm_free(mm, &buf, NULL, true);
+		list_del(&htbuf->node);
+		kmem_cache_free(mm->hold_tbuf_cache, htbuf);
+		htbuf_head->nums--;
+	}
+	htbuf_head->hold_index = -1;
+	htbuf_head->hold_tcb = NULL;
+}
+
+struct aipu_hold_tcb_buf *aipu_mm_get_hold_htbuf(struct aipu_memory_manager *mm, u64 hold_tcb_pa)
+{
+	struct aipu_hold_tcb_buf *htbuf_head = mm->hold_tcb_head;
+	struct aipu_hold_tcb_buf *htbuf = NULL;
+	struct aipu_hold_tcb_buf *ret = NULL;
+	unsigned long flags = 0;
+
+	spin_lock_irqsave(&mm->shlock, flags);
+	list_for_each_entry(htbuf, &htbuf_head->node, node) {
+		if (htbuf->head == hold_tcb_pa) {
+			ret = htbuf;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&mm->shlock, flags);
+
+	return ret;
+}
+
+void aipu_mm_set_final_htbuf_index(struct aipu_memory_manager *mm, int index)
+{
+	struct aipu_hold_tcb_buf *htbuf_head = mm->hold_tcb_head;
+	unsigned long flags = 0;
+
+	spin_lock_irqsave(&mm->shlock, flags);
+	htbuf_head->hold_index = index;
+	spin_unlock_irqrestore(&mm->shlock, flags);
+}
+
 static struct aipu_tcb_buf *create_tcb_buf(struct aipu_memory_manager *mm,
 					   struct aipu_mem_region *reg)
 {
@@ -93,7 +333,7 @@ static struct aipu_mem_region *aipu_mm_find_region_no_lock(struct aipu_memory_ma
 
 	list_for_each_entry(obj, &mm->mem.head->list, list) {
 		reg = obj->reg;
-		if (iova >= reg->base_iova && (iova < reg->base_iova + reg->bytes))
+		if (reg && iova >= reg->base_iova && (iova - reg->base_iova < reg->bytes))
 			return reg;
 	}
 
@@ -266,18 +506,19 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 		}
 	}
 
-	ret = dma_set_coherent_mask(reg->dev, DMA_BIT_MASK(32));
-	if (ret) {
-		dev_err(reg->dev, "DMA set coherent mask failed: idx %d (%d)!\n", idx, ret);
-		goto err;
-	}
+	if (mm->has_iommu) {
+		ret = dma_set_mask_and_coherent(reg->dev, DMA_BIT_MASK(32));
+		if (ret) {
+			dev_err(reg->dev, "DMA set coherent mask failed: idx %d (%d)!\n", idx, ret);
+			goto err;
+		}
 
 #if (KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE)
-	reg->dev->bus_dma_limit = 0xc0000000 - 1;
+		reg->dev->bus_dma_limit = 0xc0000000;
 #elif (KERNEL_VERSION(4, 19, 0) <= LINUX_VERSION_CODE)
-	reg->dev->bus_dma_mask = 0xc0000000 - 1;
+		reg->dev->bus_dma_mask = 0xc0000000;
 #endif
-
+	}
 	va = dma_alloc_attrs(reg->dev, reg->bytes, &reg->base_pa, GFP_KERNEL, reg->attrs);
 	if (!va) {
 		dev_err(reg->dev, "dma_alloc_attrs failed: idx %d (bytes: 0x%llx, attrs %ld)\n",
@@ -451,7 +692,7 @@ static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
 	buf_req->desc.region = reg->type;
 
 	dev_dbg(reg->dev,
-		"allocation in region done: iova 0x%llx, bytes 0x%llx, type %d\n",
+		"allocation in region done: asid %d iova 0x%llx, bytes 0x%llx, type %d\n", buf_req->asid,
 		buf_req->desc.pa, buf_req->desc.bytes, buf_req->data_type);
 	return 0;
 
@@ -461,8 +702,8 @@ fail:
 	return -ENOMEM;
 }
 
-int aipu_mm_free_in_region(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf,
-			   struct aipu_mem_region *reg, bool unlock)
+static int aipu_mm_free_in_region(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf,
+				  struct aipu_mem_region *reg, bool unlock)
 {
 	unsigned long bitmap_no = 0;
 	unsigned long alloc_nr = 0;
@@ -507,7 +748,8 @@ int aipu_mm_free_in_region(struct aipu_memory_manager *mm, struct aipu_buf_desc 
 	 * marked as unlocked and will be released at an appropriate point;
 	 */
 	if (tbuf && (tbuf->dep_job_id || tbuf->pinned)) {
-		dev_dbg(reg->dev, "deferred free TCB: iova 0x%llx\n", buf->pa);
+		dev_info(reg->dev, "deferred free TCB: iova 0x%llx dep_job_id 0x%x ping %d\n",
+			 buf->pa, tbuf->dep_job_id, tbuf->pinned);
 		return DEFERRED_FREE;
 	}
 
@@ -691,6 +933,9 @@ static int aipu_mm_add_reserved_regions(struct aipu_memory_manager *mm)
 					}
 
 					add_region_list(mm, asid, reg);
+					if (asid >= mm->valid_asid_cnt)
+						mm->valid_asid_cnt = asid + 1;
+
 					asid_set = true;
 				} else {
 					break;
@@ -699,6 +944,7 @@ static int aipu_mm_add_reserved_regions(struct aipu_memory_manager *mm)
 
 			if (!asid_set) {
 				dev_err(mm->dev, "dts: reg asid is not set, use default asid\n");
+				mm->valid_asid_cnt = 2;
 				add_region_list(mm, AIPU_BUF_ASID_0, reg);
 				add_region_list(mm, AIPU_BUF_ASID_1, reg);
 			}
@@ -797,8 +1043,10 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 		return -ENOMEM;
 	INIT_LIST_HEAD(&mm->importer_bufs->node);
 	spin_lock_init(&mm->slock);
+	spin_lock_init(&mm->shlock);
 	mm->default_asid_base = 0;
 	mm->default_asid_size = 0xC0000000;
+	mm->valid_asid_cnt = 0;
 
 	mm->obj_cache = kmem_cache_create("aipu_obj_cache", sizeof(struct aipu_mem_region_obj),
 					  0, SLAB_PANIC, NULL);
@@ -806,7 +1054,10 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 					  0, SLAB_PANIC, NULL);
 	mm->tbuf_cache = kmem_cache_create("aipu_tbuf_cache", sizeof(struct aipu_tcb_buf),
 					   0, SLAB_PANIC, NULL);
-	if (!mm->obj_cache || !mm->reg_cache || !mm->tbuf_cache)
+	mm->hold_tbuf_cache = kmem_cache_create("aipu_hold_tbuf_cache",
+						sizeof(struct aipu_hold_tcb_buf),
+						0, SLAB_PANIC, NULL);
+	if (!mm->obj_cache || !mm->reg_cache || !mm->tbuf_cache || !mm->hold_tbuf_cache)
 		return -ENOMEM;
 
 	for (asid = AIPU_BUF_ASID_0; asid < ZHOUYI_ASID_COUNT; asid++) {
@@ -827,6 +1078,13 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
 		mm->dtcm_max_cnt = 1;
 
+	if (version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+		mm->hold_tcb_head = kmem_cache_zalloc(mm->hold_tbuf_cache, GFP_KERNEL);
+		if (!mm->hold_tcb_head)
+			goto finish;
+		INIT_LIST_HEAD(&mm->hold_tcb_head->node);
+		mm->hold_tcb_head->nums = 0;
+	}
 	/**
 	 * Device tree binding for Zhouyi V3:
 	 *
@@ -857,8 +1115,10 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	}
 
 	group = iommu_group_get(mm->dev);
-	if (group)
+	if (group) {
+		mm->valid_asid_cnt = ZHOUYI_ASID_COUNT;
 		mm->has_iommu = true;
+	}
 	iommu_group_put(group);
 	dev_info(mm->dev, "AIPU is%s behind an IOMMU\n", mm->has_iommu ? "" : " not");
 
@@ -892,6 +1152,19 @@ int aipu_deinit_mm(struct aipu_memory_manager *mm)
 	struct aipu_mem_region_obj *obj = NULL;
 	struct aipu_mem_region_obj *next = NULL;
 
+	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+		if (mm->gm_policy_attr) {
+			aipu_common_destroy_attr(mm->dev, &mm->gm_policy_attr);
+			mm->gm_policy_attr = NULL;
+		}
+		if (mm->hold_tbuf_cache) {
+			aipu_mm_hold_tcb_buf_free(mm);
+			kmem_cache_free(mm->hold_tbuf_cache, mm->hold_tcb_head);
+			mm->hold_tcb_head = NULL;
+			kmem_cache_destroy(mm->hold_tbuf_cache);
+			mm->hold_tbuf_cache = NULL;
+		}
+	}
 	if (mm->mem.head) {
 		list_for_each_entry_safe(obj, next, &mm->mem.head->list, list)
 			aipu_mm_destroy_region_object(mm, obj);
@@ -912,11 +1185,6 @@ int aipu_deinit_mm(struct aipu_memory_manager *mm)
 			kmem_cache_free(mm->obj_cache, mm->ase[id].head);
 			mm->ase[id].head = NULL;
 		}
-	}
-
-	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3 && mm->gm_policy_attr) {
-		aipu_common_destroy_attr(mm->dev, &mm->gm_policy_attr);
-		mm->gm_policy_attr = NULL;
 	}
 
 	mm->res_cnt = 0;
@@ -1032,10 +1300,21 @@ alloc:
 	}
 
 	/* fall back to main memory */
-	if (!allocated && !fall_back && type != AIPU_MEM_REGION_TYPE_MEMORY) {
-		type = AIPU_MEM_REGION_TYPE_MEMORY;
-		fall_back = true;
-		goto alloc;
+	if (!allocated && !fall_back) {
+		if (type != AIPU_MEM_REGION_TYPE_MEMORY) {
+			type = AIPU_MEM_REGION_TYPE_MEMORY;
+			fall_back = true;
+			goto alloc;
+		} else if (buf_req->asid > AIPU_BUF_ASID_0){
+			dev_dbg(mm->dev, "fail to malloc memory size 0x%llx from asid %d ",
+				buf_req->bytes, buf_req->asid);
+			buf_req->asid++;
+			dev_dbg(mm->dev, "change new asid %d\n", buf_req->asid);
+			if (buf_req->asid < mm->valid_asid_cnt)
+				goto alloc;
+			else
+				dev_err(mm->dev, "Inalid asid parameter.\n");
+		}
 	}
 
 	WARN_ON(buf_req->desc.pa % (buf_req->align_in_page << PAGE_SHIFT));
@@ -1054,8 +1333,8 @@ tcb_handle:
 			buf_req->bytes, buf_req->align_in_page, buf_req->data_type);
 	} else {
 		dev_dbg(mm->dev,
-			"allocate done (%s): iova 0x%llx, type %d, bytes 0x%llx (al %d, rg %d)\n",
-			fall_back ? "fall back to memory" : "as requested",
+			"allocate done (%s): asid %d iova 0x%llx, type %d, bytes 0x%llx (al %d, rg %d)\n",
+			fall_back ? "fall back to memory" : "as requested", buf_req->asid,
 			buf_req->desc.pa, buf_req->data_type, buf_req->bytes,
 			buf_req->align_in_page, buf_req->desc.region);
 	}
@@ -1081,7 +1360,7 @@ static int aipu_mm_direct_free(struct aipu_memory_manager *mm, struct aipu_mem_r
 	/* do not return tbuf for deferred free cases */
 	tbuf = aipu_mm_find_tbuf_in_region_no_lock(mm, reg, iova);
 	if (tbuf && (tbuf->dep_job_id || tbuf->pinned)) {
-		dev_dbg(reg->dev, "deferred free (direct) TCB: iova 0x%llx\n", iova);
+		dev_info(reg->dev, "deferred free (direct) TCB: iova 0x%llx\n", iova);
 		return DEFERRED_FREE;
 	}
 
@@ -1178,6 +1457,7 @@ int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 		return -EINVAL;
 
 	vma->vm_pgoff = (iova - reg->base_iova) >> PAGE_SHIFT;
+
 #if KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE || \
 	(defined(__ANDROID_COMMON_KERNEL__) && KERNEL_VERSION(6, 1, 43) <= LINUX_VERSION_CODE)
 	vm_flags_set(vma, VM_IO);
@@ -1323,10 +1603,15 @@ struct aipu_tcb *aipu_mm_get_tcb(struct aipu_memory_manager *mm, u64 pa)
 	unsigned long flags;
 	struct aipu_tcb *tcb = NULL;
 
+	reg = aipu_mm_find_region(mm, pa, "find_tcb");
+	if (!reg)
+		return NULL;
 	spin_lock_irqsave(&mm->slock, flags);
-	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, pa, "get_tcb");
-	if (!tbuf)
+	tbuf = aipu_mm_find_tbuf_in_region_no_lock(mm, reg, pa);
+	if (!tbuf) {
+		dev_err(mm->dev, "[get_tcb] no TCB buffer is found at iova 0x%llx", pa);
 		goto unlock;
+	}
 
 	reg = tbuf->reg;
 	tcb = (struct aipu_tcb *)((char *)(reg->base_va) + pa - reg->base_iova);
@@ -1377,38 +1662,31 @@ unlock:
 int aipu_mm_link_tcb(struct aipu_memory_manager *mm, u64 prev_tail, u32 next_head_32,
 		     int next_job_id)
 {
-	struct aipu_tcb_buf *tbuf = NULL;
+	struct aipu_hold_tcb_buf *htbuf = NULL;
 	unsigned long flags;
 	int ret = 0;
 	u32 temp = 0;
 
-	spin_lock_irqsave(&mm->slock, flags);
+	htbuf = aipu_mm_get_hold_htbuf(mm, prev_tail);
+	if (!htbuf)
+		return -EFAULT;
 
-	/**
-	 * if no prev TCB is found, job manager should destroy the pool,
-	 * and re-create & re-dispatch with the new head.
-	 */
-	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, prev_tail, "link_tcb");
-	if (!tbuf) {
-		ret = -EFAULT;
-		goto unlock;
-	}
+	spin_lock_irqsave(&mm->shlock, flags);
+	htbuf->hold_tcb->next = next_head_32;
+	temp = htbuf->hold_tcb->next;
+	htbuf->next_head = next_head_32;
+	if (htbuf->status == AIPU_MEM_HOLD_TYPE_LINK_PREV)
+		htbuf->status = AIPU_MEM_HOLD_TYPE_LINKED;
+	else if (htbuf->status == AIPU_MEM_HOLD_TYPE_IDLE)
+		htbuf->status = AIPU_MEM_HOLD_TYPE_LINK_NEXT;
+	else
+		dev_info(mm->dev, "ABNORMAL STATUS link hold tcb index %d status %d\n",
+			 htbuf->index, htbuf->status);
 
-	/* tail TCB should be set first */
-	if (!tbuf->tail_tcb) {
-		dev_err(mm->dev, "tail TCB was not set before linking it");
-		ret = -EINVAL;
-		goto unlock;
-	}
+	dev_dbg(mm->dev, "new tcb task link prev htcb index %d status %d\n",
+		htbuf->index, htbuf->status);
 
-	tbuf->tail_tcb->next = next_head_32;
-	tbuf->dep_job_id = next_job_id;
-	temp = tbuf->tail_tcb->next;
-
-	dev_dbg(mm->dev, "link tcb 0x%x to prev 0x%llx\n", next_head_32, prev_tail);
-
-unlock:
-	spin_unlock_irqrestore(&mm->slock, flags);
+	spin_unlock_irqrestore(&mm->shlock, flags);
 	return ret;
 }
 
@@ -1420,42 +1698,75 @@ unlock:
  *
  * Return: 0 on success and error code otherwise.
  */
-int aipu_mm_unlink_tcb(struct aipu_memory_manager *mm, u64 prev_tail, bool free_tcb)
+int aipu_mm_unlink_tcb(struct aipu_memory_manager *mm, u64 curr_hold, bool free_tcb)
 {
 	struct aipu_tcb_buf *tbuf = NULL;
+	struct aipu_hold_tcb_buf *htbuf = NULL;
+	struct aipu_hold_tcb_buf *prev_htbuf = NULL;
 	struct aipu_buf_desc buf;
 	unsigned long flags;
 	int ret = 0;
 	u32 temp = 0;
+	int prev_status = -1, prev_index = -1;
 
-	spin_lock_irqsave(&mm->slock, flags);
-	tbuf = aipu_mm_find_tcb_buf_no_lock(mm, prev_tail, "unlink_tcb");
-	if (!tbuf) {
-		ret = -EFAULT;
-		goto unlock;
+	htbuf = aipu_mm_get_hold_htbuf(mm, curr_hold);
+	if (!htbuf)
+		return -EFAULT;
+	if (htbuf->prev_hold_tcb != 0) {
+		prev_htbuf = aipu_mm_get_hold_htbuf(mm, htbuf->prev_hold_tcb);
+		if (!prev_htbuf)
+			dev_info(mm->dev, "PREV HOLD TCB 0x%llx IS NOT SET.", htbuf->prev_hold_tcb);
 	}
+	spin_lock_irqsave(&mm->shlock, flags);
 
-	/* tail TCB should be set first */
-	if (!tbuf->tail_tcb) {
-		dev_err(mm->dev, "tail TCB was not set before unlinking it");
+	if (!htbuf->hold_tcb) {
+		dev_err(mm->dev, "hold TCB was not set before unlinking it");
 		ret = -EINVAL;
 		goto unlock;
 	}
+	if (prev_htbuf) {
+		prev_htbuf->hold_tcb->next = 0;
+		temp = prev_htbuf->hold_tcb->next;
+		if (prev_htbuf->status == AIPU_MEM_HOLD_TYPE_LINK_NEXT) {
+			prev_htbuf->status = AIPU_MEM_HOLD_TYPE_IDLE;
+		} else if (prev_htbuf->status == AIPU_MEM_HOLD_TYPE_LINKED) {
+			prev_htbuf->status = AIPU_MEM_HOLD_TYPE_LINK_PREV;
+		} else {
+			dev_info(mm->dev, "ABNORMAL UNLINK PREV HOLD TCB STATUS %d\n",
+				 prev_htbuf->status);
+		}
+		htbuf->prev_hold_tcb = 0;
+		prev_status = prev_htbuf->status;
+		prev_index = prev_htbuf->index;
+	}
 
-	dev_dbg(mm->dev, "unlink tcb 0x%x from prev 0x%llx\n", tbuf->tail_tcb->next, prev_tail);
-
+	tbuf = htbuf->prev_tbuf;
 	tbuf->tail_tcb->next = 0;
 	tbuf->dep_job_id = 0;
 	tbuf->pinned = false;
 	temp = tbuf->tail_tcb->next;
+	htbuf->prev_head = 0;
+	htbuf->prev_tail = 0;
+	if (htbuf->status == AIPU_MEM_HOLD_TYPE_LINKED) {
+		htbuf->status = AIPU_MEM_HOLD_TYPE_LINK_NEXT;
+	} else if (htbuf->status == AIPU_MEM_HOLD_TYPE_LINK_PREV) {
+		htbuf->status = AIPU_MEM_HOLD_TYPE_IDLE;
+	} else {
+		dev_info(mm->dev, "ABNORMAL UNLINK CUR HOLD TCB STATUS %d\n", htbuf->status);
+	}
+	dev_dbg(mm->dev, "unlink prev hold index %d status %d, "
+		"unlink curr hold tcb index %d status %d final holder index %d",
+		prev_index, prev_status, htbuf->index, htbuf->status,
+		mm->hold_tcb_head->hold_index);
 
 unlock:
-	spin_unlock_irqrestore(&mm->slock, flags);
+	spin_unlock_irqrestore(&mm->shlock, flags);
 	if (!ret && free_tcb) {
 		memset(&buf, 0, sizeof(buf));
 		buf.pa = tbuf->head;
 		aipu_mm_free(mm, &buf, NULL, false);
 	}
+	htbuf->prev_tbuf = NULL;
 	return ret;
 }
 
@@ -1504,13 +1815,20 @@ u64 aipu_mm_get_asid_size(struct aipu_memory_manager *mm, u32 asid)
 
 void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap)
 {
+	int i;
 	if (!mm || !cap)
 		return;
 
-	cap->asid0_base = aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_0);
-	cap->asid1_base = aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_1);
-	cap->asid2_base = aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_2);
-	cap->asid3_base = aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_3);
+	for(i = 0; i < mm->valid_asid_cnt; i++){
+		cap->asid_base[i] = aipu_mm_get_asid_base(mm, i);
+	}
+}
+
+u32 aipu_mm_get_asid_cnt(struct aipu_memory_manager *mm)
+{
+	if (!mm)
+		return 0;
+	return mm->valid_asid_cnt;
 }
 
 int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes)

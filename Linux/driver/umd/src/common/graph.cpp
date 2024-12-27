@@ -20,8 +20,8 @@ aipudrv::Graph::Graph(void* ctx, GRAPH_ID id, DeviceBase* dev): GraphBase(ctx, i
     m_bcrodata.init(nullptr, 0);
     m_brodata.init(nullptr, 0);
     m_bdesc.init(nullptr, 0);
-    m_bweight.init(nullptr, 0);
     m_bdata.init(nullptr, 0);
+    m_bweight.clear();
 }
 
 aipudrv::Graph::~Graph()
@@ -33,8 +33,32 @@ aipu_status_t aipudrv::Graph::load(std::istream& gbin, uint32_t size,bool ver_ch
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
+    /**
+    * decide weight allocation strategy
+    */
+    if (config != nullptr)
+    {
+        m_wt_mem_region = config->wt_mem_region;
+        if (config->wt_idxes)
+        {
+            for (int i = 0; i < config->wt_idxes_cnt; i++)
+                m_wt_idxes.insert(config->wt_idxes[i]);
+        }
+
+        if (config->extra_weight_path != nullptr)
+        {
+            if(access(config->extra_weight_path, F_OK) == 0)
+            {
+                m_extra_weight_path = config->extra_weight_path;
+            } else {
+                LOG(LOG_ERR, "Extra weight path: %s [non exist]\n", config->extra_weight_path);
+                return AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
+            }
+        }
+    }
+
     ret = m_parser->parse_graph(gbin, size, *this);
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
         goto finish;
 
     m_mem->dump_tracking_log_start();
@@ -50,7 +74,7 @@ aipu_status_t aipudrv::Graph::load(std::istream& gbin, uint32_t size,bool ver_ch
          * there is no effect for text self.
          */
         ret = m_mem->malloc(m_btext.size + 16, 0, &m_text, "text");
-        if (AIPU_STATUS_SUCCESS != ret)
+        if (ret != AIPU_STATUS_SUCCESS)
             goto finish;
         m_mem->write(m_text->pa, m_btext.va, m_btext.size);
     }
@@ -63,14 +87,17 @@ aipu_status_t aipudrv::Graph::load(std::istream& gbin, uint32_t size,bool ver_ch
         m_mem->write(m_crodata->pa, m_bcrodata.va, m_bcrodata.size);
     }
 
-    ret = alloc_weight_buffer(get_static_section_ref(), config);
-    if (ret != AIPU_STATUS_SUCCESS)
-        goto finish;
+    if (m_bweight.size() > 0)
+    {
+        ret = alloc_weight_buffer(get_static_section_ref(0), config);
+        if (ret != AIPU_STATUS_SUCCESS)
+            goto finish;
+    }
 
     // if (m_bweight.size != 0)
     // {
     //     ret = m_mem->malloc(m_bweight.size, 0, &m_weight, "weight");
-    //     if (AIPU_STATUS_SUCCESS != ret)
+    //     if (ret != AIPU_STATUS_SUCCESS)
     //         goto finish;
     //     m_mem->write(m_weight.pa, m_bweight.va, m_bweight.size);
     // }
@@ -90,6 +117,7 @@ finish:
  *        put them more to specific region. the rest of buffer that
  *        can't be allocated from SRAM/DTCM is from ASID0 default.
  */
+#if 0
 aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectionDesc> &static_sections,
     aipu_load_graph_cfg_t *config)
 {
@@ -97,9 +125,9 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
     struct GraphSectionDesc *static_section = nullptr;
     int pad_sz = 0;
 
-     /**
-     * decide weight allocation strategy
-     */
+    /**
+    * decide weight allocation strategy
+    */
     if (config != nullptr)
     {
         m_wt_mem_region = config->wt_mem_region;
@@ -110,10 +138,10 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
         }
     }
 
-    #ifndef SIMULATION
+#ifndef SIMULATION
     if (m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3)
         pad_sz = 0x800;
-    #endif
+#endif
 
     if (m_wt_mem_region == AIPU_MEM_REGION_DEFAULT)
     {
@@ -122,7 +150,7 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
         if (m_bweight.size != 0)
         {
             if (m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3
-                || m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V4)
+                || m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3_1)
                 asid = 1;
 
             /**
@@ -131,7 +159,7 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
              */
             ret = m_mem->malloc(get_const_size() + pad_sz, 0, &m_weight, "weight",
                 (asid << 8) | AIPU_MEM_REGION_DEFAULT);
-            if (AIPU_STATUS_SUCCESS != ret)
+            if (ret != AIPU_STATUS_SUCCESS)
             {
                 LOG(LOG_ERR, "alloc weight buffer [fail]");
                 goto finish;
@@ -139,9 +167,9 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
 
             if (get_zerocpy_const_size() > 0)
             {
-                ret = m_mem->malloc(get_zerocpy_const_size() + pad_sz, 0, &m_zerocpy_const, "zerocpy_const",
+                ret = m_mem->malloc(get_zerocpy_const_size() + pad_sz, 0, &wb_zerocpy_const, "zerocpy_const",
                     AIPU_MEM_REGION_DEFAULT);
-                if (AIPU_STATUS_SUCCESS != ret)
+                if (ret != AIPU_STATUS_SUCCESS)
                 {
                     LOG(LOG_ERR, "alloc zerocpy_const buffer [fail]");
                     goto finish;
@@ -157,9 +185,9 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
 
             if (static_section->type == SECTION_TYPE_ZEROCPY_CONSTANT)
             {
-                m_mem->write(m_zerocpy_const->pa + static_section->relative_addr,
+                m_mem->write(wb_zerocpy_const->pa + static_section->relative_addr,
                     m_bweight.va + static_section->offset_in_file, static_section->size);
-                buf->init(m_zerocpy_const->asid_base, m_zerocpy_const->pa + static_section->relative_addr,
+                buf->init(wb_zerocpy_const->asid_base, wb_zerocpy_const->pa + static_section->relative_addr,
                     static_section->size, static_section->size);
                 LOG(LOG_INFO, "zerocpy %d, pa=%lx, a_b=%lx, asid_pa=%lx, relative_addr=%x\n", i,
                     buf->pa, buf->asid_base, buf->align_asid_pa, static_section->relative_addr);
@@ -188,7 +216,7 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
                     ret = m_mem->malloc(static_section->size + pad_sz, static_section->align_in_page, &buf, str.c_str(),
                         AIPU_MEM_REGION_DEFAULT);
 
-                if (AIPU_STATUS_SUCCESS != ret)
+                if (ret != AIPU_STATUS_SUCCESS)
                 {
                     LOG(LOG_ERR, "alloc weight buffer %d [fail]", i);
                     goto finish;
@@ -203,6 +231,141 @@ aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectio
 finish:
     return ret;
 }
+#else
+aipu_status_t aipudrv::Graph::alloc_weight_buffer(std::vector<struct GraphSectionDesc> &static_sections,
+    aipu_load_graph_cfg_t *config)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    struct GraphSectionDesc *static_section = nullptr;
+    uint32_t asid = 0;
+    int pad_sz = 0;
+
+#ifndef SIMULATION
+    if (m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3)
+        pad_sz = 0x800;
+#endif
+
+    if (m_wt_mem_region == AIPU_MEM_REGION_DEFAULT)
+    {
+        for (uint32_t bss_id = 0; bss_id < get_bss_cnt(); bss_id++)
+        {
+            std::vector<struct GraphSectionDesc> &static_sections = get_static_section_ref(bss_id);
+            struct WeightBufferInfo weightBufferInfo = {0};
+
+            if (m_bweight.size() > 0 && m_bweight[bss_id].size != 0)
+            {
+                if (m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3
+                    || m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3_1)
+                    asid = 1;
+
+                /**
+                * allocate weight from ASID1 region defalut.if all ASIDs are configured
+                * with the same base addr, it's also equal to allocate from ASID0.
+                */
+                ret = m_mem->malloc(get_const_size(bss_id) + pad_sz, 0,
+                    &weightBufferInfo.wb_weight, "weight", (asid << 8) | AIPU_MEM_REGION_DEFAULT);
+                if (ret != AIPU_STATUS_SUCCESS)
+                {
+                    LOG(LOG_ERR, "alloc weight buffer [fail]");
+                    goto finish;
+                }
+
+                if (get_zerocpy_const_size(bss_id) > 0)
+                {
+                    ret = m_mem->malloc(get_zerocpy_const_size(bss_id) + pad_sz, 0,
+                        &weightBufferInfo.wb_zerocpy_const, "zerocpy_const", AIPU_MEM_REGION_DEFAULT);
+                    if (ret != AIPU_STATUS_SUCCESS)
+                    {
+                        LOG(LOG_ERR, "alloc zerocpy_const buffer [fail]");
+                        goto finish;
+                    }
+                }
+            }
+
+            for (uint32_t i = 0; i < static_sections.size(); i++)
+            {
+                BufferDesc *buf = new BufferDesc;
+                static_section = &static_sections[i];
+                buf->reset();
+
+                if (static_section->type == SECTION_TYPE_ZEROCPY_CONSTANT)
+                {
+                    m_mem->write(weightBufferInfo.wb_zerocpy_const->pa + static_section->relative_addr,
+                        m_bweight[bss_id].va + static_section->offset_in_file, static_section->size);
+                    buf->init(weightBufferInfo.wb_zerocpy_const->asid_base,
+                        weightBufferInfo.wb_zerocpy_const->pa + static_section->relative_addr,
+                        static_section->size, static_section->size);
+                    LOG(LOG_INFO, "zerocpy %d, pa=%lx, a_b=%lx, asid_pa=%lx, relative_addr=%x\n", i,
+                        buf->pa, buf->asid_base, buf->align_asid_pa, static_section->relative_addr);
+                } else {
+                    m_mem->write(weightBufferInfo.wb_weight->pa + static_section->relative_addr,
+                        m_bweight[bss_id].va + static_section->offset_in_file, static_section->size);
+                    buf->init(weightBufferInfo.wb_weight->asid_base,
+                        weightBufferInfo.wb_weight->pa + static_section->relative_addr,
+                        static_section->size, static_section->size, 0, asid << 8);
+                }
+
+                weightBufferInfo.wb_weights.push_back(buf);
+                if (bss_id != 0)
+                    m_weight_buffers_vec[0].wb_weights.push_back(buf);
+            }
+
+            weightBufferInfo.wb_asid_base = weightBufferInfo.wb_weight->asid_base;
+            m_weight_buffers_vec.push_back(weightBufferInfo);
+        }
+    } else {
+        if (get_bss_cnt() == 1)
+        {
+            for (uint32_t bss_id = 0; bss_id < get_bss_cnt(); bss_id++)
+            {
+                std::vector<struct GraphSectionDesc> &static_sections = get_static_section_ref(bss_id);
+                struct WeightBufferInfo weightBufferInfo = {0};
+
+                for (uint32_t i = 0; i < static_sections.size(); i++)
+                {
+                    if (weightBufferInfo.wb_weights.size() != static_sections.size())
+                    {
+                        BufferDesc *buf = nullptr;
+                        std::string str = "static_" + std::to_string(i);
+                        static_section = &static_sections[i];
+
+                        if ((m_wt_idxes.count(i) == 1) && (static_section->type != SECTION_TYPE_ZEROCPY_CONSTANT)) {
+                            ret = m_mem->malloc(static_section->size + pad_sz, static_section->align_in_page,
+                                &buf, str.c_str(), m_wt_mem_region);
+                        } else {
+                            if (static_section->type == SECTION_TYPE_ZEROCPY_CONSTANT)
+                                ret = m_mem->malloc(static_section->size + pad_sz, static_section->align_in_page,
+                                    &buf, str.c_str(), AIPU_MEM_REGION_DEFAULT);
+                            else {
+                                ret = m_mem->malloc(static_section->size + pad_sz, static_section->align_in_page,
+                                    &buf, str.c_str(), (asid << 8) | AIPU_MEM_REGION_DEFAULT);
+                            }
+                        }
+
+                        if (ret != AIPU_STATUS_SUCCESS)
+                        {
+                            LOG(LOG_ERR, "alloc weight buffer %d [fail]", i);
+                            goto finish;
+                        }
+
+                        m_mem->write(buf->pa, (char *)static_section->load_src, static_section->size);
+                        weightBufferInfo.wb_weights.push_back(buf);
+                        if (bss_id != 0)
+                            m_weight_buffers_vec[0].wb_weights.push_back(buf);
+                    }
+                }
+
+                m_weight_buffers_vec.push_back(weightBufferInfo);
+            }
+        } else {
+            LOG(LOG_ALERT, "Not support: specify weight region on BSS coutnt > 0\n");
+        }
+    }
+
+finish:
+    return ret;
+}
+#endif
 
 aipu_status_t aipudrv::Graph::unload()
 {
@@ -215,30 +378,42 @@ aipu_status_t aipudrv::Graph::unload()
     if (m_text && m_text->size != 0)
         m_mem->free(&m_text);
 
-
     if (m_crodata && m_crodata->size != 0)
         m_mem->free(&m_crodata);
 
-    if (m_zerocpy_const != nullptr && m_zerocpy_const->size != 0)
-        m_mem->free(&m_zerocpy_const);
-
-    if (m_weight != nullptr)
+    if (m_bweight.size() > 0)
     {
-        if (m_weight->size != 0)
-            m_mem->free(&m_weight);
-
-        for (uint32_t i = 0; i < m_weights.size(); i++)
+        for (uint32_t bss_id = 0; bss_id < get_bss_cnt(); bss_id++)
         {
-            m_weights[i]->reset();
-            delete m_weights[i];
-        }
-    } else {
-        for (uint32_t i = 0; i < m_weights.size(); i++)
-            m_mem->free(&m_weights[i]);
-    }
-    m_weights.clear();
+            struct WeightBufferInfo &weightBufferInfo = m_weight_buffers_vec[bss_id];
 
-    m_parsed_shape.clear();
+            if (weightBufferInfo.wb_zerocpy_const != nullptr && weightBufferInfo.wb_zerocpy_const->size != 0)
+                m_mem->free(&weightBufferInfo.wb_zerocpy_const);
+
+            if (weightBufferInfo.wb_weight != nullptr)
+            {
+                if (weightBufferInfo.wb_weight->size != 0)
+                    m_mem->free(&weightBufferInfo.wb_weight);
+
+                if (bss_id == 0)
+                {
+                    for (uint32_t i = 0; i < weightBufferInfo.wb_weights.size(); i++)
+                    {
+                        weightBufferInfo.wb_weights[i]->reset();
+                        delete weightBufferInfo.wb_weights[i];
+                        weightBufferInfo.wb_weights[i] = nullptr;
+                    }
+                }
+            } else {
+                if (bss_id == 0)
+                {
+                    for (uint32_t i = 0; i < weightBufferInfo.wb_weights.size(); i++)
+                        m_mem->free(&weightBufferInfo.wb_weights[i]);
+                }
+            }
+            weightBufferInfo.wb_weights.clear();
+        }
+    }
 
     m_mem->dump_tracking_log_end();
     return ret;
@@ -286,76 +461,39 @@ bool aipudrv::Graph::get_dynamic_shape_data(uint32_t idx, bool max_shape_dim, ui
     return true;
 }
 
-bool aipudrv::Graph::set_dynamic_shape_data(aipu_dynshape_param_t *shape_param)
+aipu_status_t aipudrv::Graph::set_graph_extra_weight(BinSection extra_weight)
 {
-    if (!is_dynamic_shape())
-        return false;
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+    char *start = (char *)extra_weight.va;
+    size_t extra_weight_bin_cnt = *(size_t *)start;
 
-    if (shape_param->input_shape_cnt != get_dynamic_shape_num())
+    start += sizeof(size_t);
+    for (size_t i = 0; i < extra_weight_bin_cnt; i++)
     {
-        LOG(LOG_ERR, "config shape count not match input shape count\n");
-        return false;
-    }
+        struct ExtraWeightInfo extraWeightInfo;
+        struct BinSection ew_binsection = {0};
+        size_t extra_weight_bin_name_len = *(size_t *)start;
+        std::string path;
 
-    if (shape_param->shape_items == nullptr)
-    {
-        LOG(LOG_ERR, "config shape address is NULL\n");
-        return false;
-    }
+        start += sizeof(size_t);
+        char *plus_mark = std::strstr(start, "+");
+        extraWeightInfo.extraWeight_name = std::string(start, plus_mark - start);
+        extraWeightInfo.extraWeight_hash = std::string(plus_mark + 1,
+            extra_weight_bin_name_len - (plus_mark + 1 - start));
+        start += extra_weight_bin_name_len;
 
-    m_parsed_shape.clear();
-    for (uint32_t i = 0; i < shape_param->input_shape_cnt; i++)
-    {
-        aipu_dynshape_item_t *shape_item = &shape_param->shape_items[i];
-        uint32_t idx = shape_item->ds_idx;
-
-        if (idx >= 0 && idx < m_input_shape_constraint.size())
+        path = m_extra_weight_path + "/" + extraWeightInfo.extraWeight_name;
+        ret = umd_mmap_file_helper(path.c_str(), (void **)&ew_binsection.va, &ew_binsection.size);
+        if (ret != AIPU_STATUS_SUCCESS)
         {
-            uint32_t size = 1;
-
-            for (uint32_t dim = 0; dim < m_input_shape_constraint[idx][0].size(); dim++)
-            {
-                size *= shape_item->ds_data[dim];
-                m_parsed_shape[idx].push_back(shape_item->ds_data[dim]);
-            }
-
-            if (size < m_input_shape_threshhold[idx][0] &&
-                size > m_input_shape_threshhold[idx][1])
-            {
-                m_parsed_shape.clear();
-                LOG(LOG_ERR, "input %d: dynamic shape invalid, valid scope [%lu, %lu]\n",
-                    idx, m_input_shape_threshhold[idx][0], m_input_shape_threshhold[idx][1]);
-                return false;
-            }
-
-            m_config_in_tensor_size[idx] = size;
-            if (get_io_tensor_type(idx) == AIPU_DATA_TYPE_U16
-                || get_io_tensor_type(idx) == AIPU_DATA_TYPE_S16
-                || get_io_tensor_type(idx) == AIPU_DATA_TYPE_F16
-                || get_io_tensor_type(idx) == AIPU_DATA_TYPE_BF16)
-                m_config_in_tensor_size[idx] <<= 1;
-            else if (get_io_tensor_type(idx) == AIPU_DATA_TYPE_U32
-                || get_io_tensor_type(idx) == AIPU_DATA_TYPE_S32
-                || get_io_tensor_type(idx) == AIPU_DATA_TYPE_F32)
-                m_config_in_tensor_size[idx] <<= 2;
-        } else {
-            m_parsed_shape.clear();
-            m_config_in_tensor_size.clear();
-            LOG(LOG_ERR, "input %d invalid index\n", idx);
-            return false;
+            LOG(LOG_ERR, "Mmap extra weight: %s [fail]\n", path.c_str());
+            m_extra_weight_info_vec.clear();
+            return ret;
         }
+
+        set_graph_weight(ew_binsection);
+        m_extra_weight_info_vec.push_back(extraWeightInfo);
     }
 
-    if (m_parsed_shape.size() != get_dynamic_shape_num())
-    {
-        m_parsed_shape.clear();
-        m_config_in_tensor_size.clear();
-        LOG(LOG_ERR, "set shape count != input shape count\n");
-        return false;
-    }
-
-    reset_dynamic_out_shape_updated_flag();
-    update_dynamic_io_tensor_size(AIPU_TENSOR_TYPE_INPUT);
-
-    return true;
+    return ret;
 }

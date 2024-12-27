@@ -1,13 +1,9 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
-//
-// SPDX-License-Identifier: Apache-2.0
-
-
 #ifndef __AIPU_CONFIG_H__
 #define __AIPU_CONFIG_H__
 
 #include <stdint.h>
 #include <string>
+#include <vector>
 
 namespace sim_aipu
 {
@@ -55,9 +51,9 @@ namespace sim_aipu
         {
             X2_1204 = 1,
             X2_1204MP3,
-            tbd1,
-            tbd2,
-            tbd3,
+            X3_1304,
+            X3_1304MP2,
+            X3_1304MP4,
         };
         int code;                           //!< select one core(1204) or tree core(1204MP3).
         bool enable_avx;                    //!< use Intel avx instruction (not yet).
@@ -74,15 +70,17 @@ namespace sim_aipu
         bool en_eval = 0;                   //!< profiling statistics.
         bool en_probe = 0;                  //!< function unit coverage rate.
         bool en_fast_perf = 0;              //!< fast evaluation of perf count.
+        bool en_l2d = 0;                    //!< fast l2d cache for x3.
         uint32_t gm_size;                   //!< set gm size in bytes.
         std::string plugin_filename;        //!< plugin dynamic library filename.
         std::string json_filename;          //!< json filename.
         uint32_t freq_mhz = 1000;           //!< fast evaluation: frequency setting.
-        uint32_t ddr_latency_rd = 0;        //!< fast evaluation: ddr latency read setting
-        uint32_t ddr_latency_wr = 0;        //!< fast evaluation: ddr latency write setting
-        uint32_t ddr_bw = 256;              //!< fast evaluation: ddr bandwidth setting, indicate how may bits of the axi data bus
-        float ddr_bw_ratio = 1.0;           //!< fast evaluation: ddr bandwidth ratio setting
+        uint32_t ddr_latency_rd = 0;      //!< fast evaluation: ddr latency read setting
+        uint32_t ddr_latency_wr = 0;       //!< fast evaluation: ddr latency write setting
+        uint32_t ddr_bw = 256;               //!< fast evaluation: ddr bandwidth setting, indicate how may bits of the axi data bus
+        float ddr_bw_ratio = 1.0;            //!< fast evaluation: ddr bandwidth ratio setting
         std::string perf_report;            //!< fast evaluation: performance report
+        std::vector<uint8_t> isa_events; // isa events to be profiled, default is None.
     };
 
     enum { AIPU_EV_GRID_END, };

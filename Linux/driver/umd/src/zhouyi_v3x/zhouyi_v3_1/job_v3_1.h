@@ -19,6 +19,7 @@
 #include "kmd/tcb.h"
 #include "job_base.h"
 #include "gm.h"
+#include "../common/dynamic_shape.h"
 
 namespace aipudrv
 {
@@ -38,27 +39,43 @@ struct Task
     BufferDesc *private_data;
 };
 
-struct SubGraphTask
+struct BSSBuffer
 {
     uint32_t id;
     std::vector<BufferDesc*> reuses;
-    std::vector<BufferDesc*> reuse_priv_buffers;
     std::vector<BufferDesc*> *weights;
-    std::vector<Task>       tasks;
 
     /**
      * record buffer index, will not free these special buffer as it is
      * allocated externally.
      */
-    std::set<uint32_t>   dma_buf_idx;
+    std::set<uint32_t> dma_buf_idx;
     void reset(uint32_t _id)
     {
         id = _id;
         reuses.clear();
         weights = nullptr;
+        dma_buf_idx.clear();
+    }
+};
+
+struct SubGraphTask
+{
+    uint32_t id;
+    uint32_t bss_id;
+    std::vector<BufferDesc*> reuse_priv_buffers;
+    std::vector<Task> tasks;
+
+    /**
+     * record buffer index, will not free these special buffer as it is
+     * allocated externally.
+     */
+    void reset(uint32_t _id, uint32_t _bss_id)
+    {
+        id = _id;
+        bss_id = _bss_id;
         reuse_priv_buffers.clear();
         tasks.clear();
-        dma_buf_idx.clear();
     }
 };
 
@@ -82,7 +99,7 @@ struct dumpcfg_host_desc
     uint32_t lo_addr;
 };
 
-class JobV4: public JobBase
+class JobV3_1: public JobBase
 {
 private:
     uint32_t    m_tot_tcb_cnt = 0;
@@ -106,12 +123,13 @@ private:
     std::unique_ptr<char []> m_backup_tcb;
     bool m_backup_tcb_used = false;
     std::vector<SubGraphTask> m_sg_job;
+    std::vector<BSSBuffer> m_bss_buffer_vec;
     std::map<uint32_t, GM_info_desc> m_gm_info[2];
     uint32_t m_segmmu_num = 0;
     uint32_t m_segmmu_tcb_num = 3;
     std::vector<SegMMUConfig> m_segmmu_sec;
-    GM_V4 *m_gm = nullptr;
-    bool m_same_asid = true;
+    GM_V3_1 *m_gm = nullptr;
+    DynamicShape *m_dyn_shape = nullptr;
 
     std::string m_dumpcfg_header;
     dumpcfg_host_desc m_dumpcfg_host;
@@ -136,6 +154,11 @@ private:
     std::set<uint32_t> m_top_reuse_idx;
     bool m_top_priv_buf_freed = false;
 
+    /**
+     * model global parameter buffer
+     */
+    BufferDesc *m_model_global_param = nullptr;
+
 public:
     GraphV3X& get_graph()
     {
@@ -149,28 +172,30 @@ public:
 
     const std::vector<BufferDesc *> & get_reuse() override
     {
-        return static_cast< std::vector<BufferDesc *>& >(m_sg_job[0].reuses);
+        return static_cast< std::vector<BufferDesc *>& >(m_bss_buffer_vec[0].reuses);
     }
 
 private:
     aipu_status_t setup_rodata_sg(uint32_t sg_id, const std::vector<struct GraphParamMapLoadDesc>& param_map,
         std::vector<BufferDesc*>& reuse_buf, std::vector<BufferDesc*>& static_buf,
         std::set<uint32_t> *dma_buf_idx = nullptr);
-    aipu_status_t setup_tcb_task(uint32_t sg_id, uint32_t grid_id, uint32_t core_id, uint32_t task_id);
-    aipu_status_t setup_tcb_sg(uint32_t sg_id, uint32_t grid_id, uint32_t core_id);
+    aipu_status_t setup_task_tcb(uint32_t sg_id, uint32_t grid_id, uint32_t core_id, uint32_t task_id);
+    aipu_status_t setup_tcb_group(uint32_t sg_id, uint32_t grid_id, uint32_t core_id);
     void          set_job_params(uint32_t sg_cnt, uint32_t task_per_sg, uint32_t remap, uint32_t core_cnt);
     aipu_status_t alloc_load_job_buffers();
     aipu_status_t free_job_buffers();
     int alloc_subgraph_buffers_optimized();
     aipu_status_t alloc_subgraph_buffers();
     aipu_status_t init_per_task_data();
-    aipu_status_t setup_tcbs();
-    aipu_status_t config_smmu_tcb(tcb_t *tcb);
-    void setup_gm_sync_from_ddr(tcb_t *tcb);
-    aipu_status_t setup_segmmu(SubGraphTask &sg);
-    void free_sg_buffers(SubGraphTask& sg);
+    aipu_status_t setup_tcb_chain();
+    aipu_status_t config_tcb_smmu(tcb_t &tcb);
+    aipu_status_t config_tcb_deps(tcb_t &tcb, uint32_t sg_id);
+    void setup_gm_sync_from_ddr(tcb_t &tcb);
+    aipu_status_t setup_segmmu(SubGraphTask &sg_task);
+    void free_sg_buffers(SubGraphTask& sg_task);
     aipu_status_t dump_for_emulation();
     aipu_status_t specify_io_buffer(aipu_shared_tensor_info_t &tensor_info);
+    aipu_status_t parse_dynamic_out_shape();
 
 public:
     aipu_status_t init(const aipu_global_config_simulation_t* cfg,
@@ -180,9 +205,9 @@ public:
     aipu_status_t bind_core(uint32_t core_id);
     aipu_status_t debugger_run();
 
-    #if defined(SIMULATION)
+#if defined(SIMULATION)
     virtual void dumpcfg_alljob();
-    #endif
+#endif
 
     void dump_specific_buffers();
 
@@ -219,12 +244,12 @@ public:
     }
 
 public:
-    JobV4(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_create_job_cfg_t *config = nullptr);
-    ~JobV4();
-    JobV4(const JobV4& job) = delete;
-    JobV4& operator=(const JobV4& job) = delete;
+    JobV3_1(MainContext* ctx, GraphBase& graph, DeviceBase* dev, aipu_create_job_cfg_t *config = nullptr);
+    ~JobV3_1();
+    JobV3_1(const JobV3_1& job) = delete;
+    JobV3_1& operator=(const JobV3_1& job) = delete;
 
-    friend class GM_V4;
+    friend class GM_V3_1;
 };
 }
 

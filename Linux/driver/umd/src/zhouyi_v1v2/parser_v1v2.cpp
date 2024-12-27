@@ -22,6 +22,7 @@ aipudrv::ParserV12::~ParserV12()
     for (uint32_t i = 0; i < m_sections.size(); i++)
     {
         delete[] m_sections[i].va;
+        m_sections[i].va = nullptr;
     }
 }
 
@@ -31,7 +32,7 @@ aipu_status_t aipudrv::ParserV12::parse_graph_header_check(std::istream& gbin, u
     HeaderBottomV12 bot_header;
     unsigned int header_sz = 0, tmp = 0;
     unsigned int cur_pos = gbin.tellg();
-    #define GBIN_HEADER_MIN_SZ (104)
+    constexpr uint32_t GBIN_HEADER_MIN_SZ = 104;
 
     gbin.read((char*)&top_header, sizeof(BinHeaderTop));
     gbin.read((char*)&bot_header, sizeof(HeaderBottomV12));
@@ -148,11 +149,11 @@ aipu_status_t aipudrv::ParserV12::parse_graph(std::istream& gbin, uint32_t size,
 
     gbin.seekg(0, gbin.beg);
     ret = parse_graph_header_top(gbin, size, gobj);
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
         return ret;
 
     ret = parse_graph_header_bottom(gbin, gobj);
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
         return ret;
 
     for (uint32_t i = 0; i < SECTION_TYPE_MAX; i++)
@@ -169,13 +170,18 @@ aipu_status_t aipudrv::ParserV12::parse_graph(std::istream& gbin, uint32_t size,
 
     gobj.set_graph_rodata(m_sections[SECTION_TYPE_RODATA]);
     gobj.set_graph_desc(m_sections[SECTION_TYPE_DESCRIPTOR]);
-    gobj.set_graph_weight(m_sections[SECTION_TYPE_WEIGHT]);
+
+    if (m_sections[SECTION_TYPE_WEIGHT].size > 0)
+        gobj.set_graph_weight(m_sections[SECTION_TYPE_WEIGHT]);
+
     gobj.set_graph_text(m_sections[SECTION_TYPE_TEXT].va, m_sections[SECTION_TYPE_TEXT].size);
 
     ret = parse_bss_section((char*)m_sections[SECTION_TYPE_BSS].va,
         m_sections[SECTION_TYPE_BSS].size, 0, gobj, &remap);
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
         goto finish;
+
+    sort_io(gobj.get_bss_io_ref(0));
 
     ret = parse_remap_section(remap, gobj);
 

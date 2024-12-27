@@ -1,6 +1,14 @@
 # Compass_NPU_driver
 Compass_NPU_driver includes two parts: kernel mode driver(KMD) and user mode library(UMD). KMD is a standard Linux char driver model for NPU. UMD can be compiled as dynamicly and static libraty accordingly. User application directly call top APIs in UMD and then indirectly call the interface of KMD to interract with NPU hardware.
 
+## Table of mapping between architecure and target
+|arch|target|
+|-|-|
+|v1|z1|
+|v2|z2/z3/x1|
+|v3|x2|
+|v3_1|x3|
+
 ## 1. Folders
 ### driver
 include kernel driver (KMD) and user lib (UMD).
@@ -8,6 +16,8 @@ include kernel driver (KMD) and user lib (UMD).
 the reference related to how to config dts to enable AIPU on embedded boards.
 ### samples
 the samples related to how to call UMD APIs to implement inference APPs.
+### out-of-box
+the simplest demo running on simulator.
 ### unit_test
 the unit test cases for UMD and KMD.
 
@@ -53,13 +63,15 @@ COMPASS_DRV_BTENVAR_CROSS_COMPILE_GNU=aarch64-linux-gnu-
 - compile commands
 
 ```bash
-# cd Linux
+$ cd Linux
 
-# source bash_env_setup.sh (for bash env)
-or
-# source env_setup.sh (for csh env)
+# for bash env
+$ source bash_env_setup.sh 
 
-# ./build_all.sh -p juno [-d]
+# for csh env
+$ source env_setup.sh
+
+$ ./build_all.sh -p juno [-d]
 ```
 
 - compile commands for python api
@@ -70,17 +82,19 @@ or
   CONFIG_DRV_RTENVAR_PY_INCD_PATH=/usr/local/include/python3.6
 
 ```bash
-# cd Linux
+$ cd Linux
 
-# source bash_env_setup.sh (for bash env)
-or
-# source env_setup.sh (for csh env)
+# for bash env
+$ source bash_env_setup.sh
 
--- for aipu v1/v2/v3
-# ./build_all.sh -p juno -v v3 -a python_api [-d]
+# for csh env
+$ source env_setup.sh
 
--- for aipu v4
-# ./build_all.sh -p juno -v v4 -a python_api [-d]
+# for aipu v1/v2/v3
+$ ./build_all.sh -p juno -v v3 -a python_api [-d]
+
+# for aipu v3_1
+$ ./build_all.sh -p juno -v v3_1 -a python_api [-d]
 ```
 
 - If the command run normally, a folder named 'bin' is created, the corresponding KMD driver(aipu.ko) and UMD library(libaipudrv.so) are generated and stored in it.
@@ -98,6 +112,7 @@ Set below env variables accordingly.
     |-- bin
     |   |-- aipu_simulator_x1
     |   |-- aipu_simulator_x2
+    |   |-- aipu_simulator_x3
     |   |-- aipu_simulator_z1
     |   |-- aipu_simulator_z2
     |   |-- aipu_simulator_z3
@@ -105,6 +120,7 @@ Set below env variables accordingly.
     `-- lib
         |-- libaipu_simulator_x1.so
         |-- libaipu_simulator_x2.so
+        |-- libaipu_simulator_x3.so
         |-- libaipu_simulator_z1.so
         |-- libaipu_simulator_z2.so
         |-- libaipu_simulator_z3.so
@@ -120,19 +136,22 @@ CONFIG_DRV_RTENVAR_SIM_BASE_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_SIMULATOR
 CONFIG_DRV_BRENVAR_X86_CLPATH=/arm/tools/gnu/gcc/7.3.0/rhe7-x86_64/lib64 (optional)
 COMPASS_DRV_BTENVAR_X86_CXX=g++
 
-- specify path where store aipu v1/v2/v3 simulators and libraries
+- specify path where store aipu v1/v2/v3/v3_1 simulators and libraries
 CONFIG_DRV_RTENVAR_SIM_PATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/bin/
 COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/lib/
 
 - compile commands for standard api
 
 ```bash
-# cd Linux
+$ cd Linux
 
-# source bash_env_setup.sh (for bash env)
-or
-# source env_setup.sh (for csh env)
-# ./build_all.sh -p sim [-d]
+# for bash env
+$ source bash_env_setup.sh
+
+# for csh env
+$ source env_setup.sh
+
+$ ./build_all.sh -p sim [-d]
 ```
 
 - compile commands for python api
@@ -140,17 +159,19 @@ or
   the Python APIs are just with limited functionality, it's mainly for quickly verification.
 
 ```bash
-# cd Linux
+$ cd Linux
 
-# source bash_env_setup.sh (for bash env)
-or
-# source env_setup.sh (for csh env)
+# for bash env
+$ source bash_env_setup.sh (for bash env)
 
--- for aipu v1/v2/v3
-# ./build_all.sh -p sim -v v3 -a python_api [-d]
+# for csh env
+$ source env_setup.sh (for csh env)
 
--- for aipu v4
-# ./build_all.sh -p sim -v v4 -a python_api [-d]
+# for aipu v1/v2/v3
+$ ./build_all.sh -p sim -v v3 -a python_api [-d]
+
+# for aipu v3_1
+$ ./build_all.sh -p sim -v v3_1 -a python_api [-d]
 ```
 
 - If the command run normally, a folder named 'bin' is created, the UMD library(libaipudrv.so)
@@ -166,9 +187,9 @@ is generated and stored in it.
 Here take Juno(arm64) board as an example, it has to do #2.1 firstly before doing this step. then
 
 ```bash
-# cd Linux
-# source bash_env_setup.sh
-# ./build_all.sh -p juno -t sample [-d]
+$ cd Linux
+$ source bash_env_setup.sh
+$ ./build_all.sh -p juno -t sample [-d]
 ```
 
 After perform this command successfully, the samples are also stored in forder 'bin'.
@@ -180,9 +201,9 @@ After perform this command successfully, the samples are also stored in forder '
 it has to do #2.2 firstly before doing this step. then
 
 ```bash
-# cd Linux
-# source bash_env_setup.sh
-# ./build_all.sh -p sim -t sample [-d]
+$ cd Linux
+$ source bash_env_setup.sh
+$ ./build_all.sh -p sim -t sample [-d]
 ```
 
 After perform this command successfully, the samples are also stored in forder 'bin'.
@@ -193,6 +214,10 @@ After perform this command successfully, the samples are also stored in forder '
 
 - samples/READM.md: some detail to run samples.
 
-## 4. Compile & run unit_test
+## 4. Compile & run out-of-box demo
+
+- Read the detail in out-of-box README.md
+
+## 5. Compile & run unit_test
 
 - Read the detail in unit_test README.md

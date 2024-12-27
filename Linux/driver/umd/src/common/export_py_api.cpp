@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/mman.h>
+#include <map>
 #include <vector>
 #include <tuple>
 #include "standard_api.h"
@@ -104,7 +105,16 @@ class NPU
      *          "enable_avx" : "0|1",
      *          "enable_calloc" : "0|1",
      *          "en_eval" : "0|1",
+     *          "en_l2d" : "0|1",
+     *          "en_fast_perf" : "0|1",
+     *          "freq_mhz" : "0|1",
+     *          "ddr_latency_rd" : "0|300",
+     *          "ddr_latency_wr" : "0|100",
+     *          "ddr_bw" : "256|512",
+     *          "ddr_bw_ratio" : "1.0",
+     *          "perf_report" : "fast evaluation performance file name",
      *      }
+     *
      *
      * @retval AIPU_STATUS_SUCCESS
      * @retval AIPU_STATUS_ERROR_NULL_PTR
@@ -122,8 +132,12 @@ class NPU
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         const char *status_msg = nullptr;
-        std::string str_key[] = {"simulator", "log_file_path", "npu_arch_desc", "plugin_name", "json_filename"};
-        std::string int_key[] = {"log_level", "gm_size", "verbose", "enable_avx", "enable_calloc", "en_eval"};
+        std::string str_key[] = {"simulator", "log_file_path", "npu_arch_desc",
+            "plugin_name", "json_filename", "perf_report"};
+        std::string int_key[] = {"log_level", "gm_size", "verbose", "enable_avx",
+            "enable_calloc", "en_eval", "en_l2d", "en_fast_perf", "freq_mhz", "ddr_latency_rd",
+            "ddr_latency_wr", "ddr_bw"};
+        std::string float_key[] = {"ddr_bw_ratio"};
 
         if (global_cfg_simulation.count(str_key[0]) == 1)
         {
@@ -165,6 +179,14 @@ class NPU
                 strlen(global_cfg_simulation[str_key[4]].c_str()));
         }
 
+        if (global_cfg_simulation.count(str_key[5]) == 1)
+        {
+            m_global_config_simulation.perf_report = new char[PATH_LEN];
+            memset((void *)m_global_config_simulation.perf_report, 0, PATH_LEN);
+            strncpy((char*)m_global_config_simulation.perf_report, (char*)global_cfg_simulation[str_key[5]].c_str(),
+                strlen(global_cfg_simulation[str_key[5]].c_str()));
+        }
+
         if (global_cfg_simulation.count(int_key[0]) == 1)
             m_global_config_simulation.log_level = atoi(global_cfg_simulation[int_key[0]].c_str());
 
@@ -183,6 +205,27 @@ class NPU
         if (global_cfg_simulation.count(int_key[5]) == 1)
             m_global_config_simulation.en_eval = atoi(global_cfg_simulation[int_key[5]].c_str());
 
+        if (global_cfg_simulation.count(int_key[6]) == 1)
+            m_global_config_simulation.en_l2d = atoi(global_cfg_simulation[int_key[6]].c_str());
+
+        if (global_cfg_simulation.count(int_key[7]) == 1)
+            m_global_config_simulation.en_fast_perf = atoi(global_cfg_simulation[int_key[7]].c_str());
+
+        if (global_cfg_simulation.count(int_key[8]) == 1)
+            m_global_config_simulation.freq_mhz = atoi(global_cfg_simulation[int_key[8]].c_str());
+
+        if (global_cfg_simulation.count(int_key[9]) == 1)
+            m_global_config_simulation.ddr_latency_rd = atoi(global_cfg_simulation[int_key[9]].c_str());
+
+        if (global_cfg_simulation.count(int_key[10]) == 1)
+            m_global_config_simulation.ddr_latency_wr = atoi(global_cfg_simulation[int_key[10]].c_str());
+
+        if (global_cfg_simulation.count(int_key[11]) == 1)
+            m_global_config_simulation.ddr_bw = atoi(global_cfg_simulation[int_key[11]].c_str());
+
+        if (global_cfg_simulation.count(float_key[0]) == 1)
+            m_global_config_simulation.ddr_bw_ratio = std::stof(global_cfg_simulation[float_key[0]]);
+
         if (types & AIPU_CONFIG_TYPE_HW)
             ret = aipu_config_global(m_ctx, AIPU_CONFIG_TYPE_HW, &m_global_config_hw);
         else if (types & AIPU_CONFIG_TYPE_SIMULATION) {
@@ -197,6 +240,41 @@ class NPU
             fprintf(stderr, "[PY UMD ERROR] aipu_config_global: %s\n", status_msg);
         }
 
+        if (m_global_config_simulation.simulator)
+        {
+            delete[] m_global_config_simulation.simulator;
+            m_global_config_simulation.simulator = nullptr;
+        }
+
+        if (m_global_config_simulation.log_file_path)
+        {
+            delete[] m_global_config_simulation.log_file_path;
+            m_global_config_simulation.log_file_path = nullptr;
+        }
+
+        if (m_global_config_simulation.npu_arch_desc)
+        {
+            delete[] m_global_config_simulation.npu_arch_desc;
+            m_global_config_simulation.npu_arch_desc = nullptr;
+        }
+
+        if (m_global_config_simulation.plugin_name)
+        {
+            delete[] m_global_config_simulation.plugin_name;
+            m_global_config_simulation.plugin_name = nullptr;
+        }
+
+        if (m_global_config_simulation.json_filename)
+        {
+            delete[] m_global_config_simulation.json_filename;
+            m_global_config_simulation.json_filename = nullptr;
+        }
+
+        if (m_global_config_simulation.perf_report)
+        {
+            delete[] m_global_config_simulation.perf_report;
+            m_global_config_simulation.perf_report = nullptr;
+        }
         return ret;
     }
 
@@ -263,7 +341,10 @@ class NPU
         }
 
         if (load_grach_cfg.wt_idxes != nullptr)
-            delete []load_grach_cfg.wt_idxes;
+        {
+            delete[] load_grach_cfg.wt_idxes;
+            load_grach_cfg.wt_idxes = nullptr;
+        }
 
         retmap["ret"] = ret;
         retmap["data"] = graph_id;
@@ -336,7 +417,10 @@ class NPU
         }
 
         if (load_grach_cfg.wt_idxes != nullptr)
-            delete []load_grach_cfg.wt_idxes;
+        {
+            delete[] load_grach_cfg.wt_idxes;
+            load_grach_cfg.wt_idxes = nullptr;
+        }
 
         retmap["ret"] = ret;
         retmap["data"] = graph_id;
@@ -372,14 +456,21 @@ class NPU
      *
      * @param[in] graph_id: loaded graph id
      * @param[in] job_cfg: job's config item
-     *      {
-     *          "partition_id" : "0-3",
-     *          "dbg_dispatch" : "0|1",
-     *          "dbg_core_id" : "0-2",
-     *          "qos_level" : "0|1",
-     *          "fm_mem_region" : "feature map priority allocation region",
-     *      }
+     *            {
+     *                "partition_id" : "0-3",
+     *                "dbg_dispatch" : "0|1",
+     *                "dbg_core_id" : "0-2",
+     *                "qos_level" : "0|1",
+     *                "fm_mem_region" : "feature map priority allocation region",
+     *            }
      * @param[in] fm_idxes: specify which feature maps are allocated from specific region
+     *
+     * @param[in] ds_shapes: all dynamic inut shape parameters
+     *
+     *            ds_shapes = [
+     *                [1,2,3,4],
+     *                [11,22,33,44]
+     *            ]
      *
      * @retval    return value map
      *            {
@@ -394,7 +485,7 @@ class NPU
      * @retval AIPU_STATUS_ERROR_BUF_ALLOC_FAIL
      */
     std::map<std::string, uint64_t> aipu_create_job_py(uint64_t graph_id, std::map<std::string, int> job_cfg,
-        std::vector<int> fm_idxes)
+        std::vector<int> fm_idxes, std::vector<std::vector<uint64_t>> ds_shapes)
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         const char *status_msg = nullptr;
@@ -403,6 +494,7 @@ class NPU
         aipu_create_job_cfg_t create_job_config = {0};
         std::string keys[] = {"partition_id", "dbg_dispatch", "dbg_core_id",
             "qos_level", "fm_mem_region"};
+        aipu_dynshape_param_t *ds_params = nullptr;
 
         create_job_config.misc = 0;
         if (job_cfg.count(keys[0]))
@@ -429,6 +521,27 @@ class NPU
                 create_job_config.fm_idxes[i] = fm_idxes[i];
         }
 
+        /* parse dynamic input shape */
+        if (ds_shapes.size() > 0)
+        {
+            ds_params = new aipu_dynshape_param_t;
+            ds_params->input_shape_cnt = ds_shapes.size();
+            ds_params->shape_items = new aipu_dynshape_item_t[ds_params->input_shape_cnt];
+
+            for(uint32_t i = 0; i < ds_params->input_shape_cnt; i++)
+            {
+                uint32_t shape_data_item_num = ds_shapes[i].size();
+
+                ds_params->shape_items[i].ds_idx = i;
+                ds_params->shape_items[i].ds_data = new uint32_t[shape_data_item_num];
+
+                for (uint32_t j = 0; j < shape_data_item_num; j++)
+                    ds_params->shape_items[i].ds_data[j] = ds_shapes[i][j];
+            }
+
+            create_job_config.dynshape = ds_params;
+        }
+
         ret = aipu_create_job(m_ctx, graph_id, &job_id, &create_job_config);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -439,7 +552,25 @@ class NPU
 
         /* free job config items */
         if (create_job_config.fm_idxes)
-            delete []create_job_config.fm_idxes;
+        {
+            delete[] create_job_config.fm_idxes;
+            create_job_config.fm_idxes = nullptr;
+        }
+
+        if (ds_params != nullptr)
+        {
+            uint32_t shape_items_num = ds_shapes.size();
+            for(uint32_t i = 0; i < shape_items_num; i++)
+            {
+                delete[] ds_params->shape_items[i].ds_data;
+                ds_params->shape_items[i].ds_data = nullptr;
+            }
+
+            delete[] ds_params->shape_items;
+            ds_params->shape_items = nullptr;
+            delete ds_params;
+            ds_params = nullptr;
+        }
 
         retmap["ret"] = ret;
         retmap["data"] = job_id;
@@ -521,20 +652,35 @@ class NPU
 
         /* free job config dump items */
         if (aipu_job_config_dump.dump_dir)
-            delete []aipu_job_config_dump.dump_dir;
+        {
+            delete[] aipu_job_config_dump.dump_dir;
+            aipu_job_config_dump.dump_dir = nullptr;
+        }
 
         if (aipu_job_config_dump.prefix)
-            delete []aipu_job_config_dump.prefix;
+        {
+            delete[] aipu_job_config_dump.prefix;
+            aipu_job_config_dump.prefix = nullptr;
+        }
 
         if (aipu_job_config_dump.output_prefix)
-            delete []aipu_job_config_dump.output_prefix;
+        {
+            delete[] aipu_job_config_dump.output_prefix;
+            aipu_job_config_dump.output_prefix = nullptr;
+        }
 
         if (aipu_job_config_dump.misc_prefix)
-            delete []aipu_job_config_dump.misc_prefix;
+        {
+            delete[] aipu_job_config_dump.misc_prefix;
+            aipu_job_config_dump.misc_prefix = nullptr;
+        }
 
         /* free job_config_simulation data_dir */
         if (aipu_job_config_simulation.data_dir)
-            delete []aipu_job_config_simulation.data_dir;
+        {
+            delete[] aipu_job_config_simulation.data_dir;
+            aipu_job_config_simulation.data_dir = nullptr;
+        }
 
         return ret;
     }
@@ -865,9 +1011,17 @@ class NPU
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
         aipu_tensor_desc_t desc;
         const char *status_msg = nullptr;
-        const int *data = numpy_array.data();
         uint8_t * in_data = nullptr;
 
+        constexpr int C_CONTIGUOUS = py::detail::npy_api::constants::NPY_ARRAY_C_CONTIGUOUS_;
+        if (C_CONTIGUOUS != (numpy_array.flags() & C_CONTIGUOUS))
+        {
+            auto np = py::module::import("numpy");
+            auto result = np.attr("ascontiguousarray")(numpy_array);
+            numpy_array = pybind11::array::ensure(result);
+        }
+
+        const int *data = numpy_array.data();
         ret = aipu_get_tensor_descriptor(m_ctx, job_id, AIPU_TENSOR_TYPE_INPUT, tensor, &desc);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -910,7 +1064,11 @@ class NPU
         }
 
         if (in_data && ((data_size & 0xFF) != D_INT32))
+        {
             delete[] in_data;
+            in_data = nullptr;
+        }
+
     finish:
         return ret;
     }
@@ -1011,7 +1169,11 @@ class NPU
 
     finish:
         if (out_data)
+        {
             delete[] out_data;
+            out_data = nullptr;
+        }
+
         return retmap;
     }
 
@@ -1161,7 +1323,8 @@ class NPU
             for (uint32_t i = 0; i < p->size; i++)
                 retmap["data"].push_back((uint64_t)p->data[i]);
 
-            delete []p->data;
+            delete[] p->data;
+            p->data = nullptr;
         } else if (cmd == AIPU_IOCTL_ALLOC_DMABUF) {
             struct aipu_dma_buf_request *p = (struct aipu_dma_buf_request *)arg;
             retmap["data"].push_back((uint64_t)p->fd);
@@ -1178,109 +1341,6 @@ class NPU
         if (arg)
             free(arg);
         return retmap;
-    }
-
-    /**
-     * @brief This API is used to send specific command to config dynamic shape.
-     *
-     * @param[in] cmd cmd
-     * @param[inout] py_arg0 input or output argument according to 'cmd', map type
-     * @param[inout] py_arg1 input or output argument according to 'cmd', vector<map> type
-     *
-     * @retval     return value map
-     *             {
-     *                 "ret": {retval}
-     *                 "data": {out data}, optional output
-     *             }
-     *
-     * @retval AIPU_STATUS_SUCCESS
-     * @retval AIPU_STATUS_ERROR_NULL_PTR
-     * @retval AIPU_STATUS_ERROR_INVALID_CTX
-     * @retval AIPU_STATUS_ERROR_DEV_ABNORMAL
-     */
-    aipu_status_t aipu_ioctl_dshape_py(uint32_t cmd,
-        std::map<std::string, uint64_t> py_arg0, std::vector<std::vector<uint64_t>> py_arg1)
-    {
-        void *arg = nullptr;
-        aipu_status_t ret = AIPU_STATUS_SUCCESS;
-        const char *status_msg = nullptr;
-
-        switch (cmd)
-        {
-            case AIPU_IOCTL_SET_DS_INFO:
-                {
-                    /**
-                     * each input tensor has corresponding shape, and all shape information
-                     * is set in one aipu_ioctl calling.
-                     *
-                     * dynamical shape example:
-                     *
-                     * py_arg0 = {
-                     *    "graph_id" = 0x100000001,
-                     * }
-                     *
-                     * "shape_items"
-                     * py_arg1 = [
-                     *     [1,2,3,4],
-                     *     [11,22,33,44]
-                     * ]
-                     *
-                     */
-
-                    std::string shape_param_key[] = {"graph_id", "input_shape_cnt", "shape_items"};
-                    aipu_dynshape_param_t *ds_param = nullptr;
-                    uint32_t shape_items_num = 0;
-
-                    arg = new aipu_dynshape_param_t;
-                    ds_param = (aipu_dynshape_param_t *)arg;
-
-                    ds_param->graph_id = py_arg0[shape_param_key[0]];
-
-                    shape_items_num = py_arg1.size();
-                    ds_param->input_shape_cnt = shape_items_num;
-                    ds_param->shape_items = new aipu_dynshape_item_t[shape_items_num];
-
-                    for(uint32_t i = 0; i < shape_items_num; i++)
-                    {
-                        uint32_t shape_data_item_num = py_arg1[i].size();
-
-                        ds_param->shape_items[i].ds_idx = i;
-                        ds_param->shape_items[i].ds_data = new uint32_t[shape_data_item_num];
-
-                        for (uint32_t j = 0; j < shape_data_item_num; j++)
-                            ds_param->shape_items[i].ds_data[j] = py_arg1[i][j];
-                    }
-                }
-                break;
-
-            default:
-                fprintf(stderr, "[PY UMD ERROR] aipu_ioctl invalid cmd\n");
-                ret = AIPU_STATUS_ERROR_INVALID_OP;
-                goto finish;
-
-        }
-
-        ret = aipu_ioctl(m_ctx, cmd, arg);
-        if (ret != AIPU_STATUS_SUCCESS)
-        {
-            aipu_get_error_message(m_ctx, ret, &status_msg);
-            fprintf(stderr, "[PY UMD ERROR] aipu_ioctl: %s\n", status_msg);
-            goto finish;
-        }
-
-        if (cmd == AIPU_IOCTL_SET_DS_INFO) {
-            uint32_t shape_items_num = py_arg1.size();
-            aipu_dynshape_param_t *ds_param = (aipu_dynshape_param_t *)arg;
-
-            for(uint32_t i = 0; i < shape_items_num; i++)
-                delete[] ds_param->shape_items[i].ds_data;
-
-            delete[] ds_param->shape_items;
-            delete ds_param;
-        }
-
-    finish:
-        return ret;
     }
 
     aipu_status_t aipu_ioctl_write_dmabuf_py(uint32_t cmd,
@@ -1322,10 +1382,16 @@ class NPU
 
     finish:
         if (p && p->data)
-            delete []p->data;
+        {
+            delete[] p->data;
+            p->data = nullptr;
+        }
 
         if (p)
+        {
             free(p);
+            p = nullptr;
+        }
 
         return ret;
     }
@@ -1376,21 +1442,6 @@ class NPU
 
     virtual ~NPU()
     {
-        /* free global config items */
-        if (m_global_config_simulation.simulator)
-            delete []m_global_config_simulation.simulator;
-
-        if (m_global_config_simulation.log_file_path)
-            delete []m_global_config_simulation.log_file_path;
-
-        if (m_global_config_simulation.npu_arch_desc)
-            delete []m_global_config_simulation.npu_arch_desc;
-
-        if (m_global_config_simulation.plugin_name)
-            delete []m_global_config_simulation.plugin_name;
-
-        if (m_global_config_simulation.json_filename)
-            delete []m_global_config_simulation.json_filename;
     };
 
     private:
@@ -1452,6 +1503,7 @@ PYBIND11_MODULE(libaipudrv, m) {
         .value("AIPU_TENSOR_TYPE_PRINTF", aipu_tensor_type_t::AIPU_TENSOR_TYPE_PRINTF)
         .value("AIPU_TENSOR_TYPE_PROFILER", aipu_tensor_type_t::AIPU_TENSOR_TYPE_PROFILER)
         .value("AIPU_TENSOR_TYPE_LAYER_COUNTER", aipu_tensor_type_t::AIPU_TENSOR_TYPE_LAYER_COUNTER)
+        /* only for v1v2 */
         .value("AIPU_TENSOR_TYPE_ERROR_CODE", aipu_tensor_type_t::AIPU_TENSOR_TYPE_ERROR_CODE)
         .value("AIPU_TENSOR_TYPE_OUT_TENSOR_SHAPE", aipu_tensor_type_t::AIPU_TENSOR_TYPE_OUT_TENSOR_SHAPE)
         .export_values();
@@ -1516,13 +1568,21 @@ PYBIND11_MODULE(libaipudrv, m) {
         .def_readwrite("verbose", &aipu_global_config_simulation_t::verbose)
         .def_readwrite("enable_avx", &aipu_global_config_simulation_t::enable_avx)
         .def_readwrite("enable_calloc", &aipu_global_config_simulation_t::enable_calloc)
-        .def_readwrite("en_eval", &aipu_global_config_simulation_t::en_eval);
+        .def_readwrite("en_eval", &aipu_global_config_simulation_t::en_eval)
+        .def_readwrite("en_l2d", &aipu_global_config_simulation_t::en_l2d)
+        .def_readwrite("en_fast_perf", &aipu_global_config_simulation_t::en_fast_perf)
+        .def_readwrite("freq_mhz", &aipu_global_config_simulation_t::freq_mhz)
+        .def_readwrite("ddr_latency_rd", &aipu_global_config_simulation_t::ddr_latency_rd)
+        .def_readwrite("ddr_latency_wr", &aipu_global_config_simulation_t::ddr_latency_wr)
+        .def_readwrite("ddr_bw", &aipu_global_config_simulation_t::ddr_bw)
+        .def_readwrite("ddr_bw_ratio", &aipu_global_config_simulation_t::ddr_bw_ratio)
+        .def_readwrite("perf_report", &aipu_global_config_simulation_t::perf_report);
 
     py::class_<aipu_global_config_hw_t>(m, "aipu_global_config_hw_t")
         .def(py::init<>())
         .def_readwrite("poll_in_commit_thread", &aipu_global_config_hw_t::poll_in_commit_thread);
 
-    #if 0
+#if 0
     py::class_<callback_args_t>(m, "callback_args_t")
         .def(py::init<>())
         .def_readwrite("func_arg", &callback_args_t::func_arg)
@@ -1533,7 +1593,7 @@ PYBIND11_MODULE(libaipudrv, m) {
         .def(py::init<>())
         .def_readwrite("cb_func", &callback_wrapper_t::cb_func)
         .def_readwrite("cb_args", &callback_wrapper_t::cb_args);
-    #endif
+#endif
 
     py::class_<aipu_core_info_t>(m, "aipu_core_info_t")
         .def(py::init<>())
@@ -1598,7 +1658,6 @@ PYBIND11_MODULE(libaipudrv, m) {
 
     py::class_<aipu_dynshape_param_t>(m, "aipu_dynshape_param_t")
         .def(py::init<>())
-        .def_readwrite("graph_id", &aipu_dynshape_param_t::graph_id)
         .def_readwrite("input_shape_cnt", &aipu_dynshape_param_t::input_shape_cnt)
         .def_readwrite("shape_items", &aipu_dynshape_param_t::shape_items);
 
@@ -1608,7 +1667,6 @@ PYBIND11_MODULE(libaipudrv, m) {
         .value("AIPU_IOCTL_GET_DS_NUM", aipu_ioctl_cmd_t::AIPU_IOCTL_GET_DS_NUM)
         .value("AIPU_IOCTL_GET_DS_DIM_NUM", aipu_ioctl_cmd_t::AIPU_IOCTL_GET_DS_DIM_NUM)
         .value("AIPU_IOCTL_GET_DS_INFO", aipu_ioctl_cmd_t::AIPU_IOCTL_GET_DS_INFO)
-        .value("AIPU_IOCTL_SET_DS_INFO", aipu_ioctl_cmd_t::AIPU_IOCTL_SET_DS_INFO)
         .value("AIPU_IOCTL_IS_DYNAMIC_SHAPE", aipu_ioctl_cmd_t::AIPU_IOCTL_IS_DYNAMIC_SHAPE)
         .value("AIPU_IOCTL_ALLOC_SHARE_BUF", aipu_ioctl_cmd_t::AIPU_IOCTL_ALLOC_SHARE_BUF)
         .value("AIPU_IOCTL_FREE_SHARE_BUF", aipu_ioctl_cmd_t::AIPU_IOCTL_FREE_SHARE_BUF)
@@ -1716,28 +1774,111 @@ PYBIND11_MODULE(libaipudrv, m) {
 
     py::class_<NPU>(m, "NPU")
         .def(py::init())
+
         .def("aipu_init_context", &NPU::aipu_init_context_py)
+
         .def("aipu_deinit_context", &NPU::aipu_deinit_context_py)
-        .def("aipu_get_error_message", &NPU::aipu_get_error_message_py, py::return_value_policy::copy)
-        .def("aipu_config_global", &NPU::aipu_config_global_py)
-        .def("aipu_load_graph", &NPU::aipu_load_graph_py, py::return_value_policy::copy)
-        .def("aipu_load_graph", &NPU::aipu_load_graph_helper_py, py::return_value_policy::copy)
-        .def("aipu_unload_graph", &NPU::aipu_unload_graph_py)
-        .def("aipu_create_job", &NPU::aipu_create_job_py)
-        .def("aipu_config_job", &NPU::aipu_config_job_py)
-        .def("aipu_finish_job", &NPU::aipu_finish_job_py)
-        .def("aipu_flush_job", &NPU::aipu_flush_job_py)
-        .def("aipu_get_job_status", &NPU::aipu_get_job_status_py)
-        .def("aipu_clean_job", &NPU::aipu_clean_job_py)
-        .def("aipu_get_tensor_count", &NPU::aipu_get_tensor_count_py)
-        .def("aipu_get_tensor_descriptor", &NPU::aipu_get_tensor_descriptor_py, py::return_value_policy::copy)
-        .def("aipu_load_tensor_from_file", &NPU::aipu_load_tensor_file_py)
-        .def("aipu_load_tensor", &NPU::aipu_load_tensor_rawbytes_py)
-        .def("aipu_load_tensor", &NPU::aipu_load_tensor_pybytes_py)
-        .def("aipu_load_tensor", &NPU::aipu_load_tensor_numpyarray_py)
-        .def("aipu_get_tensor", &NPU::aipu_get_tensor_py, py::return_value_policy::copy)
-        .def("aipu_ioctl", &NPU::aipu_ioctl_py, py::return_value_policy::copy)
-        .def("aipu_ioctl", &NPU::aipu_ioctl_dshape_py, py::return_value_policy::copy)
-        .def("aipu_ioctl", &NPU::aipu_ioctl_write_dmabuf_py)
-        .def("aipu_specify_iobuf", &NPU::aipu_specify_iobuf_py);
+
+        .def("aipu_get_error_message", &NPU::aipu_get_error_message_py,
+            py::arg("status"),
+            py::return_value_policy::copy)
+
+        .def("aipu_config_global", &NPU::aipu_config_global_py,
+            py::arg("types"),
+            py::arg("global_cfg_simulation"))
+
+        .def("aipu_load_graph", &NPU::aipu_load_graph_py,
+            py::arg("graph_bin"),
+            py::arg("load_cfg") = std::map<std::string, int>{},
+            py::arg("wt_idxes") = std::vector<int>{},
+            py::return_value_policy::copy)
+
+        .def("aipu_load_graph", &NPU::aipu_load_graph_helper_py,
+            py::arg("graph_buffer"),
+            py::arg("graph_size"),
+            py::arg("load_cfg") = std::map<std::string, int>{},
+            py::arg("wt_idxes") = std::vector<int>{},
+            py::return_value_policy::copy)
+
+        .def("aipu_unload_graph", &NPU::aipu_unload_graph_py,
+            py::arg("graph_id"))
+
+        .def("aipu_create_job", &NPU::aipu_create_job_py,
+            py::arg("graph_id"),
+            py::arg("job_cfg") = std::map<std::string, int>{},
+            py::arg("fm_idxes") = std::vector<int>{},
+            py::arg("ds_shapes") = std::vector<std::vector<uint64_t>>{})
+
+        .def("aipu_config_job", &NPU::aipu_config_job_py,
+            py::arg("job_id"),
+            py::arg("types"),
+            py::arg("job_config_dump") = std::map<std::string, std::string>{})
+
+        .def("aipu_finish_job", &NPU::aipu_finish_job_py,
+            py::arg("job_id"),
+            py::arg("time_out") = -1)
+
+        .def("aipu_flush_job", &NPU::aipu_flush_job_py,
+            py::arg("job_id"),
+            py::arg("py_cb") = nullptr)
+
+        .def("aipu_get_job_status", &NPU::aipu_get_job_status_py,
+            py::arg("job_id"),
+            py::arg("timeout") = -1)
+
+        .def("aipu_clean_job", &NPU::aipu_clean_job_py,
+            py::arg("job_id"))
+
+        .def("aipu_get_tensor_count", &NPU::aipu_get_tensor_count_py,
+            py::arg("graph_id"),
+            py::arg("type"),
+            py::return_value_policy::copy)
+
+        .def("aipu_get_tensor_descriptor", &NPU::aipu_get_tensor_descriptor_py,
+            py::arg("graph_id"),
+            py::arg("type"),
+            py::arg("tensor"),
+            py::return_value_policy::copy)
+
+        .def("aipu_load_tensor_from_file", &NPU::aipu_load_tensor_file_py,
+            py::arg("job_id"),
+            py::arg("tensor"),
+            py::arg("filename"))
+
+        .def("aipu_load_tensor", &NPU::aipu_load_tensor_rawbytes_py,
+            py::arg("job_id"),
+            py::arg("tensor"),
+            py::arg("data"))
+
+        .def("aipu_load_tensor", &NPU::aipu_load_tensor_pybytes_py,
+            py::arg("job_id"),
+            py::arg("tensor"),
+            py::arg("raw_bytes"))
+
+        .def("aipu_load_tensor", &NPU::aipu_load_tensor_numpyarray_py,
+            py::arg("job_id"),
+            py::arg("tensor"),
+            py::arg("numpy_array"),
+            py::arg("data_size"))
+
+        .def("aipu_get_tensor", &NPU::aipu_get_tensor_py,
+            py::arg("job_id"),
+            py::arg("type"),
+            py::arg("tensor"),
+            py::arg("data_size"),
+            py::return_value_policy::copy)
+
+        .def("aipu_ioctl", &NPU::aipu_ioctl_py,
+            py::arg("cmd"),
+            py::arg("py_arg") = std::map<std::string, uint64_t>{},
+            py::return_value_policy::copy)
+
+        .def("aipu_ioctl", &NPU::aipu_ioctl_write_dmabuf_py,
+            py::arg("cmd"),
+            py::arg("py_arg"),
+            py::arg("data"))
+
+        .def("aipu_specify_iobuf", &NPU::aipu_specify_iobuf_py,
+            py::arg("job_id"),
+            py::arg("py_arg") = std::map<std::string, uint64_t>{});
 }

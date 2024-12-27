@@ -1,6 +1,14 @@
 # Compass_NPU 驱动
 Compass_NPU 驱动包括两部分：内核态驱动(KMD)和用户态驱动(UMD)，内核态驱动是一个标准的Linux字符设备驱动，而用户态驱动其实是辅助应用开发的一个库，它可以被编译成动态库或静态库的形式。应用程序通过直接调用用户态驱动提供的高层API，进而间接的调用到内核态驱动提供的接口，达到与硬件交互的目的。
 
+## NPU硬件arch和target映射关系
+|arch|target|
+|-|-|
+|v1|z1|
+|v2|z2/z3/x1|
+|v3|x2|
+|v3_1|x3|
+
 ## 1. 目录
 ### driver
 存放内核态(KMD)和用户态(UMD)驱动的源码实现
@@ -8,6 +16,8 @@ Compass_NPU 驱动包括两部分：内核态驱动(KMD)和用户态驱动(UMD)�
 如何在一些嵌入式平台上使用该驱动，对应的的设备文件树文件(DTS)的配置参考
 ### samples
 如何调用用户态驱动(UMD)中的API来实现具体推理应用的参考例程
+### out-of-box
+一个在X86平台上的模拟器上跑的简单应用demo
 ### unit_test
 一组内核态驱动(UMD)和用户态驱动(UMD)的单元测试源码
 
@@ -52,11 +62,15 @@ COMPASS_DRV_BTENVAR_CROSS_COMPILE_GNU=aarch64-linux-gnu-
 - 编译standard api命令
 
 ```bash
-# cd Linux
-# source bash_env_setup.sh (for bash env)
-or
-# source env_setup.sh (for csh env)
-# ./build_all.sh -p juno [-d]
+$ cd Linux
+
+# for bash env
+$ source bash_env_setup.sh 
+
+# for csh env
+$ source env_setup.sh
+
+$ ./build_all.sh -p juno [-d]
 ```
 
 - 编译python api命令
@@ -67,17 +81,19 @@ or
   CONFIG_DRV_RTENVAR_PY_INCD_PATH=/usr/local/include/python3.6
 
 ```bash
-# cd Linux
+$ cd Linux
 
-# source bash_env_setup.sh (for bash env)
-or
-# source env_setup.sh (for csh env)
+# for bash env
+$ source bash_env_setup.sh 
 
--- for aipu v1/v2/v3
-# ./build_all.sh -p juno -v v3 -a python_api [-d]
+# for csh env
+$ source env_setup.sh
 
--- for aipu v4
-# ./build_all.sh -p juno -v v4 -a python_api [-d]
+# for aipu v1/v2/v3
+$ ./build_all.sh -p juno -v v3 -a python_api [-d]
+
+# for aipu v3_1
+$ ./build_all.sh -p juno -v v3_1 -a python_api [-d]
 ```
 
 - 如果以上命令成功执行，一个驱动加载模块aipu.ko和一个用户态动态链接库libaipudrv.so将产生，并且被存放在bin文件夹中。
@@ -94,6 +110,7 @@ or
     |-- bin
     |   |-- aipu_simulator_x1
     |   |-- aipu_simulator_x2
+    |   |-- aipu_simulator_x3
     |   |-- aipu_simulator_z1
     |   |-- aipu_simulator_z2
     |   |-- aipu_simulator_z3
@@ -101,6 +118,7 @@ or
     `-- lib
         |-- libaipu_simulator_x1.so
         |-- libaipu_simulator_x2.so
+        |-- libaipu_simulator_x3.so
         |-- libaipu_simulator_z1.so
         |-- libaipu_simulator_z2.so
         |-- libaipu_simulator_z3.so
@@ -116,18 +134,22 @@ CONFIG_DRV_RTENVAR_SIM_BASE_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_SIMULATOR
 CONFIG_DRV_BRENVAR_X86_CLPATH=/arm/tools/gnu/gcc/7.3.0/rhe7-x86_64/lib64 (可选)
 COMPASS_DRV_BTENVAR_X86_CXX=g++
 
-- 针对aipu v1/v2/v3模拟的时候，指定模拟器和库存放的路径
+- 针对aipu v1/v2/v3/v3_1模拟的时候，指定模拟器和库存放的路径
 CONFIG_DRV_RTENVAR_SIM_PATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/bin/
 COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/lib/
 
 - 编译standard api命令
 
 ```bash
-# cd Linux
-# source bash_env_setup.sh (for bash env)
-or
-# source env_setup.sh (for csh env)
-# ./build_all.sh -p sim [-d]
+$ cd Linux
+
+# for bash env
+$ source bash_env_setup.sh
+
+# for csh env
+$ source env_setup.sh
+
+$ ./build_all.sh -p sim [-d]
 ```
 
 - 编译python api命令
@@ -135,17 +157,19 @@ or
   Python api的功能有限，主要用于快速验证。
 
 ```bash
-# cd Linux
+$ cd Linux
 
-# source bash_env_setup.sh (for bash env)
-or
-# source env_setup.sh (for csh env)
+# for bash env
+$ source bash_env_setup.sh
 
--- for aipu v1/v2/v3
-# ./build_all.sh -p sim -v v3 -a python_api [-d]
+# for csh env
+$ source env_setup.sh
 
--- for aipu v4
-# ./build_all.sh -p sim -v v4 -a python_api [-d]
+# for aipu v1/v2/v3
+$ ./build_all.sh -p sim -v v3 -a python_api [-d]
+
+# for aipu v3_1
+$ ./build_all.sh -p sim -v v3_1 -a python_api [-d]
 ```
 
 - 如果以上命令成功执行，一个驱动加载模块aipu.ko和一个用户态动态链接库libaipudrv.so将产生，并且被存放在bin文件夹中。
@@ -160,9 +184,9 @@ or
 这里以JUNO(Arm64)开发板为例，在此之前也要先完成#2.1中的步骤。
 
 ```bash
-# cd Linux
-# source bash_env_setup.sh
-# ./build_all.sh -p juno -t sample [-d]
+$ cd Linux
+$ source bash_env_setup.sh
+$ ./build_all.sh -p juno -t sample [-d]
 ```
 
 上述命令成功执行之后，对应的样例生成的可执行文件也将被放在bin文件夹中。
@@ -174,9 +198,9 @@ or
 在执行下面的命令之前，也要先完成前面#2.2中的相应步骤。
 
 ```bash
-# cd Linux
-# source bash_env_setup.sh
-# ./build_all.sh -p sim -t sample [-d]
+$ cd Linux
+$ source bash_env_setup.sh
+$ ./build_all.sh -p sim -t sample [-d]
 ```
 
 上述命令成功执行之后，对应的样例生成的可执行文件也将被放在bin文件夹中。
@@ -188,6 +212,10 @@ After perform this command successfully, the samples are also stored in forder '
 
 - samples/READM.md: 关于所以参考样例的说明
 
-## 4. 编译和运行单元测试
+## 4. 编译和运行开箱测试例程
+
+- 请参考out-of-box中的README.md
+
+## 5. 编译和运行单元测试
 
 - 请参考unit_test中的README.md

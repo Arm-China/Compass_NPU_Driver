@@ -216,7 +216,7 @@ int main(int argc, char* argv[])
             }
 
             for (uint32_t i = 0; i < MAX_BATCH; i++)
-                pass = check_result_helper(output_data[i], output_desc, opt.gts[0], opt.gts_size[0]);
+                pass = check_result_helper(output_data[i], output_desc, opt.gts, opt.gts_size);
         }
 
     clean_batch_queue:
@@ -253,16 +253,25 @@ int main(int argc, char* argv[])
             pass = -1;
 
         if (input_buf != nullptr)
-            delete []input_buf;
+        {
+            delete[] input_buf;
+            input_buf = nullptr;
+        }
 
         for (uint32_t k = 0; k < MAX_BATCH; k++)
         {
             for (uint32_t i = 0; i < output_data[k].size(); i++)
-                delete []output_data[k][i];
+            {
+                delete[] output_data[k][i];
+                output_data[k][i] = nullptr;
+            }
 
             output_data[k].clear();
             if (output_buf != nullptr)
-                delete []output_buf[k];
+            {
+                delete[] output_buf[k];
+                output_buf[k] = nullptr;
+            }
         }
     }
 

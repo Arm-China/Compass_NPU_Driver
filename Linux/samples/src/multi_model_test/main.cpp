@@ -49,8 +49,8 @@ typedef struct {
     string aipubin;
     vector<string> inputbins;
     string gtbin;
-    char *gt_data;
-    uint32_t gt_size;
+    std::vector<char*> gt_data;
+    std::vector<uint32_t> gt_size;
 } infer_info_t;
 
 aipu_ctx_handle_t *ctx;
@@ -88,8 +88,8 @@ void pipeline()
         infer_info[i].job_id = 0;
         infer_info[i].aipubin = opt.bin_files[0].c_str();
         infer_info[i].inputbins.assign(opt.input_files.begin(), opt.input_files.end());
-        infer_info[i].gt_data = opt.gts[0];
-        infer_info[i].gt_size = opt.gts_size[0];
+        infer_info[i].gt_data = opt.gts;
+        infer_info[i].gt_size = opt.gts_size;
 
         ret = aipu_load_graph(ctx, infer_info[i].aipubin.c_str(), &graph_id);
         if (ret != AIPU_STATUS_SUCCESS)

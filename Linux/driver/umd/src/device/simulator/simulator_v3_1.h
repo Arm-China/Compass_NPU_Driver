@@ -4,12 +4,12 @@
 
 
 /**
- * @file  simulator_v4.h
- * @brief AIPU User Mode Driver (UMD) zhouyi aipu v4 simulator module header
+ * @file  simulator_v3_1.h
+ * @brief AIPU User Mode Driver (UMD) zhouyi aipu v3_1 simulator module header
  */
 
-#ifndef _SIMULATOR_V4_H_
-#define _SIMULATOR_V4_H_
+#ifndef _SIMULATOR_V3_1_H_
+#define _SIMULATOR_V3_1_H_
 
 #include <map>
 #include <set>
@@ -25,7 +25,7 @@
 #include "simulator/config.h"
 #include "kmd/tcb.h"
 #include "utils/debug.h"
-#include "job_v4.h"
+#include "job_v3_1.h"
 
 namespace aipudrv
 {
@@ -47,7 +47,7 @@ enum {
     POOL_MAX,
 };
 
-class SimulatorV4 : public DeviceBase
+class SimulatorV3_1 : public DeviceBase
 {
 private:
     pthread_rwlock_t m_lock;
@@ -55,18 +55,29 @@ private:
     sim_aipu::config_t m_config;
     sim_aipu::Aipu *m_aipu = nullptr;
     uint32_t m_code = 0;
-    uint32_t m_log_level;
+    uint32_t m_log_level = RTDEBUG_SIMULATOR_LOG_LEVEL;
     std::string m_log_filepath;
-    bool m_verbose;
-    bool m_enable_avx;
-    bool m_en_eval;
-    uint32_t m_gm_size = 0;
+    bool m_verbose = false;
+    bool m_enable_avx = false;
+    bool m_en_eval = false;
+    bool m_en_l2d = false;
+    uint32_t m_gm_size = 8 * MB_SIZE;
     std::string m_plugin_filename;
     std::string m_json_filename;
     std::string m_arch_desc;
+
+    bool m_en_fast_perf = 0;
+    uint32_t m_freq_mhz = 1000;
+    uint32_t m_ddr_latency_rd = 0;
+    uint32_t m_ddr_latency_wr = 0;
+    uint32_t m_ddr_bw = 512;
+    float m_ddr_bw_ratio = 1.0;
+    std::string m_perf_report = "./perf.csv";
+
     std::vector<uint32_t> m_cluster_in_part[MAX_PART_CNT];
     uint32_t m_max_cmdpool_cnt = 0;
     std::vector<BufferDesc*> m_reserve_mem;
+    static constexpr uint32_t MAX_GROUP_ID = (1 << 15);
 
     /**
      * @cmdpool_id: the next cmdpool index in one partition
@@ -96,11 +107,10 @@ private:
     static std::set< uint16_t > m_sim_done_grid_set;
     static std::mutex m_sim_done_grid_mtx;
 
-    volatile bool m_cmdpool_busy = false;
+    volatile bool m_cant_add_job_flag = false;
 
     std::atomic<uint16_t> m_grid_id = {0};
 
-    #define MAX_GROUP_ID (1 << 15)
     bool m_group_id_bitmap[MAX_GROUP_ID] = {false};
     std::mutex m_group_id_mtx;
 
@@ -160,7 +170,7 @@ private:
 
             part_cap.id = part_cap.cluster_cnt;
             part_cap.arch = AIPU_ARCH_ZHOUYI;
-            part_cap.version = AIPU_ISA_VERSION_ZHOUYI_V3;
+            part_cap.version = AIPU_ISA_VERSION_ZHOUYI_V3_1;
             part_cap.config = 1304;
             part_cap.clusters[part_cap.cluster_cnt].core_cnt = (reg_val >> 8) & 0xF;
             part_cap.clusters[part_cap.cluster_cnt].tec_cnt = reg_val & 0xF;
@@ -175,6 +185,58 @@ private:
             m_cluster_cnt = m_part_caps[0].cluster_cnt;
             m_core_cnt = m_part_caps[0].clusters[0].core_cnt;
         }
+    }
+
+    void sim_create_config(int code, sim_aipu::config_t &config)
+    {
+        config.code = code;
+        config.enable_calloc = false;
+        config.max_pkg_num = -1;
+        config.enable_avx = m_enable_avx;
+        config.en_eval = m_en_eval;
+        config.en_l2d = m_en_l2d;
+        config.log.filepath = m_log_filepath;
+        config.log.level = m_log_level;
+        config.log.verbose = m_verbose;
+        config.gm_size = m_gm_size;
+        config.plugin_filename = "";
+        config.json_filename = m_json_filename;
+
+        config.en_fast_perf = m_en_fast_perf;
+        if (m_en_fast_perf)
+        {
+            config.freq_mhz = m_freq_mhz;
+            config.ddr_latency_rd = m_ddr_latency_rd;
+            config.ddr_latency_wr = m_ddr_latency_wr;
+            config.ddr_bw = m_ddr_bw;
+            config.ddr_bw_ratio = m_ddr_bw_ratio;
+            config.perf_report = m_perf_report;
+        }
+
+        LOG(LOG_DEBUG, "\nconfig.code = %d\n"
+            "config.enable_calloc = %d\n"
+            "config.max_pkg_num = %ld\n"
+            "config.enable_avx = %d\n"
+            "config.en_eval = %d\n"
+            "config.en_l2d = %d\n"
+            "config.log.filepath = %s\n"
+            "config.log.level = %d\n"
+            "config.log.verbose = %d\n"
+            "config.gm_size = 0x%x\n"
+            "config.plugin_filename = %s\n"
+            "config.json_filename = %s\n"
+            "config.en_fast_perf = %d\n"
+            "config.freq_mhz = %d\n"
+            "config.ddr_latency_rd = %d\n"
+            "config.ddr_latency_wr = %d\n"
+            "config.ddr_bw = %d\n"
+            "config.ddr_bw_ratio = %f\n"
+            "config.perf_report = %s\n",
+            config.code, config.enable_calloc, config.max_pkg_num, config.enable_avx,
+            config.en_eval, config.en_l2d, config.log.filepath.c_str(), config.log.level,
+            config.log.verbose, config.gm_size, config.plugin_filename.c_str(), config.json_filename.c_str(),
+            config.en_fast_perf, config.freq_mhz, config.ddr_latency_rd, config.ddr_latency_wr,
+            config.ddr_bw, config.ddr_bw_ratio, config.perf_report.c_str());
     }
 
 public:
@@ -223,14 +285,15 @@ public:
     {
         std::map<uint32_t, const char *> npu_sim_codetoname =
         {
-            {3, "tbd1"},
-            {4, "tbd2"}
+            {sim_aipu::config_t::X3_1304, "X3_1304"},
+            {sim_aipu::config_t::X3_1304MP2, "X3_1304MP2"},
+            {sim_aipu::config_t::X3_1304MP4, "X3_1304MP4"}
         };
 
         if (npu_sim_codetoname.count(m_config.code) == 1)
             return npu_sim_codetoname[m_config.code];
         else
-            return npu_sim_codetoname[sim_aipu::config_t::tbd1];
+            return npu_sim_codetoname[sim_aipu::config_t::X3_1304];
     }
 
 public:
@@ -239,10 +302,15 @@ public:
         m_aipu->enable_profiling(en);
     }
 
-public:
-    static SimulatorV4* get_v4_simulator(const aipu_global_config_simulation_t* cfg)
+    virtual void dump_profiling()
     {
-        static SimulatorV4 sim_instance(cfg);
+        m_aipu->dump_profiling();
+    }
+
+public:
+    static SimulatorV3_1* get_v3_1_simulator(const aipu_global_config_simulation_t* cfg)
+    {
+        static SimulatorV3_1 sim_instance(cfg);
         sim_instance.inc_ref_cnt();
         return &sim_instance;
     }
@@ -255,55 +323,13 @@ public:
         return AIPU_STATUS_SUCCESS;
     }
 
-    virtual ~SimulatorV4();
-    SimulatorV4(const SimulatorV4& sim) = delete;
-    SimulatorV4& operator=(const SimulatorV4& sim) = delete;
+    virtual ~SimulatorV3_1();
+    SimulatorV3_1(const SimulatorV3_1& sim) = delete;
+    SimulatorV3_1& operator=(const SimulatorV3_1& sim) = delete;
 
 private:
-    SimulatorV4(const aipu_global_config_simulation_t* cfg);
+    SimulatorV3_1(const aipu_global_config_simulation_t* cfg);
 };
-
-inline sim_aipu::config_t sim_create_config(int code, uint32_t log_level = 0,
-    const std::string &log_path = "./sim.log", bool verbose = false,
-    bool enable_avx = false, bool en_eval = 0, uint32_t gm_size = 4 * MB_SIZE,
-    const std::string &plugin_filename = "", const std::string &json_filename = "")
-{
-    sim_aipu::config_t config = {0};
-
-    config.code = code;
-    config.enable_calloc = false;
-    config.max_pkg_num = -1;
-    config.enable_avx = enable_avx;
-    config.en_eval = en_eval;
-    config.log.filepath = log_path;
-    config.log.level = log_level;
-    config.log.verbose = verbose;
-    config.gm_size = gm_size;
-    config.plugin_filename = plugin_filename;
-    config.json_filename = json_filename;
-    config.freq_mhz = 1000;
-    config.ddr_latency_rd = 0;
-    config.ddr_latency_wr = 0;
-    config.ddr_bw = 512;
-
-    LOG(LOG_DEBUG, "\nconfig.code = %d\n"
-        "config.enable_calloc = %d\n"
-        "config.max_pkg_num = %ld\n"
-        "config.enable_avx = %d\n"
-        "config.en_eval = %d\n"
-        "config.log.filepath = %s\n"
-        "config.log.level = %d\n"
-        "config.log.verbose = %d\n"
-        "config.gm_size = 0x%x\n"
-        "config.plugin_filename = %s\n"
-        "config.json_filename = %s\n",
-        config.code, config.enable_calloc, config.max_pkg_num, config.enable_avx,
-        config.en_eval, config.log.filepath.c_str(), config.log.level,
-        config.log.verbose, config.gm_size, config.plugin_filename.c_str(), config.json_filename.c_str());
-
-    return config;
 }
 
-}
-
-#endif /* _SIMULATOR_V4_H_ */
+#endif /* _SIMULATOR_V3_1_H_ */

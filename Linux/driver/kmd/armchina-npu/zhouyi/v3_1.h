@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
 
-#ifndef __V4_H__
-#define __V4_H__
+#ifndef __V3_1_H__
+#define __V3_1_H__
 
 /**************************************************************************************
  *                             Cluster [N] Registers
@@ -16,8 +16,8 @@
  * ...
  * 0xCE0 ~ 0xCFF    Cluster 7
  */
-#define _GET_CLUSTER_OFFSET_V4(id)                     (0xC00 + 0x20 * (id))
-#define MAX_CLUSTER_NUM_V4                             8
+#define _GET_CLUSTER_OFFSET_V3_1(id)                     (0xC00 + 0x20 * (id))
+#define MAX_CLUSTER_NUM_V3_1                             8
 
 /**
  * A1.1.1 Cluster Configuration Register (Read-Only)
@@ -27,42 +27,41 @@
  * [7:4]    number of available AIFF in every core
  * [3:0]    number of available TEC in every core
  */
-#define IS_CLUSTER_PRESENT_V4(config_32)               (((config_32) >> 12) & 0x1)
-#define GET_AIPU_CORE_NUM_V4(config_32)                (((config_32) >> 8) & 0xF)
-#define GET_AIFF_NUM_V4(config_32)                     (((config_32) >> 4) & 0xF)
-#define GET_TEC_NUM_V4(config_32)                      ((config_32) & 0xF)
-#define GET_NUMS_V4(config_32)                         ((config_32) & 0xFFF)
-#define CLUSTER_CONFIG_REG_V4(id)                      (_GET_CLUSTER_OFFSET_V4(id) + 0x0)
+#define IS_CLUSTER_PRESENT_V3_1(config_32)               (((config_32) >> 12) & 0x1)
+#define GET_AIPU_CORE_NUM_V3_1(config_32)                (((config_32) >> 8) & 0xF)
+#define GET_AIFF_NUM_V3_1(config_32)                     (((config_32) >> 4) & 0xF)
+#define GET_TEC_NUM_V3_1(config_32)                      ((config_32) & 0xF)
+#define GET_NUMS_V3_1(config_32)                         ((config_32) & 0xFFF)
+#define CLUSTER_CONFIG_REG_V3_1(id)                      (_GET_CLUSTER_OFFSET_V3_1(id) + 0x0)
 
 /*
  * A1.1.2 Cluster Control Register
  * [31:24] core enable bits (27:24: core 3 - core 0; )
- * [23:14] reserved (RO)
- * [13]    core partition mode (0 no partition, 1 core0/1/2 PCP core3 SCP) (RO)
+ * [23:13] reserved (RO)
  * [12]    cluster enable (RO)
  * [11:8]  Core enable number (RO)
  * [7:4]   AIFF enable number (RO)
  * [3:0]   TEC enable number (RO)
  * [3:0] number of TEC enabled in every core (RO)
  */
-#define _ENABLE_CORE_V4(core_en)                      ((core_en) << 24)
-#define _ENABLE_CLUSTER_V4                             (0x1 << 12)
-#define _DISABLE_CLUSTER_V4                            (0x0 << 12)
-#define _EN_CORE_NUM_V4(num)                           (((num) & 0xF) << 8)
-#define _EN_AIFF_NUM_V4(num)                           (((num) & 0xF) << 4)
-#define _EN_TEC_NUM_V4(num)                            ((num) & 0xF)
-#define EN_NUMS_V4(nums)                               ((nums) & 0xFFF)
-#define ENABLE_CLUSTER_V4(partition, nums) \
-	(EN_NUMS_V4(nums) | _ENABLE_CLUSTER_V4)
-#define DISABLE_CLUSTER_V4                             _DISABLE_CLUSTER_V4
-#define CONFIG_CLUSTER_V4(core_en, en_core_num, en_aiff, en_tec, par_mode) \
-	(_ENABLE_CORE_V4(core_en) | \
-	 _EN_CORE_NUM_V4(en_core_num) | \
-	 _EN_AIFF_NUM_V4(en_aiff) | \
-	 _EN_TEC_NUM_V4(en_tec) | \
-	 _ENABLE_CLUSTER_V4 | (par_mode))
+#define _ENABLE_CORE_V3_1(core_en)                      ((core_en) << 24)
+#define _ENABLE_CLUSTER_V3_1                             (0x1 << 12)
+#define _DISABLE_CLUSTER_V3_1                            (0x0 << 12)
+#define _EN_CORE_NUM_V3_1(num)                           (((num) & 0xF) << 8)
+#define _EN_AIFF_NUM_V3_1(num)                           (((num) & 0xF) << 4)
+#define _EN_TEC_NUM_V3_1(num)                            ((num) & 0xF)
+#define EN_NUMS_V3_1(nums)                               ((nums) & 0xFFF)
+#define ENABLE_CLUSTER_V3_1(partition, nums) \
+	(EN_NUMS_V3_1(nums) | _ENABLE_CLUSTER_V3_1)
+#define DISABLE_CLUSTER_V3_1                             _DISABLE_CLUSTER_V3_1
+#define CONFIG_CLUSTER_V3_1(core_en, en_core_num, en_aiff, en_tec, par_mode) \
+	(_ENABLE_CORE_V3_1(core_en) | \
+	 _EN_CORE_NUM_V3_1(en_core_num) | \
+	 _EN_AIFF_NUM_V3_1(en_aiff) | \
+	 _EN_TEC_NUM_V3_1(en_tec) | \
+	 _ENABLE_CLUSTER_V3_1 | (par_mode))
 
-#define CLUSTER_CONTROL_REG_V4(id)                     (_GET_CLUSTER_OFFSET_V4(id) + 0x4)
+#define CLUSTER_CONTROL_REG_V3_1(id)                     (_GET_CLUSTER_OFFSET_V3_1(id) + 0x4)
 
 /*****************************************************************************
  *                             TSM Registers
@@ -75,12 +74,8 @@
  * [23:20] Reserved (RO)
  * [19]    Command pool type
  *         0: PCP
- *         1: SCP
  * [18:16] Write to select a command pool
- *         PCP: pool -> cluster
- *             0 -> 0, 1 -> 1, 2 -> 2, 3 -> 3
- *         SCP: pool -> cluster
- *             4 -> 0, 5 -> 1, 6 -> 2, 7 -> 3
+ *         0 command pool 0 sellected
  * [15:13] Reserved (RO)
  * [12]    0 to map one cluster to this command pool (RO)
  *         1) Only works for command pool creation
@@ -91,34 +86,34 @@
  * [3:0]   command tpye:0 none, 1 create, 2 destroy, 3 Abortion,
  *                      4 Dispatch,5 direct dispatch, 6 Others.
  */
-#define _TSM_DIRECT_CLUSTER_V4(cluser)                  ((cluster) << 28)
-#define _TSM_DIRECT_CORE_V4(core)                       ((core) << 24)
-#define _TSM_POOL_V4(pool)                              ((pool) << 16)
-#define _TSM_MAP_V4(map)                                ((map) << 12)
-#define _TSM_QOS_V4(qos)                                ((qos) << 8)
-#define _TSM_CREATE_V4                                  0x1
-#define _TSM_DESTROY_V4                                 0x2
-#define _TSM_ABORT_V4                                   0x3
-#define _TSM_DISPATCH_V4                                0x4
-#define _TSM_DEBUG_DISPATCH_V4                          0x5
+#define _TSM_DIRECT_CLUSTER_V3_1(cluser)                  ((cluster) << 28)
+#define _TSM_DIRECT_CORE_V3_1(core)                       ((core) << 24)
+#define _TSM_POOL_V3_1(pool)                              ((pool) << 16)
+#define _TSM_MAP_V3_1(map)                                ((map) << 12)
+#define _TSM_QOS_V3_1(qos)                                ((qos) << 8)
+#define _TSM_CREATE_V3_1                                  0x1
+#define _TSM_DESTROY_V3_1                                 0x2
+#define _TSM_ABORT_V3_1                                   0x3
+#define _TSM_DISPATCH_V3_1                                0x4
+#define _TSM_DEBUG_DISPATCH_V3_1                          0x5
 
-#define TSM_MAP_SINGLE_V4                              _TSM_MAP_V4(0x0)
-#define TSM_MAP_ALL_V4                                 _TSM_MAP_V4(0x1)
-#define TSM_CREATE_CMD_POOL_V4(pool, map)              (_TSM_CREATE_V4 | _TSM_POOL_V4(pool) | (map))
-#define TSM_DESTROY_CMD_POOL_V4(pool)                  (_TSM_DESTROY_V4 | _TSM_POOL_V4(pool))
-#define TSM_ABORT_CMD_POOL_V4(pool)                    (_TSM_ABORT_V4 | _TSM_POOL_V4(pool))
-#define TSM_DBG_DISPATCH_CMD_POOL_V4(pool, qos, core)  (_TSM_DEBUG_DISPATCH_V4 | (qos) | \
-						     _TSM_POOL_V4(pool) | _TSM_DIRECT_CORE_V4(core))
+#define TSM_MAP_SINGLE_V3_1                              _TSM_MAP_V3_1(0x0)
+#define TSM_MAP_ALL_V3_1                                 _TSM_MAP_V3_1(0x1)
+#define TSM_CREATE_CMD_POOL_V3_1(pool, map)              (_TSM_CREATE_V3_1 | _TSM_POOL_V3_1(pool) | (map))
+#define TSM_DESTROY_CMD_POOL_V3_1(pool)                  (_TSM_DESTROY_V3_1 | _TSM_POOL_V3_1(pool))
+#define TSM_ABORT_CMD_POOL_V3_1(pool)                    (_TSM_ABORT_V3_1 | _TSM_POOL_V3_1(pool))
+#define TSM_DBG_DISPATCH_CMD_POOL_V3_1(pool, qos, core)  (_TSM_DEBUG_DISPATCH_V3_1 | (qos) | \
+						     _TSM_POOL_V3_1(pool) | _TSM_DIRECT_CORE_V3_1(core))
 
-#define TSM_CMD_SCHD_CTRL_HANDLE_REG_V4             0x0
-#define TSM_DISPATCH_CMD_POOL_V4(pool, qos)         (_TSM_DISPATCH_V4 | (qos) | (pool))
+#define TSM_CMD_SCHD_CTRL_HANDLE_REG_V3_1             0x0
+#define TSM_DISPATCH_CMD_POOL_V3_1(pool, qos)         (_TSM_DISPATCH_V3_1 | (qos) | (pool))
 
 /**
  * A1.1.6 TSM Command Schedule Address High Register
  *
  * [31:0] Write to set the address[63:32] of head of a TCB chain to be dispatched
  */
-#define TSM_CMD_SCHD_ADDR_HIGH_REG_V4               0x8
+#define TSM_CMD_SCHD_ADDR_HIGH_REG_V3_1               0x8
 
 /**
  * A1.1.7 TSM Command Schedule Address Low Register
@@ -127,14 +122,14 @@
  *         be dispatched
  *         1) this address shall be 4k page aligned
  */
-#define TSM_CMD_SCHD_ADDR_LOW_REG_V4                0xC
+#define TSM_CMD_SCHD_ADDR_LOW_REG_V3_1                0xC
 
 /**
  * A1.1.9 TSM Configuration Register
  * [31:4] Reserved (RO)
  * [3:0]  TSM scheduling policy
  */
-#define TSM_CONFIG_REG_V4                           0x10
+#define TSM_CONFIG_REG_V3_1                           0x10
 
 /**
  * TSM Build Info Register (Read-Only)
@@ -144,36 +139,34 @@
  *
  * other fields are the same as v3
  */
-#define TSM_BUILD_INFO_REG_V4                       0x14
-#define GET_CMD_POOL_NUM_V4(build_info_32)          ((((build_info_32) >> 16) & 0xF) + 1)
+#define TSM_BUILD_INFO_REG_V3_1                       0x14
+#define GET_CMD_POOL_NUM_V3_1(build_info_32)          ((((build_info_32) >> 16) & 0xF) + 1)
 
 /**
  * TSM Status Register
  * [31]    scheduling cmd fail
  * [30:24] Reserved (RO)
  * [23:16] TSM abort command pool done
- * [15:12] TSM SCP (QoS high) is full
+ * [15:12] Reserved
  * [11:8]  TSM PCP (QoS high) is full
- * [7:4]   TSM SCP (QoS low) is full
+ * [7:4]   Reserved
  * [3:0]   TSM PCP (QoS low) is full
  */
 #define PCP_ABORT_DONE_BIT                          16
-#define SCP_ABORT_DONE_BIT                          20
 #define IS_ABORT_DONE(status_32, done_bit)          (((status_32) >> (done_bit)) & 0x1)
 #define CLEAR_ABORT(done_bit)                       ((~(1 << (done_bit))) & (0x7FFFFFFF))
 #define IS_PCP_FULL(status, high)                   (((status) >> ((high) ? 8 : 0)) & 0x1)
-#define IS_SCP_FULL(status, high)                   (((status) >> (4 + ((high) ? 8 : 0))) & 0x1)
-#define IS_CMD_FAIL_V4(status_32)                   ((status_32) >> 31)
-#define IS_CMD_POOL_FULL_V4(status_32)              ((status_32) & 0xFF)
-#define CLEAR_CMD_FAIL_V4(status_32)                ((status_32) & 0xFFFFFFFF)
-#define TSM_STATUS_REG_V4                           0x18
+#define IS_CMD_FAIL_V3_1(status_32)                   ((status_32) >> 31)
+#define IS_CMD_POOL_FULL_V3_1(status_32)              ((status_32) & 0xFF)
+#define CLEAR_CMD_FAIL_V3_1(status_32)                ((status_32) & 0xFFFFFFFF)
+#define TSM_STATUS_REG_V3_1                           0x18
 
 /**
  * A1.1.8 TSM Command Schedule TCB Number Register
  *
  * [31:0] TCB number of chain
  */
-#define TSM_COMMAND_SCHEDULE_TCB_NUM_REG_V4         0x1C
+#define TSM_COMMAND_SCHEDULE_TCB_NUM_REG_V3_1         0x1C
 
 /**************************************************************************************
  *                             Debug Link Access Registers
@@ -185,12 +178,12 @@
  * [11:4] cluster selection
  * [3:0]  core selection
  */
-#define _ENABLE_DEBUG_V4                            BIT(12)
-#define _SET_DBG_CLUSTER_V4(id)                     (((id) & 0xFF) << 4)
-#define _SET_DBG_CORE_V4(id)                        ((id) & 0xF)
-#define SELECT_DEBUG_CORE_V4(cluster, core)         (_ENABLE_DEBUG_V4 | \
-			_SET_DBG_CLUSTER_V4(cluster) | _SET_DBG_CORE_V4(core))
-#define DISABLE_DEBUG_V4                            0
+#define _ENABLE_DEBUG_V3_1                            BIT(12)
+#define _SET_DBG_CLUSTER_V3_1(id)                     (((id) & 0xFF) << 4)
+#define _SET_DBG_CORE_V3_1(id)                        ((id) & 0xF)
+#define SELECT_DEBUG_CORE_V3_1(cluster, core)         (_ENABLE_DEBUG_V3_1 | \
+			_SET_DBG_CLUSTER_V3_1(cluster) | _SET_DBG_CORE_V3_1(core))
+#define DISABLE_DEBUG_V3_1                            0
 #define AHB_INTERNAL_CSR_SELECTION_CTRL_REG         0x1F00
 #define CLUSTER_MMR_WIN_BASE                        (0x2000)
 #define CORE_MMR_WIN_BASE                           (0x3000)
@@ -204,10 +197,10 @@
  * [7:4]   major revision ID
  * [3:0]   minor number
  */
-#define _IS_TSM_ARCH_V4(rev_32)                     (((rev_32) >> 16) & 0x1)
-#define _IS_V4_ARCH(rev_32)                         ((((rev_32) >> 8) & 0x1))
+#define _IS_TSM_ARCH_V3_1(rev_32)                     (((rev_32) >> 16) & 0x1)
+#define _IS_V3_1_ARCH(rev_32)                         ((((rev_32) >> 8) & 0x1))
 
-#define TSM_REVISION_REG_V4                         0x50
+#define TSM_REVISION_REG_V3_1                         0x50
 
 /**
  * A1.1.22 Tick Counter Control Status Register
@@ -216,20 +209,20 @@
  * [1] clear
  * [0] enable
  */
-#define IS_COUNTER_OVERFLOW_V4(status_32)           (((status_32) >> 8) & 0x1)
-#define CLEAR_COUNTER_V4                            BIT(1)
-#define ENABLE_COUNTER_V4                           0x0
-#define DISABLE_COUNTER_V4                          ((CLEAR_COUNTER_V4) | 0x1)
+#define IS_COUNTER_OVERFLOW_V3_1(status_32)           (((status_32) >> 8) & 0x1)
+#define CLEAR_COUNTER_V3_1                            BIT(1)
+#define ENABLE_COUNTER_V3_1                           0x1
+#define DISABLE_COUNTER_V3_1                          ((CLEAR_COUNTER_V3_1))
 
-#define TICK_COUNTER_CONTROL_STATUS_REG_V4          0x68
+#define TICK_COUNTER_CONTROL_STATUS_REG_V3_1          0x68
 
 /**
  * TSM Interrupt Status Register
  *
  * Bit 0 - 15: TSM interrupt 0 - 15
  */
-#define TSM_CLEAR_INTERRUPT_V4(i)                   BIT(i)
-#define GET_V4_IRQS_BITS(status)                    ((status) & 0xFFFF)
+#define TSM_CLEAR_INTERRUPT_V3_1(i)                   BIT(i)
+#define GET_V3_1_IRQS_BITS(status)                    ((status) & 0xFFFF)
 
 #define TSM_INTERRUPT_STATUS_REG                    0x80
 #define TSM_IRQ_MAX_NUM                             16
@@ -324,7 +317,7 @@
 #define IS_POOL_DONE(val)                           ((val) & 0x1)
 #define IS_POOL_ERROR(val)                          (((val) >> 4) & 0x1)
 #define IS_POOL_TIMEOUT(val)                        (((val) >> 5) & 0x1)
-#define IS_POOL_IDLE(val)                           (((val) >> 6) & 0x1)
+#define IS_POOL_BUSY(val)                           (!(((val) >> 6) & 0x1))
 #define IS_POOL_CID(val)                            ((val) >> 24)
 #define CLEAR_POOL_DONE                             BIT(0)
 
@@ -344,55 +337,30 @@
  * [2]  exception interrupt enable
  * [0]  done interrupt enable
  */
-#define EN_CMD_POOL_INTR_V4                         BIT(11)
-#define EN_CLUSTER_INTR_V4                          BIT(10)
-#define EN_CORE_INTR_V4                             BIT(9)
-#define EN_TEC_INTR_V4                              BIT(8)
-#define EN_TIMEOUT_INTR_V4                          BIT(5) /* shared with SCP */
-#define EN_ERROR_INTR_V4                            BIT(4)
-#define EN_FAULT_INTR_V4                            BIT(3)
-#define EN_EXCEPTION_INTR_V4                        BIT(2)
-#define EN_SIGNAL_INTR_V4                           BIT(1)
-#define EN_DONE_INTR_V4                             BIT(0)
+#define EN_CMD_POOL_INTR_V3_1                         BIT(11)
+#define EN_CLUSTER_INTR_V3_1                          BIT(10)
+#define EN_CORE_INTR_V3_1                             BIT(9)
+#define EN_TEC_INTR_V3_1                              BIT(8)
+#define EN_TIMEOUT_INTR_V3_1                          BIT(5)
+#define EN_ERROR_INTR_V3_1                            BIT(4)
+#define EN_FAULT_INTR_V3_1                            BIT(3)
+#define EN_EXCEPTION_INTR_V3_1                        BIT(2)
+#define EN_SIGNAL_INTR_V3_1                           BIT(1)
+#define EN_DONE_INTR_V3_1                             BIT(0)
 
-#define EN_ALL_TYPE_INTRS_V4 \
-						(EN_SIGNAL_INTR_V4 | EN_ERROR_INTR_V4 | \
-						EN_FAULT_INTR_V4 | EN_EXCEPTION_INTR_V4 | \
-						EN_DONE_INTR_V4 | EN_TIMEOUT_INTR_V4)
+#define EN_ALL_TYPE_INTRS_V3_1 \
+						(EN_SIGNAL_INTR_V3_1 | EN_ERROR_INTR_V3_1 | \
+						EN_FAULT_INTR_V3_1 | EN_EXCEPTION_INTR_V3_1 | \
+						EN_DONE_INTR_V3_1 | EN_TIMEOUT_INTR_V3_1)
 
-#define EN_ALL_LEVEL_INTRS_V4 \
-						(EN_CMD_POOL_INTR_V4 | EN_CLUSTER_INTR_V4 | \
-						 EN_CORE_INTR_V4 | EN_TEC_INTR_V4)
-#define EN_CMD_POOL_ALL_INTRS_V4  (EN_CMD_POOL_INTR_V4 | EN_ALL_TYPE_INTRS_V4)
-#define EN_ALL_INTRS_V4           (EN_ALL_LEVEL_INTRS_V4 | EN_ALL_TYPE_INTRS_V4)
-#define DISABLE_ALL_INTRS_V4                           0
+#define EN_ALL_LEVEL_INTRS_V3_1 \
+						(EN_CMD_POOL_INTR_V3_1 | EN_CLUSTER_INTR_V3_1 | \
+						 EN_CORE_INTR_V3_1 | EN_TEC_INTR_V3_1)
+#define EN_CMD_POOL_ALL_INTRS_V3_1  (EN_CMD_POOL_INTR_V3_1 | EN_ALL_TYPE_INTRS_V3_1)
+#define EN_ALL_INTRS_V3_1           (EN_ALL_LEVEL_INTRS_V3_1 | EN_ALL_TYPE_INTRS_V3_1)
+#define DISABLE_ALL_INTRS_V3_1                           0
 
 #define COMMAND_POOL_PCP_INTERRUPT_CONTROL_REG      (_TSM_PCP_REGISTERS_BASE + 0x8)
-
-/**************************************************************************************
- *                             TSM Command Pool (SCP) Registers
- *************************************************************************************/
-#define _TSM_SCP_REGISTERS_BASE                     0x900
-
-/**
- * TSM Command Pool [N] Status SCP Register
- *
- * [31:24]: cluster physical ID
- * [6]: idle (0: busy; 1: idle)
- * [5]: timeout (0: none; 1: MIF timeout)
- * [4]: error (0: none; 1: pool error)
- * [0]: done (0: none; 1: pool done)
- */
-#define COMMAND_POOL_SCP_STATUS_REG                 (_TSM_SCP_REGISTERS_BASE + 0x4)
-
-/**
- * TSM Command Pool [N] Interrupt Control SCP Register
- *
- * [6]  timeout interrupt enable
- *
- * other fields are the same as v3
- */
-#define COMMAND_POOL_SCP_INTERRUPT_CONTROL_REG      (_TSM_SCP_REGISTERS_BASE + 0x8)
 
 /**************************************************************************************
  *                             Interrupt Registers (Per Interrupt)
@@ -427,23 +395,23 @@
  * [0]     done bit
  */
 #define IS_RESET(status_32)                         (((status_32) >> 3) & 0x7)
-#define GET_INTR_CLUSTER_ID_V4(status_32)           (((status_32) >> 24) & 0xFF)
-#define GET_INTR_CORE_ID_V4(status_32)              (((status_32) >> 20) & 0xF)
-#define GET_INTR_TEC_ID_V4(status_32)               (((status_32) >> 16) & 0xF)
-#define IS_POOL_IRQ_V4(status_32)                   (((status_32) >> 11) & 0x1)
-#define IS_CLUSTER_IRQ_V4(status_32)                (((status_32) >> 10) & 0x1)
-#define IS_CORE_IRQ_V4(status_32)                   (((status_32) >> 9) & 0x1)
-#define IS_TEC_IRQ_V4(status_32)                    (((status_32) >> 8) & 0x1)
-#define IS_TIMEOUT_IRQ_V4(status_32)                (((status_32) >> 5) & 0x1)
-#define IS_ERROR_IRQ_V4(status_32)                  (((status_32) >> 4) & 0x1)
-#define IS_FAULT_IRQ_V4(status_32)                  (((status_32) >> 3) & 0x1)
-#define IS_EXCEPTION_IRQ_V4(status_32)              (((status_32) >> 2) & 0x1)
-#define IS_SIGNAL_IRQ_V4(status_32)                 (((status_32) >> 1) & 0x1)
-#define IS_DONE_IRQ_V4(status_32)                   ((status_32) & 0x1)
-#define IS_ABNORMAL_V4(status_32)                   (((status_32) >> 2) & 0xF)
-#define IS_SERIOUS_ERR_V4(status_32)                (((status_32) >> 3) & 0x7)
-#define GET_INTR_TYPE_V4(status_32)                 ((status_32) & 0x3F)
-#define IS_IRQ_TO_HANDLE_V4(status_32)              ((status_32) & 0xF1F)
+#define GET_INTR_CLUSTER_ID_V3_1(status_32)           (((status_32) >> 24) & 0xFF)
+#define GET_INTR_CORE_ID_V3_1(status_32)              (((status_32) >> 20) & 0xF)
+#define GET_INTR_TEC_ID_V3_1(status_32)               (((status_32) >> 16) & 0xF)
+#define IS_POOL_IRQ_V3_1(status_32)                   (((status_32) >> 11) & 0x1)
+#define IS_CLUSTER_IRQ_V3_1(status_32)                (((status_32) >> 10) & 0x1)
+#define IS_CORE_IRQ_V3_1(status_32)                   (((status_32) >> 9) & 0x1)
+#define IS_TEC_IRQ_V3_1(status_32)                    (((status_32) >> 8) & 0x1)
+#define IS_TIMEOUT_IRQ_V3_1(status_32)                (((status_32) >> 5) & 0x1)
+#define IS_ERROR_IRQ_V3_1(status_32)                  (((status_32) >> 4) & 0x1)
+#define IS_FAULT_IRQ_V3_1(status_32)                  (((status_32) >> 3) & 0x1)
+#define IS_EXCEPTION_IRQ_V3_1(status_32)              (((status_32) >> 2) & 0x1)
+#define IS_SIGNAL_IRQ_V3_1(status_32)                 (((status_32) >> 1) & 0x1)
+#define IS_DONE_IRQ_V3_1(status_32)                   ((status_32) & 0x1)
+#define IS_ABNORMAL_V3_1(status_32)                   (((status_32) >> 2) & 0xF)
+#define IS_SERIOUS_ERR_V3_1(status_32)                (((status_32) >> 3) & 0x7)
+#define GET_INTR_TYPE_V3_1(status_32)                 ((status_32) & 0x3F)
+#define IS_IRQ_TO_HANDLE_V3_1(status_32)              ((status_32) & 0xF1F)
 
 #define INTERRUPT_TYPE_INFO_REG(id)                 (_GET_PER_INTERRUPT_REGISTER_OFFSET(id) + 0x0)
 
@@ -467,22 +435,22 @@
  *
  * [31:0]    irq signal flag
  */
-#define IS_HW_EXCEPTION_SIGNAL_V4(flag)             ((flag) >> 31)
-#define IS_SW_EXCEPTION_SIGNAL_V4(flag)             (((flag) >> 30) & 0x1)
-#define IS_EXCEPTION_SIGNAL_V4(flag)                ((flag) >> 30)
-#define IS_PRINTF_SIGNAL_V4(flag)                   (((flag) >> 29) & 0x1)
-#define IS_PROFILER_SIGNAL_V4(flag)                 (((flag) >> 28) & 0x1)
-#define IS_COREDUMP_SIGNAL_V4(flag)                 (((flag) >> 27) & 0x1)
-#define GET_ERR_CODE_V4(flag)                       ((flag) & 0xFFFF)
-#define GET_PRINF_SIZE_V4(flag)                     ((flag) & 0xFFFF)
-#define GET_PROFILER_BUF_PA_V4(flag)                (((flag) & 0xFFFFF) << 12)
+#define IS_HW_EXCEPTION_SIGNAL_V3_1(flag)             ((flag) >> 31)
+#define IS_SW_EXCEPTION_SIGNAL_V3_1(flag)             (((flag) >> 30) & 0x1)
+#define IS_EXCEPTION_SIGNAL_V3_1(flag)                ((flag) >> 30)
+#define IS_PRINTF_SIGNAL_V3_1(flag)                   (((flag) >> 29) & 0x1)
+#define IS_PROFILER_SIGNAL_V3_1(flag)                 (((flag) >> 28) & 0x1)
+#define IS_COREDUMP_SIGNAL_V3_1(flag)                 (((flag) >> 27) & 0x1)
+#define GET_ERR_CODE_V3_1(flag)                       ((flag) & 0xFFFF)
+#define GET_PRINF_SIZE_V3_1(flag)                     ((flag) & 0xFFFF)
+#define GET_PROFILER_BUF_PA_V3_1(flag)                (((flag) & 0xFFFFF) << 12)
 
 #define INTERRUPT_SIGNAL_FLAG_REG(id)               (_GET_PER_INTERRUPT_REGISTER_OFFSET(id) + 0xc)
 
-#define ZHOUYI_V4_MAX_REG_OFFSET                    0x322C /* to be updated */
+#define ZHOUYI_V3_1_MAX_REG_OFFSET                    0x322C /* to be updated */
 
 u64 get_gm_size(u32 val);
-struct aipu_operations *get_zhouyi_v4_ops(void);
-struct aipu_priv_operations *get_v4_priv_ops(void);
+struct aipu_operations *get_zhouyi_v3_1_ops(void);
+struct aipu_priv_operations *get_v3_1_priv_ops(void);
 
-#endif /* __V4_H__ */
+#endif /* __V3_1_H__ */

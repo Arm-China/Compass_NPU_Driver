@@ -17,7 +17,7 @@ aipudrv::SimulatorV3::SimulatorV3(const aipu_global_config_simulation_t* cfg)
 {
     m_dev_type = DEV_TYPE_SIMULATOR_V3;
     m_dram = UMemory::get_memory();
-    if (nullptr == cfg)
+    if (cfg == nullptr)
     {
         m_log_level = RTDEBUG_SIMULATOR_LOG_LEVEL;
         m_verbose = false;
@@ -111,7 +111,7 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
     uint32_t reg_val = 0, sim_code = 0;
     BufferDesc *rev_buf = nullptr;
     bool ret = false;
-    char *umd_asid_base = getenv("UMD_ASID_BASE");
+    char *umd_asid_base = getenv("UMD_ASID_BASE"); /* provide address is hex format, NA now*/
     uint64_t umd_asid_base_pa = 0;
     char *ptr = nullptr;
 
@@ -145,24 +145,19 @@ bool aipudrv::SimulatorV3::has_target(uint32_t arch, uint32_t version, uint32_t 
 
     if (umd_asid_base != nullptr)
     {
-        umd_asid_base_pa = strtoul(umd_asid_base, &ptr, 10);
-        if (umd_asid_base_pa > get_umemory()->get_memregion_base(ASID_REGION_0, MEM_REGION_DDR))
+        /* provide address is hex format */
+        umd_asid_base_pa = strtoul(umd_asid_base, &ptr, 16);
+        uint64_t max_asid_address = get_umemory()->get_memregion_base(ASID_MAX - 1, MEM_REGION_DDR) +
+            get_umemory()->get_memregion_size(ASID_MAX - 1, MEM_REGION_DDR);
+        if (umd_asid_base_pa < max_asid_address)
         {
-            umd_asid_base_pa = get_umemory()->get_memregion_base(ASID_REGION_0, MEM_REGION_DDR);
-            LOG(LOG_WARN, "\nreq ASID base > sim DDR base, use DDR base as ASID base: 0x%lx\n",
-                umd_asid_base_pa);
+            LOG(LOG_WARN, "\nreq provide asid0 address: 0x%lx < max asid address: 0x%lx, be careful with conflict\n",
+                umd_asid_base_pa, max_asid_address);
         }
-    } else {
-        umd_asid_base_pa = get_umemory()->get_memregion_base(ASID_REGION_0, MEM_REGION_DDR);
     }
 
-    m_dram->set_asid_base(0, umd_asid_base_pa);
-    if (SHARE_ONE_ASID == 1)
-        m_dram->set_asid_base(1, umd_asid_base_pa);
-    else
-        m_dram->set_asid_base(1, get_umemory()->get_memregion_base(ASID_REGION_1, MEM_REGION_DDR));
-    m_dram->set_asid_base(2, umd_asid_base_pa);
-    m_dram->set_asid_base(3, umd_asid_base_pa);
+    if (umd_asid_base_pa != get_umemory()->get_memregion_base(ASID_REGION_0, MEM_REGION_DDR))
+        m_dram->reset_asid_base(0, umd_asid_base_pa);
 
     /* reserve 4KB for debug */
     m_dram->reserve_mem(0xC1000000, AIPU_PAGE_SIZE, &rev_buf, "rsv");

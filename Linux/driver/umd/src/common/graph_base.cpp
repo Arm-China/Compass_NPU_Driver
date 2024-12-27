@@ -60,6 +60,7 @@ aipu_status_t aipudrv::GraphBase::destroy_jobs()
             goto unlock;
 
         delete iter->second;
+        iter->second = nullptr;
         m_jobs.erase(iter);
         iter = m_jobs.begin();
     }
@@ -81,6 +82,7 @@ aipu_status_t aipudrv::GraphBase::destroy_job(JOB_ID id)
             goto unlock;
 
         delete m_jobs[id];
+        m_jobs[id] = nullptr;
         m_jobs.erase(id);
     }
 
@@ -167,18 +169,12 @@ aipu_status_t aipudrv::GraphBase::clean_batch_queue(uint32_t queue_id)
 
 bool aipudrv::GraphBase::is_valid_batch_queue(uint32_t queue_id)
 {
-    if (m_batch_queue.count(queue_id) != 0)
-        return true;
-    else
-        return false;
+    return m_batch_queue.count(queue_id) != 0;
 }
 
 uint32_t aipudrv::GraphBase::get_batch_queue_size(uint32_t queue_id)
 {
-    if (m_batch_queue.count(queue_id) != 0)
-        return m_batch_queue[queue_id].batches.size();
-    else
-        return 0;
+    return m_batch_queue.count(queue_id) != 0 ? m_batch_queue[queue_id].batches.size() : 0;
 }
 
 aipudrv::batch_info_t& aipudrv::GraphBase::get_batch_queue_item(uint32_t queue_id, uint32_t batch_num)

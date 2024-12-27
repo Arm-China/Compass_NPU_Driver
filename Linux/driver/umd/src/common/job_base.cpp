@@ -20,26 +20,25 @@ aipudrv::JobBase::JobBase(MainContext* ctx, GraphBase& graph, DeviceBase* dev):
     m_ctx(ctx), m_graph(graph), m_dev(dev)
 {
     m_mem = m_dev->get_mem();
-    #if DUMP_RO_ENTRY
+#if DUMP_RO_ENTRY
     char log[1024] = {0};
     m_ro_entry_dump.open((m_dump_dir + "/" + m_ro_entry_name).c_str(), std::ofstream::out | std::ofstream::trunc);
     snprintf(log, 1024, "     Idx: Tp: <   Ro_sz,    De_sz>, <  Buf_idx,  Sec_off>, <   Et_Off,       Addr>\n");
     m_ro_entry_dump << log;
-    #endif
+#endif
 }
 
 aipudrv::JobBase::~JobBase()
 {
-    #if DUMP_RO_ENTRY
+#if DUMP_RO_ENTRY
     m_ro_entry_dump.close();
-    #endif
+#endif
 }
 
 aipu_status_t aipudrv::JobBase::get_status(aipu_job_status_t* status)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     std::vector<aipu_job_status_desc> jobs_status;
-    uint32_t err = 0;
 
     if (get_subgraph_cnt() == 0)
     {
@@ -64,17 +63,11 @@ aipu_status_t aipudrv::JobBase::get_status(aipu_job_status_t* status)
         *status = AIPU_JOB_STATUS_NO_STATUS;
     }
 
-    if (m_err_code.size() > 0)
-        m_mem->read32(&err, m_err_code[0].pa);
-
-    return m_ctx->log_rt_err_msg(err);
+    return get_runtime_err_code();
 }
 
 aipu_status_t aipudrv::JobBase::get_status_blocking(aipu_job_status_t* status, int32_t time_out)
 {
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    uint32_t err = 0;
-
     if (get_subgraph_cnt() == 0)
     {
         m_status = AIPU_JOB_STATE_DONE;
@@ -83,7 +76,7 @@ aipu_status_t aipudrv::JobBase::get_status_blocking(aipu_job_status_t* status, i
         if (job_callback_func != nullptr)
             job_callback_func(get_id(), (aipu_job_status_t)m_status);
     } else {
-        ret = convert_ll_status(m_dev->poll_status(1, time_out,
+        aipu_status_t ret = convert_ll_status(m_dev->poll_status(1, time_out,
             m_hw_cfg->poll_in_commit_thread, this));
         if (ret != AIPU_STATUS_SUCCESS)
             return ret;
@@ -98,22 +91,47 @@ aipu_status_t aipudrv::JobBase::get_status_blocking(aipu_job_status_t* status, i
         *status = (aipu_job_status_t)m_status;
         dump_job_private_buffers_after_run(*m_rodata, m_descriptor);
         dump_job_shared_buffers_after_run();
+        if (m_cfg->en_fast_perf)
+        {
+            m_dev->dump_profiling();
+        }
     } else {
         *status = AIPU_JOB_STATUS_NO_STATUS;
     }
 
-    if (m_err_code.size() > 0)
-        m_mem->read32(&err, m_err_code[0].pa);
-
-    return m_ctx->log_rt_err_msg(err);
+    return get_runtime_err_code();
 }
 
 aipu_status_t aipudrv::JobBase::load_tensor(uint32_t tensor, const void* data)
 {
+  if (nullptr == data)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (tensor >= m_inputs.size())
+    return AIPU_STATUS_ERROR_INVALID_TENSOR_ID;
+
+  /* Applications cannot load tensors if a job is not in the to-be-scheduled status */
+  if ((m_status != AIPU_JOB_STATUS_INIT) &&
+      (m_status != AIPU_JOB_STATUS_DONE) &&
+      (m_status != AIPU_JOB_STATUS_BIND))
+    return AIPU_STATUS_ERROR_INVALID_OP;
+
+  if (m_inputs[tensor].dmabuf_fd < 0)
+    {
+      m_mem->write(m_inputs[tensor].pa, (const char*)data, m_inputs[tensor].size);
+    } else {
+    readwrite_dma_buf(m_inputs[tensor], (char *)data, false); // write dma_buf
+  }
+
+  return AIPU_STATUS_SUCCESS;
+}
+
+aipu_status_t aipudrv::JobBase::load_output_tensor(uint32_t tensor, const void* data)
+{
     if (nullptr == data)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
-    if (tensor >= m_inputs.size())
+    if (tensor >= m_outputs.size())
         return AIPU_STATUS_ERROR_INVALID_TENSOR_ID;
 
     /* Applications cannot load tensors if a job is not in the to-be-scheduled status */
@@ -122,11 +140,11 @@ aipu_status_t aipudrv::JobBase::load_tensor(uint32_t tensor, const void* data)
         (m_status != AIPU_JOB_STATUS_BIND))
         return AIPU_STATUS_ERROR_INVALID_OP;
 
-    if (m_inputs[tensor].dmabuf_fd < 0)
+    if (m_outputs[tensor].dmabuf_fd < 0)
     {
-        m_mem->write(m_inputs[tensor].pa, (const char*)data, m_inputs[tensor].size);
+        m_mem->write(m_outputs[tensor].pa, (const char*)data, m_outputs[tensor].size);
     } else {
-        readwrite_dma_buf(m_inputs[tensor], (char *)data, false); // write dma_buf
+        readwrite_dma_buf(m_outputs[tensor], (char *)data, false); // write dma_buf
     }
 
     return AIPU_STATUS_SUCCESS;
@@ -223,9 +241,9 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     char* ro_va = nullptr;
     char* dcr_va = nullptr;
-    #if DUMP_RO_ENTRY
+#if DUMP_RO_ENTRY
     char log[1024] = {0};
-    #endif
+#endif
 
     m_mem->pa_to_va(rodata.pa, rodata.size, &ro_va);
     if (dcr != nullptr && dcr->size != 0)
@@ -263,22 +281,22 @@ aipu_status_t aipudrv::JobBase::setup_rodata(
             LOG(LOG_INFO, "%8u: re: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
                 rodata.req_size, (dcr != nullptr) ? dcr->req_size : 0, ref_iter, sec_offset, entry_offset,
                 get_low_32(reuse_buf[ref_iter]->align_asid_pa) + sec_offset);
-            #if DUMP_RO_ENTRY
+#if DUMP_RO_ENTRY
             snprintf(log, 1024, "%8u: re: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
                 rodata.req_size, (dcr != nullptr) ? dcr->req_size : 0, ref_iter, sec_offset, entry_offset,
                 get_low_32(reuse_buf[ref_iter]->align_asid_pa) + sec_offset);
             m_ro_entry_dump << log << std::endl;
-            #endif
+#endif
         } else {
             LOG(LOG_INFO, "%8u: wt: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
                 rodata.req_size, (dcr != nullptr) ? dcr->req_size : 0, ref_iter, sec_offset, entry_offset,
                 get_low_32(static_buf[ref_iter]->align_asid_pa) + sec_offset);
-            #if DUMP_RO_ENTRY
+#if DUMP_RO_ENTRY
             snprintf(log, 1024, "%8u: wt: <%8lx, %8lx>, < %8d, %8x>, < %8x, 0x%8x>", i,
                 rodata.req_size, (dcr != nullptr) ? dcr->req_size : 0, ref_iter, sec_offset, entry_offset,
                 get_low_32(static_buf[ref_iter]->align_asid_pa) + sec_offset);
             m_ro_entry_dump << log << std::endl;
-            #endif
+#endif
         }
 
         if (param_map[i].load_type == PARAM_MAP_LOAD_TYPE_REUSE)
@@ -392,6 +410,15 @@ void aipudrv::JobBase::update_io_buffers(const struct GraphIOTensors& io,
     create_io_buffers(m_outputs, io.outputs, reuses);
 }
 
+void aipudrv::JobBase::update_single_io_buffers(
+    const std::vector<struct GraphIOTensorDesc> &graph_iobufs,
+    std::vector<struct JobIOBuffer> &job_iobufs,
+    const std::vector<BufferDesc*>& reuses)
+{
+    job_iobufs.clear();
+    create_io_buffers(job_iobufs, graph_iobufs, reuses);
+}
+
 void aipudrv::JobBase::dump_buffer(DEV_PA_64 pa, const char* bin_va, uint32_t size, const char* name)
 {
     char file_name[4096];
@@ -464,7 +491,7 @@ aipu_status_t aipudrv::JobBase::config_mem_dump(uint64_t types, const aipu_job_c
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    if ((nullptr != config) && (nullptr != config->dump_dir))
+    if ((config != nullptr) && (config->dump_dir != nullptr))
     {
         if(access(config->dump_dir, F_OK) != 0)
         {
@@ -475,13 +502,13 @@ aipu_status_t aipudrv::JobBase::config_mem_dump(uint64_t types, const aipu_job_c
         m_dump_dir = config->dump_dir;
     }
 
-    if ((nullptr != config) && (nullptr != config->prefix))
+    if ((config != nullptr) && (config->prefix != nullptr))
         m_dump_prefix = config->prefix;
 
-    if ((nullptr != config) && (nullptr != config->output_prefix))
+    if ((config != nullptr) && (config->output_prefix != nullptr))
         m_dump_output_prefix = config->output_prefix;
 
-     if ((nullptr != config) && (nullptr != config->misc_prefix))
+     if ((config != nullptr) && (config->misc_prefix != nullptr))
         m_dump_misc_prefix = config->misc_prefix;
 
     m_dump_text = types & AIPU_JOB_CONFIG_TYPE_DUMP_TEXT;
@@ -513,24 +540,27 @@ void aipudrv::JobBase::dump_job_shared_buffers()
         dump_buffer(dump_pa, bin_va, dump_size, "Text_BeforeRun");
     }
 
-    if (m_dump_weight)
+    if (m_dump_weight && (get_graph().m_bweight.size() > 0))
     {
-        if (get_graph().m_weight != nullptr && get_graph().m_weight->size > 0)
+        for (uint32_t bss_id = 0; bss_id < get_graph().get_bss_cnt(); bss_id++)
         {
-            dump_pa = get_graph().m_weight->pa;
-            bin_va = get_graph().m_bweight.va;
-            dump_size = get_graph().m_weight->size;
-            if (dump_size != 0)
-                dump_buffer(dump_pa, nullptr, dump_size, "Weight_BeforeRun");
-        }
+            if (get_graph().get_WeightBufferInfo(bss_id).wb_weight != nullptr
+                && get_graph().get_WeightBufferInfo(bss_id).wb_weight->size > 0)
+            {
+                dump_pa = get_graph().get_WeightBufferInfo(bss_id).wb_weight->pa;
+                dump_size = get_graph().get_WeightBufferInfo(bss_id).wb_weight->size;
+                if (dump_size != 0)
+                    dump_buffer(dump_pa, nullptr, dump_size, "Weight_BeforeRun");
+            }
 
-        if (get_graph().m_zerocpy_const != nullptr && get_graph().m_zerocpy_const->size > 0)
-        {
-            dump_pa = get_graph().m_zerocpy_const->pa;
-            bin_va = get_graph().m_bweight.va;
-            dump_size = get_graph().m_zerocpy_const->size;
-            if (dump_size != 0)
-                dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_BeforeRun");
+            if (get_graph().get_WeightBufferInfo(bss_id).wb_zerocpy_const != nullptr
+                && get_graph().get_WeightBufferInfo(bss_id).wb_zerocpy_const->size > 0)
+            {
+                dump_pa = get_graph().get_WeightBufferInfo(bss_id).wb_zerocpy_const->pa;
+                dump_size = get_graph().get_WeightBufferInfo(bss_id).wb_zerocpy_const->size;
+                if (dump_size != 0)
+                    dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_BeforeRun");
+            }
         }
     }
 }
@@ -593,22 +623,27 @@ void aipudrv::JobBase::dump_job_shared_buffers_after_run()
         dump_single_buffer(dump_pa, dump_size, "Text_AfterRun");
     }
 
-    if (m_dump_weight)
+    if (m_dump_weight && (get_graph().m_bweight.size() > 0))
     {
-        if (get_graph().m_weight != nullptr && get_graph().m_weight->size > 0)
+        for (uint32_t bss_id = 0; bss_id < get_graph().get_bss_cnt(); bss_id++)
         {
-            dump_pa = get_graph().m_weight->pa;
-            dump_size = get_graph().m_weight->size;
-            if (dump_size != 0)
-                dump_single_buffer(dump_pa, dump_size, "Weight_AfterRun");
-        }
+            if (get_graph().get_WeightBufferInfo(bss_id).wb_weight != nullptr
+                && get_graph().get_WeightBufferInfo(bss_id).wb_weight->size > 0)
+            {
+                dump_pa = get_graph().get_WeightBufferInfo(bss_id).wb_weight->pa;
+                dump_size = get_graph().get_WeightBufferInfo(bss_id).wb_weight->size;
+                if (dump_size != 0)
+                    dump_single_buffer(dump_pa, dump_size, "Weight_AfterRun");
+            }
 
-        if (get_graph().m_zerocpy_const != nullptr && get_graph().m_zerocpy_const->size > 0)
-        {
-            dump_pa = get_graph().m_zerocpy_const->pa;
-            dump_size = get_graph().m_zerocpy_const->size;
-            if (dump_size != 0)
-                dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_AfterRun");
+            if (get_graph().get_WeightBufferInfo(bss_id).wb_zerocpy_const != nullptr
+                && get_graph().get_WeightBufferInfo(bss_id).wb_zerocpy_const->size > 0)
+            {
+                dump_pa = get_graph().get_WeightBufferInfo(bss_id).wb_zerocpy_const->pa;
+                dump_size = get_graph().get_WeightBufferInfo(bss_id).wb_zerocpy_const->size;
+                if (dump_size != 0)
+                    dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_AfterRun");
+            }
         }
     }
 }
@@ -663,7 +698,7 @@ void aipudrv::JobBase::dump_job_private_buffers_after_run(BufferDesc& rodata, Bu
     {
         if ((m_dev->get_dev_type() == DEV_TYPE_AIPU) ||
             (m_dev->get_dev_type() == DEV_TYPE_SIMULATOR_V3) ||
-            (m_dev->get_dev_type() == DEV_TYPE_SIMULATOR_V4))
+            (m_dev->get_dev_type() == DEV_TYPE_SIMULATOR_V3_1))
         {
             std::vector<BufferDesc*> m_job_reuses = get_reuse();
             for (uint32_t i = 0; i < m_job_reuses.size(); i++)

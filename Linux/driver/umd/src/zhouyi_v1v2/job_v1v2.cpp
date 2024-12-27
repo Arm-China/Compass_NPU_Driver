@@ -57,7 +57,7 @@ int aipudrv::JobV12::alloc_reuse_buffer_optimized()
 
     ret = m_mem->malloc(reuse_buf_total_size, max_align_in_page, &m_top_reuse_buf,
         "tot_reuse", m_fm_mem_region);
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
     {
         retval = -1;
         LOG(LOG_DEBUG, "optmize alloc reuse buffer, size: 0x%x [fail], try scatter alloc\n",
@@ -115,7 +115,7 @@ aipu_status_t aipudrv::JobV12::alloc_reuse_buffer()
         {
             std::string str = "reuse_" + std::to_string(i);
             ret = m_mem->malloc(size, align_in_page, &bufferDesc, str.c_str(), m_fm_mem_region);
-            if (AIPU_STATUS_SUCCESS != ret)
+            if (ret != AIPU_STATUS_SUCCESS)
                 goto finish;
             LOG(LOG_DEBUG, "buf %d: align_in_page: %d, sz: %lx, req_sz: %lx, pa: %lx\n", i, align_in_page,
                 bufferDesc->req_size, bufferDesc->size, bufferDesc->pa);
@@ -141,7 +141,7 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
     m_hw_cfg = hw_cfg;
 
 #if (defined SIMULATION)
-    if (nullptr == cfg)
+    if (cfg == nullptr)
         return AIPU_STATUS_ERROR_INVALID_CONFIG;
 
     if (((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V1) && (cfg->simulator == nullptr)) ||
@@ -164,7 +164,7 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
 
     /* 1. allocate and load job rodata */
     ret = m_mem->malloc(get_graph().m_brodata.size, 0, &m_rodata, "rodata");
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
         goto finish;
 
     m_mem->write(m_rodata->pa, get_graph().m_brodata.va, get_graph().m_brodata.size);
@@ -173,7 +173,7 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
     if (get_graph().m_bdesc.size != 0)
     {
         ret = m_mem->malloc(get_graph().m_bdesc.size, 0, &m_descriptor, "dcr");
-        if (AIPU_STATUS_SUCCESS != ret)
+        if (ret != AIPU_STATUS_SUCCESS)
             goto finish;
 
         m_mem->write(m_descriptor->pa, get_graph().m_bdesc.va, get_graph().m_bdesc.size);
@@ -182,7 +182,7 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
     /* 3. allocate task stack */
     ret = m_mem->malloc(get_graph().m_stack_size, get_graph().m_stack_align_in_page,
             &m_stack, "stack");
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
         goto finish;
 
     /* 4. allocate reuse buffers */
@@ -192,7 +192,7 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
     if (retval == -1)
     {
         ret = alloc_reuse_buffer();
-        if (AIPU_STATUS_SUCCESS != ret)
+        if (ret != AIPU_STATUS_SUCCESS)
             goto finish;
     } else if (retval < -1) {
         ret = AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
@@ -200,11 +200,12 @@ aipu_status_t aipudrv::JobV12::init(const aipu_global_config_simulation_t* cfg,
     }
 
     /* 5. init weights address, share a common copy */
-    m_weights = &get_graph().m_weights;
+    if (get_graph().m_weight_buffers_vec.size() > 0)
+        m_weights = &get_graph().get_WeightBufferInfo(0).wb_weights;
 
     /* 6. update rodata & dcr */
     ret = setup_rodata_v12();
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
         goto finish;
 
     /* 7. setup remap */
@@ -268,7 +269,7 @@ aipu_status_t aipudrv::JobV12::specify_io_buffer(aipu_shared_tensor_info_t &tens
             goto out;
     }
 
-    if (index > iobuffer_vec->size())
+    if (index >= iobuffer_vec->size())
     {
         ret = AIPU_STATUS_ERROR_INVALID_TENSOR_ID;
         goto out;
@@ -355,7 +356,7 @@ aipu_status_t aipudrv::JobV12::specify_io_buffer(aipu_shared_tensor_info_t &tens
     if (update_ro)
     {
         ret = setup_rodata_v12(&m_dma_buf_idx);
-        if (AIPU_STATUS_SUCCESS != ret)
+        if (ret != AIPU_STATUS_SUCCESS)
             goto out;
     }
 
@@ -451,16 +452,21 @@ aipu_status_t aipudrv::JobV12::schedule()
     desc.kdesc.dtcm_size_kb = get_graph().m_dtcm_size;
     desc.kdesc.enable_poll_opt = !m_hw_cfg->poll_in_commit_thread;
     desc.text_size = get_graph().m_btext.size;
-    if (get_graph().m_weight && get_graph().m_weight->req_size > 0)
-    {
-        desc.weight_pa = get_graph().m_weight->pa;
-        desc.weight_size = get_graph().m_weight->req_size;
-    }
 
-    if (get_graph().m_zerocpy_const != nullptr)
+    if (get_graph().m_weight_buffers_vec.size() > 0)
     {
-        desc.zerocpy_const_pa = get_graph().m_zerocpy_const->pa;
-        desc.zerocpy_const_size = get_graph().m_zerocpy_const->req_size;
+        if (get_graph().get_WeightBufferInfo(0).wb_weight
+            && get_graph().get_WeightBufferInfo(0).wb_weight->req_size > 0)
+        {
+            desc.weight_pa = get_graph().get_WeightBufferInfo(0).wb_weight->pa;
+            desc.weight_size = get_graph().get_WeightBufferInfo(0).wb_weight->req_size;
+        }
+
+        if (get_graph().get_WeightBufferInfo(0).wb_zerocpy_const != nullptr)
+        {
+            desc.zerocpy_const_pa = get_graph().get_WeightBufferInfo(0).wb_zerocpy_const->pa;
+            desc.zerocpy_const_size = get_graph().get_WeightBufferInfo(0).wb_zerocpy_const->req_size;
+        }
     }
 
     desc.rodata_size = m_rodata->req_size;
@@ -518,7 +524,7 @@ aipu_status_t aipudrv::JobV12::schedule()
         desc.kdesc.exec_flag |= AIPU_JOB_EXEC_FLAG_SRAM_MUTEX;
 
     ret = m_dev->schedule(desc);
-    if (AIPU_STATUS_SUCCESS == ret)
+    if (ret == AIPU_STATUS_SUCCESS)
     {
 #if (defined SIMULATION)
         m_status = AIPU_JOB_STATUS_DONE;
@@ -544,7 +550,7 @@ aipu_status_t aipudrv::JobV12::config_simulation(uint64_t types, const aipu_job_
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    if (nullptr == config)
+    if (config == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     if(access(config->data_dir, F_OK) != 0)
@@ -589,8 +595,19 @@ aipu_status_t aipudrv::JobV12::debugger_run()
         return ret;
 
     ret = get_status_blocking(&status, -1);
-    if ((AIPU_STATUS_SUCCESS == ret) && (AIPU_JOB_STATUS_DONE != status))
+    if ((ret == AIPU_STATUS_SUCCESS) && (status != AIPU_JOB_STATUS_DONE))
         ret = AIPU_STATUS_ERROR_JOB_EXCEPTION;
 
     return ret;
+}
+
+aipu_status_t aipudrv::JobV12::get_runtime_err_code() const
+{
+    if (m_err_code.size() > 0)
+    {
+        uint32_t err = 0;
+        m_mem->read32(&err, m_err_code[0].pa);
+        return m_ctx->log_rt_err_msg(err);
+    }
+    return AIPU_STATUS_SUCCESS;
 }

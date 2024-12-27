@@ -116,9 +116,9 @@ struct JobDesc
 enum DeviceType
 {
     DEV_TYPE_NONE             = 0,
-    DEV_TYPE_SIMULATOR_V1V2 = 1,
+    DEV_TYPE_SIMULATOR_V1V2   = 1,
     DEV_TYPE_SIMULATOR_V3     = 2,
-    DEV_TYPE_SIMULATOR_V4     = 3,
+    DEV_TYPE_SIMULATOR_V3_1   = 3,
     DEV_TYPE_AIPU             = 4,
 };
 
@@ -268,13 +268,13 @@ public:
         {
             *cnt = m_core_cnt;
         } else {
-            #if SIMULATION
+#if SIMULATION
             if (cluster_id > m_cluster_cnt)
                 return AIPU_STATUS_ERROR_INVALID_CLUSTER_ID;
-            #else
+#else
             if (cluster_id > m_part_caps.at(partition_id).cluster_cnt)
                 return AIPU_STATUS_ERROR_INVALID_CLUSTER_ID;
-            #endif
+#endif
             *cnt = m_part_caps.at(partition_id).clusters[cluster_id].core_cnt;
         }
 
@@ -334,6 +334,7 @@ public:
  */
 public:
     virtual void enable_profiling(bool en) {}
+    virtual void dump_profiling() {}
 
 public:
     virtual int get_grid_id(uint16_t &grid_id)

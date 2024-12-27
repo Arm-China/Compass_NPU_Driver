@@ -8,6 +8,8 @@ class Parse_Cmdline:
     m_group_benchmark_path = ""
     m_dump_path = ""
     m_so_lib_path = ""
+    m_emulator_path = "./"
+    m_input_shape = []
 
     # [
     #    {
@@ -35,7 +37,9 @@ class Parse_Cmdline:
         parser.add_argument('-l', '--so_lib_path', type=str, \
             help='-l: specify aipu driver so library path')
         parser.add_argument('-e', '--emulator_path', type=str, \
-            help='-l: specify emulator path, just for simulation')
+            help='-e: specify emulator path, just for simulation')
+        parser.add_argument('-r', '--input_shape', type=str, \
+            help='-r: specify new input shape for all input tensors')
         args = parser.parse_args()
 
         if args.single_benchmark_path != None:
@@ -74,6 +78,10 @@ class Parse_Cmdline:
 
         if args.emulator_path != None:
             self.m_emulator_path = args.emulator_path
+
+        if args.input_shape != None:
+            self.m_input_shape = [ [ int(dim_val) for dim_val in shape_str.split(",") ] \
+                 for shape_str in args.input_shape.split("/")]
 
     def help(self):
         help_str = \

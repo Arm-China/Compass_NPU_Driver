@@ -22,8 +22,8 @@
 #include "simulator/simulator_v3.h"
 #endif
 
-#ifdef ZHOUYI_V4
-#include "simulator/simulator_v4.h"
+#ifdef ZHOUYI_V3_1
+#include "simulator/simulator_v3_1.h"
 #endif
 
 #else
@@ -51,44 +51,44 @@ inline aipu_status_t test_get_device(uint32_t graph_version, DeviceBase** dev,
     if (dev == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
-    if ((AIPU_LOADABLE_GRAPH_V0005 != graph_version) &&
-        (AIPU_LOADABLE_GRAPH_ELF_V0 != graph_version))
+    if ((graph_version != AIPU_LOADABLE_GRAPH_V0005) &&
+        (graph_version != AIPU_LOADABLE_GRAPH_ELF_V0))
         return AIPU_STATUS_ERROR_GVERSION_UNSUPPORTED;
 
 #if (defined SIMULATION)
     {
         std::lock_guard<std::mutex> lock_(m_tex);
-    #if (defined ZHOUYI_V12)
-        if (AIPU_LOADABLE_GRAPH_V0005 == graph_version)
+#if (defined ZHOUYI_V12)
+        if (graph_version == AIPU_LOADABLE_GRAPH_V0005)
         {
             if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V1V2))
                 return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
-            else if (nullptr == *dev)
+            else if (*dev == nullptr)
                 *dev = Simulator::get_simulator();
         }
-    #endif
-    #if (defined ZHOUYI_V3)
-        if (AIPU_LOADABLE_GRAPH_ELF_V0 == graph_version)
+#endif
+#if (defined ZHOUYI_V3)
+        if (graph_version == AIPU_LOADABLE_GRAPH_ELF_V0)
         {
             if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V3))
                 return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
-            else if (nullptr == *dev)
+            else if (*dev == nullptr)
                 *dev = SimulatorV3::get_v3_simulator(cfg);
         }
-    #endif
-    #if (defined ZHOUYI_V4)
-        if (AIPU_LOADABLE_GRAPH_ELF_V0 == graph_version)
+#endif
+#if (defined ZHOUYI_V3_1)
+        if (graph_version == AIPU_LOADABLE_GRAPH_ELF_V0)
         {
-            if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V4))
+            if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V3_1))
                 return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
-            else if (nullptr == *dev)
-                *dev = SimulatorV4::get_v4_simulator(cfg);
+            else if (*dev == nullptr)
+                *dev = SimulatorV3_1::get_v3_1_simulator(cfg);
         }
-    #endif
+#endif
     }
 #endif
 
-    if (nullptr == *dev)
+    if (*dev == nullptr)
         return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
 
     return ret;
@@ -105,33 +105,33 @@ inline aipu_status_t set_target(uint32_t graph_version, DeviceBase** dev,
 #if (defined SIMULATION)
     std::lock_guard<std::mutex> lock_(m_tex);
 
-    #if (defined ZHOUYI_V3)
-    if (AIPU_LOADABLE_GRAPH_ELF_V0 == graph_version)
+#if (defined ZHOUYI_V3)
+    if (graph_version == AIPU_LOADABLE_GRAPH_ELF_V0)
     {
         if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V3))
         {
             return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
-        } else if (nullptr == *dev) {
+        } else if (*dev == nullptr) {
             SimulatorV3 *v3_sim = nullptr;
             *dev = v3_sim = SimulatorV3::get_v3_simulator(cfg);
             v3_sim->has_target(AIPU_ARCH_ZHOUYI, AIPU_ISA_VERSION_ZHOUYI_V3, 1204, 0);
         }
     }
-    #elif (defined ZHOUYI_V4)
-    if (AIPU_LOADABLE_GRAPH_ELF_V0 == graph_version)
+#elif (defined ZHOUYI_V3_1)
+    if (graph_version == AIPU_LOADABLE_GRAPH_ELF_V0)
     {
-        if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V4))
+        if ((*dev != nullptr) && ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V3_1))
         {
             return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
-        } else if (nullptr == *dev) {
-            SimulatorV4 *v4_sim = nullptr;
-            *dev = v4_sim = SimulatorV4::get_v4_simulator(cfg);
-            v4_sim->has_target(AIPU_ARCH_ZHOUYI, AIPU_ISA_VERSION_ZHOUYI_V4, 1304, 0);
+        } else if (*dev == nullptr) {
+            SimulatorV3_1 *v3_1_sim = nullptr;
+            *dev = v3_1_sim = SimulatorV3_1::get_v3_1_simulator(cfg);
+            v3_1_sim->has_target(AIPU_ARCH_ZHOUYI, AIPU_ISA_VERSION_ZHOUYI_V3_1, 1304, 0);
         }
     }
-    #endif
+#endif
 
-    if (nullptr == *dev)
+    if (*dev == nullptr)
         return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
 
 #endif
@@ -154,17 +154,16 @@ inline aipu_status_t get_device(DeviceBase** dev)
 
 inline bool put_device(DeviceBase* dev)
 {
-    if (nullptr == dev)
+    if (dev == nullptr)
         return false;
 
     if (dev->dec_ref_cnt() == 0)
     {
-    #ifdef SIMULATION
+#ifdef SIMULATION
         dev = nullptr;
-    #else
+#else
         Aipu::put_aipu(dev);
-    #endif
-
+#endif
         return true;
     } else {
         return false;

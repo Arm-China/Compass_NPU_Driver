@@ -25,6 +25,7 @@ aipudrv::GraphV12::~GraphV12()
 {
     unload();
     delete m_parser;
+    m_parser = nullptr;
 }
 
 aipu_status_t aipudrv::GraphV12::create_job(JOB_ID* id, const aipu_global_config_simulation_t* cfg,
@@ -40,7 +41,7 @@ aipu_status_t aipudrv::GraphV12::create_job(JOB_ID* id, const aipu_global_config
 
 aipu_status_t aipudrv::GraphV12::get_tensor_count(aipu_tensor_type_t type, uint32_t* cnt)
 {
-    if (nullptr == cnt)
+    if (cnt == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     switch (type)
@@ -77,7 +78,7 @@ aipu_status_t aipudrv::GraphV12::get_tensor_descriptor(aipu_tensor_type_t type, 
     if (tensor >= cnt)
         return AIPU_STATUS_ERROR_INVALID_TENSOR_ID;
 
-    if (nullptr == desc)
+    if (desc == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     switch (type)

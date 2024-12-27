@@ -26,15 +26,17 @@ build_help() {
     echo "                    - 6cg"
     echo "                    - hybrid"
     echo "                    - r329"
-    echo "                    - android"
+    echo "                    - android (default android9)"
+    echo "                    - android12"
     echo "                    - [other platforms you add]"
     echo "-k, --kversion    kernel version (optional)"
     echo "                    - [major].[minor]"
     echo "                    - [major].[minor].[patch]"
-    echo "-v, --version     AIPU version (optional, by default build V1/2/3):"
+    echo "-v, --version     AIPU version (optional, by default build v1/2/3):"
     echo "                    - v1"
     echo "                    - v2"
     echo "                    - v3"
+    echo "                    - v3_1"
     echo "-a, --api         Build UMD API type (optional, by default standard api):"
     echo "                    - standard_api"
     echo "                    - python_api"
@@ -42,8 +44,9 @@ build_help() {
     echo "                  format: umd_major,umd_minor,kmd_version"
     echo "                  eg: 5,2.0,3.3.0 umd: 5.2.0; kmd: 3.3.0"
     echo "-g, --get         Get UMD and KMD version number"
-    echo "-t, --test        Build samples for specific platform"
+    echo "-t, --test        Build samples or demo for specific platform"
     echo "                    - sample"
+    echo "                    - demo"
     echo "==========================================================================="
     exit 1
 }
@@ -150,11 +153,14 @@ if [ "$BUILD_AIPU_VERSION"x == "v1"x ]  ||
     BUILD_AIPU_VERSION=aipu_v1v2
 elif [ "$BUILD_AIPU_VERSION"x == "v3"x ] || [ "$BUILD_AIPU_VERSION"x == "all"x ]; then
     BUILD_AIPU_VERSION=aipu_v3
+elif [ "$BUILD_AIPU_VERSION"x == "v3_1"x ]; then
+    BUILD_AIPU_VERSION=aipu_v3_1
 elif [ "$BUILD_AIPU_VERSION"x != "v1"x ] &&
      [ "$BUILD_AIPU_VERSION"x != "v2"x ] &&
-     [ "$BUILD_AIPU_VERSION"x != "v3"x ]; then
+     [ "$BUILD_AIPU_VERSION"x != "v3"x ] &&
+     [ "$BUILD_AIPU_VERSION"x != "v3_1"x ]; then
     echo -e "$COMPASS_DRV_BRENVAR_ERROR Invalid AIPU version $BUILD_AIPU_VERSION," \
-        "specify target: -v [v2|v3]"
+        "specify target: -v [v1|v2|v3|v3_1]"
     exit 2
 fi
 
@@ -200,7 +206,7 @@ else
     export COMPASS_DRV_BTENVAR_KPATH=${!KPATH}
 fi
 
-if [ "$BUILD_TARGET_PLATFORM"x = "android"x ]; then
+if [[ "$BUILD_TARGET_PLATFORM" =~ "android" ]]; then
     export CXX=$COMPASS_DRV_BTENVAR_ANDROID_CXX
     export AR=$COMPASS_DRV_BTENVAR_ANDROID_AR
     export PATH=$CONFIG_DRV_BTENVAR_ANDROID_CXX_PATH:$PATH
@@ -267,6 +273,7 @@ if [ "$BUILD_TEST"x = "sample"x ]; then
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=time_cost_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=sharebuffer_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dynamic_shape_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=multiple_bss_test
     else
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=benchmark_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=batch_test
@@ -283,10 +290,34 @@ if [ "$BUILD_TEST"x = "sample"x ]; then
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dmabuf_attach_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=emulation_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dynamic_shape_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=multiple_bss_test
     fi
+    cd -
+elif [ "$BUILD_TEST"x = "demo"x ]; then
+    if [ "$BUILD_TARGET_PLATFORM"x != "sim"x ]; then
+        echo "this demo is just running on Simulator"
+        echo "but the currenct platform is: $BUILD_TARGET_PLATFORM"
+        exit 1
+    fi
+
+    cd $COMPASS_DRV_BTENVAR_DEMO_DIR
+    if [ -d ./umd ]; then
+        rm -fr ./umd
+    fi
+
+    mkdir -p umd
+    mv ../bin/sim/release/libaipudrv.so.*.*.* ./umd/libaipudrv.so
+    make
     cd -
 fi
 
-if [ "$BUILD_TEST"x == "sample"x ]; then
+if [ "$BUILD_TEST"x == "sample"x ]  ||
+   [ "$BUILD_TEST"x == "demo"x ]; then
     echo -e "$COMPASS_DRV_BRENVAR_INFO Build $BUILD_TEST done: binaries are in $BUILD_AIPU_DRV_ODIR"
 fi
+
+if [ -e ../.git ]; then
+    git log -1 >  $BUILD_AIPU_DRV_ODIR/GitHash.txt
+fi
+
+exit 0

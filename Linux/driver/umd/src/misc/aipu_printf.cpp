@@ -12,25 +12,25 @@
 
 aipu_status_t aipu_printf(char *log_buffer_base, char *redirect_file)
 {
-    #define LOG_PRIFX "LOG DUMP: "
+    constexpr const char* LOG_PRIFX = "LOG DUMP:";
     enum {EM_REDIRECT_FAIL = -1, EM_REDIRECT_TERMINAL = 0, EM_REDIRECT_FILE = 1};
     int ret = 0, redirect_flag = -1, redirect_fd = EM_REDIRECT_FAIL;
     char end_char = 0;
-    char *end_pos = NULL;
-    char *start_log_base = NULL;
-    aipu_log_buffer_header_t *header = NULL;
+    char *end_pos = nullptr;
+    char *start_log_base = nullptr;
+    aipu_log_buffer_header_t *header = nullptr;
 
-    if (nullptr == log_buffer_base)
+    if (log_buffer_base == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     header = (aipu_log_buffer_header_t *)log_buffer_base;
 
-    if (redirect_file == NULL) {
+    if (redirect_file == nullptr) {
         redirect_flag = EM_REDIRECT_TERMINAL;
     } else {
         redirect_fd = open(redirect_file, O_CREAT|O_RDWR, 0755);
         if (redirect_fd < 0) {
-            printf(LOG_PRIFX "open %s, ret=%d [fail]\n", redirect_file, redirect_fd);
+            printf("%s open %s, ret=%d [fail]\n", LOG_PRIFX, redirect_file, redirect_fd);
             ret = redirect_fd;
             goto out;
         }
@@ -50,7 +50,7 @@ aipu_status_t aipu_printf(char *log_buffer_base, char *redirect_file)
             end_pos = log_buffer_base + header->write_offset + LOG_HEADER_SZ;
             end_char = *end_pos;
             *end_pos = '\0';
-            printf("%s", start_log_base);
+            printf("%s %s", LOG_PRIFX, start_log_base);
             *end_pos = end_char;
         } else if (redirect_flag == EM_REDIRECT_FILE) {
             /* output log to specified file */
@@ -75,7 +75,7 @@ aipu_status_t aipu_printf(char *log_buffer_base, char *redirect_file)
             end_pos = log_buffer_base + BUFFER_LEN - 1;
             end_char = *end_pos;
             *end_pos = '\0';
-            printf("%s", start_log_base);
+            printf("%s %s", LOG_PRIFX, start_log_base);
             putchar(end_char);
             *end_pos = end_char;
 
@@ -84,7 +84,7 @@ aipu_status_t aipu_printf(char *log_buffer_base, char *redirect_file)
                 end_pos = log_buffer_base + header->write_offset + LOG_HEADER_SZ;
                 end_char = *end_pos;
                 *end_pos = '\0';
-                printf("%s", log_buffer_base + LOG_HEADER_SZ);
+                printf("%s %s", LOG_PRIFX, log_buffer_base + LOG_HEADER_SZ);
                 *end_pos = end_char;
             }
         } else if (redirect_flag == EM_REDIRECT_FILE) {

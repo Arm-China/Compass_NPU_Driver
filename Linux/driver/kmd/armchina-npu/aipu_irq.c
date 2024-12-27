@@ -102,7 +102,6 @@ void aipu_destroy_irq_object(struct aipu_irq_object *irq_obj)
 		if (irq_obj->irqnum)
 			free_irq(irq_obj->irqnum, irq_obj->dev);
 		kfree(irq_obj);
-		flush_scheduled_work();
 	}
 }
 

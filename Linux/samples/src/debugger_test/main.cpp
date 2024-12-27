@@ -357,7 +357,7 @@ int main(int argc, char* argv[])
                 i, i+1, output_cnt);
         }
 
-        pass = check_result_helper(output_data, output_desc, opt.gts[0], opt.gts_size[0]);
+        pass = check_result_helper(output_data, output_desc, opt.gts, opt.gts_size);
     }
 
 clean_job:

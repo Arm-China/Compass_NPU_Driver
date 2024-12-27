@@ -208,7 +208,7 @@ static void v3_destroy_partitions(struct aipu_priv *aipu)
 	}
 }
 
-int v3_global_soft_reset(struct aipu_priv *aipu)
+static int v3_global_soft_reset(struct aipu_priv *aipu)
 {
 	return zhouyi_soft_reset(&aipu->reg, TSM_SOFT_RESET_REG, aipu->reset_delay_us);
 }

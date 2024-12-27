@@ -256,7 +256,7 @@ int main(int argc, char* argv[])
     }
 
     sim_glb_config.simulator = simulator;
-    sim_job_config.data_dir     = dump_dir;
+    sim_job_config.data_dir = dump_dir;
     if (!arch.empty())
         sim_glb_config.npu_arch_desc = arch.c_str();
 

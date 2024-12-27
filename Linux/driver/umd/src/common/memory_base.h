@@ -185,7 +185,7 @@ private:
     mutable uint32_t end = 0;
     uint32_t m_enable_mem_dump = DUMP_MEM_OP_MASK;
     std::string m_file_name = "mem_info.log";
-    DEV_PA_64 m_asid_base[4] = {0};
+    std::vector<DEV_PA_64> m_asid_base_vec;
     GMRegion m_gm_region[2] = {0};
     bool m_gm_enable = true;
 
@@ -230,12 +230,21 @@ public:
     int mem_bzero(uint64_t addr, size_t size);
     void set_asid_base(int i, DEV_PA_64 base)
     {
-        m_asid_base[i] = base;
+        if (i == 0)
+            m_asid_base_vec.clear();
+
+        m_asid_base_vec.push_back(base);
+    }
+
+    void reset_asid_base(uint32_t i, DEV_PA_64 base)
+    {
+        if (i < m_asid_base_vec.size())
+            m_asid_base_vec[i] = base;
     }
 
     DEV_PA_64 get_asid_base(int i)
     {
-        return m_asid_base[i];
+        return m_asid_base_vec[i];
     }
 
     void set_dtcm_info(DEV_PA_64 base, uint32_t size)

@@ -43,11 +43,31 @@ aipudrv::UMemory::UMemory(): MemoryBase(), sim_aipu::IMemEngine()
     }
 
     /**
+     * ASID number, control how many ASID regions which are used in simulation scenario.
+     * scope [ASID_MAX, UMD_ASID_NUM]
+     */
+    const char *asid_num = getenv("UMD_ASID_NUM");
+    if (asid_num != nullptr)
+    {
+        uint32_t num = atoi(asid_num);
+
+        if (num < ASID_MAX)
+        {
+            num = ASID_MAX;
+        } else if (num > 101) {
+            num = 101;
+            LOG(LOG_WARN, "ASID num is beyond the scope, use max num 101 (~300GB)\n");
+        }
+
+        m_asid_max = num;
+    }
+
+    /**
      * default mem region config
      * aipu v3: default 4MB
      * other aipu version: no GM
      */
-    for (int i = 0; i < MME_REGION_MAX; i++)
+    for (int i = 0; i < MEM_REGION_MAX; i++)
     {
         if (m_memblock[ASID_REGION_0][i].size >= AIPU_PAGE_SIZE)
         {
@@ -56,24 +76,28 @@ aipudrv::UMemory::UMemory(): MemoryBase(), sim_aipu::IMemEngine()
             memset(m_memblock[ASID_REGION_0][i].bitmap, true, m_memblock[ASID_REGION_0][i].bit_cnt);
         }
     }
+    set_asid_base(0, m_memblock[ASID_REGION_0][0].base);
 
-    if (!SHARE_ONE_ASID && m_memblock[ASID_REGION_1][0].size >= AIPU_PAGE_SIZE)
-    {
-        m_memblock[ASID_REGION_1][0].bit_cnt = m_memblock[ASID_REGION_1][0].size / AIPU_PAGE_SIZE;
-        m_memblock[ASID_REGION_1][0].bitmap = new bool[m_memblock[ASID_REGION_1][0].bit_cnt];
-        memset(m_memblock[ASID_REGION_1][0].bitmap, true, m_memblock[ASID_REGION_1][0].bit_cnt);
-    }
-
-    for (int i = 0; i < MME_REGION_MAX; i++)
+    for (int i = 0; i < MEM_REGION_MAX; i++)
     {
         LOG(LOG_ALERT, "ASID 0: mem region [%2d]: base=0x%.8lx, size=0x%lx", i,
             m_memblock[ASID_REGION_0][i].base, m_memblock[ASID_REGION_0][i].size);
     }
 
-    if (!SHARE_ONE_ASID)
+    /**
+     * limit each ASID region to 3GB, and base address is 4GB alighment.
+     */
+    for (int region = ASID_REGION_1; region < m_asid_max; region++)
     {
-        LOG(LOG_ALERT, "ASID 1: mem region [ 0]: base=0x%.12lx, size=0x%lx",
-            m_memblock[ASID_REGION_1][0].base, m_memblock[ASID_REGION_1][0].size);
+        m_memblock[region][0].base = static_cast<uint64_t>(region) << 32; // (region | 1ul) << 32;
+        m_memblock[region][0].size = 3ul << 30; // 3GB
+        m_memblock[region][0].bit_cnt = m_memblock[region][0].size / AIPU_PAGE_SIZE;
+        m_memblock[region][0].bitmap = new bool[m_memblock[region][0].bit_cnt];
+        memset(m_memblock[region][0].bitmap, true, m_memblock[region][0].bit_cnt);
+        set_asid_base(region, m_memblock[region][0].base);
+
+        LOG(LOG_ALERT, "ASID %d: mem region [ 0]: base=0x%.12lx, size=0x%lx", region,
+            m_memblock[region][0].base, m_memblock[region][0].size);
     }
 
     if (gm_mean != nullptr)
@@ -88,14 +112,24 @@ aipudrv::UMemory::UMemory(): MemoryBase(), sim_aipu::IMemEngine()
 aipudrv::UMemory::~UMemory()
 {
     free_all();
-    for (int i = 0; i < MME_REGION_MAX; i++)
+    for (int i = 0; i < MEM_REGION_MAX; i++)
     {
         if (m_memblock[ASID_REGION_0][i].bitmap)
+        {
             delete[] m_memblock[ASID_REGION_0][i].bitmap;
+            m_memblock[ASID_REGION_0][i].bitmap = nullptr;
+        }
+
     }
 
-    if (m_memblock[ASID_REGION_1][0].bitmap)
-        delete[] m_memblock[ASID_REGION_1][0].bitmap;
+    for (int region = ASID_REGION_1; region < m_asid_max; region++)
+    {
+        if (m_memblock[region][0].bitmap)
+        {
+            delete[] m_memblock[region][0].bitmap;
+            m_memblock[region][0].bitmap = nullptr;
+        }
+    }
 }
 
 void aipudrv::UMemory:: gm_init(uint32_t gm_size)
@@ -148,10 +182,10 @@ aipu_status_t aipudrv::UMemory::malloc_internal(uint32_t size, uint32_t align, B
     uint32_t mem_region = asid_mem_region & 0xff;
     Buffer buf;
 
-    if ((size > m_memblock[asid][mem_region].size) || (0 == size))
+    if ((size > m_memblock[asid][mem_region].size) || (size == 0))
         return AIPU_STATUS_ERROR_INVALID_SIZE;
 
-    if (0 == align)
+    if (align == 0)
         align = 1;
 
     malloc_page = get_page_cnt(size);
@@ -204,7 +238,7 @@ aipu_status_t aipudrv::UMemory::malloc(uint32_t size, uint32_t align, BufferDesc
     uint32_t mem_region = asid_mem_cfg & 0xff;
     uint32_t asid = (asid_mem_cfg >> 8) & 0xff;
 
-    if (nullptr == *desc)
+    if (*desc == nullptr)
     {
         *desc = new BufferDesc;
         (*desc)->reset();
@@ -223,7 +257,14 @@ aipu_status_t aipudrv::UMemory::malloc(uint32_t size, uint32_t align, BufferDesc
         ret = malloc_internal(size, align, *desc, str, (asid << 8) | mem_region);
 
     if (ret != AIPU_STATUS_SUCCESS)
-        ret = malloc_internal(size, align, *desc, str, (asid << 8) | MEM_REGION_DDR);
+    {
+        for (uint32_t asid_idx = asid; asid_idx < ASID_MAX; asid_idx++)
+        {
+            ret = malloc_internal(size, align, *desc, str, (asid_idx << 8) | MEM_REGION_DDR);
+            if (ret == AIPU_STATUS_SUCCESS)
+                break;
+        }
+    }
 
     return ret;
 }
@@ -237,10 +278,10 @@ aipu_status_t aipudrv::UMemory::free(BufferDesc** desc, const char* str)
     DEV_PA_64 pa = 0;
     uint64_t size = 0;
 
-    if (nullptr == *desc)
+    if (*desc == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
-    if (0 == (*desc)->size)
+    if ((*desc)->size == 0)
         return AIPU_STATUS_ERROR_INVALID_SIZE;
 
     pthread_rwlock_wrlock(&m_lock);
@@ -267,7 +308,7 @@ aipu_status_t aipudrv::UMemory::free(BufferDesc** desc, const char* str)
             m_memblock[asid][mem_region].bitmap[i] = true;
 
         LOG(LOG_INFO, "free buffer_pa=%lx\n", iter->second.desc->pa);
-        delete []iter->second.va;
+        delete[] iter->second.va;
         iter->second.va = nullptr;
         if (!reserve_mem_flag)
         {
@@ -300,10 +341,10 @@ aipu_status_t aipudrv::UMemory::free_phybuffer(BufferDesc* desc, const char* str
     DEV_PA_64 pa = 0;
     uint64_t size = 0;
 
-    if (nullptr == desc)
+    if (desc == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
-    if (0 == desc->size)
+    if (desc->size == 0)
         return AIPU_STATUS_ERROR_INVALID_SIZE;
 
     pthread_rwlock_wrlock(&m_lock);
@@ -330,7 +371,7 @@ aipu_status_t aipudrv::UMemory::free_phybuffer(BufferDesc* desc, const char* str
             m_memblock[asid][mem_region].bitmap[i] = true;
 
         LOG(LOG_INFO, "free buffer_pa=%lx\n", iter->second.desc->pa);
-        delete []iter->second.va;
+        delete[] iter->second.va;
         iter->second.va = nullptr;
         if (!reserve_mem_flag)
         {
@@ -360,10 +401,10 @@ aipu_status_t aipudrv::UMemory::reserve_mem(DEV_PA_32 addr, uint32_t size,
     uint32_t mem_region = MEM_REGION_DDR;
     uint32_t asid = ASID_REGION_0;
 
-    if (0 == size)
+    if (size == 0)
         return AIPU_STATUS_ERROR_INVALID_SIZE;
 
-    if (nullptr == *desc)
+    if (*desc == nullptr)
     {
         *desc = new BufferDesc;
         (*desc)->reset();
@@ -480,11 +521,13 @@ aipu_status_t aipudrv::UMemory::free_all(void)
                 m_memblock[asid][mem_region].bitmap[i] = true;
 
             LOG(LOG_INFO, "free buffer_pa=%lx\n", desc->pa);
-            delete []iter->second.va;
+            delete[] iter->second.va;
+            iter->second.va = nullptr;
             pa = desc->pa;
             size = desc->size;
             desc->reset();
             delete desc;
+            desc = nullptr;
             pthread_rwlock_unlock(&m_lock);
             (mem_map == &m_reserved) ? promt = "rsv" : promt = "normal";
             add_tracking(pa, size, MemOperationFree, promt, false, 0);

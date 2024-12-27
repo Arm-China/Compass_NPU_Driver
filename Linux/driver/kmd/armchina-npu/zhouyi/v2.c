@@ -93,8 +93,8 @@ static int zhouyi_v2_reserve(struct aipu_partition *core, struct aipu_job_desc *
 	/* ASE 0 */
 	aipu_write32(core->reg, AIPU_ADDR_EXT0_CTRL_REG_OFFSET,
 		     ZHOUYI_V2_ASE_RW_ENABLE | enable_dtcm);
-	aipu_write32(core->reg, AIPU_ADDR_EXT0_HIGH_BASE_REG_OFFSET, cap.asid0_base >> 32);
-	aipu_write32(core->reg, AIPU_ADDR_EXT0_LOW_BASE_REG_OFFSET, (u32)cap.asid0_base);
+	aipu_write32(core->reg, AIPU_ADDR_EXT0_HIGH_BASE_REG_OFFSET, cap.asid_base[AIPU_BUF_ASID_0] >> 32);
+	aipu_write32(core->reg, AIPU_ADDR_EXT0_LOW_BASE_REG_OFFSET, (u32)cap.asid_base[AIPU_BUF_ASID_0]);
 	dev_dbg(core->dev, "ASE 0 Ctrl 0x%x, ASE 0 PA 0x%llx",
 		aipu_read32(core->reg, AIPU_ADDR_EXT0_CTRL_REG_OFFSET),
 		((u64)aipu_read32(core->reg, AIPU_ADDR_EXT0_HIGH_BASE_REG_OFFSET) << 32) +
@@ -102,8 +102,8 @@ static int zhouyi_v2_reserve(struct aipu_partition *core, struct aipu_job_desc *
 	/* ASE 1 */
 	aipu_write32(core->reg, AIPU_ADDR_EXT1_CTRL_REG_OFFSET,
 		     ZHOUYI_V2_ASE_READ_ENABLE | enable_dtcm);
-	aipu_write32(core->reg, AIPU_ADDR_EXT1_HIGH_BASE_REG_OFFSET, cap.asid1_base >> 32);
-	aipu_write32(core->reg, AIPU_ADDR_EXT1_LOW_BASE_REG_OFFSET, (u32)cap.asid1_base);
+	aipu_write32(core->reg, AIPU_ADDR_EXT1_HIGH_BASE_REG_OFFSET, cap.asid_base[AIPU_BUF_ASID_1] >> 32);
+	aipu_write32(core->reg, AIPU_ADDR_EXT1_LOW_BASE_REG_OFFSET, (u32)cap.asid_base[AIPU_BUF_ASID_1]);
 	dev_dbg(core->dev, "ASE 1 Ctrl 0x%x, ASE 1 PA 0x%llx",
 		aipu_read32(core->reg, AIPU_ADDR_EXT1_CTRL_REG_OFFSET),
 		((u64)aipu_read32(core->reg, AIPU_ADDR_EXT1_HIGH_BASE_REG_OFFSET) << 32) +
@@ -111,8 +111,8 @@ static int zhouyi_v2_reserve(struct aipu_partition *core, struct aipu_job_desc *
 	/* ASE 2 */
 	aipu_write32(core->reg, AIPU_ADDR_EXT2_CTRL_REG_OFFSET,
 		     ZHOUYI_V2_ASE_RW_ENABLE | enable_dtcm);
-	aipu_write32(core->reg, AIPU_ADDR_EXT2_HIGH_BASE_REG_OFFSET, cap.asid2_base >> 32);
-	aipu_write32(core->reg, AIPU_ADDR_EXT2_LOW_BASE_REG_OFFSET, (u32)cap.asid2_base);
+	aipu_write32(core->reg, AIPU_ADDR_EXT2_HIGH_BASE_REG_OFFSET, cap.asid_base[AIPU_BUF_ASID_2] >> 32);
+	aipu_write32(core->reg, AIPU_ADDR_EXT2_LOW_BASE_REG_OFFSET, (u32)cap.asid_base[AIPU_BUF_ASID_2]);
 	dev_dbg(core->dev, "ASE 2 Ctrl 0x%x, ASE 0 PA 0x%llx",
 		aipu_read32(core->reg, AIPU_ADDR_EXT2_CTRL_REG_OFFSET),
 		((u64)aipu_read32(core->reg,
@@ -343,7 +343,7 @@ static int zhouyi_v2_sysfs_show(struct aipu_partition *core, char *buf)
 }
 #endif
 
-int zhouyi_v2_soft_reset(struct aipu_partition *core, bool init_regs)
+static int zhouyi_v2_soft_reset(struct aipu_partition *core, bool init_regs)
 {
 	int ret = 0;
 

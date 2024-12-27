@@ -40,7 +40,7 @@ class GM_V3
 
     public:
     JobV3 &m_job;
-    const GraphV3X &m_graph;
+    GraphV3X &m_graph;
 
     /**
      * index 0: record the input info, DDR->GM

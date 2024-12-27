@@ -11,7 +11,7 @@
 #include <set>
 #include <queue>
 #include <iomanip>
-#include <sstream>
+#include <iostream>
 #include <unistd.h>
 #include <string.h>
 #include <sys/time.h>
@@ -26,7 +26,7 @@
 #include "graph_v1v2.h"
 #endif
 
-#if (defined ZHOUYI_V3) || (defined ZHOUYI_V4)
+#if (defined ZHOUYI_V3) || (defined ZHOUYI_V3_1)
 #include "graph_v3x.h"
 #endif
 
@@ -55,14 +55,22 @@ aipudrv::MainContext::MainContext()
     m_sim_cfg.enable_avx = false;
     m_sim_cfg.enable_calloc = false;
     m_sim_cfg.en_eval = false;
-    #if (defined ZHOUYI_V3)
+    m_sim_cfg.en_l2d = false;
+#if (defined ZHOUYI_V3)
     m_sim_cfg.gm_size = 4 * MB_SIZE;
-    #else
+#else
     m_sim_cfg.gm_size = 8 * MB_SIZE;
-    #endif
+#endif
+
+    m_sim_cfg.en_fast_perf = 0;
+    m_sim_cfg.freq_mhz = 1000;
+    m_sim_cfg.ddr_latency_rd = 0;
+    m_sim_cfg.ddr_latency_wr = 0;
+    m_sim_cfg.ddr_bw = 512;
+    m_sim_cfg.ddr_bw_ratio = 1.0;
+    m_sim_cfg.perf_report = nullptr;
 
     m_hw_cfg.poll_in_commit_thread = true;
-
     if (umd_log_level_env != nullptr)
     {
         int32_t log_level = umd_log_level_env[0] - '0';
@@ -80,18 +88,40 @@ aipudrv::MainContext::~MainContext()
 {
     pthread_rwlock_destroy(&m_glock);
     if (m_sim_cfg.simulator != nullptr)
+    {
         delete[] m_sim_cfg.simulator;
+        m_sim_cfg.simulator = nullptr;
+    }
 
     if (m_sim_cfg.npu_arch_desc != nullptr)
+    {
         delete[] m_sim_cfg.npu_arch_desc;
+        m_sim_cfg.npu_arch_desc = nullptr;
+    }
 
     if (m_sim_cfg.plugin_name != nullptr)
+    {
         delete[] m_sim_cfg.plugin_name;
+        m_sim_cfg.plugin_name = nullptr;
+    }
 
     if (m_sim_cfg.json_filename != nullptr)
+    {
         delete[] m_sim_cfg.json_filename;
+        m_sim_cfg.json_filename = nullptr;
+    }
 
-    delete[] m_sim_cfg.log_file_path;
+    if (m_sim_cfg.perf_report != nullptr)
+    {
+        delete[] m_sim_cfg.perf_report;
+        m_sim_cfg.perf_report = nullptr;
+    }
+
+    if (m_sim_cfg.log_file_path != nullptr)
+    {
+        delete[] m_sim_cfg.log_file_path;
+        m_sim_cfg.log_file_path = nullptr;
+    }
 }
 
 bool aipudrv::MainContext::is_deinit_ok()
@@ -109,10 +139,10 @@ aipu_status_t aipudrv::MainContext::init()
         return ret;
 
     /* init m_dram here as debugger may allocate buffer after contex initializing done */
-    #ifndef SIMULATION
+#ifndef SIMULATION
     if (m_dev->get_mem() != nullptr)
         m_dram = m_dev->get_mem();
-    #endif
+#endif
 
     m_umd_version = MACRO_UMD_VERSION;
 
@@ -155,7 +185,7 @@ aipu_status_t aipudrv::MainContext::get_status_msg(aipu_status_t status, const c
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    if (nullptr == msg)
+    if (msg == nullptr)
     {
         ret = AIPU_STATUS_ERROR_NULL_PTR;
         goto finish;
@@ -188,7 +218,7 @@ aipu_status_t aipudrv::MainContext::create_graph_object(std::istream& gbin, uint
     GraphBase* p_gobj = nullptr;
     uint32_t g_version = 0;
 
-    if (nullptr == gobj)
+    if (gobj == nullptr)
     {
         ret = AIPU_STATUS_ERROR_NULL_PTR;
         goto finish;
@@ -196,7 +226,7 @@ aipu_status_t aipudrv::MainContext::create_graph_object(std::istream& gbin, uint
 
     g_version = ParserBase::get_graph_bin_version(gbin);
     ret = test_get_device(g_version, &m_dev, &m_sim_cfg);
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
         goto finish;
 
     {
@@ -206,22 +236,22 @@ aipu_status_t aipudrv::MainContext::create_graph_object(std::istream& gbin, uint
     }
 
 #if (defined ZHOUYI_V12)
-    if (AIPU_LOADABLE_GRAPH_V0005 == g_version)
+    if (g_version == AIPU_LOADABLE_GRAPH_V0005)
         p_gobj = new GraphV12(this, id, m_dev);
 #endif
-#if (defined ZHOUYI_V3) || (defined ZHOUYI_V4)
-    if (AIPU_LOADABLE_GRAPH_ELF_V0 == g_version)
+#if (defined ZHOUYI_V3) || (defined ZHOUYI_V3_1)
+    if (g_version == AIPU_LOADABLE_GRAPH_ELF_V0)
         p_gobj = new GraphV3X(this, id, m_dev);
 #endif
 
-    if (nullptr == p_gobj)
+    if (p_gobj == nullptr)
     {
         ret = AIPU_STATUS_ERROR_GVERSION_UNSUPPORTED;
         goto finish;
     }
 
     ret = p_gobj->load(gbin, size, m_do_vcheck, config);
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
     {
         destroy_graph_object(&p_gobj);
         goto finish;
@@ -238,7 +268,7 @@ aipudrv::GraphBase* aipudrv::MainContext::get_graph_object(GRAPH_ID id)
 {
     GraphBase* p_gobj = nullptr;
     pthread_rwlock_rdlock(&m_glock);
-    if (0 != m_graphs.count(id))
+    if (m_graphs.count(id) != 0)
         p_gobj = m_graphs[id];
     pthread_rwlock_unlock(&m_glock);
 
@@ -258,14 +288,14 @@ aipu_status_t aipudrv::MainContext::destroy_graph_object(GraphBase** gobj)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    if ((nullptr == gobj) || (nullptr == (*gobj)))
+    if ((gobj == nullptr) || ((*gobj) == nullptr))
     {
         ret = AIPU_STATUS_ERROR_NULL_PTR;
         goto finish;
     }
 
     ret = (*gobj)->unload();
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
         goto finish;
 
     /* success */
@@ -276,16 +306,16 @@ finish:
     return ret;
 }
 
-aipu_status_t aipudrv::MainContext::load_graph(const char* graph_file, GRAPH_ID* id,
+aipu_status_t aipudrv::MainContext::load_graph(const char* graph_file, GRAPH_ID* _id,
     aipu_load_graph_cfg_t *config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     GraphBase* gobj = nullptr;
-    uint64_t _id = 0;
+    uint64_t id = 0;
     std::ifstream gbin;
     int fsize = 0;
 
-    if ((nullptr == graph_file) || (nullptr == id))
+    if ((graph_file == nullptr) || (_id == nullptr))
     {
         ret = AIPU_STATUS_ERROR_NULL_PTR;
         goto finish;
@@ -301,24 +331,24 @@ aipu_status_t aipudrv::MainContext::load_graph(const char* graph_file, GRAPH_ID*
 
     /* push nullptr into graphs to pin this graph ID */
     pthread_rwlock_wrlock(&m_glock);
-    _id = create_unique_graph_id_inner();
-    m_graphs[_id] = nullptr;
+    id = create_unique_graph_id_inner();
+    m_graphs[id] = nullptr;
     pthread_rwlock_unlock(&m_glock);
 
-    ret = create_graph_object(gbin, fsize, _id, &gobj, config);
-    if (AIPU_STATUS_SUCCESS != ret)
+    ret = create_graph_object(gbin, fsize, id, &gobj, config);
+    if (ret != AIPU_STATUS_SUCCESS)
     {
         pthread_rwlock_wrlock(&m_glock);
-        m_graphs.erase(_id);
+        m_graphs.erase(id);
         pthread_rwlock_unlock(&m_glock);
         goto finish;
     }
 
-    /* success: update graphs[_id] */
+    /* success: update graphs[id] */
     pthread_rwlock_wrlock(&m_glock);
-    m_graphs[_id] = gobj;
+    m_graphs[id] = gobj;
     pthread_rwlock_unlock(&m_glock);
-    *id = _id;
+    *_id = id;
 
 finish:
     gbin.close();
@@ -326,53 +356,54 @@ finish:
 }
 
 aipu_status_t aipudrv::MainContext::load_graph(const char* graph_buf, uint32_t graph_size,
-    GRAPH_ID* id, aipu_load_graph_cfg_t *config)
+    GRAPH_ID* _id, aipu_load_graph_cfg_t *config)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     GraphBase* gobj = nullptr;
-    uint64_t _id = 0;
-    std::stringstream gbin;
-    std::string *gbin_str = nullptr;
+    uint64_t id = 0;
 
-    if ((nullptr == graph_buf) || (nullptr == id))
+    if ((graph_buf == nullptr) || (_id == nullptr))
     {
         ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
+        return ret;
     }
 
     if ((graph_size <= 0) || (graph_size > UINT32_MAX))
     {
         ret = AIPU_STATUS_ERROR_INVALID_SIZE;
-        goto finish;
+        return ret;
     }
-
-    /* convert graph data array to stringstream */
-    gbin_str = new std::string(graph_buf, graph_size);
-    gbin << *gbin_str;
 
     /* push nullptr into graphs to pin this graph ID */
     pthread_rwlock_wrlock(&m_glock);
-    _id = create_unique_graph_id_inner();
-    m_graphs[_id] = nullptr;
+    id = create_unique_graph_id_inner();
+    m_graphs[id] = nullptr;
     pthread_rwlock_unlock(&m_glock);
 
-    ret = create_graph_object(gbin, graph_size, _id, &gobj, config);
-    if (AIPU_STATUS_SUCCESS != ret)
+    CustomMemBuf buf(const_cast<char*>(graph_buf), graph_size);
+    std::istream gbin(&buf);
+    if (gbin.fail())
+    {
+        ret = AIPU_STATUS_ERROR_READ_FILE_FAIL;
+        goto finish;
+    }
+
+    ret = create_graph_object(gbin, graph_size, id, &gobj, config);
+    if (ret != AIPU_STATUS_SUCCESS)
     {
         pthread_rwlock_wrlock(&m_glock);
-        m_graphs.erase(_id);
+        m_graphs.erase(id);
         pthread_rwlock_unlock(&m_glock);
         goto finish;
     }
 
-    /* success: update graphs[_id] */
+    /* success: update graphs[id] */
     pthread_rwlock_wrlock(&m_glock);
-    m_graphs[_id] = gobj;
+    m_graphs[id] = gobj;
     pthread_rwlock_unlock(&m_glock);
-    *id = _id;
+    *_id = id;
 
 finish:
-    delete gbin_str;
     return ret;
 }
 
@@ -382,14 +413,14 @@ aipu_status_t aipudrv::MainContext::unload_graph(GRAPH_ID id)
     GraphBase* p_gobj = nullptr;
 
     p_gobj = get_graph_object(id);
-    if (nullptr == p_gobj)
+    if (p_gobj == nullptr)
     {
         ret = AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
         goto finish;
     }
 
     ret = destroy_graph_object(&p_gobj);
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
         goto finish;
 
     /* p_gobj becomes NULL after destroy */
@@ -408,14 +439,14 @@ aipu_status_t aipudrv::MainContext::create_job(GRAPH_ID graph, JOB_ID* id, aipu_
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     GraphBase* p_gobj = nullptr;
 
-    if (nullptr == id)
+    if (id == nullptr)
     {
         ret = AIPU_STATUS_ERROR_NULL_PTR;
         goto finish;
     }
 
     p_gobj = get_graph_object(graph);
-    if (nullptr == p_gobj)
+    if (p_gobj == nullptr)
     {
         ret = AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
         goto finish;
@@ -456,23 +487,23 @@ aipu_status_t aipudrv::MainContext::debugger_get_job_info(uint64_t job, aipu_deb
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     GraphBase* p_gobj = get_graph_object(get_graph_id(job));
-    if (nullptr == p_gobj)
+    if (p_gobj == nullptr)
     {
         ret = AIPU_STATUS_ERROR_INVALID_JOB_ID;
         goto finish;
     }
 
-    if (nullptr == info)
+    if (info == nullptr)
     {
         ret = AIPU_STATUS_ERROR_NULL_PTR;
         goto finish;
     }
 
     ret = get_simulation_instance(&info->simulation_aipu, &info->simulation_mem_engine);
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
         goto finish;
 
-    info->instr_base = p_gobj->debugger_get_instr_base() & 0xffffffffUL;
+    info->instr_base = p_gobj->debugger_get_instr_base();
 
 finish:
     return ret;
@@ -495,7 +526,7 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
         64 << 20
     };
 
-    if (nullptr == config)
+    if (config == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     if (config->simulator != nullptr)
@@ -532,15 +563,30 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
     m_sim_cfg.enable_avx = config->enable_avx;
     m_sim_cfg.enable_calloc = config->enable_calloc;
     m_sim_cfg.en_eval = config->en_eval;
+    m_sim_cfg.en_l2d = config->en_l2d;
 
     m_sim_cfg.gm_size = config->gm_size;
     if (gm_sz_cfg.count(m_sim_cfg.gm_size) != 1)
     {
-        #if (defined ZHOUYI_V3)
+#if (defined ZHOUYI_V3)
         m_sim_cfg.gm_size = 4 * MB_SIZE;
-        #else
+#else
         m_sim_cfg.gm_size = 8 * MB_SIZE;
-        #endif
+#endif
+    }
+
+    m_sim_cfg.en_fast_perf = config->en_fast_perf;
+    m_sim_cfg.freq_mhz = config->freq_mhz;
+    m_sim_cfg.ddr_latency_rd = config->ddr_latency_rd;
+    m_sim_cfg.ddr_latency_wr = config->ddr_latency_wr;
+    m_sim_cfg.ddr_bw = config->ddr_bw;
+    m_sim_cfg.ddr_bw_ratio = config->ddr_bw_ratio;
+    if (config->perf_report != nullptr)
+    {
+        if (m_sim_cfg.perf_report == nullptr)
+            m_sim_cfg.perf_report = new char[BUF_LEN];
+
+        strncpy((char*)m_sim_cfg.perf_report, config->perf_report, BUF_LEN);
     }
 
     if ((config->npu_arch_desc != nullptr) || (sim_npu_arch_env != nullptr))
@@ -557,6 +603,7 @@ aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_globa
         if (ret != AIPU_STATUS_SUCCESS)
             goto out;
     }
+
 out:
     return ret;
 }
@@ -565,7 +612,7 @@ aipu_status_t aipudrv::MainContext::config_hw(uint64_t types, aipu_global_config
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    if (nullptr == config)
+    if (config == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     m_hw_cfg = *config;
@@ -579,7 +626,7 @@ aipu_status_t aipudrv::MainContext::debugger_malloc(uint32_t size, void** va)
     char* alloc_va = nullptr;
     uint32_t core_cnt = 0;
 
-    if ((nullptr == va) || (nullptr == m_dram))
+    if ((va == nullptr) || (m_dram == nullptr))
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     ret = m_dram->malloc(size, 1, &buf, "dbg");
@@ -598,7 +645,8 @@ aipu_status_t aipudrv::MainContext::debugger_malloc(uint32_t size, void** va)
      * dreg1: magic number requested by debugger
      */
     m_dev->get_core_count(0, 0, &core_cnt);
-    if (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3)
+    if ((m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3) ||
+        (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3_1))
     {
         m_dev->write_reg(0, 0x0c, buf->pa);
         m_dev->write_reg(0, 0x08, 0x1248FFA5);
@@ -619,7 +667,7 @@ aipu_status_t aipudrv::MainContext::debugger_free(void* va)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    if (nullptr == va)
+    if (va == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     if (m_dbg_buffers.count(va) == 0)
@@ -644,14 +692,15 @@ aipu_status_t aipudrv::MainContext::aipu_get_target(char *target)
         "Z1_0904", "Z1_1002", "Z1_0701",
         "Z2_1104", "Z2_1002", "Z2_0901",
         "Z3_1104", "Z3_0901", "X1_1204",
-        "X2_1204"
+        "X2_1204",
+        "X3_1304",
     };
 
-    #if SIMULATION
+#if SIMULATION
     const char *nul_ptr = "null";
     strcpy(target, nul_ptr);
     return ret;
-    #endif
+#endif
 
     isa = m_dev->get_npu_version();
     config = m_dev->get_npu_config();
@@ -672,14 +721,11 @@ aipu_status_t aipudrv::MainContext::aipu_get_target(char *target)
             break;
         case AIPU_ISA_VERSION_ZHOUYI_V3:
             isa_version = "X2_";
-            if (m_dev->get_npu_core_cnt() == 3)
-            {
-                arch_cfg = "X2_1204MP3";
-                strncpy(target, arch_cfg.c_str(), 10);
-                return ret;
-            } else {
-                config = 1204;
-            }
+            config = 1204;
+            break;
+        case AIPU_ISA_VERSION_ZHOUYI_V3_1:
+            isa_version = "X3_";
+            config = 1304;
             break;
         default:
             return AIPU_STATUS_ERROR_INVALID_CONFIG;
@@ -690,7 +736,11 @@ aipu_status_t aipudrv::MainContext::aipu_get_target(char *target)
     if (arch_set.count(arch_cfg.c_str()) == 0)
         return AIPU_STATUS_ERROR_INVALID_CONFIG;
 
-    strncpy(target, arch_cfg.c_str(), 7);
+    uint32_t core_num = m_dev->get_npu_core_cnt();
+    if (core_num > 1)
+        arch_cfg = arch_cfg + "MP" + std::to_string(core_num);
+
+    strncpy(target, arch_cfg.c_str(), arch_cfg.size());
     return ret;
 }
 
@@ -703,9 +753,9 @@ aipu_status_t aipudrv::MainContext::aipu_get_device_status(device_status_t *stat
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     *status = DEV_IDLE;
-    #ifdef SIMULATION
+#ifdef SIMULATION
     return ret;
-    #endif
+#endif
 
     if (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3)
         reg_addr = 0x804;
@@ -811,7 +861,7 @@ repeat:
         }
 
         job = graph.get_job(job_id);
-        #ifdef SIMULATION
+#ifdef SIMULATION
         if (types & AIPU_CONFIG_TYPE_SIMULATION)
         {
             aipu_job_config_simulation_t sim_config = {0};
@@ -824,7 +874,7 @@ repeat:
                 goto poll_job_sts;
             }
         }
-        #endif
+#endif
 
         if (types & (~AIPU_CONFIG_TYPE_SIMULATION)) {
             aipu_job_config_dump_t dump_config = {0};
@@ -864,7 +914,7 @@ repeat:
 poll_job_sts:
     while (job_queue.size() > 0)
     {
-        #ifdef SIMULATION
+#ifdef SIMULATION
         uint32_t min_in_flight = (job_queue.size() < max_in_flight) ?
             job_queue.size() : max_in_flight;
         for (uint32_t i = 0; i < min_in_flight; i++)
@@ -889,7 +939,7 @@ poll_job_sts:
             if (ret != AIPU_STATUS_SUCCESS)
                 goto out;
         }
-        #else
+#else
         job_info_t job_info_item = job_queue.front();
         job_queue.pop();
         status = AIPU_JOB_STATUS_NO_STATUS;
@@ -914,7 +964,7 @@ poll_job_sts:
         ret = graph.destroy_job(job_info_item.job_id);
         if (ret != AIPU_STATUS_SUCCESS)
             goto out;
-        #endif
+#endif
 
         if ((oldret == AIPU_STATUS_SUCCESS) && (batch_num < graph.get_batch_queue_size(queue_id)) )
             goto repeat;
@@ -944,7 +994,7 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
         cmd != AIPU_IOCTL_DISABLE_TICK_COUNTER &&
         cmd != AIPU_IOCTL_ABORT_CMD_POOL)
     {
-        if (nullptr == arg)
+        if (arg == nullptr)
             return AIPU_STATUS_ERROR_NULL_PTR;
     }
 
@@ -953,7 +1003,7 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
         switch(cmd)
         {
             case AIPU_IOCTL_SET_PROFILE:
-                m_dev->enable_profiling((*(int *)arg) != 0);
+                m_dev->enable_profiling((*(int32_t *)arg) != 0);
                 break;
 
             case AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION:
@@ -964,7 +1014,7 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
                         return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
                     p_gobj = get_graph_object(buildver->graph_id);
-                    if (nullptr == p_gobj)
+                    if (p_gobj == nullptr)
                         return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
                     buildver->aipubin_buildversion = p_gobj->get_buildversion();
@@ -1008,7 +1058,7 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
                         return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
                     p_gobj = get_graph_object(ds_num->graph_id);
-                    if (nullptr == p_gobj)
+                    if (p_gobj == nullptr)
                         return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
                     if (ds_num->ds_num != nullptr) {
@@ -1028,7 +1078,7 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
                         return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
                     p_gobj = get_graph_object(ds_dim_num->graph_id);
-                    if (nullptr == p_gobj)
+                    if (p_gobj == nullptr)
                         return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
                     if (ds_dim_num->ds_dim_num != nullptr) {
@@ -1050,7 +1100,7 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
                         return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
                     p_gobj = get_graph_object(ds_info->graph_id);
-                    if (nullptr == p_gobj)
+                    if (p_gobj == nullptr)
                         return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
                     bool success = p_gobj->get_dynamic_shape_data(ds_info->ds_idx,
@@ -1063,34 +1113,14 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
                 }
                 break;
 
-            case AIPU_IOCTL_SET_DS_INFO:
-                {
-                    aipu_dynshape_param_t *ds_param = (aipu_dynshape_param_t *)arg;
-
-                    if (!aipudrv::valid_graph_id(ds_param->graph_id))
-                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-                    p_gobj = get_graph_object(ds_param->graph_id);
-                    if (nullptr == p_gobj)
-                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-                    bool success = p_gobj->set_dynamic_shape_data(ds_param);
-                    if (!success)
-                    {
-                        LOG(LOG_ERR, "set dynamic shape failed\n");
-                        return AIPU_STATUS_ERROR_SET_SHAPE_FAILED;
-                    }
-                }
-                break;
-
             default:
                 LOG(LOG_ERR, "invalid command\n");
                 return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
         }
     } else {
-        #ifndef SIMULATION
+#ifndef SIMULATION
         ret = convert_ll_status(m_dev->ioctl_cmd(cmd, arg));
-        #endif
+#endif
 
         if (ret == AIPU_STATUS_SUCCESS)
         {
@@ -1107,3 +1137,4 @@ aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
 
    return ret;
 }
+

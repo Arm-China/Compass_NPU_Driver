@@ -12,7 +12,7 @@ SRC_ZHOUYI_V1V2 = $(SRC_ROOT)/zhouyi_v1v2/
 SRC_ZHOUYI_V3X = $(SRC_ROOT)/zhouyi_v3x/
 SRC_ZHOUYI_V3X_COMMON = $(SRC_ZHOUYI_V3X)/common
 SRC_ZHOUYI_V3 = $(SRC_ZHOUYI_V3X)/zhouyi_v3/
-SRC_ZHOUYI_V4 = $(SRC_ZHOUYI_V3X)/zhouyi_v4/
+SRC_ZHOUYI_V3_1 = $(SRC_ZHOUYI_V3X)/zhouyi_v3_1/
 SRC_MISC = $(SRC_ROOT)/misc/
 SRC_UTIL = $(SRC_ROOT)/utils/
 SRC_DEVICE = $(SRC_ROOT)/device/
@@ -27,17 +27,19 @@ else ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
 INCD += -I$(SRC_ZHOUYI_V1V2)
 INCD += -I$(SRC_ZHOUYI_V3X_COMMON)
 INCD += -I$(SRC_ZHOUYI_V3)
-else ifeq ($(BUILD_AIPU_VERSION), aipu_v4)
+else ifeq ($(BUILD_AIPU_VERSION), aipu_v3_1)
 INCD += -I$(SRC_ZHOUYI_V1V2)
 INCD += -I$(SRC_ZHOUYI_V3X_COMMON)
-INCD += -I$(SRC_ZHOUYI_V4)
+INCD += -I$(SRC_ZHOUYI_V3_1)
 endif
 
 LDFLAGS = -shared -Wl,-soname,$(COMPASS_DRV_BTENVAR_UMD_SO_NAME)
 ANDROIDCXXFLAGS := --target=aarch64-none-linux-android21 \
                    --gcc-toolchain=$(BUILD_ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64 \
                    --sysroot=$(BUILD_ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/sysroot \
-                   -DGTEST_HAS_RTTI=0 -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -DANDROID -Wno-error
+                   -DGTEST_HAS_RTTI=0 -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -DANDROID -Wno-error \
+                   -Wno-non-pod-varargs -Wno-missing-braces -Wno-inconsistent-missing-override -Wno-unused-variable -Wno-overloaded-virtual \
+                   -Wno-tautological-pointer-compare -Wno-unused-command-line-argument
 ANDROIDLDFLAGS := -Wl,-O3 -Wl,--gc-sections \
                   -Wl,--exclude-libs,$(BUILD_ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/aarch64-linux-android/4.9.x/libgcc.a \
                   -Wl,--exclude-libs,$(BUILD_ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/aarch64-linux-android/lib64/libatomic.a \
@@ -62,9 +64,9 @@ ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
     CXXFLAGS += -DZHOUYI_V3
 endif
 
-ifeq ($(BUILD_AIPU_VERSION), aipu_v4)
+ifeq ($(BUILD_AIPU_VERSION), aipu_v3_1)
     CXXFLAGS += -DZHOUYI_V12
-    CXXFLAGS += -DZHOUYI_V4
+    CXXFLAGS += -DZHOUYI_V3_1
 endif
 
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
@@ -72,7 +74,7 @@ ifeq ($(BUILD_TARGET_PLATFORM), sim)
 endif
 
 SRC_DIRS = $(SRC_MISC) $(SRC_COMMON) $(SRC_UTIL) $(SRC_DEVICE) $(SRC_ZHOUYI_V1V2) \
-           $(SRC_ZHOUYI_V3V4) $(SRC_ZHOUYI_V3X_COMMON) $(SRC_ZHOUYI_V3) $(SRC_ZHOUYI_V4)
+           $(SRC_ZHOUYI_V3X_COMMON) $(SRC_ZHOUYI_V3) $(SRC_ZHOUYI_V3_1)
 SRCS = $(SRC_COMMON)/context.cpp           \
        $(SRC_COMMON)/ctx_ref_map.cpp       \
        $(SRC_COMMON)/graph_base.cpp        \
@@ -108,7 +110,8 @@ SRCS += $(V1V2_SRCS)
 V3_INCD += -I./3rdparty
 V3_SRCS += $(SRC_ZHOUYI_V3X_COMMON)/graph_v3x.cpp  \
         $(SRC_ZHOUYI_V3X_COMMON)/parser_elf.cpp \
-        $(SRC_ZHOUYI_V3)/job_v3.cpp     \
+        $(SRC_ZHOUYI_V3X_COMMON)/dynamic_shape.cpp \
+        $(SRC_ZHOUYI_V3)/job_v3.cpp \
         $(SRC_ZHOUYI_V3)/gm.cpp
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
     V3_LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X2_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X2_SIM_LNAME)
@@ -121,21 +124,22 @@ ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
     SRCS += $(V3_SRCS)
 endif
 
-# V4 deps
-V4_INCD += -I./3rdparty
-V4_SRCS += $(SRC_ZHOUYI_V3X_COMMON)/graph_v3x.cpp  \
+# V3_1 deps
+V3_1_INCD += -I./3rdparty
+V3_1_SRCS += $(SRC_ZHOUYI_V3X_COMMON)/graph_v3x.cpp  \
         $(SRC_ZHOUYI_V3X_COMMON)/parser_elf.cpp \
-        $(SRC_ZHOUYI_V4)/job_v4.cpp \
-        $(SRC_ZHOUYI_V4)/gm.cpp
+        $(SRC_ZHOUYI_V3X_COMMON)/dynamic_shape.cpp \
+        $(SRC_ZHOUYI_V3_1)/job_v3_1.cpp \
+        $(SRC_ZHOUYI_V3_1)/gm.cpp
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
-    V4_LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X3_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X3_SIM_LNAME)
-    V4_SRCS += $(SRC_DEVICE)/simulator/simulator_v4.cpp
+    V3_1_LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X3_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X3_SIM_LNAME)
+    V3_1_SRCS += $(SRC_DEVICE)/simulator/simulator_v3_1.cpp
 endif
 
-ifeq ($(BUILD_AIPU_VERSION), aipu_v4)
-    LDFLAGS += $(V4_LDFLAGS)
-    INCD += $(V4_INCD)
-    SRCS += $(V4_SRCS)
+ifeq ($(BUILD_AIPU_VERSION), aipu_v3_1)
+    LDFLAGS += $(V3_1_LDFLAGS)
+    INCD += $(V3_1_INCD)
+    SRCS += $(V3_1_SRCS)
 endif
 
 ifeq ($(BUILD_UMD_API_TYPE), python_api)

@@ -105,8 +105,8 @@ struct cluster_info {
  * @dtcm_size:       DTCM size in bytes
  * @cluster_cnt:     cluster count
  * @clusters:        cluster information array
- * @partition_mode:  partition mode in a cluster (for zhouyi v4 only)
- * @event_type:      interrupt's event type (for zhouyi v4 only)
+ * @partition_mode:  partition mode in a cluster (for zhouyi v3_1 only)
+ * @event_type:      interrupt's event type (for zhouyi v3_1 only)
  */
 struct aipu_partition {
 	u32 id;

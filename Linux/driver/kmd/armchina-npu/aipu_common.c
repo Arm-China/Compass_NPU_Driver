@@ -8,6 +8,7 @@
 #include "aipu_partition.h"
 
 #define MAX_CHAR_SYSFS 4096
+#define ADDR_VALUE 2
 
 #ifdef CONFIG_SYSFS
 ssize_t aipu_common_ext_register_sysfs_show(struct device *dev,
@@ -50,55 +51,50 @@ ssize_t aipu_common_ext_register_sysfs_store(struct device *dev,
 					     struct device_attribute *attr,
 					     const char *buf, size_t count)
 {
-	int i = 0;
-	int ret = 0;
-	char *token = NULL;
-	char *buf_dup = NULL;
-	int value[3] = { 0 };
-	struct aipu_io_req io_req;
 	struct platform_device *p_dev = container_of(dev, struct platform_device, dev);
 	struct aipu_partition *partition = platform_get_drvdata(p_dev);
+	int ret = 0;
+	int value[2] = { 0 };
+	struct aipu_io_req io_req;
 
 	if (get_soc_ops(partition) &&
 	    get_soc_ops(partition)->is_clk_enabled &&
 	    !get_soc_ops(partition)->is_clk_enabled(dev, get_soc(partition)))
 		return 0;
 
-	buf_dup = kzalloc(1024, GFP_KERNEL);
-	if (!buf_dup)
-		return -ENOMEM;
-	snprintf(buf_dup, 1024, buf);
-
-	for (i = 0; i < 3; i++) {
-		token = strsep(&buf_dup, "-");
-		if (!token) {
-			dev_err(dev, "[SYSFS] please echo as this format: <reg_offset>-<write time>-<write value>");
-			goto out_free_buffer;
+	ret = sscanf(buf, "%x %x", &value[0], &value[1]);
+	if (ret == ADDR_VALUE) {
+		io_req.rw = AIPU_IO_WRITE;
+		io_req.offset = value[0];
+		io_req.value = value[1];
+		dev_info(dev, "[SYSFS] write 0x%x into register offset 0x%x", value[1], value[0]);
+		if (io_req.offset % 4 == 0) {
+			partition->ops->io_rw(partition, &io_req);
+		} else {
+			dev_err(dev, "0x%x invalid address! 4 bytes alignment!\n", value[0]);
+			return -EINVAL;
 		}
-
-		dev_dbg(dev, "[SYSFS] to convert str: %s", token);
-
-		ret = kstrtouint(token, 0, &value[i]);
-		if (ret) {
-			dev_err(dev, "[SYSFS] convert str to int failed (%d): %s", ret, token);
-			goto out_free_buffer;
-		}
+	} else {
+		dev_info(dev, "echo \"addr_hex  value_hex\" > ext_registers\n");
+		return -EINVAL;
 	}
 
-	dev_dbg(dev, "[SYSFS] offset 0x%x, time 0x%x, value 0x%x",
-		value[0], value[1], value[2]);
-
-	io_req.rw = AIPU_IO_WRITE;
-	io_req.offset = value[0];
-	io_req.value = value[2];
-	for (i = 0; i < value[1]; i++) {
-		dev_info(dev, "[SYSFS] write 0x%x into register offset 0x%x", value[2], value[0]);
-		partition->ops->io_rw(partition, &io_req);
-	}
-
-out_free_buffer:
-	kfree(buf_dup);
 	return count;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }
 
 ssize_t aipu_common_clock_sysfs_show(struct device *dev,

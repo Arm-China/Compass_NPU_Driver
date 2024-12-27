@@ -206,7 +206,7 @@ void unmap_file_data(void *data, int size)
 /**
  * check the inferrence output with referrence data
  */
-bool is_output_correct(volatile char* src1, char* src2, uint32_t cnt)
+bool is_output_correct(const char* src1, const char* src2, uint32_t cnt)
 {
     for(uint32_t out_chr = 0; out_chr < cnt; out_chr++)
     {

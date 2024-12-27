@@ -8,7 +8,7 @@
 #include "v1.h"
 #include "v2.h"
 #include "v3.h"
-#include "v4.h"
+#include "v3_1.h"
 
 static int init_misc_dev(struct aipu_priv *aipu)
 {
@@ -78,9 +78,9 @@ int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,
 	aipu->version = version;
 	aipu->revision = revision;
 
-#ifdef CONFIG_ARMCHINA_NPU_ARCH_V4
-	if (version == AIPU_ISA_VERSION_ZHOUYI_V4) {
-		aipu->ops = get_v4_priv_ops();
+#ifdef CONFIG_ARMCHINA_NPU_ARCH_V3_1
+	if (version == AIPU_ISA_VERSION_ZHOUYI_V3_1) {
+		aipu->ops = get_v3_1_priv_ops();
 		aipu->core_reset_delay_us = AIPU_CONFIG_CORE_RESET_DELAY_US;
 	}
 #endif
@@ -227,6 +227,7 @@ int aipu_priv_query_capability(struct aipu_priv *aipu, struct aipu_cap *cap)
 
 	cap->partition_cnt = aipu_priv_get_partition_cnt(aipu);
 	cap->is_homogeneous = 1;
+	cap->asid_cnt = aipu_mm_get_asid_cnt(&aipu->mm);
 
 	ins_cap = kcalloc(cap->partition_cnt, sizeof(*ins_cap), GFP_KERNEL);
 	if (!ins_cap)

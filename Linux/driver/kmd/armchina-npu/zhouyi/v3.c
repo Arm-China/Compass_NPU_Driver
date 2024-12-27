@@ -165,6 +165,7 @@ static int zhouyi_v3_destroy_command_pool(struct aipu_partition *partition, int 
 		aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
 		zhouyi_v3_abort_command_pool(partition, ZHOUYI_COMMAND_POOL_DEFAULT);
 		zhouyi_v3_destroy_command_pool_internal(partition);
+		status = aipu_read32(partition->reg, TSM_STATUS_REG);
 		if (IS_CMD_FAIL(status)) {
 			aipu_write32(partition->reg, TSM_STATUS_REG, CLEAR_CMD_FAIL(status));
 			return -EFAULT;
@@ -229,7 +230,7 @@ static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_d
 	return ret;
 }
 
-int zhouyi_v3_exit_dispatch(struct aipu_partition *partition, u32 job_flag, u64 tcb_pa)
+static int zhouyi_v3_exit_dispatch(struct aipu_partition *partition, u32 job_flag, u64 tcb_pa)
 {
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
 		     TSM_DISPATCH_CMD_POOL(partition->id, get_qos(job_flag)));
@@ -471,7 +472,7 @@ static int zhouyi_v3_sysfs_show(struct aipu_partition *partition, char *buf)
 }
 #endif
 
-int zhouyi_v3_soft_reset(struct aipu_partition *partition, bool init_regs)
+static int zhouyi_v3_soft_reset(struct aipu_partition *partition, bool init_regs)
 {
 	int ret = 0;
 	struct aipu_priv *aipu = partition->priv;

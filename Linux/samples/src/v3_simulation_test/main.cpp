@@ -43,6 +43,7 @@ int main(int argc, char* argv[])
     uint64_t cfg_types = 0;
     uint32_t part_idx = 0, part_cnt = 0, cluster_cnt = 0, core_cnt = 0;
     aipu_create_job_cfg_t create_job_cfg = {0};
+    char target[20] = {'\0'};
 
     AIPU_CRIT() << "usage: ./aipu_v3_simulation_test "
                     "-a X2_1204/X2_1204MP3 -b aipu.bin -i input0.bin -c output.bin -d ./\n";
@@ -148,6 +149,17 @@ int main(int argc, char* argv[])
             }
         }
 
+        AIPU_INFO()("partition cnt: %u, cluster cnt: %u, core_cnt: %u\n", part_cnt, cluster_cnt, core_cnt);
+
+        ret = aipu_get_target(ctx, target);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(ctx, ret, &msg);
+            AIPU_ERR()("aipu_get_target: %s\n", msg);
+            goto deinit_ctx;
+        }
+        AIPU_INFO()("aipu target: %s\n", target);
+
         ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -240,7 +252,7 @@ int main(int argc, char* argv[])
         if (part_idx >= part_cnt)
             part_idx = 0;
 
-    #if ((defined RTDEBUG) && (RTDEBUG == 1))
+#if ((defined RTDEBUG) && (RTDEBUG == 1))
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_TEXT  |
             AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_RODATA        |
@@ -249,9 +261,9 @@ int main(int argc, char* argv[])
             AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION     |
             AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN;
-    #else
+#else
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT | AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
-    #endif
+#endif
         ret = aipu_config_job(ctx, job_id, cfg_types, &mem_dump_config);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -329,7 +341,7 @@ int main(int argc, char* argv[])
                     i, i+1, output_cnt);
             }
 
-            pass = check_result_helper(output_data, output_desc, opt.gts[0], opt.gts_size[0]);
+            pass = check_result_helper(output_data, output_desc, opt.gts, opt.gts_size);
         }
 
         input_desc.clear();
@@ -373,6 +385,7 @@ int main(int argc, char* argv[])
         for (uint32_t i = 0; i < output_data.size(); i++)
         {
             delete[] output_data[i];
+            output_data[i] = nullptr;
         }
 
         output_data.clear();

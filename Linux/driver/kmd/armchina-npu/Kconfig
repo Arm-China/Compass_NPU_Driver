@@ -34,6 +34,14 @@ config ARMCHINA_NPU_ARCH_V3
 
 	  For other architecture versions, say N.
 
+config ARMCHINA_NPU_ARCH_V3_1
+	bool "ArmChina NPU architecture: v3_1"
+	select ARMCHINA_NPU
+	help
+	  Say Y if the NPU version on your SoC is Zhouyi V3_1.
+
+	  For other architecture versions, say N.
+
 config ARMCHINA_NPU_SOC_DEFAULT
 	bool "Default SoC APIs"
 	help

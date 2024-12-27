@@ -56,6 +56,9 @@ static const struct of_device_id aipu_of_match[] = {
 		.compatible = "armchina,zhouyi-v3",
 	},
 	{
+		.compatible = "armchina,zhouyi-v3_1",
+	},
+	{
 		.compatible = "armchina,zhouyi",
 	},
 	{ }

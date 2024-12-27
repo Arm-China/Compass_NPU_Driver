@@ -136,17 +136,16 @@ aipu_status_t aipudrv::ParserELF::parse_subgraph(char* start, uint32_t id, Graph
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     Subgraph sg = {0};
     ElfSubGraphDesc gbin_sg_desc = {0};
-    FeatureMapList  fm_list = {0};
-    char* bss = nullptr;
     char* next = nullptr;
 
-    if (nullptr == start)
+    if (start == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     memcpy(&gbin_sg_desc, start, sizeof(gbin_sg_desc) - sizeof(int32_t));
     sg_desc_size = sizeof(gbin_sg_desc) - sizeof(int32_t);
 
     sg.id = id;
+    sg.bss_idx = gbin_sg_desc.fm_desc_offset; // BSS ID which sg refers to
     sg.text.load(nullptr, gbin_sg_desc.text_offset, 0);
     sg.rodata.load(nullptr, gbin_sg_desc.rodata_offset, gbin_sg_desc.rodata_size);
     sg.dcr.load(nullptr, gbin_sg_desc.dcr_offset, gbin_sg_desc.dcr_size);
@@ -184,7 +183,7 @@ aipu_status_t aipudrv::ParserELF::parse_subgraph(char* start, uint32_t id, Graph
     if (gbin_sg_desc.private_buffer_cnt > 0)
     {
         ret = parse_reuse_section(start, gbin_sg_desc.private_buffer_cnt, id, sg, &next);
-        if (AIPU_STATUS_SUCCESS != ret)
+        if (ret != AIPU_STATUS_SUCCESS)
             return ret;
         sg_desc_size += next - start;
     }
@@ -199,22 +198,6 @@ aipu_status_t aipudrv::ParserELF::parse_subgraph(char* start, uint32_t id, Graph
 
     gobj.set_subgraph(sg);
 
-    /* currently all subgraphs share one copy of feature map */
-    if (gobj.get_subgraph_cnt() == 1)
-    {
-        bss = (char*)sections[ELFSectionFMList].va + gbin_sg_desc.fm_desc_offset;
-        memcpy(&fm_list, bss, sizeof(fm_list));
-        bss += sizeof(fm_list);
-        for (uint32_t i = 0; i < fm_list.num_fm_descriptor; i++)
-        {
-            ret = parse_bss_section(bss, 0, id, gobj, &next);
-            if (AIPU_STATUS_SUCCESS != ret)
-                return ret;
-
-            bss = next;
-        }
-    }
-
     return ret;
 }
 
@@ -224,10 +207,10 @@ aipu_status_t aipudrv::ParserELF::parse_no_subgraph(char* start, uint32_t id, Gr
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     Subgraph sg = {0};
     FeatureMapList  fm_list;
-    char* bss = nullptr;
+    char* start_va = nullptr;
     char* next = nullptr;
 
-    if (nullptr == start)
+    if (start == nullptr)
         return AIPU_STATUS_ERROR_NULL_PTR;
 
     sg.id = id;
@@ -240,16 +223,19 @@ aipu_status_t aipudrv::ParserELF::parse_no_subgraph(char* start, uint32_t id, Gr
     gobj.set_subgraph(sg);
     gobj.set_fake_subgraph();
 
-    bss = (char*)sections[ELFSectionFMList].va;
-    memcpy(&fm_list, bss, sizeof(fm_list));
-    bss += sizeof(fm_list);
+    start_va = (char*)sections[ELFSectionFMList].va;
+    memcpy(&fm_list, start_va, sizeof(fm_list));
+    start_va += sizeof(fm_list);
     for (uint32_t i = 0; i < fm_list.num_fm_descriptor; i++)
     {
-        ret = parse_bss_section(bss, 0, id, gobj, &next);
-        if (AIPU_STATUS_SUCCESS != ret)
+        struct BSS bss = {0};
+
+        static_cast<GraphV3X&>(gobj).set_bss(bss);
+        ret = parse_bss_section(start_va, 0, i, gobj, &next);
+        if (ret != AIPU_STATUS_SUCCESS)
             return ret;
 
-        bss = next;
+        start_va = next;
     }
 
     return ret;
@@ -297,7 +283,9 @@ aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size,
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     struct ElfSubGraphList sg_desc_header = {0};
+    FeatureMapList  fm_list = {0};
     char* start = nullptr;
+    char* next = nullptr;
 
     ret = parse_graph_header_check(gbin, size);
     if (ret != AIPU_STATUS_SUCCESS)
@@ -312,7 +300,7 @@ aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size,
 
     /* .text section parse */
     m_text = get_elf_section(".text");
-    if (nullptr == m_text)
+    if (m_text == nullptr)
     {
         ret = AIPU_STATUS_ERROR_INVALID_GBIN;
         goto finish;
@@ -331,7 +319,7 @@ aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size,
 
     /* .note section parse */
     m_note = get_elf_section(".note.aipu");
-    if (nullptr == m_note)
+    if (m_note == nullptr)
     {
         ret = AIPU_STATUS_ERROR_INVALID_GBIN;
         goto finish;
@@ -348,7 +336,15 @@ aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size,
         gobj.set_graph_desc(sections[ELFSectionDesc]);
 
     if (sections[ELFSectionWeight].size != 0)
+    {
         gobj.set_graph_weight(sections[ELFSectionWeight]);
+        if (sections[ELFSectionExtraWeightName].size != 0)
+        {
+            ret = gobj.set_graph_extra_weight(sections[ELFSectionExtraWeightName]);
+            if (ret != AIPU_STATUS_SUCCESS)
+                goto finish;
+        }
+    }
 
     if (sections[ELFSectionGmconfig].size != 0)
         gobj.set_gmconfig(sections[ELFSectionGmconfig]);
@@ -379,6 +375,7 @@ aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size,
         }
     }
 
+    /* parse Subgraph section */
     start = (char*)sections[ELFSectionSubGraphs].va;
     memcpy(&sg_desc_header, start, sizeof(sg_desc_header));
 
@@ -393,6 +390,29 @@ aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size,
 
             start += sg_desc_size;
         }
+
+        /* parse BSS section */
+        start = (char*)sections[ELFSectionFMList].va;
+        memcpy(&fm_list, start, sizeof(fm_list));
+        start += sizeof(fm_list);
+        for (uint32_t i = 0; i < fm_list.num_fm_descriptor; i++)
+        {
+            struct BSS bss = {0};
+
+            static_cast<GraphV3X&>(gobj).set_bss(bss);
+            ret = parse_bss_section(start, 0, i, static_cast<GraphV3X&>(gobj), &next);
+            if (ret != AIPU_STATUS_SUCCESS)
+                return ret;
+
+            start = next;
+        }
+        sort_io(gobj.get_bss_io_ref(0));
+
+        start = (char*)sections[ELFSectionRemap].va;
+        ret = parse_remap_section(start, gobj);
+
+        if (sg_desc_header.subgraphs_cnt != 0)
+            ret = gobj.extract_gm_info(0);
     } else if (sg_desc_header.subgraphs_cnt == 0) {
         /**
          * although there is no subgraph, to reuse the rest logic,
@@ -404,14 +424,9 @@ aipu_status_t aipudrv::ParserELF::parse_graph(std::istream& gbin, uint32_t size,
         if (ret)
             goto finish;
 
-        start += sg_desc_size;
+        /* resort reuse buffer for input and output result */
+        sort_io(gobj.get_bss_io_ref(0));
     }
-
-    start = (char*)sections[ELFSectionRemap].va;
-    ret = parse_remap_section(start, gobj);
-
-    if (sg_desc_header.subgraphs_cnt != 0)
-        ret = gobj.extract_gm_info(0);
 
 finish:
     return ret;

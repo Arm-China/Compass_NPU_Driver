@@ -75,7 +75,7 @@ struct ElfSubGraphDesc
     uint32_t id;
     uint32_t type;
     uint32_t text_offset;
-    uint32_t fm_desc_offset;
+    uint32_t fm_desc_offset; // BSS index
     uint32_t rodata_offset;
     uint32_t rodata_size;
     uint32_t dcr_offset;
@@ -115,6 +115,7 @@ enum ELFSection {
     ELFSectionSegmmu,
     ELFSectionGlobalParam,
     ELFSectionInputShapeConstraint,
+    ELFSectionExtraWeightName,
     ELFSectionCnt
 };
 
@@ -158,7 +159,8 @@ private:
         "gmconfig",
         "segmmu",
         "globalparam",
-        "inputshapeconstraint"
+        "inputshapeconstraint",
+        "extra_weight_name"
     };
 
 private:

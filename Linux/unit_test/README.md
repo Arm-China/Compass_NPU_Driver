@@ -16,14 +16,14 @@ The basic unit test cases for quickly verifying UMD and KMD.
 
 ## config example
 ```bash
-# cd unit_test
-# edit build.sh to add tool-chain and simulator lib path
-# ./buld.sh x86 X1
+$ cd unit_test
+$ edit build.sh to add tool-chain and simulator lib path
+$ ./buld.sh x86 X1
 
-# cd test_demo
-# mdkir ./benchmark; mkdir ./simulator
-# cp runtime_unit_test ./
-# cp aipu.bin/input0.bin ./benchmark
-# cp aipu_simulator_x1 ./simulator
-# ./runtime_unit_test
+$ cd test_demo
+$ mdkir ./benchmark; mkdir ./simulator
+$ cp runtime_unit_test ./
+$ cp aipu.bin/input0.bin ./benchmark
+$ cp aipu_simulator_x1 ./simulator
+$ ./runtime_unit_test
 ```

@@ -16,6 +16,32 @@
 
 #define gettid() syscall(SYS_gettid)
 
+#ifdef __ANDROID__
+class SemOp {
+  public:
+    explicit SemOp(int32_t count = 1) : m_count(count) {
+    }
+
+    void semaphore_v() {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        ++m_count;
+        m_cv.notify_one();
+    }
+
+    void semaphore_p() {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_cv.wait(lock, [ = ] { return m_count > 0; });
+        --m_count;
+    }
+
+  private:
+    std::mutex m_mutex;
+    std::condition_variable m_cv;
+    int32_t m_count;
+};
+
+#else
+
 union semun
 {
     int val;
@@ -98,13 +124,15 @@ class SemOp
     }
 };
 
+#endif
+
 int dump_file_helper(const char* fname, void* src, unsigned int size);
 int load_file_helper(const char* fname, char** dest, uint32_t* size);
 int unload_file_helper(char* data);
 int check_result_helper(const std::vector<char*>& outputs,
-    const std::vector<aipu_tensor_desc_t>& descs, char* gt, uint32_t gt_size);
-int check_result(std::vector< std::shared_ptr<char> >outputs,
-    const std::vector<aipu_tensor_desc_t>& descs, char* gt, uint32_t gt_size);
+    const std::vector<aipu_tensor_desc_t>& descs, const std::vector<char*>& gt, const std::vector<uint32_t>& gt_size);
+int check_result(const std::vector<std::shared_ptr<char>>& outputs,
+    const std::vector<aipu_tensor_desc_t>& descs, const std::vector<char*>& gt, const std::vector<uint32_t>& gt_size);
 
 extern std::shared_ptr<SemOp> semOp_sp;
 int help_create_dir(const char *path);

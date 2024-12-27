@@ -53,7 +53,7 @@ aipu_status_t aipudrv::UKMemory::malloc(uint32_t size, uint32_t align, BufferDes
         (*desc)->reset();
     }
 
-    if (0 == size)
+    if (size == 0)
         return AIPU_STATUS_ERROR_INVALID_SIZE;
 
     /* specific command for tcb alloc/free */
@@ -63,7 +63,7 @@ aipu_status_t aipudrv::UKMemory::malloc(uint32_t size, uint32_t align, BufferDes
     kret = ioctl(m_fd, cmd, &buf_req);
     if (kret != 0)
     {
-        LOG(LOG_ERR, "alloc buffer: size 0x%x [fail]", size);
+        LOG(LOG_ALERT, "alloc buffer: size 0x%x [fail]", size);
         return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
     }
 
@@ -235,6 +235,7 @@ aipu_status_t aipudrv::UKMemory::free_all(void)
         }
         desc->reset();
         delete desc;
+        desc = nullptr;
         pthread_rwlock_unlock(&m_lock);
         add_tracking(pa, size, MemOperationFree, "normal", false, 0);
         pthread_rwlock_wrlock(&m_lock);

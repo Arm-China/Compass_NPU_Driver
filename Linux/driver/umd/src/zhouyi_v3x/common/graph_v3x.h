@@ -115,6 +115,7 @@ struct BinSubGraphSection {
 
 struct Subgraph {
     uint32_t id;
+    uint32_t bss_idx;
     struct BinSubGraphSection text;
     struct BinSubGraphSection rodata;
     struct BinSubGraphSection dcr;
@@ -124,21 +125,32 @@ struct Subgraph {
     uint32_t warmup_len;
     std::vector<uint32_t> precursors;
     int32_t precursor_cnt;
+    std::vector<struct GraphParamMapLoadDesc> private_buffers_map;
+    std::vector<struct GraphSectionDesc> private_buffers;
+};
+
+struct ConstInfo {
+    uint32_t const_sz;
+    uint32_t zero_copy_sz;
+};
+
+struct BSS {
+    uint32_t bss_id;
     uint32_t stack_size;
     uint32_t stack_align_in_page;
     std::vector<struct GraphParamMapLoadDesc> param_map;
     std::map<uint32_t, struct GraphSectionDesc> const_sections;
     std::map<uint32_t, struct GraphSectionDesc> zerocpy_const_sections;
+    std::vector<uint32_t> const_info;
     std::vector<struct GraphSectionDesc> static_sections;
     std::vector<struct GraphSectionDesc> reuse_sections;
-    std::vector<struct GraphParamMapLoadDesc> private_buffers_map;
-    std::vector<struct GraphSectionDesc> private_buffers;
     struct GraphIOTensors io;
 };
 
 class GraphV3X: public Graph
 {
 private:
+    std::vector<struct BSS> m_bss_vec;
     std::vector<struct Subgraph> m_subgraphs;
     std::vector<struct GMConfig> m_gmconfig;
     BinSection m_bsegmmu;
@@ -148,9 +160,6 @@ public:
     std::map<uint32_t, GM_info_desc> m_gm_info[2];
     uint32_t m_segmmu_num = 0;
 
-    /* for broadcast, <sg_id, core_num> */
-    std::map<uint32_t, uint32_t> m_broadcast_info;
-
 public:
     void print_parse_info();
     aipu_status_t extract_gm_info(int sg_id);
@@ -159,16 +168,10 @@ public:
     aipu_status_t get_tensor_count(aipu_tensor_type_t type, uint32_t* cnt);
     aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor, aipu_tensor_desc_t* desc);
 
-    virtual std::vector<struct GraphSectionDesc> &get_static_section_ref()
-    {
-        return m_subgraphs[0].static_sections;
-    }
-
 public:
-    virtual aipu_status_t update_dynamic_io_tensor_size(aipu_tensor_type_t type);
     virtual aipu_data_type_t get_io_tensor_type(int idx)
     {
-        return m_subgraphs[0].io.inputs[idx].data_type;
+        return m_bss_vec[0].io.inputs[idx].data_type;
     }
 
 public:
@@ -195,6 +198,26 @@ public:
         return m_subgraphs[sg_id];
     }
 
+    void set_bss(struct BSS bss)
+    {
+        m_bss_vec.push_back(bss);
+    }
+
+    virtual BSS &get_bss(uint32_t bss_id)
+    {
+        return m_bss_vec[bss_id];
+    }
+
+    virtual uint32_t get_bss_cnt()
+    {
+        return m_bss_vec.size();
+    }
+
+    virtual GraphIOTensors&get_bss_io_ref(uint32_t bss_id)
+    {
+        return m_bss_vec[bss_id].io;
+    }
+
     void set_gmconfig(BinSection &gm_section)
     {
         GMConfig gmconfig = {0};
@@ -211,46 +234,91 @@ public:
         m_bsegmmu.init(segmmu_section.va + 4, segmmu_section.size - 4);
     }
 
-    void set_stack(uint32_t sg_id, uint32_t size, uint32_t align)
+    void set_stack(uint32_t bss_id, uint32_t size, uint32_t align)
     {
-        if (sg_id < (uint32_t)m_subgraphs.size())
+        if (bss_id < (uint32_t)m_bss_vec.size())
         {
-            m_subgraphs[sg_id].stack_size = size;
-            m_subgraphs[sg_id].stack_align_in_page = align;
+            m_bss_vec[bss_id].stack_size = size;
+            m_bss_vec[bss_id].stack_align_in_page = align;
         }
     }
-    void add_param(uint32_t sg_id, struct GraphParamMapLoadDesc param)
+    void add_param(uint32_t bss_id, struct GraphParamMapLoadDesc param)
     {
-        if (sg_id < (uint32_t)m_subgraphs.size())
+        if (bss_id < (uint32_t)m_bss_vec.size())
         {
-            m_subgraphs[sg_id].param_map.push_back(param);
+            m_bss_vec[bss_id].param_map.push_back(param);
         }
     }
-    void add_const_section(uint32_t sg_id, struct GraphSectionDesc section)
+    void add_const_section(uint32_t bss_id, struct GraphSectionDesc section)
     {
-        if (sg_id < (uint32_t)m_subgraphs.size())
-            m_subgraphs[sg_id].const_sections[section.slot_index] = section;
+        if (bss_id < (uint32_t)m_bss_vec.size())
+            m_bss_vec[bss_id].const_sections[section.slot_index] = section;
     }
-    void add_zerocpy_const_section(uint32_t sg_id, struct GraphSectionDesc section)
+    void add_zerocpy_const_section(uint32_t bss_id, struct GraphSectionDesc section)
     {
-        if (sg_id < (uint32_t)m_subgraphs.size())
-            m_subgraphs[sg_id].zerocpy_const_sections[section.slot_index] = section;
+        if (bss_id < (uint32_t)m_bss_vec.size())
+            m_bss_vec[bss_id].zerocpy_const_sections[section.slot_index] = section;
     }
-    void add_static_section(uint32_t sg_id, struct GraphSectionDesc section)
+    void add_static_section(uint32_t bss_id, struct GraphSectionDesc section)
     {
-        if (sg_id < (uint32_t)m_subgraphs.size())
-            m_subgraphs[sg_id].static_sections.push_back(section);
+        if (bss_id < (uint32_t)m_bss_vec.size())
+            m_bss_vec[bss_id].static_sections.push_back(section);
     }
 
-    void add_reuse_section(uint32_t sg_id, struct GraphSectionDesc section)
+    void add_reuse_section(uint32_t bss_id, struct GraphSectionDesc section)
     {
-        if (sg_id < (uint32_t)m_subgraphs.size())
-            m_subgraphs[sg_id].reuse_sections.push_back(section);
+        if (bss_id < (uint32_t)m_bss_vec.size())
+            m_bss_vec[bss_id].reuse_sections.push_back(section);
+
+        if (bss_id != 0)
+            m_bss_vec[0].reuse_sections.push_back(section);
     }
-    void set_io_tensors(uint32_t sg_id, struct GraphIOTensors io)
+    void set_io_tensors(uint32_t bss_id, struct GraphIOTensors io)
     {
-        if (sg_id < (uint32_t)m_subgraphs.size())
-            m_subgraphs[sg_id].io = io;
+        if (bss_id < (uint32_t)m_bss_vec.size())
+            m_bss_vec[bss_id].io = io;
+
+    }
+
+    virtual void set_const_size(uint32_t bss_id, uint32_t _const_size, uint32_t _zerocpy_const_size)
+    {
+        /**
+         * if one graph doesn't need weight, it just reserves
+         * 4KB as default placehold for whole flow.
+         */
+        if (_const_size == 0)
+            _const_size = 4096;
+
+        if (bss_id < (uint32_t)m_bss_vec.size())
+        {
+            m_bss_vec[bss_id].const_info.push_back(_const_size);
+            m_bss_vec[bss_id].const_info.push_back(_zerocpy_const_size);
+        }
+    }
+
+    virtual uint32_t get_zerocpy_const_size(uint32_t bss_id)
+    {
+        if (bss_id < (uint32_t)m_bss_vec.size())
+        {
+            return m_bss_vec[bss_id].const_info[1];
+        } else {
+            return 0;
+        }
+    }
+
+    virtual uint32_t get_const_size(uint32_t bss_id)
+    {
+        if (bss_id < (uint32_t)m_bss_vec.size())
+        {
+            return m_bss_vec[bss_id].const_info[0];
+        } else {
+            return 0;
+        }
+    }
+
+    virtual std::vector<struct GraphSectionDesc> &get_static_section_ref(uint32_t bss_id)
+    {
+        return m_bss_vec[bss_id].static_sections;
     }
 
 public:
@@ -260,7 +328,7 @@ public:
     GraphV3X& operator=(const GraphV3X& graph) = delete;
 
     friend class JobV3;
-    friend class JobV4;
+    friend class JobV3_1;
 };
 }
 

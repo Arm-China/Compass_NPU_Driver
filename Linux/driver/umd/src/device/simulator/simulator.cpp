@@ -85,18 +85,21 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
         ctx.weight = fname;
         weight_cnt = 1;
     } else {
-        for (uint32_t i = 0; i < job.weights->size(); i++)
+        if (job.weights != nullptr)
         {
-            char inter_fix[32] = {0};
-            snprintf(inter_fix, 32, "Weight%u", i);
-            ret = create_simulation_input_file(fname, inter_fix, job.kdesc.job_id,
-                (*job.weights)[i]->pa, (*job.weights)[i]->size, job);
-            if (ret != AIPU_STATUS_SUCCESS)
-                goto finish;
+            for (uint32_t i = 0; i < job.weights->size(); i++)
+            {
+                char inter_fix[32] = {0};
+                snprintf(inter_fix, 32, "Weight%u", i);
+                ret = create_simulation_input_file(fname, inter_fix, job.kdesc.job_id,
+                    (*job.weights)[i]->pa, (*job.weights)[i]->size, job);
+                if (ret != AIPU_STATUS_SUCCESS)
+                    goto finish;
 
-            ctx.weights.push_back(fname);
+                ctx.weights.push_back(fname);
+            }
+            weight_cnt = job.weights->size();
         }
-        weight_cnt = job.weights->size();
     }
 
     if (job.zerocpy_const_size != 0)
@@ -281,14 +284,17 @@ aipu_status_t aipudrv::Simulator::update_simulation_rtcfg(const JobDesc& job, Si
             <<  "=0x" << std::hex << job.weight_pa << "\n";
         input_file_idx++;
     } else {
-        for(uint32_t i = 0; i < job.weights->size(); i++)
+        if (job.weights != nullptr)
         {
-            ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx + i
-                <<  "=" << ctx.weights[i] << "\n";
-            ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx + i
-                <<  "=0x" << std::hex << (*job.weights)[i]->pa << "\n";
+            for(uint32_t i = 0; i < job.weights->size(); i++)
+            {
+                ofs << "INPUT_DATA_FILE" << std::dec << input_file_idx + i
+                    <<  "=" << ctx.weights[i] << "\n";
+                ofs << "INPUT_DATA_BASE" << std::dec << input_file_idx + i
+                    <<  "=0x" << std::hex << (*job.weights)[i]->pa << "\n";
+            }
+            input_file_idx += job.weights->size();
         }
-        input_file_idx += job.weights->size();
     }
 
     if (zerocpy_const_cnt == 1)

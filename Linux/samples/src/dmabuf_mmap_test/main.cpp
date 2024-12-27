@@ -178,10 +178,10 @@ int main(int argc, char* argv[])
     aipu_create_job_cfg create_job_cfg = {0};
     aipu_shared_tensor_info_t share_tensor;
 
-    #if !DMABUF_OP_WITH_WRAPPER
+#if !DMABUF_OP_WITH_WRAPPER
     struct aipu_dma_buf_request dmabuf_req = {0};
     struct aipu_dmabuf_op dmabuf_op = {0};
-    #endif
+#endif
 
     AIPU_CRIT() << "usage: ./aipu_dmabuf_mmap_test -b aipu.bin -i input0.bin -c output.bin -d ./\n";
 
@@ -292,7 +292,7 @@ int main(int argc, char* argv[])
          *
          * alloca/free/read/write dma_buf totally with own wrapper functions
          */
-        #if DMABUF_OP_WITH_WRAPPER
+#if DMABUF_OP_WITH_WRAPPER
         if (dmabuf_malloc(input_desc[0].size) < 0)
         {
             AIPU_ERR() << "dmabuf_malloc [fail]\n";
@@ -319,22 +319,22 @@ int main(int argc, char* argv[])
         share_tensor.tensor_idx = 0;
         share_tensor.type = AIPU_TENSOR_TYPE_INPUT;
 
-        #if CUSTOMIZE_DMABUF
+#if CUSTOMIZE_DMABUF
         /**
          * specify customized buffer as share buffer
          */
         share_tensor.pa = dmabuf_pa;
         share_tensor.shared_case_type = AIPU_SHARE_BUF_CUSTOMED;
-        #else
+#else
         /**
          * specify standard dma-buf as share buffer
          */
         share_tensor.dmabuf_fd = dmabuf_fd;
         share_tensor.offset_in_dmabuf = 0;
         share_tensor.shared_case_type = AIPU_SHARE_BUF_DMABUF;
-        #endif
+#endif
 
-        #else
+#else
         /**
          * method 2:
          *
@@ -377,7 +377,7 @@ int main(int argc, char* argv[])
         share_tensor.tensor_idx = 0;
         share_tensor.type = AIPU_TENSOR_TYPE_INPUT;
         share_tensor.shared_case_type = AIPU_SHARE_BUF_DMABUF;
-        #endif
+#endif
 
         ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
         if (ret != AIPU_STATUS_SUCCESS)
@@ -400,7 +400,7 @@ int main(int argc, char* argv[])
         }
         AIPU_INFO()("aipu_specify_iobuf success\n");
 
-    #if ((defined RTDEBUG) && (RTDEBUG == 1))
+#if ((defined RTDEBUG) && (RTDEBUG == 1))
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_TEXT  |
             AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_RODATA        |
@@ -409,9 +409,9 @@ int main(int argc, char* argv[])
             AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN     |
             AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
-    #else
+#else
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT;
-    #endif
+#endif
         ret = aipu_config_job(ctx, job_id, cfg_types, &mem_dump_config);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -437,7 +437,7 @@ int main(int argc, char* argv[])
         for (uint32_t frame = 0; frame < frame_cnt; frame++)
         {
             AIPU_INFO()("Frame #%u\n", frame);
-            #if 0
+#if 0
             for (uint32_t i = 0; i < min((uint32_t)opt.inputs.size(), input_cnt); i++)
             {
                 if (input_desc[i].size > opt.inputs_size[i])
@@ -456,7 +456,7 @@ int main(int argc, char* argv[])
                 AIPU_INFO()("load input tensor %d from %s (%u/%u)\n",
                     i, opt.input_files[i].c_str(), i+1, input_cnt);
             }
-            #endif
+#endif
 
             ret = aipu_finish_job(ctx, job_id, -1);
             if (ret != AIPU_STATUS_SUCCESS)
@@ -481,7 +481,7 @@ int main(int argc, char* argv[])
                     i, i+1, output_cnt);
             }
 
-            pass = check_result_helper(output_data, output_desc, opt.gts[0], opt.gts_size[0]);
+            pass = check_result_helper(output_data, output_desc, opt.gts, opt.gts_size);
         }
 
         input_desc.clear();
@@ -507,11 +507,11 @@ int main(int argc, char* argv[])
         }
         AIPU_INFO()("aipu_unload_graph success\n");
 
-        #if DMABUF_OP_WITH_WRAPPER
+#if DMABUF_OP_WITH_WRAPPER
         dmabuf_free(dmabuf_fd);
-        #else
+#else
         aipu_ioctl(ctx, AIPU_IOCTL_FREE_DMABUF, &dmabuf_req.fd);
-        #endif
+#endif
 
     deinit_ctx:
         ret = aipu_deinit_context(ctx);

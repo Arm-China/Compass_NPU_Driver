@@ -85,7 +85,7 @@ void aipudrv::MemoryBase::add_tracking(DEV_PA_64 pa, uint64_t size, MemOperation
         return;
 
     pthread_rwlock_wrlock(&m_lock);
-    if (nullptr == str)
+    if (str == nullptr)
         log = get_tracking_log(pa);
     else
         log = str;

@@ -36,9 +36,23 @@ typedef enum {
     AIPU_DATA_TYPE_S32  = 7,
     AIPU_DATA_TYPE_U64  = 8,
     AIPU_DATA_TYPE_S64  = 9,
-    AIPU_DATA_TYPE_f16  = 10,
-    AIPU_DATA_TYPE_f32  = 11,
-    AIPU_DATA_TYPE_f64  = 12,
+    AIPU_DATA_TYPE_F16  = 0xa,
+    AIPU_DATA_TYPE_F32  = 0xb,
+    AIPU_DATA_TYPE_F64  = 0xc,
+    AIPU_DATA_TYPE_BF16 = 0xd,
+
+    // byte-aligned u/int4
+    AIPU_DATA_TYPE_ALIGNED_U4  = 0x12,
+    AIPU_DATA_TYPE_ALIGNED_S4  = 0x13,
+
+    // byte-aligned u/int12
+    AIPU_DATA_TYPE_ALIGNED_U12 = 0x14,
+    AIPU_DATA_TYPE_ALIGNED_S12 = 0x15,
+
+    AIPU_DATA_TYPE_COMPACT_U4  = 0x20,
+    AIPU_DATA_TYPE_COMPACT_S4  = 0x21,
+    AIPU_DATA_TYPE_COMPACT_U12 = 0x22,
+    AIPU_DATA_TYPE_COMPACT_S12 = 0x23,
 } aipu_data_type_t;
 
 typedef enum {
@@ -48,7 +62,8 @@ typedef enum {
     AIPU_TENSOR_TYPE_PRINTF        = 3,
     AIPU_TENSOR_TYPE_PROFILER      = 4,
     AIPU_TENSOR_TYPE_LAYER_COUNTER = 5,
-    AIPU_TENSOR_TYPE_ERROR_CODE    = 6,
+    AIPU_TENSOR_TYPE_ERROR_CODE    = 6, /* only for v1/v2 */
+    AIPU_TENSOR_TYPE_OUT_TENSOR_SHAPE = 7,
 } aipu_tensor_type_t;
 
 typedef struct
@@ -56,7 +71,7 @@ typedef struct
     uint32_t id;
     uint32_t size;
     float    scale;
-    float    zero_point;
+    int32_t  zero_point;
     aipu_data_type_t data_type;
 } aipu_tensor_desc_t;
 
@@ -129,7 +144,7 @@ typedef struct {
 typedef struct {
     /**
      * configure simulator file name for aipu v1/v2;
-     * set simulator to be NULL for aipu v3;
+     * set simulator to be NULL for aipu v3/v3_1;
      * log_level works for all simulator versions;
      */
     const char *simulator;
@@ -143,6 +158,18 @@ typedef struct {
     bool enable_avx;
     bool enable_calloc;
     bool en_eval;
+    bool en_l2d;
+
+    /**
+     * fast evaluation config for aipu v3_1
+     */
+    bool en_fast_perf;
+    uint32_t freq_mhz;
+    uint32_t ddr_latency_rd;
+    uint32_t ddr_latency_wr;
+    uint32_t ddr_bw;
+    float ddr_bw_ratio;
+    const char *perf_report;
 } aipu_global_config_simulation_t;
 
 /**
@@ -186,92 +213,26 @@ typedef struct aipu_core_info {
 } aipu_core_info_t;
 
 typedef enum {
-    AIPU_JOB_PART0 = 0x0,
-    AIPU_JOB_PART1 = 0x1,
-    AIPU_JOB_PART2 = 0x2,
-    AIPU_JOB_PART3 = 0x3,
-} aipu_job_part_t;
-
-typedef enum {
-    AIPU_JOB_QOS_SLOW = 0x0,
-    AIPU_JOB_QOS_HIGH = 0x1
-} aipu_job_qos_t;
-
-typedef enum {
-    AIPU_MEM_REGION_DEFAULT = 0,
-    AIPU_MEM_REGION_SRAM    = 1,
-    AIPU_MEM_REGION_DTCM    = 2
-} aipu_mem_region_t;
-
-/**
- * @union aipu_create_job_cfg
- *
- * @brief config job's partition, qos(priority), feature map
- *        and weight buffer region on creating a job.
- * @note fm_mem_region
- *       if config feature buffer region for aipu v1/v2, just ignore partition_id & qos_level,
- *       set them as 0 and only set fm_mem_region field.
- *       the buffer is allocated successfully only if there's enough space in
- *       region marked by `fm_mem_region`.
- * @note wt_mem_region
- *       if config weight buffer region for aipu v1/v2, just ignore partition_id & qos_level,
- *       set them as 0 and only set fm_mem_region field.
- *       the buffer is allocated successfully only if there's enough space in
- *       region marked by `fm_mem_region`.
- *
- *       usually it only needs to set `fm_mem_region`. if it's sure that the region's
- *       free space is enough large, you can set `wt_mem_region` to try to allocate
- *       buffer from it. if it fail to allocate buffer from marked region, it will try
- *       according to region order: DTCM->SRAM->DDR.
- *
- *       if it hopes to allcate weight buffer from SRAM, it has to confirm the SRAM range locates in
- *       ASID1 address scope.
- *
- * @note fm_idxes
- *       the indexes of feature map tensors, those tensor buffers will firstly try to be allocated from
- *       region specified in 'fm_mem_region'.
- *
- * @note wt_idxes
- *       the indexes of weight tensors, those tensor buffers firstly try to be allocated from
- *       region specified in 'wt_mem_region'.
- *
- * @note dbg_dispatch and dbg_core_id
- *       it can dispatch job to some core for debug. it needs not to set them in normal cases.
- */
-typedef struct aipu_create_job_cfg {
-    union {
-        uint32_t misc = 0;
-        struct {
-            uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for aipu v3 */
-            uint8_t dbg_dispatch:1;  /**< debug dispatch flag, set 1 to indicate specify job
-                                          to debug core to run */
-            uint8_t dbg_core_id:3;   /**< specify debug core id, [0, max_core_id in cluster] */
-            uint8_t qos_level:4;     /**< defalut 0, low priority, only for aipu v3 */
-            uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
-            uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
-        };
-    };
-
-    int32_t *fm_idxes;      /**< specify feature maps allocated from 'fm_mem_region' */
-    int32_t fm_idxes_cnt;   /**< the emement number in fm_idxes */
-    int32_t *wt_idxes;      /**< specify weights allocated from 'wt_mem_region' */
-    int32_t wt_idxes_cnt;   /**< the emement number in wt_idxes */
-} aipu_create_job_cfg_t;
-
-typedef enum {
     AIPU_SHARE_BUF_IN_ONE_PROCESS = 0x0,
     AIPU_SHARE_BUF_DMABUF = 0x1,
     AIPU_SHARE_BUF_CUSTOMED = 0x2,
+    AIPU_SHARE_BUF_ATTACH_DMABUF = 0x3
 } aipu_share_case_type_t;
 
 /**
  * @struct aipu_shared_tensor
  *
- * @brief case1: mark one tensor buffer of one graph as shared with other graphs.(in one process context)
+ * @brief case1: mark one tensor buffer of one graph as shared with other graphs.
+ *               (in one process context)
  *
- * @brief case2: describe a shared buffer based on dma_buf mechanism.(among multiple processes)
+ * @brief case2: describe a shared buffer based on dma_buf mechanism.
+ *               this dma_buf is managed by NPU KMD. (among multiple processes)
  *
- * @brief case3: specify a shared buffer allocated in external memory manager(not original NPU driver)
+ * @brief case3: specify a shared buffer allocated in external memory manager.
+ *               (not original NPU driver)
+ *
+ * @brief case4: describe a shared buffer based on dma_buf mechanism.
+ *               this dma_buf is managed by other modules(not KMD). (among multiple processes)
  *
  * @note for case1:
  *       the share action is based on one process contex, not among multiple processes.
@@ -280,6 +241,7 @@ typedef enum {
  *
  * @note for case2:
  *       share a common buffer via dma_buf framework among multiple modules/processes.
+ *       this dma_buf is managed by KMD self.
  *       it has to set 'shared_case_type' as AIPU_SHARE_BUF_DMABUF.
  *       need paramsters: {job id, type, tensor_idx, fd, offset, shared_case_type}
  *
@@ -289,6 +251,12 @@ typedef enum {
  *       is not allocated by original NPU driver, it has to confirm the buffer matches
  *       the ASID constraint.
  *       need parameters: {job id, type, tensor_idx, pa, shared_case_type}
+ *
+ * @note for case4:
+ *       share a common buffer via dma_buf framework among multiple modules/processes.
+ *       this dma_buf is managed by other modules(not KMD).
+ *       it has to set 'shared_case_type' as AIPU_SHARE_BUF_ATTACH_DMABUF.
+ *       need paramsters: {job id, type, tensor_idx, fd, offset, shared_case_type}
  */
 typedef struct aipu_shared_tensor_info {
     /* the common fields */
@@ -367,17 +335,190 @@ typedef struct aipu_bin_buildversion
 } aipu_bin_buildversion_t;
 
 /**
+ * @struct aipu_dynshape_num
+ *
+ * @brief get how many kinds of dynamic shape supported.
+ *
+ * @note dynamic shape is generated by NN compiler. eg:
+ *       [[N1*H1*W1*C1], [N2*H2*W2*C2]], ds_num is 2.
+ */
+typedef struct aipu_dynshape_num
+{
+    uint64_t graph_id; /**< the graph id to be searched */
+    uint32_t *ds_num; /**< the dynamic shape count graph support */
+} aipu_dynshape_num_t;
+
+/**
+ * @struct aipu_dynshape_dim_num
+ *
+ * @brief get specific shape dimensions of specified shape.
+ *
+ * @note 'ds_dim_num' indicates the shape has how many uint32 words,
+ *       N*H*W*C => 4 words
+ */
+typedef struct aipu_dynshape_dim_num
+{
+    uint64_t graph_id;    /**< the graph id to be inquired */
+    uint32_t ds_idx;      /**< the dynamic shape index */
+    bool  max_threshhold; /**< true: for max shape, false: for min shape */
+    uint32_t *ds_dim_num; /**< the dynamic dim number of requested shape index */
+} aipu_dynshape_dim_num_t;
+
+/**
+ * @struct aipu_dynshape_info
+ *
+ * @brief dynamic shape information generated by NN compiler.
+ *
+ * @note 'ds_data' is uint32 array indicates a shape, eg:
+ *        N*H*W*C => [u32_N, u32_H, u32_W, u32_C], total 4 words.
+ */
+typedef struct aipu_dynshape_info
+{
+    uint64_t graph_id;    /**< the graph id to be searched */
+    uint32_t ds_idx;      /**< the dynamic shape index */
+    bool  max_threshhold; /**< true: for max shape, false: for min shape */
+    uint32_t *ds_data;    /**< the dynamic shape information of inquired */
+} aipu_dynshape_info_t;
+
+/**
+ * @struct aipu_dynshape_param
+ *
+ * @brief dynamic shape information to be confirgured for one graph.
+ *
+ * @note 'ds_data' is uint32 array indicates a shape, eg:
+ *        N*H*W*C => [u32_N, u32_H, u32_W, u32_C], total 4 words.
+ */
+typedef struct aipu_dynshape_item
+{
+    uint32_t ds_idx;      /**< the dynamic shape index */
+    uint32_t *ds_data;    /**< the dynamic shape information of configured */
+} aipu_dynshape_item_t;
+
+/**
+ * @struct aipu_dynshape_param
+ *
+ * @brief dynamic shape information to be confirgured for one graph.
+ *
+ * @note input_shape_cnt can be less than input tensors number of graph, but you are suggested to providing
+ *       full input shapes. Otherwise, not provided shape will be set as minimum shape which is same with building time
+ */
+typedef struct aipu_dynshape_param
+{
+    uint32_t input_shape_cnt; /**< input shape counter provided */
+    aipu_dynshape_item_t *shape_items; /**< configured input shape info */
+} aipu_dynshape_param_t;
+
+typedef enum {
+    AIPU_JOB_PART0 = 0x0,
+    AIPU_JOB_PART1 = 0x1,
+    AIPU_JOB_PART2 = 0x2,
+    AIPU_JOB_PART3 = 0x3,
+} aipu_job_part_t;
+
+typedef enum {
+    AIPU_JOB_QOS_SLOW = 0x0,
+    AIPU_JOB_QOS_HIGH = 0x1
+} aipu_job_qos_t;
+
+typedef enum {
+    AIPU_MEM_REGION_DEFAULT = 0,
+    AIPU_MEM_REGION_SRAM    = 1,
+    AIPU_MEM_REGION_DTCM    = 2
+} aipu_mem_region_t;
+
+/**
+ * @union aipu_load_graph_cfg
+ *
+ * @brief support some configuration done in loading graph stage.
+ *
+ * @note wt_mem_region
+ *       if config weight buffer region for aipu v1/v2, just ignore partition_id & qos_level,
+ *       set them as 0 and only set fm_mem_region field.
+ *       the buffer is allocated successfully only if there's enough space in
+ *       region marked by `fm_mem_region`.
+ *
+ *       usually it only needs to set `fm_mem_region` in struct aipu_create_job_cfg to
+ *       control feature map buffer allocated from which memory region.
+ *       if it's sure that the region's free space is enough large, you can set
+ *       `wt_mem_region` to try to allocate buffer from it. if it fail to allocate
+ *       buffer from marked region, it will try according to region order: DTCM->SRAM->DDR.
+ *
+ *       if it hopes to allcate weight buffer from SRAM, it has to confirm the SRAM range locates in
+ *       ASID1 address scope.
+ *
+ * @note wt_idxes
+ *       the indexes of weight tensors, those tensor buffers firstly try to be allocated from
+ *       region specified in 'wt_mem_region'.
+ */
+typedef struct aipu_load_graph_cfg {
+    union {
+        uint32_t misc = 0;
+        struct {
+            uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
+        };
+    };
+
+    int32_t *wt_idxes;      /**< specify weights allocated from 'wt_mem_region' */
+    int32_t wt_idxes_cnt;   /**< the emement number in wt_idxes */
+    const char *extra_weight_path;/**< the extra weight files path */
+} aipu_load_graph_cfg_t;
+
+/**
+ * @union aipu_create_job_cfg
+ *
+ * @brief config job's partition, qos(priority), feature map
+ *        and weight buffer region on creating a job.
+ * @note fm_mem_region
+ *       if config feature buffer region for aipu v1/v2, just ignore partition_id & qos_level,
+ *       set them as 0 and only set fm_mem_region field.
+ *       the buffer is allocated successfully only if there's enough space in
+ *       region marked by `fm_mem_region`.
+ *
+ * @note fm_idxes
+ *       the indexes of feature map tensors, those tensor buffers will firstly try to be allocated from
+ *       region specified in 'fm_mem_region'.
+ *
+ *
+ * @note dbg_dispatch and dbg_core_id
+ *       it can dispatch job to some core for debug. it needs not to set them in normal cases.
+ */
+typedef struct aipu_create_job_cfg {
+    union {
+        uint32_t misc = 0;
+        struct {
+            uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for aipu v3 */
+            uint8_t dbg_dispatch:1;  /**< debug dispatch flag, set 1 to indicate specify job
+                                          to debug core to run */
+            uint8_t dbg_core_id:3;   /**< specify debug core id, [0, max_core_id in cluster] */
+            uint8_t qos_level:4;     /**< defalut 0, low priority, only for aipu v3 */
+            uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
+        };
+    };
+
+    int32_t *fm_idxes;      /**< specify feature maps allocated from 'fm_mem_region' */
+    int32_t fm_idxes_cnt;   /**< the emement number in fm_idxes */
+
+    aipu_dynshape_param_t *dynshape; /**< dynamic shape parameter */
+} aipu_create_job_cfg_t;
+
+/**
  * @brief ioctl commands to operate shared tensor buffer for KMD
  */
 typedef enum {
     AIPU_IOCTL_SET_PROFILE = 255,
     AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION,
+    AIPU_IOCTL_GET_DS_NUM,
+    AIPU_IOCTL_GET_DS_DIM_NUM,
+    AIPU_IOCTL_GET_DS_INFO,
+    AIPU_IOCTL_IS_DYNAMIC_SHAPE,
     AIPU_IOCTL_ALLOC_SHARE_BUF,
     AIPU_IOCTL_FREE_SHARE_BUF,
     AIPU_IOCTL_ALLOC_DMABUF,
     AIPU_IOCTL_FREE_DMABUF,
     AIPU_IOCTL_WRITE_DMABUF,
     AIPU_IOCTL_READ_DMABUF,
+    AIPU_IOCTL_ATTACH_DMABUF,
+    AIPU_IOCTL_DETACH_DMABUF,
     AIPU_IOCTL_GET_VERSION
 } aipu_ioctl_cmd_t;
 
@@ -429,7 +570,14 @@ typedef enum {
     AIPU_STATUS_ERROR_MARK_SHARED_TENSOR   = 0x25,
     AIPU_STATUS_ERROR_SET_SHARED_TENSOR    = 0x26,
     AIPU_STATUS_ERROR_DMABUF_SHARED_IO     = 0x27,
-    AIPU_STATUS_MAX                        = 0x28,
+    AIPU_STATUS_ERROR_GET_SHAPE_FAILED     = 0x28,
+    AIPU_STATUS_ERROR_SET_SHAPE_FAILED     = 0x29,
+    AIPU_STATUS_ERROR_NOT_CONFIG_SHAPE     = 0x30,
+    AIPU_STATUS_ERROR_UNMATCH_OUT_SHAPE    = 0x31,
+    AIPU_STATUS_ERROR_ZERO_TENSOR_SIZE     = 0x32,
+    AIPU_STATUS_ERROR_ALLOC_GRIP_ID        = 0x33,
+    AIPU_STATUS_ERROR_ALLOC_GROUP_ID       = 0x34,
+    AIPU_STATUS_MAX                        = 0x35,
     /* AIPU layer library runtime error code */
     AIPU_STATUS_ERROR_UNKNOWN_ERROR        = 0x200,
     AIPU_STATUS_ERROR_KEYBOARD_INTERRUPT   = 0x300,
@@ -528,6 +676,7 @@ aipu_status_t aipu_config_global(const aipu_ctx_handle_t* ctx, uint64_t types, v
  * @param[in]  garph Executable graph binary file path
  * @param[out] id    Pointer to a memory location allocated by application where UMD stores the
  *                       graph ID
+ * @param[in]  config Pointer to specific configuration struct
  *
  * @retval AIPU_STATUS_SUCCESS
  * @retval AIPU_STATUS_ERROR_NULL_PTR
@@ -542,7 +691,8 @@ aipu_status_t aipu_config_global(const aipu_ctx_handle_t* ctx, uint64_t types, v
  * @retval AIPU_STATUS_ERROR_RESERVE_SRAM_FAIL
  * @retval AIPU_STATUS_ERROR_INVALID_GM
  */
-aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph, uint64_t* id);
+aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph,
+    uint64_t* id, aipu_load_graph_cfg_t *config = nullptr);
 
 /**
  * @brief This API loads a graph with the form of AIPU executable graph binary array.
@@ -552,6 +702,7 @@ aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph, u
  * @param[in]  graph_size The byte size of graph binary data in 'graph_buf'
  * @param[out] id    Pointer to a memory location allocated by application where UMD stores the
  *                       graph ID
+ * @param[in]  config Pointer to specific configuration struct
  *
  * @retval AIPU_STATUS_SUCCESS
  * @retval AIPU_STATUS_ERROR_NULL_PTR
@@ -568,7 +719,7 @@ aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph, u
  * @retval AIPU_STATUS_ERROR_INVALID_GM
  */
 aipu_status_t aipu_load_graph_helper(const aipu_ctx_handle_t* ctx, const char* graph_buf,
-    uint32_t graph_size, uint64_t* id);
+    uint32_t graph_size, uint64_t* id, aipu_load_graph_cfg_t *config = nullptr);
 
 /**
  * @brief This API is used to unload a loaded graph
@@ -965,6 +1116,8 @@ aipu_status_t aipu_printf(char* printf_base, char* redirect_file);
  * @retval AIPU_STATUS_SUCCESS
  * @retval AIPU_STATUS_ERROR_NULL_PTR
  * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ *
+ * @note Simulator should not use this API, because simulator has specified target at beginning.
  */
 aipu_status_t aipu_get_target(const aipu_ctx_handle_t *ctx, char *target);
 
@@ -1086,30 +1239,50 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
  *
  * @note support commands currently
  *       AIPU_IOCTL_ALLOC_SHARE_BUF:
- *           request a shared buffer, arg { aipu_share_buf_t* }
+ *           request a shared buffer.
+ *           arg: { aipu_share_buf_t* }
  *       AIPU_IOCTL_FREE_SHARE_BUF:
- *           free a shared buffer, arg { aipu_share_buf_t* }
+ *           free a shared buffer.
+ *           arg: { aipu_share_buf_t* }
  *       AIPU_IOCTL_ENABLE_TICK_COUNTER:
  *           enable performance counter, no arg
  *       AIPU_IOCTL_DISABLE_TICK_COUNTER:
  *           disable performance counter, no arg
  *       AIPU_IOCTL_CONFIG_CLUSTERS:
- *           config number of enabled cores in a cluster, arg { struct aipu_config_clusters* }
+ *           config number of enabled cores in a cluster.
  *           it is used to disable some core's clock to reduce power consumption.
+ *           arg: { struct aipu_config_clusters* }
  *       AIPU_IOCTL_SET_PROFILE:
- *           dynamically enable/disable profiling feature of aipu v3 simulation. arg {1/0}
+ *           dynamically enable/disable profiling feature of aipu v3 simulation.
+ *           arg: {1/0}
  *           1: enable profiling
  *           0: disable profiling
  *       AIPU_IOCTL_ALLOC_DMABUF
- *           request dma_buf from KMD. arg {struct aipu_dma_buf_request}
+ *           request dma_buf from KMD.
+ *           arg: {struct aipu_dma_buf_request* }
  *           aipu_dma_buf_request->bytes: request size (filled by UMD)
  *           aipu_dma_buf_request->fd: fd corresponding to dma_buf (filled by KMD)
  *       AIPU_IOCTL_FREE_DMABUF
- *           free a dma_buf with its fd. arg { fd }
+ *           free a dma_buf with its fd.
+ *           arg: { dmabuf_fd }
+ *       AIPU_IOCTL_WRITE_DMABUF
+ *           write a dma_buf allocated via 'AIPU_IOCTL_ALLOC_DMABUF'.
+ *           arg: aipu_shared_tensor_info_t* { fd, size, data }
+ *       AIPU_IOCTL_READ_DMABUF
+ *           read data from a dma_buf allocated via 'AIPU_IOCTL_ALLOC_DMABUF'.
+ *           arg: aipu_shared_tensor_info_t* { fd, size, buffer }
+ *       IPU_IOCTL_ATTACH_DMABUF
+ *           attach a dma_buf's fd exported from other modules.
+ *           arg: aipu_dma_buf* { dmabuf_fd }
+ *       AIPU_IOACTL_DETACH_DMABUF
+ *           detatch a dma_buf based on its fd
+ *           arg: { dmabuf_fd }
  *       AIPU_IOCTL_GET_VERSION
- *           get UMD and KMD release version. arg { aipu_driver_version_t* } *
+ *           get UMD and KMD release version.
+ *           arg: { aipu_driver_version_t* }
  *       AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION
- *           get model binary's build version. arg { aipu_bin_buildversion_t* }
+ *           get model binary's build version.
+ *           arg: { aipu_bin_buildversion_t* }
  */
 aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd, void *arg = nullptr);
 

@@ -405,7 +405,6 @@
 #define SELECT_DEBUG_CORE(cluster, core)            (_ENABLE_DEBUG | _SET_DBG_CLUSTER(cluster) | \
 						     _SET_DBG_CORE(core))
 #define DISABLE_DEBUG                               0
-
 #define DEBUG_PAGE_SELECTION_REG                    0x1F00
 
 /**

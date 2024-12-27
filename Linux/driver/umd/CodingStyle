@@ -312,7 +312,7 @@
         Use parentheses to clarify the order of evaluation for operators in expressions.
 
         Rule 32
-        Always have non-lvalues on the left side (0 == i instead of i == 0).
+        Always have non-lvalues on the left side (0 == i instead of i == 0) [deperacate].
 
     13 Memory and Resources
 
@@ -322,7 +322,7 @@
         Do not use malloc(), realloc() or free().
 
         Rule 34
-        Always use the array delete operator (delete []) when deallocating arrays.
+        Always use the array delete operator (delete[]) when deallocating arrays.
 
     14 Namespaces
 

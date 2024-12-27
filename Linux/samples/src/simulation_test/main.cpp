@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <iostream>
+#include <fstream>
 #include <string.h>
 #include <errno.h>
 #include <vector>
@@ -24,6 +25,8 @@
 #include "common/dbg.hpp"
 
 using namespace std;
+
+#define CALL_LOAD_GRAPH_HELPER 0
 
 int main(int argc, char* argv[])
 {
@@ -45,6 +48,13 @@ int main(int argc, char* argv[])
     aipu_create_job_cfg create_job_cfg = {0};
     aipu_driver_version_t drv_ver = {0};
     aipu_bin_buildversion_t buildver = {0};
+    std::string log_path_perf;
+
+#if CALL_LOAD_GRAPH_HELPER
+    std::ifstream gbin;
+    uint32_t fsize = 0;
+    char *gbin_buf = nullptr;
+#endif
 
     AIPU_CRIT() << "usage: ./aipu_simulation_test -b aipu.bin -i input0.bin -c output.bin -d ./\n";
 
@@ -76,16 +86,29 @@ int main(int argc, char* argv[])
 #if ((defined RTDEBUG) && (RTDEBUG == 1))
         sim_glb_config.log_level = 3;
 #else
-        sim_glb_config.log_level = 0;
+        sim_glb_config.log_level = 3;
 #endif
     }
 
     sim_glb_config.verbose = opt.verbose;
     sim_glb_config.en_eval = true;
     sim_glb_config.simulator = opt.simulator;
-    sim_job_config.data_dir     = opt.dump_dir;
     if (!opt.npu_arch_desc.empty())
+    {
         sim_glb_config.npu_arch_desc = opt.npu_arch_desc.c_str();
+        if (opt.npu_arch_desc.find("x3") != std::string::npos ||
+            opt.npu_arch_desc.find("X3") != std::string::npos)
+        {
+            log_path_perf = std::string(opt.dump_dir) + "/perf.csv";
+            sim_glb_config.en_fast_perf = true;
+            sim_glb_config.freq_mhz = 1000;
+            sim_glb_config.ddr_latency_rd = 0;
+            sim_glb_config.ddr_latency_wr = 0;
+            sim_glb_config.ddr_bw = 512;
+            sim_glb_config.ddr_bw_ratio = 1;
+            sim_glb_config.perf_report = log_path_perf.data();
+        }
+    }
 
     for (loop = 0; loop < total_loop; loop++)
     {
@@ -119,6 +142,37 @@ int main(int argc, char* argv[])
         }
         AIPU_INFO()("set global simulation config success\n");
 
+#if CALL_LOAD_GRAPH_HELPER
+        gbin.open(opt.bin_files[0].c_str(), std::ifstream::in | std::ifstream::binary);
+        if (!gbin.is_open())
+        {
+            return AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
+        }
+
+        gbin.seekg (0, gbin.end);
+        fsize = gbin.tellg();
+        gbin.seekg (0, gbin.beg);
+
+        gbin_buf = new char[fsize];
+        gbin.read(gbin_buf, fsize);
+        gbin.seekg (0, gbin.beg);
+
+        ret = aipu_load_graph_helper(ctx, gbin_buf, fsize, &graph_id);
+        if (ret != AIPU_STATUS_SUCCESS)
+        {
+            aipu_get_error_message(ctx, ret, &msg);
+            AIPU_ERR()("aipu_load_graph_helper: %s (%s)\n",
+                msg, opt.bin_files[0].c_str());
+            goto deinit_ctx;
+        }
+        AIPU_INFO()("aipu_load_graph_helper success: %s\n", opt.bin_files[0].c_str());
+
+        // free gbin buffer in advance to reduce memory consumption
+        delete[] gbin_buf;
+        gbin_buf = nullptr;
+
+#else /* CALL_LOAD_GRAPH_HELPER */
+
         ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -128,6 +182,7 @@ int main(int argc, char* argv[])
             goto deinit_ctx;
         }
         AIPU_INFO()("aipu_load_graph_helper success: %s\n", opt.bin_files[0].c_str());
+#endif /* CALL_LOAD_GRAPH_HELPER */
 
         /**
          * get AIPU binary's build version
@@ -239,7 +294,7 @@ int main(int argc, char* argv[])
         }
         AIPU_INFO()("aipu_create_job success\n");
 
-    #if ((defined RTDEBUG) && (RTDEBUG == 1))
+#if ((defined RTDEBUG) && (RTDEBUG == 1))
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_TEXT  |
             AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_RODATA        |
@@ -248,9 +303,9 @@ int main(int argc, char* argv[])
             AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN     |
             AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
-    #else
+#else
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT;
-    #endif
+#endif
         ret = aipu_config_job(ctx, job_id, cfg_types, &mem_dump_config);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -260,6 +315,7 @@ int main(int argc, char* argv[])
         }
         AIPU_INFO()("set dump config success\n");
 
+        sim_job_config.data_dir = opt.dump_dir;
         ret = aipu_config_job(ctx, job_id, AIPU_CONFIG_TYPE_SIMULATION, &sim_job_config);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -328,7 +384,7 @@ int main(int argc, char* argv[])
                     i, i+1, output_cnt);
             }
 
-            pass = check_result_helper(output_data, output_desc, opt.gts[0], opt.gts_size[0]);
+            pass = check_result_helper(output_data, output_desc, opt.gts, opt.gts_size);
         }
 
         input_desc.clear();
@@ -372,6 +428,7 @@ int main(int argc, char* argv[])
         for (uint32_t i = 0; i < output_data.size(); i++)
         {
             delete[] output_data[i];
+            output_data[i] = nullptr;
         }
 
         output_data.clear();

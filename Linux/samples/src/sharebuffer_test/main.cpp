@@ -245,7 +245,7 @@ int main(int argc, char* argv[])
         }
         AIPU_INFO()("aipu_specify_iobuf: 0x%lx\n", shared_tensor_info.pa);
 
-    #if ((defined RTDEBUG) && (RTDEBUG == 1))
+#if ((defined RTDEBUG) && (RTDEBUG == 1))
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_TEXT  |
             AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_RODATA        |
@@ -254,9 +254,9 @@ int main(int argc, char* argv[])
             AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN     |
             AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
-    #else
+#else
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT;
-    #endif
+#endif
         ret = aipu_config_job(ctx, job_id, cfg_types, &mem_dump_config);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -339,10 +339,11 @@ int main(int argc, char* argv[])
                     i, i+1, output_cnt);
             }
 
-            pass = check_result_helper(output_data, output_desc, opt.gts[0], opt.gts_size[0]);
+            pass = check_result_helper(output_data, output_desc, opt.gts, opt.gts_size);
             for (uint32_t i = 0; i < output_data.size(); i++)
             {
                 delete[] output_data[i];
+                output_data[i] = nullptr;
             }
 
             output_desc.clear();

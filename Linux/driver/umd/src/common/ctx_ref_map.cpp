@@ -71,9 +71,10 @@ aipu_status_t aipudrv::CtxRefMap::destroy_ctx_ref(uint32_t handle)
 
     pthread_mutex_lock(&lock);
     ctx = get_ctx_ref_inner(handle);
-    if (nullptr != ctx)
+    if (ctx != nullptr)
     {
         delete ctx;
+        ctx = nullptr;
         data.erase(handle);
     } else {
         ret = AIPU_STATUS_ERROR_INVALID_CTX;

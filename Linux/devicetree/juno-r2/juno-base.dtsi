@@ -848,6 +848,7 @@
 			reusable;
 			reg = <0x0 0xA0000000 0x0 0x10000000>;
 			asid = <0>;
+			//host-aipu-offset = <0x0 0x80000000>; /* for kernel version >= 6.1 */
 		};
 
 		aipu_reserved_1: memory@B0000000 {
@@ -855,6 +856,7 @@
 			reusable;
 			reg = <0x0 0xB0000000 0x0 0x10000000>;
 			asid = <1>;
+			//host-aipu-offset = <0x0 0x80000000>;
 		};
 
 		aipu_reserved_2: dtcm@C0000000 {
@@ -862,6 +864,7 @@
 			reusable;
 			reg = <0x0 0xC0000000 0x0 0x800000>;
 			asid = <0>;
+			//host-aipu-offset = <0x0 0x80000000>;
 		};
 
 		aipu_reserved_3: sram@C1000000 {
@@ -869,6 +872,7 @@
 			reusable;
 			reg = <0x0 0xC1000000 0x0 0x800000>;
 			asid = <0 1>;
+			//host-aipu-offset = <0x0 0x80000000>;
 		};
 	};
 
@@ -881,7 +885,7 @@
 		cluster-partition = <0 0>;            /* x2 only: cluster #0 -> partition #0 */
 		reg = <0x0 0x64000000 0x0 0x3230>;
 		memory-region=<&aipu_reserved_0 &aipu_reserved_1 &aipu_reserved_2 &aipu_reserved_3>;
-		dma-ranges=<0x0 0x20000000 0x0 0xA0000000 0x30000000>;
+		dma-ranges=<0x0 0x20000000 0x0 0xA0000000 0x30000000>; /* for kernel version < 6.1 */
 		gm-policy = <1>;                      /* x2 only: shared by tasks of all QoS level */
 		interrupts = <0 168 IRQ_TYPE_EDGE_RISING>;
 	};

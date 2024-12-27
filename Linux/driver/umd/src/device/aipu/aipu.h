@@ -50,7 +50,7 @@ public:
     {
         aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-        if (nullptr == dev)
+        if (dev == nullptr)
             return AIPU_STATUS_ERROR_NULL_PTR;
 
         std::lock_guard<std::mutex> lock_(m_tex);

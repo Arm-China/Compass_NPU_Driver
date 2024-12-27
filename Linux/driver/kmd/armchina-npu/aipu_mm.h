@@ -28,7 +28,33 @@ enum aipu_mem_region_type {
 	AIPU_MEM_REGION_TYPE_MAX    = 4,
 };
 
+enum aipu_mem_hold_tcb_status {
+	AIPU_MEM_HOLD_TYPE_IDLE     = 0,
+	AIPU_MEM_HOLD_TYPE_LINKING  = 1,
+	AIPU_MEM_HOLD_TYPE_LINK_PREV = 2,
+	AIPU_MEM_HOLD_TYPE_LINK_NEXT = 3,
+	AIPU_MEM_HOLD_TYPE_LINKED   = 4,
+	AIPU_MEM_HOLD_TYPE_MAX      = 6,
+};
+
 struct aipu_mem_region_obj;
+struct aipu_job;
+struct aipu_hold_tcb_buf {
+	u64 head;
+	int status;
+	struct aipu_buf_desc desc;
+	struct list_head node;
+	struct aipu_tcb *hold_tcb;
+	u64 prev_head;
+	u64 prev_tail;
+	u64 next_head;
+	u64 prev_hold_tcb;
+	struct aipu_mem_region *reg;
+	int nums;
+	int index;
+	int hold_index;
+	struct aipu_tcb_buf *prev_tbuf;
+};
 
 /**
  * struct aipu_tcb_buf - TCB buffer descriptor
@@ -180,6 +206,7 @@ struct aipu_memory_manager {
 	struct device *dev;
 	struct mutex lock; /* Protect sram disabled head/importer bufs struct */
 	int res_cnt;
+	u32 valid_asid_cnt;
 	struct aipu_mem_region_list mem;
 	struct aipu_mem_region_list ase[ZHOUYI_ASID_COUNT];
 	int gm_bytes;
@@ -190,12 +217,15 @@ struct aipu_memory_manager {
 	int sram_disable;
 	struct device_attribute *gm_policy_attr;
 	spinlock_t slock; /* Protect tcb_buf list */
+	spinlock_t shlock; /* Protect hold tcb_buf list */
 	u64 default_asid_base;
 	u32 default_asid_size;
 	struct kmem_cache *obj_cache;
 	struct kmem_cache *reg_cache;
 	struct kmem_cache *tbuf_cache;
+	struct kmem_cache *hold_tbuf_cache;
 	struct aipu_dma_buf_importer *importer_bufs;
+	struct aipu_hold_tcb_buf *hold_tcb_head;
 };
 
 int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, int version);
@@ -213,6 +243,7 @@ int aipu_mm_enable_sram_allocation(struct aipu_memory_manager *mm, struct file *
 void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap);
 u64 aipu_mm_get_asid_base(struct aipu_memory_manager *mm, u32 asid);
 u64 aipu_mm_get_asid_size(struct aipu_memory_manager *mm, u32 asid);
+u32 aipu_mm_get_asid_cnt(struct aipu_memory_manager *mm);
 int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes);
 int aipu_mm_gm_policy_switch(struct aipu_memory_manager *mm, enum aipu_gm_policy next);
 void aipu_mm_get_gm(struct aipu_memory_manager *mm, struct aipu_cap *cap);
@@ -226,5 +257,7 @@ int aipu_mm_link_tcb(struct aipu_memory_manager *mm, u64 prev_tail, u32 next_hea
 		     int next_job_id);
 int aipu_mm_unlink_tcb(struct aipu_memory_manager *mm, u64 prev_tail, bool free_tcb);
 void aipu_mm_pin_tcb(struct aipu_memory_manager *mm, u64 tail);
-
+int aipu_mm_hold_tcb_buf_alloc(struct aipu_memory_manager *mm, struct aipu_job *kjob);
+struct aipu_hold_tcb_buf *aipu_mm_get_hold_htbuf(struct aipu_memory_manager *mm, u64 hold_tcb_pa);
+void aipu_mm_set_final_htbuf_index(struct aipu_memory_manager *mm, int index);
 #endif /* __AIPU_MM_H__ */

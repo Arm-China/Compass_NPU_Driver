@@ -38,7 +38,7 @@ aipu_ll_status_t aipudrv::Aipu::init()
     aipu_ll_status_t ret = AIPU_LL_STATUS_SUCCESS;
     int kret = 0;
     aipu_cap cap;
-    aipu_partition_cap *part_caps = NULL;
+    std::vector<aipu_partition_cap> part_caps;
 
     m_fd = open("/dev/aipu", O_RDWR | O_SYNC);
     if (m_fd <= 0)
@@ -50,19 +50,19 @@ aipu_ll_status_t aipudrv::Aipu::init()
     }
 
     kret = ioctl(m_fd, AIPU_IOCTL_QUERY_CAP, &cap);
-    if (kret || (0 == cap.partition_cnt))
+    if (kret || (cap.partition_cnt == 0))
     {
         LOG(LOG_ERR, "query capability [fail]");
         ret = AIPU_LL_STATUS_ERROR_IOCTL_QUERY_CAP_FAIL;
         goto fail;
     }
 
-    part_caps = new aipu_partition_cap[cap.partition_cnt];
-    kret = ioctl(m_fd, AIPU_IOCTL_QUERY_PARTITION_CAP, part_caps);
+    part_caps.resize(cap.partition_cnt);
+    memset(part_caps.data(), 0, cap.partition_cnt * sizeof(aipu_partition_cap));
+    kret = ioctl(m_fd, AIPU_IOCTL_QUERY_PARTITION_CAP, part_caps.data());
     if (kret)
     {
         LOG(LOG_ERR, "query partition [fail]");
-        delete[] part_caps;
         ret = AIPU_LL_STATUS_ERROR_IOCTL_QUERY_CORE_CAP_FAIL;
         goto fail;
     }
@@ -70,42 +70,6 @@ aipu_ll_status_t aipudrv::Aipu::init()
     for (uint32_t i = 0; i < cap.partition_cnt; i++)
         m_part_caps.push_back(part_caps[i]);
 
-    delete[] part_caps;
-    m_dram = UKMemory::get_memory(m_fd);
-    m_dram->set_asid_base(0, cap.asid0_base);
-    m_dram->set_asid_base(1, cap.asid1_base);
-    m_dram->set_asid_base(2, cap.asid2_base);
-    m_dram->set_asid_base(3, cap.asid3_base);
-    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V1)
-    {
-        cap.asid0_base = 0;
-        cap.asid1_base = 0;
-        cap.asid2_base = 0;
-        cap.asid3_base = 0;
-        m_dram->set_asid_base(0, cap.asid0_base);
-        m_dram->set_asid_base(1, cap.asid1_base);
-        m_dram->set_asid_base(2, cap.asid2_base);
-        m_dram->set_asid_base(3, cap.asid3_base);
-    }
-    LOG(LOG_DEBUG, "asid0: 0x%llx, asid1: 0x%llx, asid2: 0x%llx, asid3: 0x%llx\n",
-        cap.asid0_base, cap.asid1_base, cap.asid2_base, cap.asid3_base);
-
-    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
-        m_dram->set_dtcm_info(cap.dtcm_base, cap.dtcm_size);
-
-    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3)
-    {
-        if (cap.gm0_size == 0)
-            return AIPU_LL_STATUS_ERROR_IOCTL_QUERY_STATUS_FAIL;
-
-        if (m_dram->is_gm_enable())
-        {
-            m_dram->set_gm_size(0, cap.gm0_size);
-            m_dram->set_gm_size(1, cap.gm1_size);
-        }
-    }
-
-    /* success */
     if ((m_part_caps.at(0).version >= AIPU_ISA_VERSION_ZHOUYI_V1)
         && (m_part_caps.at(0).version <= AIPU_ISA_VERSION_ZHOUYI_V2_2))
     {
@@ -120,6 +84,40 @@ aipu_ll_status_t aipudrv::Aipu::init()
         /* default get the below count from cluster0 in partition0 */
         m_cluster_cnt = m_part_caps.at(0).cluster_cnt;
         m_core_cnt = m_part_caps.at(0).clusters[0].core_cnt;
+    }
+
+    m_dram = UKMemory::get_memory(m_fd);
+    for (uint32_t i = 0; i < cap.asid_cnt; ++i)
+    {
+        m_dram->set_asid_base(i, cap.asid_base[i]);
+        LOG(LOG_DEBUG, "asid index: %u, asid base: 0x%llx\n", i, cap.asid_base[i]);
+    }
+
+    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V1)
+        m_dram->set_asid_base(0, 0);
+
+    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
+        m_dram->set_dtcm_info(cap.dtcm_base, cap.dtcm_size);
+
+    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3)
+    {
+        if (cap.gm0_size == 0)
+            return AIPU_LL_STATUS_ERROR_IOCTL_QUERY_STATUS_FAIL;
+
+        if (m_dram->is_gm_enable())
+        {
+            m_dram->set_gm_size(0, cap.gm0_size);
+            m_dram->set_gm_size(1, cap.gm1_size);
+        }
+    } else if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_1) {
+        /* hardware doesn't provide gm size access register */
+        if (m_dram->is_gm_enable())
+        {
+            uint32_t gm_size = 4 * MB_SIZE;
+            if (m_core_cnt == 2 || m_core_cnt == 4)
+                gm_size = 8 * MB_SIZE;
+            m_dram->set_gm_size(0, gm_size);
+        }
     }
 
     return ret;
@@ -148,7 +146,7 @@ bool aipudrv::Aipu::has_target(uint32_t arch, uint32_t version, uint32_t config,
         if ((arch == m_part_caps[i].arch)
             && (version == m_part_caps[i].version)
             && ((version == AIPU_ISA_VERSION_ZHOUYI_V3)
-                || (version == AIPU_ISA_VERSION_ZHOUYI_V4)
+                || (version == AIPU_ISA_VERSION_ZHOUYI_V3_1)
                 || (config == m_part_caps[i].config)))
             return true;
     }
@@ -161,7 +159,7 @@ aipu_ll_status_t aipudrv::Aipu::read_reg(uint32_t core_id, uint32_t offset, uint
     int kret = 0;
     aipu_io_req ioreq;
 
-    if (nullptr == value)
+    if (value == nullptr)
         return AIPU_LL_STATUS_ERROR_NULL_PTR;
 
     ioreq.core_id = core_id;
@@ -261,6 +259,7 @@ aipu_ll_status_t aipudrv::Aipu::get_status(uint32_t max_cnt, bool of_this_thread
 
 clean:
     delete[] status_query.status;
+    status_query.status = nullptr;
     return ret;
 }
 
@@ -572,6 +571,9 @@ int aipudrv::Aipu::get_start_group_id(int group_cnt, uint16_t &start_group_id)
 {
     int ret = 0;
     struct aipu_group_id_desc id_desc = {0};
+
+    if (group_cnt == 0)
+        return ret;
 
     id_desc.group_size = group_cnt;
     if (ioctl(m_fd, AIPU_IOCTL_ALLOC_GROUP_ID, &id_desc) < 0)

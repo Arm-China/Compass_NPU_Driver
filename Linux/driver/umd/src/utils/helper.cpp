@@ -33,13 +33,13 @@ aipu_status_t umd_dump_file_helper(const char* fname, const void* src, unsigned 
     int fd = 0;
     int wbytes = 0;
 
-    if ((nullptr == fname) || (nullptr == src))
+    if ((fname == nullptr) || (src == nullptr))
     {
         ret = AIPU_STATUS_ERROR_NULL_PTR;
         goto finish;
     }
 
-    if (0 == size)
+    if (size == 0)
     {
         ret = AIPU_STATUS_ERROR_INVALID_SIZE;
         goto finish;
@@ -80,13 +80,13 @@ aipu_status_t umd_load_file_helper(const char* fname, void* dest, unsigned int s
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     int fd = 0;
 
-    if ((nullptr == fname) || (nullptr == dest))
+    if ((fname == nullptr) || (dest == nullptr))
     {
         ret = AIPU_STATUS_ERROR_NULL_PTR;
         goto finish;
     }
 
-    if (0 == size)
+    if (size == 0)
     {
         ret = AIPU_STATUS_ERROR_INVALID_SIZE;
         goto finish;
@@ -113,14 +113,14 @@ finish:
     return ret;
 }
 
-aipu_status_t umd_mmap_file_helper(const char* fname, void** data, unsigned int* size)
+aipu_status_t umd_mmap_file_helper(const char* fname, void** data, uint64_t* size)
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
     int fd = 0;
     void* p_file = nullptr;
     struct stat finfo;
 
-    if ((nullptr == fname) || (nullptr == data) || (nullptr == size))
+    if ((fname == nullptr) || (data == nullptr) || (size == nullptr))
     {
         ret = AIPU_STATUS_ERROR_NULL_PTR;
         goto finish;
@@ -142,7 +142,7 @@ aipu_status_t umd_mmap_file_helper(const char* fname, void** data, unsigned int*
     }
 
     p_file = mmap(nullptr, finfo.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-    if (MAP_FAILED == p_file)
+    if (p_file == MAP_FAILED)
     {
         ret = AIPU_STATUS_ERROR_MAP_FILE_FAIL;
         LOG(LOG_ERR, "RT failed in mapping graph file: %s! (errno = %d)\n", fname, errno);

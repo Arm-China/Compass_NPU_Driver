@@ -39,7 +39,7 @@ public:
     virtual aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type,
         uint32_t tensor, aipu_tensor_desc_t* desc);
 
-    virtual std::vector<struct GraphSectionDesc> &get_static_section_ref()
+    virtual std::vector<struct GraphSectionDesc> &get_static_section_ref(uint32_t bss_id)
     {
         return m_static_sections;
     }
@@ -69,6 +69,11 @@ public:
     void set_io_tensors(uint32_t sg_id, struct GraphIOTensors io)
     {
         m_io = io;
+    }
+
+    virtual GraphIOTensors&get_bss_io_ref(uint32_t bss_id)
+    {
+        return m_io;
     }
 
 public:

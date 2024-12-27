@@ -20,7 +20,7 @@
 #include "helper.h"
 #include "dbg.hpp"
 
-static bool is_output_correct(volatile char* src1, char* src2, uint32_t cnt)
+static bool is_output_correct(const char* src1, const char* src2, uint32_t cnt)
 {
     for (uint32_t out_chr = 0; out_chr < cnt; out_chr++)
     {
@@ -122,22 +122,14 @@ int unload_file_helper(char* data)
     if (data != nullptr)
     {
         delete[] data;
+        data = nullptr;
     }
     return 0;
 }
 
 int check_result_helper(const std::vector<char*>& outputs, const std::vector<aipu_tensor_desc_t>& descs,
-    char* gt, uint32_t gt_size)
+    const std::vector<char*>& gt, const std::vector<uint32_t>& gt_size)
 {
-    int offset = 0;
-    void* check_base = NULL;
-    int tot_size = 0;
-    volatile char* out_va = nullptr;
-    char* check_va = nullptr;
-    uint32_t size = 0;
-    int ret = 0;
-    int pass = 0;
-
     if (outputs.size() != descs.size())
     {
         AIPU_ERR()("output data count (%lu) != benchmark tensor count (%lu)!\n",
@@ -145,25 +137,45 @@ int check_result_helper(const std::vector<char*>& outputs, const std::vector<aip
         return -1;
     }
 
-    for (uint32_t i = 0; i < descs.size(); i++)
+    if (gt.size() != gt_size.size())
     {
-        tot_size += descs[i].size;
+        AIPU_ERR()("output gt file count (%lu) != gt size count (%lu)!\n",
+            gt.size(), gt_size.size());
+        return -1;
     }
 
-    check_base = gt;
+    uint32_t tot_size = 0;
+    for (uint32_t i = 0; i < descs.size(); i++)
+        tot_size += descs[i].size;
 
+    int pass = 0;
+    uint32_t offset = 0;
     for (uint32_t id = 0; id < outputs.size(); id++)
     {
-        out_va = (volatile char*)outputs[id];
-        check_va = (char*)((unsigned long)check_base + offset);
-        size = descs[id].size;
-        if ((offset + size) > gt_size)
+        const char* out_va = outputs[id];
+        const char* check_va = nullptr;
+
+        if (gt.size() == 1)
         {
-            AIPU_ERR()("gt file length (0x%x) < output tensor size!\n", gt_size);
-            return -1;
+            check_va = gt[0] + offset;
+            if (tot_size > gt_size[0])
+            {
+                AIPU_ERR()("total output size (0x%x) > total gt size: (0x%x)!\n", tot_size, gt_size[0]);
+                return -1;
+            }
         }
-        ret = is_output_correct(out_va, check_va, size);
-        if (ret == true)
+        else
+        {
+            check_va = gt[id];
+            if (descs[id].size > gt_size[id])
+            {
+                AIPU_ERR()("%uth output descs.size (0x%x) > gt size: (0x%x)!\n", id, descs[id].size, gt_size[id]);
+                return -1;
+            }
+        }
+
+        bool ret = is_output_correct(out_va, check_va, descs[id].size);
+        if (ret)
         {
             AIPU_CRIT()("Test Result Check PASS! (%u/%lu)\n", id + 1,
                 outputs.size());
@@ -174,24 +186,15 @@ int check_result_helper(const std::vector<char*>& outputs, const std::vector<aip
             AIPU_ERR()("Test Result Check FAILED! (%u/%lu)\n", id + 1,
                 outputs.size());
         }
-        offset += size;
+        offset += descs[id].size;
     }
 
     return pass;
 }
 
-int check_result(std::vector< std::shared_ptr<char> >outputs, const std::vector<aipu_tensor_desc_t>& descs,
-    char* gt, uint32_t gt_size)
+int check_result(const std::vector<std::shared_ptr<char>>& outputs, const std::vector<aipu_tensor_desc_t>& descs,
+    const std::vector<char*>& gt, const std::vector<uint32_t>& gt_size)
 {
-    int offset = 0;
-    void* check_base = NULL;
-    int tot_size = 0;
-    volatile char* out_va = nullptr;
-    char* check_va = nullptr;
-    uint32_t size = 0;
-    int ret = 0;
-    int pass = 0;
-
     if (outputs.size() != descs.size())
     {
         AIPU_ERR()("output data count (%lu) != benchmark tensor count (%lu)!\n",
@@ -199,25 +202,45 @@ int check_result(std::vector< std::shared_ptr<char> >outputs, const std::vector<
         return -1;
     }
 
-    for (uint32_t i = 0; i < descs.size(); i++)
+    if (gt.size() != gt_size.size())
     {
-        tot_size += descs[i].size;
+        AIPU_ERR()("output gt file count (%lu) != gt size count (%lu)!\n",
+            gt.size(), gt_size.size());
+        return -1;
     }
 
-    check_base = gt;
+    uint32_t tot_size = 0;
+    for (uint32_t i = 0; i < descs.size(); i++)
+        tot_size += descs[i].size;
 
+    int pass = 0;
+    uint32_t offset = 0;
     for (uint32_t id = 0; id < descs.size(); id++)
     {
-        out_va = (volatile char*)outputs[id].get();
-        check_va = (char*)((unsigned long)check_base + offset);
-        size = descs[id].size;
-        if ((offset + size) > gt_size)
+        const char* out_va = outputs[id].get();
+        const char* check_va = nullptr;
+
+        if (gt.size() == 1)
         {
-            AIPU_ERR()("gt file length (0x%x) < output tensor size!\n", gt_size);
-            return -1;
+            check_va = gt[0] + offset;
+            if (tot_size > gt_size[0])
+            {
+                AIPU_ERR()("total output size (0x%x) > total gt size: (0x%x)!\n", tot_size, gt_size[0]);
+                return -1;
+            }
         }
-        ret = is_output_correct(out_va, check_va, size);
-        if (ret == true)
+        else
+        {
+            check_va = gt[id];
+            if (descs[id].size > gt_size[id])
+            {
+                AIPU_ERR()("%uth output descs.size (0x%x) > gt size: (0x%x)!\n", id, descs[id].size, gt_size[id]);
+                return -1;
+            }
+        }
+
+        bool ret = is_output_correct(out_va, check_va, descs[id].size);
+        if (ret)
         {
             AIPU_CRIT()("Test Result Check PASS! (%u/%lu)\n", id + 1,
                 outputs.size());
@@ -228,7 +251,6 @@ int check_result(std::vector< std::shared_ptr<char> >outputs, const std::vector<
             AIPU_ERR()("Test Result Check FAILED! (%u/%lu)\n", id + 1,
                 outputs.size());
         }
-        offset += size;
     }
 
     return pass;

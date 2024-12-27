@@ -59,18 +59,18 @@ aipu_status_t aipudrv::GM_V3::gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t b
     ValidSyncBuffer io_region = {0};
     uint32_t mem_region = AIPU_BUF_REGION_DEFAULT;
     const std::vector<struct GraphSectionDesc> &section_desc = (buf_type == GM_BUF_TYPE_REUSE)
-        ? m_graph.get_subgraph(sg_id).reuse_sections : m_graph.get_subgraph(sg_id).static_sections;
+        ? m_graph.get_bss(sg_id).reuse_sections : m_graph.get_bss(sg_id).static_sections;
     uint32_t gm_region_sz = (m_job.m_qos == AIPU_JOB_QOS_SLOW)
         ? m_job.m_mem->get_gm_size(AIPU_JOB_QOS_SLOW) : m_job.m_mem->get_gm_size(AIPU_JOB_QOS_HIGH);
     uint32_t buf_size = section_desc[idx].size, gm_size = 0;
-    #ifndef SIMULATION
+#ifndef SIMULATION
     int pad_sz = 0x800;
-    #else
+#else
     int pad_sz = 0;
-    #endif
+#endif
 
     /* check which GM region the buffer comes from */
-    #if 0
+#if 0
     if (m_job.m_sg_cnt == 1)
     {
         if (m_job.m_qos == AIPU_JOB_QOS_SLOW)
@@ -78,7 +78,7 @@ aipu_status_t aipudrv::GM_V3::gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t b
         else if (m_job.m_qos == AIPU_JOB_QOS_HIGH)
             mem_region = AIPU_BUF_REGION_QOS_FAST_GM;
     }
-    #endif
+#endif
 
     if (m_job.m_qos == AIPU_JOB_QOS_HIGH)
         gm_size = m_job.m_mem->get_gm_size(1);
@@ -90,7 +90,7 @@ aipu_status_t aipudrv::GM_V3::gm_malloc(uint32_t sg_id, uint32_t idx, uint32_t b
 
     ret = m_job.m_mem->malloc(buf_size + pad_sz,
         section_desc[idx].align_in_page, &buf, buf_name.c_str(), (asid << 8) | mem_region);
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
         goto out;
 
     /* record and free weight buffer, the reuse buffer is freed in another path */
@@ -199,7 +199,8 @@ void aipudrv::GM_V3::get_valid_sync_region(uint32_t sg_id, uint32_t idx, uint32_
 {
     if (buf_type == GM_BUF_TYPE_REUSE)
     {
-        for (auto desc : m_graph.get_subgraph(sg_id).io.inputs)
+        // for (auto desc : m_graph.get_subgraph(sg_id).io.inputs)
+        for (auto desc : m_graph.get_bss(sg_id).io.inputs)
         {
             /**
              * it exist several input buffers exist in one large buffer
@@ -227,7 +228,7 @@ void aipudrv::GM_V3::get_valid_sync_region(uint32_t sg_id, uint32_t idx, uint32_
             }
         }
 
-        #if 0
+#if 0
         for (auto desc : m_graph.get_subgraph(sg_id).io.outputs)
         {
             /**
@@ -255,7 +256,7 @@ void aipudrv::GM_V3::get_valid_sync_region(uint32_t sg_id, uint32_t idx, uint32_
                 }
             }
         }
-        #endif
+#endif
     } else {
         region.valid_sync_buf[EM_GM_BUF_INPUT].sync_pa = buf.pa;
         region.valid_sync_buf[EM_GM_BUF_INPUT].sync_size = buf.size;

@@ -75,6 +75,30 @@ aipu_status_t aipudrv::ParserBase::sort_io_tensor(std::vector<GraphIOTensorDesc>
     return ret;
 }
 
+aipu_status_t aipudrv::ParserBase::sort_io(struct GraphIOTensors &io)
+{
+    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+    ret = sort_io_tensor(io.inputs);
+    if (ret != AIPU_STATUS_SUCCESS)
+        goto finish;
+
+    ret = sort_io_tensor(io.outputs);
+    if (ret != AIPU_STATUS_SUCCESS)
+        goto finish;
+
+    ret = sort_io_tensor(io.inter_dumps);
+    if (ret != AIPU_STATUS_SUCCESS)
+        goto finish;
+
+    ret = sort_io_tensor(io.outputs_shape);
+    if (ret != AIPU_STATUS_SUCCESS)
+        goto finish;
+
+finish:
+    return ret;
+}
+
 template<typename sub_section_desc_v3_t>
 aipu_status_t aipudrv::ParserBase::fill_io_tensor_desc_inner(uint32_t reuse_sec_iter,
     uint32_t sub_sec_iter, const sub_section_desc_v3_t& sub_section_load,
@@ -128,7 +152,7 @@ aipu_status_t aipudrv::ParserBase::fill_io_tensor_desc_inner(uint32_t reuse_sec_
     return ret;
 }
 
-aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, uint32_t id,
+aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, uint32_t bss_id,
     Graph& gobj, char** next) const
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
@@ -139,7 +163,7 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
     SubSectionDesc sub_desc_load = {0};
     GraphSectionDesc section_ir = {0};
     GraphParamMapLoadDesc param = {0};
-    GraphIOTensors io;
+    GraphIOTensors &io = gobj.get_bss_io_ref(0);
     uint32_t cst_start_addr = 0, zerocpy_cst_start_addr = 0;
 
     void* load_lb = bss;
@@ -157,7 +181,7 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
     }
 
     /* set stack section descriptions */
-    gobj.set_stack(id, bss_header.stack_size, ALIGN_ADDR(bss_header.stack_align_bytes));
+    gobj.set_stack(bss_id, bss_header.stack_size, ALIGN_ADDR(bss_header.stack_align_bytes));
 
     /* static sections (weight/bias) in bss */
     desc_load_addr = (char*)(bss + sizeof(BSSHeader));
@@ -200,9 +224,9 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
                         static_sec_iter, static_desc_load.sub_section_cnt, sub_desc_load.offset_in_ro_cnt,
                         sub_desc_load.offset_in_section_exec, offset_in_ro);
 
-                param.init(offset_in_ro, PARAM_MAP_LOAD_TYPE_STATIC, 0, static_sec_iter, sub_sec_iter,
+                param.init(offset_in_ro, PARAM_MAP_LOAD_TYPE_STATIC, 0, m_static_buf_idx, sub_sec_iter,
                     sub_desc_load.offset_in_section_exec, sub_desc_load.addr_mask);
-                gobj.add_param(id, param);
+                gobj.add_param(0, param);
                 desc_load_addr = (char*)(desc_load_addr + sizeof(uint32_t));
             }
         }
@@ -213,7 +237,7 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
         section_ir.offset_in_file = static_desc_load.offset_in_file;
         section_ir.type = sub_desc_load.type;
         section_ir.slot_index = static_sec_iter;
-        section_ir.load_src = (char*)((unsigned long)gobj.get_bweight_base() + static_desc_load.offset_in_file);
+        section_ir.load_src = (char*)((unsigned long)gobj.get_bweight_base(bss_id) + static_desc_load.offset_in_file);
 
         if (section_ir.type == SECTION_TYPE_ZEROCPY_CONSTANT)
         {
@@ -221,18 +245,19 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
             LOG(LOG_INFO, "%d, s_addr=%x, size=%x, align_bytes=%d, r_addr=%x\n",
                 static_sec_iter, zerocpy_cst_start_addr, section_ir.size,
                 static_desc_load.align_bytes, section_ir.relative_addr);
-            gobj.add_zerocpy_const_section(id, section_ir);
+            gobj.add_zerocpy_const_section(bss_id, section_ir);
             zerocpy_cst_start_addr = section_ir.relative_addr + section_ir.size;
         } else {
             section_ir.relative_addr = aligned(cst_start_addr, static_desc_load.align_bytes);
-            gobj.add_const_section(id, section_ir);
+            gobj.add_const_section(bss_id, section_ir);
             cst_start_addr = section_ir.relative_addr + section_ir.size;
         }
 
-        gobj.add_static_section(id, section_ir);
+        gobj.add_static_section(bss_id, section_ir);
+        m_static_buf_idx++;
     }
 
-    gobj.set_const_size(cst_start_addr, zerocpy_cst_start_addr);
+    gobj.set_const_size(bss_id, cst_start_addr, zerocpy_cst_start_addr);
     LOG(LOG_INFO, "zerocpy_const_size: %d, const_size: %d\n", zerocpy_cst_start_addr, cst_start_addr);
 
     /* reuse sections (input/output/intermediate) in bss */
@@ -254,17 +279,17 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
                 goto overflow;
 
             /* get io tensor info if this sub-section represents io */
-            if ((SECTION_TYPE_INPUT == sub_desc_load.type) ||
-                (SECTION_TYPE_OUTPUT == sub_desc_load.type) ||
-                (SECTION_TYPE_INTER_DUMP == sub_desc_load.type) ||
-                (SECTION_TYPE_PROF_DATA == sub_desc_load.type) ||
-                (SECTION_TYPE_PLOG_DATA == sub_desc_load.type) ||
-                (SECTION_TYPE_LAYER_COUNTER == sub_desc_load.type) ||
-                (SECTION_TYPE_ERROR_CODE == sub_desc_load.type) ||
-                (SECTION_TYPE_SEGMMU == sub_desc_load.type) ||
-                (SECTION_TYPE_OUT_TENSOR_SHAPE == sub_desc_load.type))
+            if ((sub_desc_load.type == SECTION_TYPE_INPUT) ||
+                (sub_desc_load.type == SECTION_TYPE_OUTPUT) ||
+                (sub_desc_load.type == SECTION_TYPE_INTER_DUMP) ||
+                (sub_desc_load.type == SECTION_TYPE_PROF_DATA) ||
+                (sub_desc_load.type == SECTION_TYPE_PLOG_DATA) ||
+                (sub_desc_load.type == SECTION_TYPE_LAYER_COUNTER) ||
+                (sub_desc_load.type == SECTION_TYPE_ERROR_CODE) ||
+                (sub_desc_load.type == SECTION_TYPE_SEGMMU) ||
+                (sub_desc_load.type == SECTION_TYPE_OUT_TENSOR_SHAPE))
             {
-                fill_io_tensor_desc_inner<SubSectionDesc>(reuse_sec_iter,
+                fill_io_tensor_desc_inner<SubSectionDesc>(m_reuse_buf_idx,
                     sub_sec_iter, sub_desc_load, io);
             }
 
@@ -282,9 +307,9 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
                 else
                     goto overflow;
 
-                param.init(offset_in_ro, PARAM_MAP_LOAD_TYPE_REUSE, sub_desc_load.type, reuse_sec_iter, sub_sec_iter,
+                param.init(offset_in_ro, PARAM_MAP_LOAD_TYPE_REUSE, sub_desc_load.type, m_reuse_buf_idx, sub_sec_iter,
                     sub_desc_load.offset_in_section_exec, sub_desc_load.addr_mask);
-                gobj.add_param(id, param);
+                gobj.add_param(0, param);
                 desc_load_addr = (char*)(desc_load_addr + sizeof(uint32_t));
             }
         }
@@ -293,27 +318,9 @@ aipu_status_t aipudrv::ParserBase::parse_bss_section(char* bss, uint32_t size, u
         section_ir.load_src = nullptr;
         section_ir.align_in_page = ALIGN_ADDR(reuse_desc_load.align_bytes);
         section_ir.size = reuse_desc_load.size;
-        gobj.add_reuse_section(id, section_ir);
+        gobj.add_reuse_section(bss_id, section_ir);
+        m_reuse_buf_idx++;
     }
-
-    /* sort IO tensors by tensor ID */
-    ret = sort_io_tensor(io.inputs);
-    if (ret != AIPU_STATUS_SUCCESS)
-        goto finish;
-
-    ret = sort_io_tensor(io.outputs);
-    if (ret != AIPU_STATUS_SUCCESS)
-        goto finish;
-
-    ret = sort_io_tensor(io.inter_dumps);
-    if (ret != AIPU_STATUS_SUCCESS)
-        goto finish;
-
-    ret = sort_io_tensor(io.outputs_shape);
-    if (ret != AIPU_STATUS_SUCCESS)
-        goto finish;
-
-    gobj.set_io_tensors(id, io);
 
     /* success */
     *next = desc_load_addr;
@@ -391,7 +398,7 @@ finish:
 
 uint32_t aipudrv::ParserBase::get_graph_bin_version(std::istream& gbin)
 {
-    #define EI_NIDENT 16
+    constexpr uint32_t EI_NIDENT = 16;
     uint32_t g_version = 0;
     char e_ident[EI_NIDENT] = {0};
 

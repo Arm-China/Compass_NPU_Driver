@@ -234,7 +234,10 @@ private:
         }
 
         for (auto item : m_cmdpools)
+        {
             delete item.second;
+            item.second = nullptr;
+        }
 
         m_cmdpools.clear();
         m_cmdpool_bitmap = 0;

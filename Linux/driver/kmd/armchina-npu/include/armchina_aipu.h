@@ -40,7 +40,7 @@ enum aipu_arch {
  * @AIPU_ISA_VERSION_ZHOUYI_V2_1: AIPU ISA version is Zhouyi V2 (Z3).
  * @AIPU_ISA_VERSION_ZHOUYI_V2_2: AIPU ISA version is Zhouyi V2 (X1).
  * @AIPU_ISA_VERSION_ZHOUYI_V3:   AIPU ISA version is Zhouyi V3.
- * @AIPU_ISA_VERSION_ZHOUYI_V4:   AIPU ISA version is Zhouyi V4.
+ * @AIPU_ISA_VERSION_ZHOUYI_V3_1: AIPU ISA version is Zhouyi V3_1.
  *
  * Zhouyi architecture has multiple ISA versions released.
  * This enum is used to indicate the ISA version of an AIPU core in the system.
@@ -51,7 +51,7 @@ enum aipu_isa_version {
 	AIPU_ISA_VERSION_ZHOUYI_V2_1 = 3,
 	AIPU_ISA_VERSION_ZHOUYI_V2_2 = 4,
 	AIPU_ISA_VERSION_ZHOUYI_V3   = 5,
-	AIPU_ISA_VERSION_ZHOUYI_V4   = 6,
+	AIPU_ISA_VERSION_ZHOUYI_V3_1 = 6,
 };
 
 /**
@@ -144,11 +144,9 @@ struct aipu_partition_cap {
  */
 struct aipu_cap {
 	__u32 partition_cnt;
+	__u32 asid_cnt;
+	__u64 asid_base[32];
 	__u32 is_homogeneous;
-	__u64 asid0_base;
-	__u64 asid1_base;
-	__u64 asid2_base;
-	__u64 asid3_base;
 	__u64 dtcm_base;
 	__u32 dtcm_size;
 	__u32 gm0_size;
@@ -182,12 +180,41 @@ enum aipu_mm_data_type {
  * @AIPU_BUF_ASID_1: [aipu v2/v3 only] ASID 1 region
  * @AIPU_BUF_ASID_2: [aipu v2/v3 only] ASID 2 region
  * @AIPU_BUF_ASID_3: [aipu v3 only] ASID 3 region
+ * @AIPU_BUF_ASID_x: [aipu v3/v3_1 only] ASID 4-31 region
  */
 enum aipu_buf_region {
 	AIPU_BUF_ASID_0 = 0,
 	AIPU_BUF_ASID_1 = 1,
 	AIPU_BUF_ASID_2 = 2,
 	AIPU_BUF_ASID_3 = 3,
+	AIPU_BUF_ASID_4 = 4,
+	AIPU_BUF_ASID_5 = 5,
+	AIPU_BUF_ASID_6 = 6,
+	AIPU_BUF_ASID_7 = 7,
+	AIPU_BUF_ASID_8 = 8,
+	AIPU_BUF_ASID_9 = 9,
+	AIPU_BUF_ASID_10 = 10,
+	AIPU_BUF_ASID_11 = 11,
+	AIPU_BUF_ASID_12 = 12,
+	AIPU_BUF_ASID_13 = 13,
+	AIPU_BUF_ASID_14 = 14,
+	AIPU_BUF_ASID_15 = 15,
+	AIPU_BUF_ASID_16 = 16,
+	AIPU_BUF_ASID_17 = 17,
+	AIPU_BUF_ASID_18 = 18,
+	AIPU_BUF_ASID_19 = 19,
+	AIPU_BUF_ASID_20 = 20,
+	AIPU_BUF_ASID_21 = 21,
+	AIPU_BUF_ASID_22 = 22,
+	AIPU_BUF_ASID_23 = 23,
+	AIPU_BUF_ASID_24 = 24,
+	AIPU_BUF_ASID_25 = 25,
+	AIPU_BUF_ASID_26 = 26,
+	AIPU_BUF_ASID_27 = 27,
+	AIPU_BUF_ASID_28 = 28,
+	AIPU_BUF_ASID_29 = 29,
+	AIPU_BUF_ASID_30 = 30,
+	AIPU_BUF_ASID_31 = 31,
 };
 
 /**

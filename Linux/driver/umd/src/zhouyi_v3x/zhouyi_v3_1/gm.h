@@ -29,8 +29,8 @@ struct ValidSyncBuffer
     SyncBuffer valid_sync_buf[EM_GM_BUF_MAX];
 };
 
-class JobV4;
-class GM_V4
+class JobV3_1;
+class GM_V3_1
 {
     private:
     bool m_gm_asm = false;
@@ -38,8 +38,8 @@ class GM_V4
     std::vector<BufferDesc *> m_gm_alloc_buffer;
 
     public:
-    JobV4 &m_job;
-    const GraphV3X &m_graph;
+    JobV3_1 &m_job;
+    GraphV3X &m_graph;
 
     DEV_PA_64 m_gm_buf_base = 0;
     uint32_t m_gm_buf_sync_size= 0;
@@ -52,8 +52,8 @@ class GM_V4
     void get_valid_map_base(BufferDesc &buf);
 
     public:
-    GM_V4(JobV4 &_job);
-    ~GM_V4();
+    GM_V3_1(JobV3_1 &_job);
+    ~GM_V3_1();
 };
 }
 

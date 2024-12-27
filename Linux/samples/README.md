@@ -44,12 +44,12 @@ note:
 # ./aipu_profiler_test -b aipu.bin -i input0.bin -c output.bin -d ./
 ```
 
-- multi_model_test: load multiple models and dispatch them to different core, only for aipu v3/v4.
+- multi_model_test: load multiple models and dispatch them to different core, only for aipu v3/v3_1.
 ```bash
 # ./aipu_multi_model_test -b aipu.bin -i input0.bin -c output.bin -d ./
 ```
 
-- batch_test: load multiple input frames for one model, try to parallel frames on cores. only for aipu v3/v4.
+- batch_test: load multiple input frames for one model, try to parallel frames on cores. only for aipu v3/v3_1.
 ```bash
 # ./aipu_batch_test -b aipu.bin -i input0.bin -c output.bin -d ./
 ```

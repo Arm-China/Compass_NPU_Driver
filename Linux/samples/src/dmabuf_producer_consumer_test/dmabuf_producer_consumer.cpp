@@ -45,14 +45,14 @@ int main(int argc, char* argv[])
     int pass = 0, loop = 0, total_loop = 2;
     uint64_t cfg_types = 0;
     aipu_create_job_cfg create_job_cfg = {0};
-    #if DMABUF_SWITCH
+#if DMABUF_SWITCH
     aipu_shared_tensor_info_t input_share_tensor;
     int dmabuf_input_fd = -1;
-    #if OUTPUT_SWITCH
+#if OUTPUT_SWITCH
     aipu_shared_tensor_info_t output_share_tensor;
     int dmabuf_output_fd = -1;
-    #endif
-    #endif
+#endif
+#endif
 
     AIPU_CRIT() << "usage: ./aipu_dmabuf_main_test -b aipu.bin -d ./\n";
 
@@ -153,7 +153,7 @@ int main(int argc, char* argv[])
         }
         //AIPU_INFO()("aipu_get_tensor_descriptor done\n");
 
-        #if DMABUF_SWITCH
+#if DMABUF_SWITCH
         /**
          * @NOTE:
          * construct input share dma_buf's descriptor
@@ -181,7 +181,7 @@ int main(int argc, char* argv[])
         input_share_tensor.type = AIPU_TENSOR_TYPE_INPUT;
         input_share_tensor.shared_case_type = AIPU_SHARE_BUF_DMABUF;
 
-        #if OUTPUT_SWITCH
+#if OUTPUT_SWITCH
         /**
          * @NOTE:
          * construct output share dma_buf's descriptor
@@ -199,8 +199,8 @@ int main(int argc, char* argv[])
         output_share_tensor.tensor_idx = 0;
         output_share_tensor.type = AIPU_TENSOR_TYPE_OUTPUT;
         output_share_tensor.shared_case_type = AIPU_SHARE_BUF_DMABUF;
-        #endif
-        #endif
+#endif
+#endif
 
         ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
         if (ret != AIPU_STATUS_SUCCESS)
@@ -210,7 +210,7 @@ int main(int argc, char* argv[])
             goto unload_graph;
         }
         AIPU_INFO()("aipu_create_job success\n");
-        #if DMABUF_SWITCH
+#if DMABUF_SWITCH
         /**
          * bind dma_buf to IO buffer after the job is created.
          */
@@ -223,7 +223,7 @@ int main(int argc, char* argv[])
         }
         AIPU_INFO()("aipu_specify_iobuf input success\n");
 
-        #if OUTPUT_SWITCH
+#if OUTPUT_SWITCH
          /**
          * bind dma_buf to IO buffer after the job is created.
          */
@@ -235,10 +235,10 @@ int main(int argc, char* argv[])
             goto unload_graph;
         }
         AIPU_INFO()("aipu_specify_iobuf ouput success\n");
-        #endif
-        #endif
+#endif
+#endif
 
-    #if ((defined RTDEBUG) && (RTDEBUG == 1))
+#if ((defined RTDEBUG) && (RTDEBUG == 1))
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_TEXT  |
             AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_RODATA        |
@@ -247,9 +247,9 @@ int main(int argc, char* argv[])
             AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN     |
             AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
-    #else
+#else
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT;
-    #endif
+#endif
         ret = aipu_config_job(ctx, job_id, cfg_types, &mem_dump_config);
         if (ret != AIPU_STATUS_SUCCESS)
         {
@@ -275,7 +275,7 @@ int main(int argc, char* argv[])
         for (uint32_t frame = 0; frame < frame_cnt; frame++)
         {
             AIPU_INFO()("Frame #%u\n", frame);
-            #if !DMABUF_SWITCH
+#if !DMABUF_SWITCH
             for (uint32_t i = 0; i < min((uint32_t)opt.inputs.size(), input_cnt); i++)
             {
                 if (input_desc[i].size > opt.inputs_size[i])
@@ -294,7 +294,7 @@ int main(int argc, char* argv[])
                 AIPU_INFO()("load input tensor %d from %s (%u/%u)\n",
                     i, opt.input_files[i].c_str(), i+1, input_cnt);
             }
-            #endif
+#endif
 
             ret = aipu_finish_job(ctx, job_id, -1);
             if (ret != AIPU_STATUS_SUCCESS)
@@ -319,7 +319,7 @@ int main(int argc, char* argv[])
                     i, i+1, output_cnt);
             }
 
-            #if OUTPUT_SWITCH
+#if OUTPUT_SWITCH
             // send output dmabuf's fd to comsumer
             if (sender(dmabuf_output_fd, CONSUMER_SERVER_PATH) < 0)
             {
@@ -327,8 +327,8 @@ int main(int argc, char* argv[])
                 goto clean_job;
             }
             AIPU_INFO()("sender success\n");
-            #endif
-            pass = check_result_helper(output_data, output_desc, opt.gts[0], opt.gts_size[0]);
+#endif
+            pass = check_result_helper(output_data, output_desc, opt.gts, opt.gts_size);
         }
 
         input_desc.clear();
@@ -354,9 +354,9 @@ int main(int argc, char* argv[])
         }
         AIPU_INFO()("aipu_unload_graph success\n");
 
-        #if DMABUF_SWITCH
+#if DMABUF_SWITCH
         dmabuf_free(dmabuf_input_fd);
-        #endif
+#endif
 
     deinit_ctx:
         ret = aipu_deinit_context(ctx);

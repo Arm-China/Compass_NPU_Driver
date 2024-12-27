@@ -299,7 +299,8 @@ struct tcb_t
             uint32_t rsvd2[5];
             uint32_t dsize;
             uint32_t tcbp;
-            uint32_t rsvd3[2];
+            uint32_t global_param;
+            uint32_t rsvd3;
         } noninit;
 
         union
@@ -367,6 +368,7 @@ struct tcb_t
 #define tecid        __data.noninit.tec_id
 #define dsize        __data.noninit.dsize
 #define tcbp         __data.noninit.tcbp
+#define global_param __data.noninit.global_param
 
 /* grid init tcb */
 #define group_num           __data.init.grid_init.group_num

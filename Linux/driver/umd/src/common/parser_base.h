@@ -97,7 +97,7 @@ enum SubSectionType {
     SECTION_TYPE_PROF_DATA  = 10,
     SECTION_TYPE_PLOG_DATA  = 12,
     SECTION_TYPE_LAYER_COUNTER = 13,
-    SECTION_TYPE_ERROR_CODE = 14,
+    SECTION_TYPE_ERROR_CODE = 14, /* only for v1/v2 */
     SECTION_TYPE_ZEROCPY_CONSTANT = 15,
     SECTION_TYPE_OUT_TENSOR_SHAPE = 16,
     SECTION_TYPE_SEGMMU = 255,
@@ -186,7 +186,7 @@ struct GraphIOTensorDesc {
     uint32_t ref_section_iter;
     uint32_t offset_in_section;
     float    scale;
-    float    zero_point;
+    int32_t  zero_point;
     aipu_data_type_t data_type;
 };
 
@@ -201,9 +201,14 @@ private:
         struct GraphIOTensors& desc) const;
 
 protected:
+    mutable uint32_t m_static_buf_idx = 0;
+    mutable uint32_t m_reuse_buf_idx = 0;
+
+protected:
     aipu_status_t parse_bss_section(char* bss, uint32_t size, uint32_t id,
         Graph& gobj, char** next) const;
     aipu_status_t parse_remap_section(char* remap, Graph& gobj);
+    aipu_status_t sort_io(struct GraphIOTensors &io);
 
 public:
     virtual aipu_status_t parse_graph(std::istream& gbin, uint32_t size, Graph& gobj) = 0;

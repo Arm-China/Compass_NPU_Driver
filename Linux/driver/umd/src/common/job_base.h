@@ -173,6 +173,8 @@ protected:
         const std::vector<BufferDesc*>& reuses);
     void update_io_buffers(const struct GraphIOTensors& io,
         const std::vector<BufferDesc*>& reuses);
+    void update_single_io_buffers(const std::vector<struct GraphIOTensorDesc> &graph_iobufs,
+        std::vector<struct JobIOBuffer> &job_iobufs, const std::vector<BufferDesc*>& reuses);
     void dump_buffer(DEV_PA_64 pa, const char* bin_va, uint32_t size, const char* name);
     void dump_single_buffer(DEV_PA_64 pa, uint32_t size, const char* name);
     void dump_share_buffer(struct JobIOBuffer &iobuf, const char* name, bool keep_name = false);
@@ -182,6 +184,10 @@ protected:
     void dump_job_shared_buffers_after_run();
     void dump_job_private_buffers_after_run(BufferDesc& rodata, BufferDesc* descriptor);
     aipu_status_t validate_schedule_status();
+    virtual aipu_status_t get_runtime_err_code() const
+    {
+        return AIPU_STATUS_SUCCESS;
+    }
 
 public:
     virtual aipu_status_t init(const aipu_global_config_simulation_t* cfg,
@@ -189,6 +195,7 @@ public:
     virtual aipu_status_t schedule() = 0;
     virtual aipu_status_t destroy() = 0;
     aipu_status_t load_tensor(uint32_t tensor, const void* data);
+    aipu_status_t load_output_tensor(uint32_t tensor, const void* data);
     aipu_status_t get_tensor(aipu_tensor_type_t type, uint32_t tensor, void* data);
     virtual aipu_status_t get_status(aipu_job_status_t* status);
     virtual aipu_status_t get_status_blocking(aipu_job_status_t* status, int32_t time_out);
@@ -250,6 +257,16 @@ public:
     aipu_job_callback_func_t get_job_cb()
     {
         return m_callback_func;
+    }
+
+    std::vector<struct JobIOBuffer> &get_inputs_ref()
+    {
+        return m_inputs;
+    }
+
+    std::vector<struct JobIOBuffer> &get_outputs_ref()
+    {
+        return m_outputs;
     }
 
 public:

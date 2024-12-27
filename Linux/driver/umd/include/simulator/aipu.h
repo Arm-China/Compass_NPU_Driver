@@ -50,6 +50,8 @@ namespace sim_aipu
 
         void enable_profiling(bool en);
 
+        void dump_profiling();
+
         void set_event_handler(void (*)(uint32_t event, uint64_t value, void *context),
                                void *context);
     private:

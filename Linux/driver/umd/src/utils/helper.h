@@ -61,7 +61,7 @@ aipu_status_t umd_load_file_helper(const char* fname, void* dest, unsigned int s
  * @retval AIPU_STATUS_ERROR_OPEN_FILE_FAIL
  * @retval AIPU_STATUS_ERROR_MAP_FILE_FAIL
  */
-aipu_status_t umd_mmap_file_helper(const char* fname, void** data, unsigned int* size);
+aipu_status_t umd_mmap_file_helper(const char* fname, void** data, uint64_t* size);
 /**
  * @brief This function is used to draw a line composed of a character into an opened file
  *
@@ -142,6 +142,59 @@ class FileWrapper {
 
     private:
     std::fstream m_fs;
+};
+
+class CustomMemBuf : public std::basic_stringbuf<char>
+{
+    public:
+    CustomMemBuf(char* data, size_t length)
+    {
+        setg(const_cast<char*>(data), const_cast<char*>(data), const_cast<char*>(data + length));
+    }
+
+    protected:
+    int_type underflow() override
+    {
+        if (gptr() < egptr())
+            return traits_type::to_int_type(*gptr());
+
+        return traits_type::eof();
+    }
+
+    virtual std::streampos seekoff(
+        std::streamoff off, std::ios_base::seekdir dir,
+        std::ios_base::openmode which = std::ios_base::in | std::ios_base::out) override
+    {
+        if (off == 0 && dir == std::ios_base::cur)
+            return std::streampos(static_cast<std::ptrdiff_t>(gptr() - eback()));
+
+        if (dir == std::ios_base::beg)
+        {
+            if (off < 0 || off > egptr() - eback())
+                return std::streampos(-1);
+
+            setg(eback(), eback() + off, egptr());
+        } else if (dir == std::ios_base::cur) {
+            if (off < 0 || off > gptr() - eback())
+                return std::streampos(-1);
+
+            setg(eback(), gptr() + off, egptr());
+        } else if (dir == std::ios_base::end) {
+            if (off < 0 || off > egptr() - eback())
+                return std::streampos(-1);
+
+            setg(eback(), egptr() + off, egptr());
+        }
+
+        return std::streampos(static_cast<std::ptrdiff_t>(gptr() - eback()));
+    }
+
+    virtual std::streampos seekpos(
+        std::streampos sepos,
+        std::ios_base::openmode which = std::ios_base::in | std::ios_base::out) override
+    {
+        return seekoff(sepos, std::ios_base::beg);
+    }
 };
 
 #endif /* _HELPER_H_ */

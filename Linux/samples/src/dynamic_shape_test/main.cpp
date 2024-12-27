@@ -8,7 +8,8 @@
  * @brief AIPU UMD test application: dynamic shape test
  *
  * @note  aipu_dynamic_shape_test -b aipu.bin -i input.bin -c output.bin -d ./output/
- *                                -r input_shape(eg: -r 1,480,640,3)
+ *                                -r shape1/shape2 -a <aipu target>
+ *        shape format is dim0,dim1,dim2,dim3..., and tail dynamic shape can be empty if it is 0 with initialize state
  *        aipu.bin should support dynamic shape, you can get shape info and
  *        set shape by aipu_ioctl interface, refer to line 89-151, output
  *        shape info should get after finish job, refer to line 186-216.
@@ -32,32 +33,36 @@
 
 using namespace std;
 
-char * g_remain_char = NULL;
+char *g_remain_char = nullptr;
 
-char * aipu_strtok( char * s,const char * ct)
+char *aipu_strtok( char *s, const char *ct)
 {
-    char *sbegin, *send;
+    char *sbegin = nullptr, *send = nullptr;
+
     sbegin  = s ? s : g_remain_char;
     if (!sbegin) {
         return NULL;
     }
-    sbegin += strspn(sbegin,ct);
+
+    sbegin += strspn(sbegin, ct);
     if (*sbegin == '\0') {
-        g_remain_char = NULL;
-        return (NULL);
+        g_remain_char = nullptr;
+        return nullptr;
     }
+
     send = strpbrk(sbegin, ct);
     if (send && *send != '\0') {
         *send++ = '\0';
     }
+
     g_remain_char = send;
-    return (sbegin);
+    return sbegin;
 }
 
 int main(int argc, char* argv[])
 {
     aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipu_ctx_handle_t* ctx;
+    aipu_ctx_handle_t *ctx;
     uint64_t graph_id, job_id;
     const char *msg = nullptr;
     uint32_t output_cnt;
@@ -68,12 +73,13 @@ int main(int argc, char* argv[])
     aipu_create_job_cfg create_job_cfg = {0};
     aipu_dynshape_param_t dynshape_param = {0};
     aipu_job_config_dump_t mem_dump_config = {0};
+    aipu_load_graph_cfg_t graph_cfg = {0};
     vector<aipu_tensor_desc_t> output_desc;
     vector<char*> output_data;
     cmd_opt_t opt;
     int pass = 0;
-    char* temp_l = nullptr;
-    char* temp_s = nullptr;
+    char *temp_l = nullptr;
+    char *temp_s = nullptr;
 
     if (init_test_bench(argc, argv, &opt, "dynamic_shape_test")) {
         AIPU_ERR()("invalid command line options/args\n");
@@ -104,7 +110,10 @@ int main(int argc, char* argv[])
     }
     AIPU_INFO()("aipu_init_context success\n");
 
-    ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id);
+    memset((void*)&graph_cfg, 0, sizeof(graph_cfg));
+    if (opt.extra_weight_dir.length() > 0)
+        graph_cfg.extra_weight_path = opt.extra_weight_dir.c_str();
+    ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id, &graph_cfg);
     if (ret != AIPU_STATUS_SUCCESS)
     {
         aipu_get_error_message(ctx, ret, &msg);
@@ -138,13 +147,11 @@ int main(int argc, char* argv[])
      * AIPU_IOCTL_GET_DS_INFO: get input tensor shape info
      *     max_threshhold = true return max shape info
      *     max_threshhold = false return min shape info
-     * AIPU_IOCTL_SET_DS_INFO: set shape info to benchmark
      */
-    dynshape_param.graph_id = graph_id;
-    dynshape_param.input_shape_cnt = *dynshape_num.ds_num;
-    dynshape_param.shape_items = (aipu_dynshape_item_t *)malloc(sizeof(aipu_dynshape_item_t) * (*dynshape_num.ds_num));
+    dynshape_param.input_shape_cnt = input_shape_vec_vec.size();
+    dynshape_param.shape_items = (aipu_dynshape_item_t *)malloc(sizeof(aipu_dynshape_item_t) * input_shape_vec_vec.size());
 
-    for (uint32_t  id = 0 ; id < *dynshape_num.ds_num; id++) {
+    for (uint32_t  id = 0 ; id < dynshape_param.input_shape_cnt; id++) {
         aipu_dynshape_dim_num_t dynshape_dim_num = {0};
         dynshape_dim_num.graph_id = graph_id;
         dynshape_dim_num.ds_idx = id;
@@ -179,14 +186,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    ret = aipu_ioctl(ctx, AIPU_IOCTL_SET_DS_INFO, &dynshape_param);
-    if (ret != AIPU_STATUS_SUCCESS) {
-        aipu_get_error_message(ctx, ret, &msg);
-        AIPU_ERR()("aipu_ioctl: %s\n", msg);
-        goto unload_graph;
-    }
-    AIPU_INFO()("aipu set dynshape_param success\n");
-
+    create_job_cfg.dynshape = &dynshape_param;
     ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
     if (ret != AIPU_STATUS_SUCCESS) {
         aipu_get_error_message(ctx, ret, &msg);
@@ -206,7 +206,7 @@ int main(int argc, char* argv[])
         AIPU_INFO()("set dump config success\n");
     }
 
-    for (uint32_t id = 0; id < *dynshape_num.ds_num; id++) {
+    for (uint32_t id = 0; id < input_shape_vec_vec.size(); id++) {
         ret = aipu_load_tensor(ctx, job_id, id, opt.inputs[id]);
         if (ret != AIPU_STATUS_SUCCESS) {
             aipu_get_error_message(ctx, ret, &msg);
@@ -214,7 +214,7 @@ int main(int argc, char* argv[])
             goto clean_job;
         }
         AIPU_INFO()("load input tensor %d from %s (%u/%u)\n",
-                id, opt.input_files[id].c_str(), id+1, dynshape_num.ds_num);
+                id, opt.input_files[id].c_str(), id+1, input_shape_vec_vec.size());
     }
 
     ret = aipu_finish_job(ctx, job_id, -1);
@@ -265,7 +265,7 @@ int main(int argc, char* argv[])
             i, i+1, output_desc.size());
     }
 
-    pass = check_result_helper(output_data, output_desc, opt.gts[0], opt.gts_size[0]);
+    pass = check_result_helper(output_data, output_desc, opt.gts, opt.gts_size);
 
 clean_job:
     ret = aipu_clean_job(ctx, job_id);

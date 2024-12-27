@@ -49,10 +49,16 @@ typedef struct batch_info
     void clear()
     {
         for (auto input : inputs)
+        {
             delete input;
+            input = nullptr;
+        }
 
         for (auto output : outputs)
+        {
             delete output;
+            output = nullptr;
+        }
 
         inputs.clear();
         outputs.clear();
@@ -116,7 +122,6 @@ public:
     virtual uint32_t get_dynamic_shape_num() = 0;
     virtual int32_t get_dynamic_shape_dim_num(uint32_t idx, bool max_shape_dim) = 0;
     virtual bool get_dynamic_shape_data(uint32_t idx, bool max_shape_dim, uint32_t *data) = 0;
-    virtual bool set_dynamic_shape_data(aipu_dynshape_param_t *shape_param) = 0;
 
     JobBase* get_job(JOB_ID id)
     {

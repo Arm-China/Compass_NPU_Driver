@@ -100,7 +100,7 @@ struct aipu_job {
 	ktime_t done_time;
 	struct aipu_ext_profiling_data pdata;
 	int wake_up;
-	u64 prev_tail_tcb;
+	u64 curr_hold_tcb;
 	struct file *prof_filp;
 	struct profiler *prof_head;
 };

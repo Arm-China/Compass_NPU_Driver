@@ -366,12 +366,13 @@ EXPORT_SYMBOL(armchina_aipu_remove);
 int armchina_aipu_suspend(struct platform_device *p_dev, pm_message_t state)
 {
 	struct aipu_partition *partition = platform_get_drvdata(p_dev);
+	int ret = 0;
 
-	aipu_job_manager_suspend(get_job_manager(partition));
+	ret = aipu_job_manager_suspend(get_job_manager(partition));
 
-	if (aipu && aipu->soc_ops && aipu->soc_ops->disable_clk)
+	if (ret == 0 && aipu && aipu->soc_ops && aipu->soc_ops->disable_clk)
 		aipu->soc_ops->disable_clk(partition->dev, aipu->soc);
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(armchina_aipu_suspend);
 
@@ -387,13 +388,14 @@ EXPORT_SYMBOL(armchina_aipu_suspend);
 int armchina_aipu_resume(struct platform_device *p_dev)
 {
 	struct aipu_partition *partition = platform_get_drvdata(p_dev);
+	int ret = 0;
 
-	aipu_job_manager_resume(get_job_manager(partition));
+	ret = aipu_job_manager_resume(get_job_manager(partition));
 
-	if (aipu && aipu->soc_ops && aipu->soc_ops->enable_clk)
+	if (ret == 0 && aipu && aipu->soc_ops && aipu->soc_ops->enable_clk)
 		aipu->soc_ops->enable_clk(partition->dev, aipu->soc);
 
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(armchina_aipu_resume);
 

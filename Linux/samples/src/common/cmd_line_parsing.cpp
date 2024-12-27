@@ -33,6 +33,7 @@ static struct option opts[] = {
     { "verbose", optional_argument, NULL, 'v' },
     { "time", required_argument, NULL, 't' },
     { "shape", required_argument, NULL, 'r' },
+    { "weight_dir", required_argument, NULL, 'w' },
     { NULL, 0, NULL, 0 }
 };
 
@@ -45,12 +46,13 @@ void help(void)
         "   -i: input bins\n"
         "   -c: output bin\n"
         "   -d: output data path\n"
-        "   -a: aipu v3 arch (X2_1204/X2_1204MP3)\n"
+        "   -a: aipu v3 arch (X2_1204/X2_1204MP3), aipu v3_1 arch(X3_1304/X3_1304MP2)\n"
         "   -o: dump options for text/weight/in/out on board(hex form: ff)\n"
         "   -t: test flush or finish job time(flush | finish), only for basic_time_test\n"
         "   -l: simulator log level(0-3)\n"
         "   -v: simulator verbose(0, 1)\n"
-        "   -r: dynamic real input shape(eg: 1,480,640,3;if multi tensors, use'/' for isolation: 1,480,640,3/1,480,640,3)\n";
+        "   -r: dynamic real input shape(eg: 1,480,640,3;if multi tensors, use'/' for isolation: 1,480,640,3/1,480,640,3)\n"
+        "   -w: extra weight bin path,(note: weight bin name is like extra_weight_{0-9}.bin)\n";
 
     std::cout << help_info;
     exit(0);
@@ -76,7 +78,7 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
 
     while (1)
     {
-        c = getopt_long(argc, argv, "hs:C:b:i:c:d:a:s:z:q:k:x:o:l:t:r:v", opts, &opt_idx);
+        c = getopt_long(argc, argv, "hs:C:b:i:c:d:a:s:z:q:k:x:o:l:t:r:w:v", opts, &opt_idx);
         if (-1 == c)
             break;
 
@@ -181,6 +183,10 @@ int init_test_bench(int argc, char* argv[], cmd_opt_t* opt, const char* test_cas
 
         case 'r':
             strcpy(opt->input_shape, optarg);
+            break;
+
+        case 'w':
+            opt->extra_weight_dir = optarg;
             break;
 
         case 'h':

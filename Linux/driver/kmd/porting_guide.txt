@@ -41,6 +41,9 @@
 |   |   |-- v3.c                    -> Zhouyi V3 specific
 |   |   |-- v3.h
 |   |   |-- v3_priv.c
+|   |   |-- v3_1.c                  -> Zhouyi V3_1 specific
+|   |   |-- v3_1.h
+|   |   |-- v3_1_priv.c
 |   |   |-- zhouyi.c                -> Common for Zhouyi architectures
 |   |   `-- zhouyi.h
 |   |-- default                     -> SoC integration implementation sample (default version)
@@ -83,7 +86,7 @@ If you would like to build for a single/compatible Zhouyi architecture(s), try t
     $./build_all.sh -p MY_SOC -v v1     #build Zhouyi V1 only
     $./build_all.sh -p MY_SOC -v v2     #build Zhouyi V2 compatible version (including Z2/Z3/X1)
     $./build_all.sh -p MY_SOC -v v3     #build Zhouyi V3 only
-    $./build_all.sh -p MY_SOC           #build Zhouyi V1/V2/V3 compatible version
+    $./build_all.sh -p MY_SOC -v v3_1   #build Zhouyi V3_1 only
 
 2.2 Build in kernel
 -------------------
@@ -121,21 +124,28 @@ KMD supports to be built in Linux kernel. To build NPU driver in-tree, please fo
             to set CONFIG_ARMCHINA_NPU_ARCH_V3. CONFIG_ARMCHINA_NPU will be set
             if you select this config.
 
-        4.4. if you use the default SoC API implementations provided by ArmChina,
+        4.4. if you use Zhouyi V3_1 NPUs, please select
+
+                "ArmChina NPU architecture: v3_1"
+
+            to set CONFIG_ARMCHINA_NPU_ARCH_V3_1. CONFIG_ARMCHINA_NPU will be set
+            if you select this config.
+
+        4.5. if you use the default SoC API implementations provided by ArmChina,
              please select
 
                 "Default SoC APIs"
 
             to set CONFIG_ARMCHINA_NPU_SOC_DEFAULT.
 
-        4.5. if you use the R329 SoC API implementations provided by Allwinner,
+        4.6. if you use the R329 SoC API implementations provided by Allwinner,
              please select
 
                 "R329 SoC APIs"
 
             to set CONFIG_ARMCHINA_NPU_SOC_R329.
 
-        4.6. if you use your own SoC, please add your corresponding configurations.
+        4.7. if you use your own SoC, please add your corresponding configurations.
     5. build kernel.
 
 The supported Linux kernel version numbers are listed in <9. Compatibility>.
@@ -155,6 +165,7 @@ the value of the compatible attribute should be one of the following strings:
     "armchina,zhouyi-v1"    ->  Zhouyi V1
     "armchina,zhouyi-v2"    ->  Zhouyi V2
     "armchina,zhouyi-v3"    ->  Zhouyi V3
+    "armchina,zhouyi-v3_1"  ->  Zhouyi V3_1
     "armchina,zhouyi"       ->  Zhouyi V1/V2/V3
 
 For example, you may configure for Zhouyi V2 AIPU as:
@@ -355,6 +366,7 @@ region reserved/allocated for AIPU:
     > For Zhouyi V1: within [0x0, 0xC0000000);
     > For Zhouyi V2: lower 32 bits address within [0x0, 0xC0000000); no limits for higher 32 bits;
     > For Zhouyi V3: lower 32 bits address within [0x0, 0xE0000000); no limits for higher 32 bits;
+    > For Zhouyi V3_1: lower 32 bits address within [0x0, 0xE0000000); no limits for higher 32 bits;
 
 Note that how many bytes to reserve depends on your target application scenario. The following values
 to reserve are just for the purpose of usage demo. For example,
@@ -428,7 +440,7 @@ it as followed:
         dma-ranges = <0x0 0x0 0x0 0x0 0xC0000000>;
         /* other attributes */
         /* ... */
-    };      1
+    };
 
 3.1.4.3 SoC SRAM
 ----------------
@@ -473,10 +485,6 @@ from userspace will be enabled.
 Sometimes to access the main memory, the physical addresses (cpu_pa) issued from host CPU and the
 addresses used by a device (dma_addr) do not equal. For this scenario, we use the dma-ranges
 attribute to describe the gap between them.
-
-You must specify this attribute in a reserved memory region node if this offset != 0.
-
-The host-aipu-offset attribute we used before will not be used in this version KMD driver.
 
 For example, if for the same memory space, dma_addr = cpu_pa - 0x80000000, you may configure as
 followed:
@@ -554,6 +562,9 @@ when specifying the offset to be 0x80000000, it means that dma_addr = cpu_pa - 0
 
         /* other attributes... */
     };
+
+For Linux kernel version >= 6.1, if the offset is not zero in your system, you are suggested
+to use host-aipu-offset instead of dma-ranges to specify this value.
 
 3.1.5 ASID Region Base & Size
 -----------------------------
@@ -644,6 +655,68 @@ For example,
     aipu0@64000000 {
         /* other attributes */
         memory-region = <&aipu_res_0 &aipu_res_1 &aipu_res_2 &aipu_res_3 &aipu_res_4>;
+    };
+
+    /* case 3 */
+    /* for multiple asid for large model with multiple weights reserve multiple asid
+       2GB memory ranges, if NPU and host access by different address, configure
+       dma-ranges reference to 3.1.4.5 */
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+
+        aipu_res_0: memory@1000000000 {
+            compatible = "shared-dma-pool";
+            no-map;
+            reg = <0x10 0x00000000 0x0 0x80000000>;
+            asid = <0>;
+        };
+
+        aipu_res_1: memory@1080000000 {
+            compatible = "shared-dma-pool";
+            no-map;
+            reg = <0x10 0x80000000 0x0 0x80000000>;
+            asid = <1>;
+        };
+        aipu_res_2: memory@1100000000 {
+            compatible = "shared-dma-pool";
+            no-map;
+            reg = <0x11 0x00000000 0x0 0x80000000>;
+            asid = <2>;
+        };
+        aipu_res_3: memory@1180000000 {
+            compatible = "shared-dma-pool";
+            no-map;
+            reg = <0x11 0x80000000 0x0 0x80000000>;
+            asid = <3>;
+        };
+        aipu_res_4: memory@1200000000 {
+            compatible = "shared-dma-pool";
+            no-map;
+            reg = <0x12 0x00000000 0x0 0x80000000>;
+            asid = <4>;
+        };
+        aipu_res_5: memory@1280000000 {
+            compatible = "shared-dma-pool";
+            no-map;
+            reg = <0x12 0x80000000 0x0 0x80000000>;
+            asid = <5>;
+        };
+		...
+    };
+    aipu0@64000000 {
+        #address-cells = <2>;
+        #size-cells = <1>;
+
+        /* other attributes */
+        memory-region = <&aipu_res_0 &aipu_res_1 &aipu_res_2 &aipu_res_3 &aipu_res_4 &aipu_res_5>;
+	dma-ranges=<0x10 0x00000000 0x10 0x00000000 0x80000000
+		    0x10 0x80000000 0x10 0x80000000 0x80000000
+		    0x11 0x00000000 0x11 0x00000000 0x80000000
+		    0x11 0x80000000 0x11 0x80000000 0x80000000
+		    0x12 0x00000000 0x12 0x00000000 0x80000000
+		    0x12 0x80000000 0x12 0x80000000 0x80000000>;
     };
 
     /* case 4 */
@@ -787,14 +860,32 @@ the following situations:
 
 You may also add your specific implementations about soft reset.
 
-5.4 Soft-reset Delay time
+5.4 Zhouyi V3_1
+-------------
+Zhouyi V3_1 NPUs support soft reset function. Host CPU can trigger a soft reset operation by
+configuring external register: TSM Soft Reset Register (0x20). You can find the speficication
+of this register in the Zhouyi V3_1 NPU TRM doc.
+
+Please be noted that a command pool abortion command will result in a soft reset internally
+as well. You should try to use command pool abortion first rather than to use soft reset directly.
+
+By default, Zhouyi NPU driver has implemented this feature. The soft reset should be triggered in
+the following situations:
+
+    1. insmod/rmmod Zhouyi KMD (reset the whole NPUs);
+    2. a runtime pool error/timeout, cluster fault occur, KMD reset the whole NPUs;
+    3. a runtime tec fault/exception signal occurs in an NPU job (abort the command pool);
+
+You may also add your specific implementations about soft reset.
+
+5.5 Soft-reset Delay time
 -------------------------
 For Zhouyi V2 (X1), you may configure AIPU_CONFIG_DEFAULT_RESET_DELAY_US in ./armchina-npu/config.h
 to set the soft-reset delay time. When a soft-reset is triggered, driver will check the hardware
 status after this time delay since the reset happens. If the status is abnormal, driver will report
 error and stop to schedule tasks. By default this delay value is 50us.
 
-This feature only works for V2 (X1) or V3.
+This feature only works for V2 (X1), V3 v3_1.
 
 6. Sysfs Debug Interfaces
 =========================
@@ -860,7 +951,7 @@ Then you can find the values be printed on screen like:
 
 To write values into a register, you should follow the following format:
 
-    $echo <reg_offset>-<write_time>-<write_value> > /sys/devices/platform/64000000.aipu0/ext_registers
+    $echo addr_hex  value_hex > /sys/devices/platform/64000000.aipu0/ext_registers
 
 where:
     <reg_offset>  is the offset of a register you would like to write
@@ -869,11 +960,11 @@ where:
 
 For example, to write Data Address 0 Register (offset 0x14) with 0x1000, just execute:
 
-    $echo 0x14-1-0x1000 > /sys/devices/platform/64000000.aipu0/ext_registers
+    $echo addr_hex  value_hex > /sys/devices/platform/64000000.aipu0/ext_registers
 
 to do soft-reset on Zhouyi X1, execute:
 
-    $echo 0x200-1-0x1 > /sys/devices/platform/64000000.aipu0/ext_registers
+    $echo "0x200 0x1" > /sys/devices/platform/64000000.aipu0/ext_registers
 
 Please do not configure external registers when there are unfinished inferencing tasks. This may
 result in undefined behaviors.
@@ -950,7 +1041,7 @@ This script uses Linux kernel checkpatch scripts.
 Zhouyi NPU KMD supports multiple Linux kernel versions. Specifically, we have verfied our code on
 the following Linux kernel versions:
 
-    5.4.66
+    4.14.0
     5.10.5
     5.11.18
     5.12.8
@@ -960,6 +1051,8 @@ the following Linux kernel versions:
     5.18.0
     5.19.0
     6.0.1
+    6.1.0
+    6.2.16
 
 If you find that KMD has compatibility issues with any kernel version (> 5.0), please contact us
 and report the issues. Thanks.

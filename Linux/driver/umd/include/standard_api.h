@@ -62,7 +62,7 @@ typedef enum {
     AIPU_TENSOR_TYPE_PRINTF        = 3,
     AIPU_TENSOR_TYPE_PROFILER      = 4,
     AIPU_TENSOR_TYPE_LAYER_COUNTER = 5,
-    AIPU_TENSOR_TYPE_ERROR_CODE    = 6,
+    AIPU_TENSOR_TYPE_ERROR_CODE    = 6, /* only for v1/v2 */
     AIPU_TENSOR_TYPE_OUT_TENSOR_SHAPE = 7,
 } aipu_tensor_type_t;
 
@@ -71,7 +71,7 @@ typedef struct
     uint32_t id;
     uint32_t size;
     float    scale;
-    float    zero_point;
+    int32_t  zero_point;
     aipu_data_type_t data_type;
 } aipu_tensor_desc_t;
 
@@ -144,7 +144,7 @@ typedef struct {
 typedef struct {
     /**
      * configure simulator file name for aipu v1/v2;
-     * set simulator to be NULL for aipu v3/v4;
+     * set simulator to be NULL for aipu v3/v3_1;
      * log_level works for all simulator versions;
      */
     const char *simulator;
@@ -158,6 +158,18 @@ typedef struct {
     bool enable_avx;
     bool enable_calloc;
     bool en_eval;
+    bool en_l2d;
+
+    /**
+     * fast evaluation config for aipu v3_1
+     */
+    bool en_fast_perf;
+    uint32_t freq_mhz;
+    uint32_t ddr_latency_rd;
+    uint32_t ddr_latency_wr;
+    uint32_t ddr_bw;
+    float ddr_bw_ratio;
+    const char *perf_report;
 } aipu_global_config_simulation_t;
 
 /**
@@ -199,96 +211,6 @@ typedef int (*aipu_job_callback_func_t)(uint64_t job_id, aipu_job_status_t job_s
 typedef struct aipu_core_info {
     uint64_t reg_base; /**< core register base address */
 } aipu_core_info_t;
-
-typedef enum {
-    AIPU_JOB_PART0 = 0x0,
-    AIPU_JOB_PART1 = 0x1,
-    AIPU_JOB_PART2 = 0x2,
-    AIPU_JOB_PART3 = 0x3,
-} aipu_job_part_t;
-
-typedef enum {
-    AIPU_JOB_QOS_SLOW = 0x0,
-    AIPU_JOB_QOS_HIGH = 0x1
-} aipu_job_qos_t;
-
-typedef enum {
-    AIPU_MEM_REGION_DEFAULT = 0,
-    AIPU_MEM_REGION_SRAM    = 1,
-    AIPU_MEM_REGION_DTCM    = 2
-} aipu_mem_region_t;
-
-/**
- * @union aipu_load_graph_cfg
- *
- * @brief support some configuration done in loading graph stage.
- *
- * @note wt_mem_region
- *       if config weight buffer region for aipu v1/v2, just ignore partition_id & qos_level,
- *       set them as 0 and only set fm_mem_region field.
- *       the buffer is allocated successfully only if there's enough space in
- *       region marked by `fm_mem_region`.
- *
- *       usually it only needs to set `fm_mem_region` in struct aipu_create_job_cfg to
- *       control feature map buffer allocated from which memory region.
- *       if it's sure that the region's free space is enough large, you can set
- *       `wt_mem_region` to try to allocate buffer from it. if it fail to allocate
- *       buffer from marked region, it will try according to region order: DTCM->SRAM->DDR.
- *
- *       if it hopes to allcate weight buffer from SRAM, it has to confirm the SRAM range locates in
- *       ASID1 address scope.
- *
- * @note wt_idxes
- *       the indexes of weight tensors, those tensor buffers firstly try to be allocated from
- *       region specified in 'wt_mem_region'.
- */
-typedef struct aipu_load_graph_cfg {
-    union {
-        uint32_t misc = 0;
-        struct {
-            uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
-        };
-    };
-
-    int32_t *wt_idxes;      /**< specify weights allocated from 'wt_mem_region' */
-    int32_t wt_idxes_cnt;   /**< the emement number in wt_idxes */
-} aipu_load_graph_cfg_t;
-
-/**
- * @union aipu_create_job_cfg
- *
- * @brief config job's partition, qos(priority), feature map
- *        and weight buffer region on creating a job.
- * @note fm_mem_region
- *       if config feature buffer region for aipu v1/v2, just ignore partition_id & qos_level,
- *       set them as 0 and only set fm_mem_region field.
- *       the buffer is allocated successfully only if there's enough space in
- *       region marked by `fm_mem_region`.
- *
- * @note fm_idxes
- *       the indexes of feature map tensors, those tensor buffers will firstly try to be allocated from
- *       region specified in 'fm_mem_region'.
- *
- *
- * @note dbg_dispatch and dbg_core_id
- *       it can dispatch job to some core for debug. it needs not to set them in normal cases.
- */
-typedef struct aipu_create_job_cfg {
-    union {
-        uint32_t misc = 0;
-        struct {
-            uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for aipu v3 */
-            uint8_t dbg_dispatch:1;  /**< debug dispatch flag, set 1 to indicate specify job
-                                          to debug core to run */
-            uint8_t dbg_core_id:3;   /**< specify debug core id, [0, max_core_id in cluster] */
-            uint8_t qos_level:4;     /**< defalut 0, low priority, only for aipu v3 */
-            uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
-        };
-    };
-
-    int32_t *fm_idxes;      /**< specify feature maps allocated from 'fm_mem_region' */
-    int32_t fm_idxes_cnt;   /**< the emement number in fm_idxes */
-} aipu_create_job_cfg_t;
 
 typedef enum {
     AIPU_SHARE_BUF_IN_ONE_PROCESS = 0x0,
@@ -477,16 +399,107 @@ typedef struct aipu_dynshape_item
  *
  * @brief dynamic shape information to be confirgured for one graph.
  *
- * @note input_shape_cnt is total number of all input tensors;
- *       shape_items is an array of all input shape items.
- *
+ * @note input_shape_cnt can be less than input tensors number of graph, but you are suggested to providing
+ *       full input shapes. Otherwise, not provided shape will be set as minimum shape which is same with building time
  */
 typedef struct aipu_dynshape_param
 {
-    uint64_t graph_id;    /**< the graph id to be searched */
-    uint32_t input_shape_cnt; /**< input shape counter which equals input tensors number */
-    aipu_dynshape_item_t *shape_items; /**< configured input shape info for all input tensors */
+    uint32_t input_shape_cnt; /**< input shape counter provided */
+    aipu_dynshape_item_t *shape_items; /**< configured input shape info */
 } aipu_dynshape_param_t;
+
+typedef enum {
+    AIPU_JOB_PART0 = 0x0,
+    AIPU_JOB_PART1 = 0x1,
+    AIPU_JOB_PART2 = 0x2,
+    AIPU_JOB_PART3 = 0x3,
+} aipu_job_part_t;
+
+typedef enum {
+    AIPU_JOB_QOS_SLOW = 0x0,
+    AIPU_JOB_QOS_HIGH = 0x1
+} aipu_job_qos_t;
+
+typedef enum {
+    AIPU_MEM_REGION_DEFAULT = 0,
+    AIPU_MEM_REGION_SRAM    = 1,
+    AIPU_MEM_REGION_DTCM    = 2
+} aipu_mem_region_t;
+
+/**
+ * @union aipu_load_graph_cfg
+ *
+ * @brief support some configuration done in loading graph stage.
+ *
+ * @note wt_mem_region
+ *       if config weight buffer region for aipu v1/v2, just ignore partition_id & qos_level,
+ *       set them as 0 and only set fm_mem_region field.
+ *       the buffer is allocated successfully only if there's enough space in
+ *       region marked by `fm_mem_region`.
+ *
+ *       usually it only needs to set `fm_mem_region` in struct aipu_create_job_cfg to
+ *       control feature map buffer allocated from which memory region.
+ *       if it's sure that the region's free space is enough large, you can set
+ *       `wt_mem_region` to try to allocate buffer from it. if it fail to allocate
+ *       buffer from marked region, it will try according to region order: DTCM->SRAM->DDR.
+ *
+ *       if it hopes to allcate weight buffer from SRAM, it has to confirm the SRAM range locates in
+ *       ASID1 address scope.
+ *
+ * @note wt_idxes
+ *       the indexes of weight tensors, those tensor buffers firstly try to be allocated from
+ *       region specified in 'wt_mem_region'.
+ */
+typedef struct aipu_load_graph_cfg {
+    union {
+        uint32_t misc = 0;
+        struct {
+            uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
+        };
+    };
+
+    int32_t *wt_idxes;      /**< specify weights allocated from 'wt_mem_region' */
+    int32_t wt_idxes_cnt;   /**< the emement number in wt_idxes */
+    const char *extra_weight_path;/**< the extra weight files path */
+} aipu_load_graph_cfg_t;
+
+/**
+ * @union aipu_create_job_cfg
+ *
+ * @brief config job's partition, qos(priority), feature map
+ *        and weight buffer region on creating a job.
+ * @note fm_mem_region
+ *       if config feature buffer region for aipu v1/v2, just ignore partition_id & qos_level,
+ *       set them as 0 and only set fm_mem_region field.
+ *       the buffer is allocated successfully only if there's enough space in
+ *       region marked by `fm_mem_region`.
+ *
+ * @note fm_idxes
+ *       the indexes of feature map tensors, those tensor buffers will firstly try to be allocated from
+ *       region specified in 'fm_mem_region'.
+ *
+ *
+ * @note dbg_dispatch and dbg_core_id
+ *       it can dispatch job to some core for debug. it needs not to set them in normal cases.
+ */
+typedef struct aipu_create_job_cfg {
+    union {
+        uint32_t misc = 0;
+        struct {
+            uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for aipu v3 */
+            uint8_t dbg_dispatch:1;  /**< debug dispatch flag, set 1 to indicate specify job
+                                          to debug core to run */
+            uint8_t dbg_core_id:3;   /**< specify debug core id, [0, max_core_id in cluster] */
+            uint8_t qos_level:4;     /**< defalut 0, low priority, only for aipu v3 */
+            uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
+        };
+    };
+
+    int32_t *fm_idxes;      /**< specify feature maps allocated from 'fm_mem_region' */
+    int32_t fm_idxes_cnt;   /**< the emement number in fm_idxes */
+
+    aipu_dynshape_param_t *dynshape; /**< dynamic shape parameter */
+} aipu_create_job_cfg_t;
 
 /**
  * @brief ioctl commands to operate shared tensor buffer for KMD
@@ -497,7 +510,6 @@ typedef enum {
     AIPU_IOCTL_GET_DS_NUM,
     AIPU_IOCTL_GET_DS_DIM_NUM,
     AIPU_IOCTL_GET_DS_INFO,
-    AIPU_IOCTL_SET_DS_INFO,
     AIPU_IOCTL_IS_DYNAMIC_SHAPE,
     AIPU_IOCTL_ALLOC_SHARE_BUF,
     AIPU_IOCTL_FREE_SHARE_BUF,
@@ -1104,6 +1116,8 @@ aipu_status_t aipu_printf(char* printf_base, char* redirect_file);
  * @retval AIPU_STATUS_SUCCESS
  * @retval AIPU_STATUS_ERROR_NULL_PTR
  * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ *
+ * @note Simulator should not use this API, because simulator has specified target at beginning.
  */
 aipu_status_t aipu_get_target(const aipu_ctx_handle_t *ctx, char *target);
 

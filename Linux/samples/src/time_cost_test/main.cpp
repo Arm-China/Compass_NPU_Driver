@@ -13,6 +13,7 @@
  *           after aipu_create_job()
  *        3, loop == 1: assign the buffer marked shared in loop-0 to new graph-1
  *           after aipu_load_graph()
+ *        4, you only need to provide one gt file for alexnet
  */
 
 #include <stdio.h>
@@ -77,9 +78,9 @@ int main(int argc, char* argv[])
     int pass = 0;
     bool flush_time = false;
 
-    #if DUMP
+#if DUMP
     uint32_t cfg_types = 0;
-    #endif
+#endif
 
     AIPU_CRIT() << "usage: ./aipu_time_cost_test -t flush|finish -b aipu.bin -i input0.bin -c output.bin -d ./\n";
 
@@ -251,7 +252,7 @@ int main(int argc, char* argv[])
         gettimeofday(&pre_t1, NULL);
         for (uint32_t job = 0; job < len; job++)
         {
-            #if DUMP
+#if DUMP
             cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_TEXT  |
                 AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT        |
                 AIPU_JOB_CONFIG_TYPE_DUMP_RODATA        |
@@ -269,7 +270,7 @@ int main(int argc, char* argv[])
                 goto clean_job;
             }
             AIPU_INFO()("set dump config success\n");
-            #endif
+#endif
 
             if (run_on_platform == ON_SIMULATOR)
             {
@@ -326,7 +327,7 @@ int main(int argc, char* argv[])
             /**
              * don't check result since it can incur time intervence.
              */
-            #if 0
+#if 0
             for (uint32_t i = 0; i < output_desc_vec[job].size(); i++)
             {
                 memset(job_outputs[job][i], 0, (output_desc_vec[job])[i].size);
@@ -340,8 +341,8 @@ int main(int argc, char* argv[])
                 AIPU_INFO()("job %d: get output tensor %u success (%u/%u)\n",
                     job, i, i+1, output_cnt);
             }
-            pass = check_result_helper(job_outputs[job], output_desc_vec[job], opt.gts[job], opt.gts_size[job]);
-            #endif
+            pass = check_result_helper(job_outputs[job], output_desc_vec[job], opt.gts, opt.gts_size);
+#endif
         }
 
         gettimeofday(&pre_t2, NULL);
@@ -352,7 +353,7 @@ int main(int argc, char* argv[])
     } else {
         for (uint32_t job = 0; job < len; job++)
         {
-            #if DUMP
+#if DUMP
             cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_TEXT  |
                 AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT        |
                 AIPU_JOB_CONFIG_TYPE_DUMP_RODATA        |
@@ -369,7 +370,7 @@ int main(int argc, char* argv[])
                 goto clean_job;
             }
             AIPU_INFO()("set dump config success\n");
-            #endif
+#endif
             if (run_on_platform == ON_SIMULATOR)
             {
                 ret = aipu_config_job(ctx, job_id[job], AIPU_CONFIG_TYPE_SIMULATION, &sim_job_config);
@@ -404,7 +405,7 @@ int main(int argc, char* argv[])
                 AIPU_INFO()("job %d: get output tensor %u success (%u/%u)\n",
                     job, i, i+1, output_cnt);
             }
-            pass = check_result_helper(job_outputs[job], output_desc_vec[job], opt.gts[job], opt.gts_size[job]);
+            pass = check_result_helper(job_outputs[job], output_desc_vec[job], opt.gts, opt.gts_size);
         }
     }
 
@@ -414,7 +415,10 @@ int main(int argc, char* argv[])
         for (uint32_t job = 0; job < len; job++)
         {
             for (uint32_t i = 0; i < job_outputs[job].size(); i++)
+            {
                 delete job_outputs[job][i];
+                job_outputs[job][i] = nullptr;
+            }
 
             ret = aipu_clean_job(ctx, job_id[job]);
             if (ret != AIPU_STATUS_SUCCESS)

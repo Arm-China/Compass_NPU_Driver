@@ -32,5 +32,5 @@ void unmap_file_data(void *data, int size);
 int dmabuf_malloc(uint64_t size);
 int dmabuf_free(int _fd);
 int dmabuf_fill(int fd, char *data, uint32_t size);
-bool is_output_correct(volatile char* src1, char* src2, uint32_t cnt);
+bool is_output_correct(const char* src1, const char* src2, uint32_t cnt);
 int dmabuf_dump_file(const char *name, int dmabuf_fd, int size);

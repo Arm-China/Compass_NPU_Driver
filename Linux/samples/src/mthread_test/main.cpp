@@ -65,6 +65,7 @@ void non_pipeline()
     std::string path;
     aipu_job_config_simulation_t tmp_sim_job_config = {0};
     aipu_job_config_dump_t tmp_mem_dump_config = {0};
+    aipu_load_graph_cfg_t load_graph_cfg = {0};
     int pass = 0;
 
     AIPU_DBG() << "non_pipeline()";
@@ -73,7 +74,9 @@ void non_pipeline()
     path = path + "/" + std::to_string(gettid());
     help_create_dir(path.c_str());
 
-    ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id);
+    if (opt.extra_weight_dir.length() > 0)
+        load_graph_cfg.extra_weight_path = opt.extra_weight_dir.c_str();
+    ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id, &load_graph_cfg);
     if (ret != AIPU_STATUS_SUCCESS)
     {
         aipu_get_error_message(ctx, ret, &msg);
@@ -137,7 +140,7 @@ void non_pipeline()
     }
     AIPU_INFO()("aipu_create_job success\n");
 
-    #if ((defined RTDEBUG) && (RTDEBUG == 1))
+#if ((defined RTDEBUG) && (RTDEBUG == 1))
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_TEXT  |
             AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_RODATA        |
@@ -146,9 +149,9 @@ void non_pipeline()
             AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN     |
             AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
-    #else
+#else
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT;
-    #endif
+#endif
     tmp_mem_dump_config.dump_dir = path.c_str();
     AIPU_INFO() << tmp_mem_dump_config.dump_dir;
     ret = aipu_config_job(ctx, job_id, cfg_types, &tmp_mem_dump_config);
@@ -181,7 +184,7 @@ void non_pipeline()
 
     for (uint32_t i = 0; i < output_cnt; i++)
     {
-        auto deleter = [](char* p) { delete [] p; };
+        auto deleter = [](char* p) { delete[] p; };
         shared_ptr<char> sp(new char[output_desc[i].size], deleter);
         output_data_vec.push_back(sp);
     }
@@ -236,7 +239,7 @@ void non_pipeline()
                 i, i+1, output_cnt);
         }
 
-        pass = check_result(output_data_vec, output_desc, opt.gts[0], opt.gts_size[0]);
+        pass = check_result(output_data_vec, output_desc, opt.gts, opt.gts_size);
 
         // clear the stale data for next loop
         for (uint32_t i = 0; i < output_cnt; i++)
@@ -283,7 +286,7 @@ void pipeline()
     vector<aipu_tensor_desc_t> output_desc;
     vector<shared_ptr<char>> output_data_vec;
     vector<char*> gt;
-    uint32_t pipe_cnt = 2;
+    constexpr uint32_t pipe_cnt = 2;
     uint64_t job_id_vec[pipe_cnt] = {0};
     aipu_status_t aipu_sts = AIPU_STATUS_SUCCESS;
     aipu_job_status_t aipu_job_sts = AIPU_JOB_STATUS_NO_STATUS;
@@ -291,6 +294,7 @@ void pipeline()
     std::string path, tmp_path;
     aipu_job_config_simulation_t tmp_sim_job_config = {0};
     aipu_job_config_dump_t tmp_mem_dump_config = {0};
+    aipu_load_graph_cfg_t load_graph_cfg = {0};
     int pass = 0;
 
     AIPU_DBG() << "pipeline()";
@@ -299,7 +303,10 @@ void pipeline()
     path = path + "/" + std::to_string(gettid());
     AIPU_DBG() << path;
 
-    ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id);
+    if (opt.extra_weight_dir.length() > 0)
+        load_graph_cfg.extra_weight_path = opt.extra_weight_dir.c_str();
+    ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id, &load_graph_cfg);
+
     if (ret != AIPU_STATUS_SUCCESS)
     {
         aipu_get_error_message(ctx, ret, &msg);
@@ -374,13 +381,13 @@ void pipeline()
 
     for (uint32_t i = 0; i < output_cnt; i++)
     {
-        auto deleter = [](char* p) { delete [] p; };
+        auto deleter = [](char* p) { delete[] p; };
         shared_ptr<char> sp(new char[output_desc[i].size], deleter);
         output_data_vec.push_back(sp);
 
     }
 
-    #if ((defined RTDEBUG) && (RTDEBUG == 1))
+#if ((defined RTDEBUG) && (RTDEBUG == 1))
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_TEXT  |
             AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_RODATA        |
@@ -389,9 +396,9 @@ void pipeline()
             AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT        |
             AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN     |
             AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
-    #else
+#else
         cfg_types = AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT;
-    #endif
+#endif
 
     /* run with with multiple frames */
     for (uint32_t frame = 0; frame < pipe_cnt; frame++)
@@ -491,7 +498,7 @@ void pipeline()
                         i, i+1, output_cnt);
                 }
 
-                result = check_result(output_data_vec, output_desc, opt.gts[0], opt.gts_size[0]);
+                result = check_result(output_data_vec, output_desc, opt.gts, opt.gts_size);
                 if (result != 0)
                     pass = result;
 

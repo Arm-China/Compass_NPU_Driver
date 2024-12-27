@@ -102,42 +102,48 @@ protected:
     struct BinSection m_bcrodata;
     struct BinSection m_brodata;
     struct BinSection m_bdesc;
-    struct BinSection m_bweight;
+    std::vector<struct BinSection> m_bweight;
+    struct BinSection m_bextraweight;
     struct BinSection m_bdata;
     std::vector<RemapEntry> m_remap;
+
+    struct ExtraWeightInfo {
+        std::string extraWeight_name;
+        std::string extraWeight_hash;
+     };
+    std::vector<ExtraWeightInfo> m_extra_weight_info_vec;
+    std::string m_extra_weight_path;
 
     /* dynamic shape */
     struct BinSection m_bglobalparam;
 
+public:
     /* entry: <min shape (N, H, W, C), max shape (N, H, W, C)> etc */
     std::map<int, std::vector<std::vector<uint32_t>>> m_input_shape_constraint;
 
     /* entry: <min size, max size>, size = N*H*W*C */
     std::map<int, std::vector<uint64_t>> m_input_shape_threshhold;
 
-    /* entry: idx: <N, H, W, C> */
-    std::map<int, std::vector<uint32_t>> m_parsed_shape;
-
-    /* new set input tensor size for dynamic shape */
-    std::map<int, uint32_t> m_config_in_tensor_size;
-
-    /* new output tensor size for dynamic shape */
-    std::map<int, uint32_t> m_config_out_tensor_size;
     bool m_dynamic_shape = false;
-    bool m_dynamic_out_shape_updated = false;
-    std::mutex m_dynamic_out_shape_updated_mtx;
 
 protected:
     /* Buffers in memory for AIPU's access */
     BufferDesc *m_text = nullptr;
     BufferDesc *m_crodata = nullptr;
 
-    /* weight in a whole buffer case */
-    BufferDesc *m_weight = nullptr;
-    BufferDesc *m_zerocpy_const = nullptr;
+    struct WeightBufferInfo {
+        /* weight in a whole buffer case */
+        BufferDesc *wb_weight = nullptr;
+        BufferDesc *wb_zerocpy_const = nullptr;
 
-    /* weight in split buffer case */
-    std::vector<BufferDesc*> m_weights;
+        /* weight in split buffer case */
+        std::vector<BufferDesc*> wb_weights;
+
+        /* weight buffer ASID base address */
+        DEV_PA_64 wb_asid_base = 0;
+    };
+
+    std::vector<struct WeightBufferInfo> m_weight_buffers_vec;
 
     bool m_do_vcheck = true;
 
@@ -147,7 +153,6 @@ protected:
 public:
     virtual int32_t get_dynamic_shape_dim_num(uint32_t idx, bool max_shape_dim);
     virtual bool get_dynamic_shape_data(uint32_t idx, bool max_shape_dim, uint32_t *data);
-    virtual bool set_dynamic_shape_data(aipu_dynshape_param_t *shape_param);
     virtual aipu_status_t update_dynamic_io_tensor_size(aipu_tensor_type_t type)
     {
         return AIPU_STATUS_SUCCESS;
@@ -167,7 +172,8 @@ public:
     virtual void set_gmconfig(BinSection &gm_section) {}
     virtual void set_segmmu(BinSection &segmmu_section) {}
     virtual aipu_status_t extract_gm_info(int sg_id) { return AIPU_STATUS_SUCCESS; }
-    virtual std::vector<struct GraphSectionDesc> & get_static_section_ref() = 0;
+    virtual std::vector<struct GraphSectionDesc> & get_static_section_ref(uint32_t bss_id) = 0;
+    virtual GraphIOTensors&get_bss_io_ref(uint32_t bss_id) = 0;
 
 
 public:
@@ -216,8 +222,10 @@ public:
     }
     void set_graph_weight(BinSection weight)
     {
-        m_bweight = weight;
+        m_bweight.push_back(weight);
     }
+    aipu_status_t set_graph_extra_weight(BinSection extra_weight);
+
     void add_remap(RemapEntry remap)
     {
         m_remap.push_back(remap);
@@ -225,6 +233,48 @@ public:
     void set_dtcm_size(int dtcm_sz)
     {
         m_dtcm_size = dtcm_sz;
+    }
+
+    struct WeightBufferInfo &get_WeightBufferInfo(uint32_t bss_id)
+    {
+        return m_weight_buffers_vec[bss_id];
+    }
+
+    virtual uint32_t get_bss_cnt()
+    {
+        return 1;
+    }
+
+    virtual void set_const_size(uint32_t bss_id, uint32_t _const_size, uint32_t _zerocpy_const_size)
+    {
+        if (bss_id > 0)
+            return;
+
+        /**
+         * if one graph doesn't need weight, it just reserves
+         * 4KB as default placehold for whole flow.
+         */
+        if (_const_size == 0)
+            _const_size = 4096;
+
+        const_size = _const_size;
+        zerocpy_const_size = _zerocpy_const_size;
+    }
+
+    virtual uint32_t get_zerocpy_const_size(uint32_t bss_id)
+    {
+        if (bss_id == 0)
+            return zerocpy_const_size;
+        else
+            return 0;
+    }
+
+    virtual uint32_t get_const_size(uint32_t bss_id)
+    {
+        if (bss_id == 0)
+            return const_size;
+        else
+            return 0;
     }
 
     void set_modle_global_param(BinSection mgp_section)
@@ -242,7 +292,8 @@ public:
         m_dynamic_shape = true;
     }
 
-    #define GET_U32_FROM_PTR_ADV(ptr) (*(uint32_t *)ptr++)
+#define GET_U32_FROM_PTR_ADV(ptr) (*(uint32_t *)ptr++)
+
     bool set_input_shape_constrait(BinSection &isc_section)
     {
         uint32_t *start = (uint32_t *)isc_section.va;
@@ -254,9 +305,7 @@ public:
             std::vector<uint32_t> shape_vec;
 
             for (uint32_t j = 0; j < dim; j++)
-            {
                 shape_vec.push_back(GET_U32_FROM_PTR_ADV(start));
-            }
 
             if (shape_vec.size() > 0)
             {
@@ -294,108 +343,16 @@ public:
             return m_input_shape_constraint.size();
     }
 
-    bool in_config_shape(uint32_t idx)
-    {
-        return m_parsed_shape.count(idx) == 1;
-    }
-
-    uint32_t get_config_shape_sz()
-    {
-        return m_parsed_shape.size();
-    }
-
-    uint32_t get_config_shape_dim_sz(uint32_t input_idx)
-    {
-        if (m_parsed_shape.count(input_idx))
-            return m_parsed_shape[input_idx].size();
-        else
-            return 0;
-    }
-
-    uint32_t get_config_shape_item(uint32_t input_idx, uint32_t dim_idx)
-    {
-        return m_parsed_shape[input_idx][dim_idx];
-    }
-
-    uint32_t get_config_in_tensor_size(uint32_t input_idx)
-    {
-        return m_config_in_tensor_size[input_idx];
-    }
-
-    void set_config_out_tensor_size(uint32_t output_idx, uint32_t size)
-    {
-        m_config_out_tensor_size[output_idx] = size;
-    }
-
-    uint32_t get_config_out_tensor_size(uint32_t output_idx)
-    {
-        return m_config_out_tensor_size[output_idx];
-    }
-
-    void clear_config_out_tensor_size()
-    {
-        m_config_out_tensor_size.clear();
-    }
-
-    // false: not updated yet
-    bool testset_dynamic_out_shape_updated()
-    {
-        bool flag = false;
-
-        m_dynamic_out_shape_updated_mtx.lock();
-        flag =  m_dynamic_out_shape_updated;
-        if (!m_dynamic_out_shape_updated)
-            m_dynamic_out_shape_updated = true;
-        m_dynamic_out_shape_updated_mtx.unlock();
-
-        return flag;
-    }
-
-    void reset_dynamic_out_shape_updated_flag()
-    {
-        m_dynamic_out_shape_updated_mtx.lock();
-        m_dynamic_out_shape_updated = false;
-        m_dynamic_out_shape_updated_mtx.unlock();
-    }
-
-    bool is_dynamic_out_shape_updated()
-    {
-        return m_dynamic_out_shape_updated;
-    }
-
     virtual void set_enrty(uint32_t offset){};
 
     /* Get functions */
-    const char* get_bweight_base()
+    const char* get_bweight_base(uint32_t bss_id)
     {
-        return m_bweight.va;
+        return m_bweight[bss_id].va;
     }
     virtual DEV_PA_64 debugger_get_instr_base()
     {
         return m_text->pa;
-    }
-
-    uint32_t get_zerocpy_const_size()
-    {
-        return zerocpy_const_size;
-    }
-
-    uint32_t get_const_size()
-    {
-        return const_size;
-    }
-
-    void set_const_size(uint32_t _const_size, uint32_t _zerocpy_const_size)
-    {
-        /**
-         * if one graph doesn't need weight, it just reserves
-         * 4KB as default placehold for whole flow.
-         */
-        if (_const_size == 0)
-            _const_size = 4096;
-
-        const_size = _const_size;
-        zerocpy_const_size = _zerocpy_const_size;
     }
 
 public:

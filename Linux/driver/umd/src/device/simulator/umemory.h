@@ -25,13 +25,19 @@ enum {
     MEM_REGION_DDR  = 0,
     MEM_REGION_SRAM = 1,
     MEM_REGION_DTCM = 2,
-    MME_REGION_MAX  = 4
+    MEM_REGION_MAX  = 4
 };
 
 enum {
     MEM_REGION_GM0  = 0,
     MEM_REGION_GM1  = 1
 };
+
+/**
+ * 1: set all ASIDs with identical base address
+ * 0: set ASIDs with non-identical base address
+ */
+#define SHARE_ONE_ASID 0
 
 enum {
     /* map MEM_REGION_DDR as ASID-0 */
@@ -45,7 +51,11 @@ enum {
 
     ASID_REGION_2 = 2,
     ASID_REGION_3 = 3,
-    ASID_MAX
+#if SHARE_ONE_ASID
+    ASID_MAX = 4
+#else
+    ASID_MAX = 11
+#endif
 };
 
 struct MemBlock {
@@ -55,16 +65,11 @@ struct MemBlock {
     bool     *bitmap;
 };
 
-/**
- * 1: set all ASIDs with identical base address
- * 0: set ASIDs with non-identical base address
- */
-#define SHARE_ONE_ASID 1
-
 class UMemory: public MemoryBase, public sim_aipu::IMemEngine
 {
 private:
-    MemBlock m_memblock[ASID_MAX][MME_REGION_MAX] = {
+    /* only asid0 has sram/dtcm */
+    MemBlock m_memblock[ASID_MAX][MEM_REGION_MAX] = {
         {
             { .base = 0, .size = (TOTAL_SIM_MEM_SZ - SIM_SRAM_SZ) },
 
@@ -75,15 +80,11 @@ private:
             { .base = 0xD0000000, .size = SIM_DTCM_SZ },
 
             {0, 0}
-        },
-        {
-            { .base = 1ul << 32, .size = 1ul << 32 },
-            {0, 0}, {0, 0}, {0, 0}
-        },
-        { {0, 0}, {0, 0}, {0, 0}, {0, 0} },
-        { {0, 0}, {0, 0}, {0, 0}, {0, 0} }
+        }
     };
+
     bool m_gm_mean = false;
+    int  m_asid_max = ASID_MAX;
 
 private:
     uint32_t get_next_alinged_page_no(uint32_t start, uint32_t align, int mem_region = 0);
@@ -91,7 +92,7 @@ private:
 public:
     uint64_t get_memregion_base(int32_t asid, int32_t region)
     {
-        if (asid == ASID_REGION_0 || asid == ASID_REGION_2 || asid == ASID_REGION_3)
+        if (asid == ASID_REGION_0)
         {
             if ((region == MEM_REGION_SRAM) && (m_memblock[ASID_REGION_0][MEM_REGION_SRAM].size != 0))
                 return m_memblock[ASID_REGION_0][MEM_REGION_SRAM].base;
@@ -99,19 +100,13 @@ public:
                 return m_memblock[ASID_REGION_0][MEM_REGION_DTCM].base;
             else
                 return m_memblock[ASID_REGION_0][MEM_REGION_DDR].base;
-        } else {
-            return m_memblock[ASID_REGION_1][MEM_REGION_DDR].base;
         }
+        return m_memblock[asid][MEM_REGION_DDR].base;
     }
 
     uint32_t get_memregion_size(int32_t asid, int region)
     {
-        if (asid == ASID_REGION_0 || asid == ASID_REGION_2 || asid == ASID_REGION_3)
-        {
-            return m_memblock[ASID_REGION_0][region].size;
-        } else {
-            return m_memblock[ASID_REGION_1][MEM_REGION_DDR].size;
-        }
+        return m_memblock[asid][region].size;
     }
 
 public:

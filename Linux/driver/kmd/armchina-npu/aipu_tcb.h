@@ -82,8 +82,9 @@ struct aipu_tcb {
 			u32 pap;
 			u32 idp;
 			u32 dsize;
-			u32 tcb_asid_offset;
-			u32 rsvd2[4];
+			u32 tcbp;
+			u32 global_param;
+			u32 rsvd2[3];
 		} noninit;
 		union {
 			struct {
@@ -112,6 +113,7 @@ struct aipu_tcb {
 #define TCB_FLAG_TASK_TYPE_TASK        1
 #define TCB_FLAG_TASK_TYPE_LOOP_TASK   2
 #define TCB_FLAG_END_TYPE_GRID_END     BIT(7)
+#define TCB_FLAG_END_TYPE_GROUP_END     BIT(6)
 
 #define GET_SEGMMU_CONFIG_CNT(flag)     (((flag) >> 16) & 0x1f)
 #define IS_INIT_TCB(flag)               (((flag) & 0x3) == TCB_FLAG_TASK_TYPE_INIT)
@@ -125,6 +127,8 @@ struct aipu_tcb {
 #define group_dim_x  __data.noninit.group_dim_x
 #define pprint       __data.noninit.pprint
 #define _coreid      __data.noninit.coreid
+#define spc          __data.noninit.spc
+#define tcbp         __data.noninit.tcbp
 
 #define gm_ctrl      __data.init.clst.gm_ctrl
 #define gm_rgnx_ctrl __data.init.clst.gm_rgnx_ctrl
