@@ -55,3 +55,10 @@ config ARMCHINA_NPU_SOC_R329
 	  Say Y if you use the Allwinner R329 SoC API implementations.
 
 	  For other SoCs, say N.
+
+config ARMCHINA_NPU_SOC_SKY1
+	bool "SKY1 SoC APIs"
+	help
+	  Say Y if you use the CIX SKY1 SoC API implementations.
+
+	  For other SoCs, say N.

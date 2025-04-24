@@ -113,7 +113,8 @@ struct aipu_tcb {
 #define TCB_FLAG_TASK_TYPE_TASK        1
 #define TCB_FLAG_TASK_TYPE_LOOP_TASK   2
 #define TCB_FLAG_END_TYPE_GRID_END     BIT(7)
-#define TCB_FLAG_END_TYPE_GROUP_END     BIT(6)
+#define TCB_FLAG_END_TYPE_GROUP_END    BIT(6)
+#define INTERRUPT_TEC                  (1 << 8)
 
 #define GET_SEGMMU_CONFIG_CNT(flag)     (((flag) >> 16) & 0x1f)
 #define IS_INIT_TCB(flag)               (((flag) & 0x3) == TCB_FLAG_TASK_TYPE_INIT)
@@ -129,6 +130,7 @@ struct aipu_tcb {
 #define _coreid      __data.noninit.coreid
 #define spc          __data.noninit.spc
 #define tcbp         __data.noninit.tcbp
+#define interrupt    __data.noninit.interrupt
 
 #define gm_ctrl      __data.init.clst.gm_ctrl
 #define gm_rgnx_ctrl __data.init.clst.gm_rgnx_ctrl

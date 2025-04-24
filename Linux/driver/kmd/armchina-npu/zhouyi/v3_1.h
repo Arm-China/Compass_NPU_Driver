@@ -158,7 +158,7 @@
 #define IS_PCP_FULL(status, high)                   (((status) >> ((high) ? 8 : 0)) & 0x1)
 #define IS_CMD_FAIL_V3_1(status_32)                   ((status_32) >> 31)
 #define IS_CMD_POOL_FULL_V3_1(status_32)              ((status_32) & 0xFF)
-#define CLEAR_CMD_FAIL_V3_1(status_32)                ((status_32) & 0xFFFFFFFF)
+#define CLEAR_CMD_FAIL_V3_1(status_32)                ((status_32) & 0x7FFFFFFF)
 #define TSM_STATUS_REG_V3_1                           0x18
 
 /**

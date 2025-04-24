@@ -1,24 +1,23 @@
+#include <errno.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
-#include <stddef.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <sys/un.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <sys/epoll.h>
-#include <fcntl.h>
-#include "standard_api.h"
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <unistd.h>
+
 #include "common/cmd_line_parsing.h"
-#include "common/helper.h"
 #include "common/dbg.hpp"
-#include "kmd/armchina_aipu.h"
+#include "common/helper.h"
 
 #define PAGE_ALIGN_SIZE(size) ((size + 4095) & (~(1 << 12)))
 
@@ -32,5 +31,5 @@ void unmap_file_data(void *data, int size);
 int dmabuf_malloc(uint64_t size);
 int dmabuf_free(int _fd);
 int dmabuf_fill(int fd, char *data, uint32_t size);
-bool is_output_correct(const char* src1, const char* src2, uint32_t cnt);
+bool is_output_correct(const char *src1, const char *src2, uint32_t cnt);
 int dmabuf_dump_file(const char *name, int dmabuf_fd, int size);

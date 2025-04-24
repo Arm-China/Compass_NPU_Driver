@@ -2,400 +2,401 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-
 /**
  * @file  standard_api_impl.cpp
  * @brief AIPU User Mode Driver (UMD) Standard API implementation file
  */
 
 #include <stdlib.h>
-#include "standard_api.h"
-#include "internal/internal_api.h"
-#include "graph_base.h"
-#include "job_base.h"
+
 #include "ctx_ref_map.h"
+#include "graph_base.h"
+#include "internal/internal_api.h"
+#include "job_base.h"
+#include "standard_api.h"
 #include "type.h"
 #include "utils/helper.h"
 #include "utils/log.h"
 
-static aipu_status_t api_get_graph(const aipu_ctx_handle_t* ctx, uint64_t graph_id, aipudrv::GraphBase** graph)
-{
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
+static aipu_status_t api_get_graph(const aipu_ctx_handle_t *ctx,
+                                   uint64_t graph_id,
+                                   aipudrv::GraphBase **graph) {
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
 
-    if ((ctx == nullptr) || (graph == nullptr))
-        return AIPU_STATUS_ERROR_NULL_PTR;
+  if ((ctx == nullptr) || (graph == nullptr))
+    return AIPU_STATUS_ERROR_NULL_PTR;
 
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        return AIPU_STATUS_ERROR_INVALID_CTX;
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    return AIPU_STATUS_ERROR_INVALID_CTX;
 
-    *graph = p_ctx->get_graph_object(graph_id);
-    if (*graph == nullptr)
-        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+  *graph = p_ctx->get_graph_object(graph_id);
+  if (*graph == nullptr)
+    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
-    return AIPU_STATUS_SUCCESS;
+  return AIPU_STATUS_SUCCESS;
 }
 
-static aipu_status_t api_get_job(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipudrv::JobBase** job)
-{
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
+static aipu_status_t api_get_job(const aipu_ctx_handle_t *ctx, uint64_t job_id,
+                                 aipudrv::JobBase **job) {
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
 
-    if ((ctx == nullptr) || (job == nullptr))
-        return AIPU_STATUS_ERROR_NULL_PTR;
+  if ((ctx == nullptr) || (job == nullptr))
+    return AIPU_STATUS_ERROR_NULL_PTR;
 
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        return AIPU_STATUS_ERROR_INVALID_CTX;
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    return AIPU_STATUS_ERROR_INVALID_CTX;
 
-    *job = p_ctx->get_job_object(job_id);
-    if (*job == nullptr)
-        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+  *job = p_ctx->get_job_object(job_id);
+  if (*job == nullptr)
+    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
 
-    return AIPU_STATUS_SUCCESS;
+  return AIPU_STATUS_SUCCESS;
 }
 
-aipu_status_t aipu_get_error_message(const aipu_ctx_handle_t* ctx, aipu_status_t status, const char** msg)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-
-    if (msg == nullptr)
-    {
-        LOG(LOG_ALERT, "message pointer is null\n");
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    /**
-     * special cases when aipu_ctx_handle is invalid, call static method
-     * to return error message directly.
-     */
-    if ((ctx == nullptr) && (status == AIPU_STATUS_ERROR_OPEN_DEV_FAIL))
-    {
-        *msg = aipudrv::MainContext::get_static_msg(AIPU_STATUS_ERROR_OPEN_DEV_FAIL);
-        ret = AIPU_STATUS_ERROR_OPEN_DEV_FAIL;
-        goto finish;
-    }
-
-    if (ctx == nullptr)
-    {
-        *msg = aipudrv::MainContext::get_static_msg(AIPU_STATUS_ERROR_NULL_PTR);
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-    {
-        *msg = aipudrv::MainContext::get_static_msg(AIPU_STATUS_ERROR_INVALID_CTX);
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-    } else {
-        ret = p_ctx->get_status_msg(status, msg);
-    }
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipu_init_context(aipu_ctx_handle_t** ctx)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-    aipu_ctx_handle_t* ctx_handle = nullptr;
-    uint32_t handle = 0;
-
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    *ctx = nullptr;
-    handle = ctx_map.create_ctx_ref();
-    p_ctx = ctx_map.get_ctx_ref(handle);
-    if (p_ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    ret = p_ctx->init();
-    if (ret != AIPU_STATUS_SUCCESS)
-    {
-        ctx_map.destroy_ctx_ref(handle);
-    } else {
-        /* success */
-        ctx_handle = new aipu_ctx_handle_t;
-        ctx_handle->handle = handle;
-        *ctx = ctx_handle;
-    }
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipu_deinit_context(const aipu_ctx_handle_t* ctx)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-    } else {
-        ret = p_ctx->deinit();
-        if (ret == AIPU_STATUS_SUCCESS)
-        {
-            ctx_map.destroy_ctx_ref(ctx->handle);
-            delete ctx;
-            ctx = nullptr;
-        }
-    }
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph_file,
-    uint64_t* id, aipu_load_graph_cfg_t *config)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-    else
-        ret = p_ctx->load_graph(graph_file, id, config);
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipu_load_graph_helper(const aipu_ctx_handle_t* ctx, const char* graph_buf,
-    uint32_t graph_size, uint64_t* id, aipu_load_graph_cfg_t *config)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-    else
-        ret = p_ctx->load_graph(graph_buf, graph_size, id, config);
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipu_unload_graph(const aipu_ctx_handle_t* ctx, uint64_t graph)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-    else
-        ret = p_ctx->unload_graph(graph);
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipu_create_job(const aipu_ctx_handle_t* ctx, uint64_t graph,
-    uint64_t* job, aipu_create_job_cfg_t *config)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-
-    if ((ctx == nullptr) || (job == nullptr))
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    if (!aipudrv::valid_graph_id(graph))
-    {
-        ret = AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-        goto finish;
-    }
-
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-    else
-        ret = p_ctx->create_job(graph, job, config);
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipu_finish_job(const aipu_ctx_handle_t* ctx, uint64_t job_id, int32_t time_out)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::JobBase* job = nullptr;
-    aipu_job_status_t status = AIPU_JOB_STATUS_NO_STATUS;
-
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    if (!aipudrv::valid_job_id(job_id))
-        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
-
-    ret = api_get_job(ctx, job_id, &job);
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    ret = job->schedule();
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    if (time_out <= 0)
-        time_out = -1;
-
-    ret = job->get_status_blocking(&status, time_out);
-    if ((ret == AIPU_STATUS_SUCCESS) && (status != AIPU_JOB_STATUS_DONE))
-        ret = AIPU_STATUS_ERROR_JOB_EXCEPTION;
-
-    return ret;
-}
-
-aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t id,
-    aipu_job_callback_func_t job_cb_func)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::JobBase* job = nullptr;
-
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    if (!aipudrv::valid_job_id(id))
-        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
-
-    ret = api_get_job(ctx, id, &job);
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    job->set_job_cb(job_cb_func);
-
-    /* callback to be implemented */
-    return job->schedule();
-}
-
-aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t id,
-    aipu_job_status_t* status, int32_t time_out)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::JobBase* job = nullptr;
-
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    if (!aipudrv::valid_job_id(id))
-        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
-
-    ret = api_get_job(ctx, id, &job);
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    return job->get_status_blocking(status, time_out);
-}
-
-aipu_status_t aipu_clean_job(const aipu_ctx_handle_t* ctx, uint64_t id)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::GraphBase* graph = nullptr;
-
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    if (!aipudrv::valid_job_id(id))
-        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
-
-    ret = api_get_graph(ctx, aipudrv::job_id2graph_id(id), &graph);
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    return graph->destroy_job(id);
-}
-
-aipu_status_t aipu_get_tensor_count(const aipu_ctx_handle_t* ctx, uint64_t id, aipu_tensor_type_t type,
-    uint32_t* cnt)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::GraphBase* graph = nullptr;
-
-    if ((ctx == nullptr) || (cnt == nullptr))
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    if (!aipudrv::valid_graph_id(id))
-        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-    ret = api_get_graph(ctx, aipudrv::get_graph_id(id), &graph);
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    return graph->get_tensor_count(type, cnt);
-}
-
-aipu_status_t aipu_get_tensor_descriptor(const aipu_ctx_handle_t* ctx, uint64_t id, aipu_tensor_type_t type,
-    uint32_t tensor, aipu_tensor_desc_t* desc)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::GraphBase* graph = nullptr;
-
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    if (!aipudrv::valid_graph_id(id))
-        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-    ret = api_get_graph(ctx, aipudrv::get_graph_id(id), &graph);
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    return graph->get_tensor_descriptor(type, tensor, desc);
-}
-
-aipu_status_t aipu_load_tensor(const aipu_ctx_handle_t* ctx, uint64_t job_id, uint32_t tensor, const void* data)
-{
+aipu_status_t aipu_get_error_message(const aipu_ctx_handle_t *ctx,
+                                     aipu_status_t status, const char **msg) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
-  aipudrv::JobBase* job = nullptr;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (msg == nullptr) {
+    LOG(LOG_ALERT, "message pointer is null");
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  /**
+   * special cases when aipu_ctx_handle is invalid, call static method
+   * to return error message directly.
+   */
+  if ((ctx == nullptr) && (status == AIPU_STATUS_ERROR_OPEN_DEV_FAIL)) {
+    *msg =
+        aipudrv::MainContext::get_static_msg(AIPU_STATUS_ERROR_OPEN_DEV_FAIL);
+    ret = AIPU_STATUS_ERROR_OPEN_DEV_FAIL;
+    goto finish;
+  }
+
+  if (ctx == nullptr) {
+    *msg = aipudrv::MainContext::get_static_msg(AIPU_STATUS_ERROR_NULL_PTR);
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr) {
+    *msg = aipudrv::MainContext::get_static_msg(AIPU_STATUS_ERROR_INVALID_CTX);
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+  } else {
+    ret = p_ctx->get_status_msg(status, msg);
+  }
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_init_context(aipu_ctx_handle_t **ctx) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+  aipu_ctx_handle_t *ctx_handle = nullptr;
+  uint32_t handle = 0;
+
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  *ctx = nullptr;
+  handle = ctx_map.create_ctx_ref();
+  p_ctx = ctx_map.get_ctx_ref(handle);
+  if (p_ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  ret = p_ctx->init();
+  if (ret != AIPU_STATUS_SUCCESS) {
+    ctx_map.destroy_ctx_ref(handle);
+  } else {
+    /* success */
+    ctx_handle = new aipu_ctx_handle_t;
+    ctx_handle->handle = handle;
+    *ctx = ctx_handle;
+  }
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_deinit_context(const aipu_ctx_handle_t *ctx) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+  } else {
+    ret = p_ctx->deinit();
+    if (ret == AIPU_STATUS_SUCCESS) {
+      ctx_map.destroy_ctx_ref(ctx->handle);
+      delete ctx;
+      ctx = nullptr;
+    }
+  }
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_load_graph(const aipu_ctx_handle_t *ctx,
+                              const char *graph_file, uint64_t *id,
+                              aipu_load_graph_cfg_t *config) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+  else
+    ret = p_ctx->load_graph(graph_file, id, config);
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_load_graph_helper(const aipu_ctx_handle_t *ctx,
+                                     const char *graph_buf, uint32_t graph_size,
+                                     uint64_t *id,
+                                     aipu_load_graph_cfg_t *config) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+  else
+    ret = p_ctx->load_graph(graph_buf, graph_size, id, config);
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_load_share_weight_graph(const aipu_ctx_handle_t *ctx,
+                                           const char *graph_file,
+                                           uint64_t **ids, uint32_t *id_cnt) {
+#if (!defined ZHOUYI_V3) && (!defined ZHOUYI_V3_1)
+  LOG(LOG_ERR, "v1&v2 donot support share weight graph");
+  return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
+#endif
+
+  if (ctx == nullptr || graph_file == nullptr || ids == nullptr ||
+      id_cnt == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    return AIPU_STATUS_ERROR_INVALID_CTX;
+
+  return p_ctx->load_share_weight_graph(graph_file, ids, id_cnt);
+}
+
+aipu_status_t aipu_unload_graph(const aipu_ctx_handle_t *ctx, uint64_t graph) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+  else
+    ret = p_ctx->unload_graph(graph);
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_create_job(const aipu_ctx_handle_t *ctx, uint64_t graph,
+                              uint64_t *job, aipu_create_job_cfg_t *config) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if ((ctx == nullptr) || (job == nullptr)) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  if (!aipudrv::valid_graph_id(graph)) {
+    ret = AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+  else
+    ret = p_ctx->create_job(graph, job, config);
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_finish_job(const aipu_ctx_handle_t *ctx, uint64_t job_id,
+                              int32_t time_out) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::JobBase *job = nullptr;
+  aipu_job_status_t status = AIPU_JOB_STATUS_NO_STATUS;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (!aipudrv::valid_job_id(job_id))
+    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+
+  ret = api_get_job(ctx, job_id, &job);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  ret = job->schedule();
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  if (time_out <= 0)
+    time_out = -1;
+
+  ret = job->get_status_blocking(&status, time_out);
+  if ((ret == AIPU_STATUS_SUCCESS) && (status != AIPU_JOB_STATUS_DONE))
+    ret = AIPU_STATUS_ERROR_JOB_EXCEPTION;
+
+  return ret;
+}
+
+aipu_status_t aipu_flush_job(const aipu_ctx_handle_t *ctx, uint64_t id,
+                             aipu_job_callback_func_t job_cb_func) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::JobBase *job = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (!aipudrv::valid_job_id(id))
+    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+
+  ret = api_get_job(ctx, id, &job);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  job->set_job_cb(job_cb_func);
+
+  /* callback to be implemented */
+  return job->schedule();
+}
+
+aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t *ctx, uint64_t id,
+                                  aipu_job_status_t *status, int32_t time_out) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::JobBase *job = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (!aipudrv::valid_job_id(id))
+    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+
+  ret = api_get_job(ctx, id, &job);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  return job->get_status_blocking(status, time_out);
+}
+
+aipu_status_t aipu_clean_job(const aipu_ctx_handle_t *ctx, uint64_t id) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::GraphBase *graph = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (!aipudrv::valid_job_id(id))
+    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+
+  ret = api_get_graph(ctx, aipudrv::job_id2graph_id(id), &graph);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  return graph->destroy_job(id);
+}
+
+aipu_status_t aipu_get_tensor_count(const aipu_ctx_handle_t *ctx, uint64_t id,
+                                    aipu_tensor_type_t type, uint32_t *cnt) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::GraphBase *graph = nullptr;
+
+  if ((ctx == nullptr) || (cnt == nullptr))
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (!aipudrv::valid_graph_id(id))
+    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+  ret = api_get_graph(ctx, aipudrv::get_graph_id(id), &graph);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  return graph->get_tensor_count(type, cnt);
+}
+
+aipu_status_t aipu_get_tensor_descriptor(const aipu_ctx_handle_t *ctx,
+                                         uint64_t id, aipu_tensor_type_t type,
+                                         uint32_t tensor,
+                                         aipu_tensor_desc_t *desc) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::GraphBase *graph = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (!aipudrv::valid_graph_id(id))
+    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+  ret = api_get_graph(ctx, aipudrv::get_graph_id(id), &graph);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  return graph->get_tensor_descriptor(type, tensor, desc);
+}
+
+aipu_status_t aipu_load_tensor(const aipu_ctx_handle_t *ctx, uint64_t job_id,
+                               uint32_t tensor, const void *data) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::JobBase *job = nullptr;
 
   if (ctx == nullptr)
     return AIPU_STATUS_ERROR_NULL_PTR;
@@ -410,529 +411,646 @@ aipu_status_t aipu_load_tensor(const aipu_ctx_handle_t* ctx, uint64_t job_id, ui
   return job->load_tensor(tensor, data);
 }
 
-aipu_status_t aipu_load_output_tensor(const aipu_ctx_handle_t* ctx, uint64_t job_id, uint32_t tensor, const void* data)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::JobBase* job = nullptr;
+aipu_status_t aipu_load_output_tensor(const aipu_ctx_handle_t *ctx,
+                                      uint64_t job_id, uint32_t tensor,
+                                      const void *data) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::JobBase *job = nullptr;
 
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
 
-    if (!aipudrv::valid_job_id(job_id))
-        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+  if (!aipudrv::valid_job_id(job_id))
+    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
 
-    ret = api_get_job(ctx, job_id, &job);
+  ret = api_get_job(ctx, job_id, &job);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  return job->load_output_tensor(tensor, data);
+}
+
+aipu_status_t aipu_rewrite_rodata(const aipu_ctx_handle_t *ctx, uint64_t job_id,
+                                  uint32_t offset, uint32_t value) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::JobBase *job = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (!aipudrv::valid_job_id(job_id))
+    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+
+  ret = api_get_job(ctx, job_id, &job);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  return job->rewrite_rodata(offset, value);
+}
+
+aipu_status_t aipu_malloc(const aipu_ctx_handle_t *ctx, uint32_t size,
+                          uint32_t align, uint32_t asid, void **handle) {
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    return AIPU_STATUS_ERROR_INVALID_CTX;
+
+  *handle =
+      nullptr; // In order to allocate BufferDesc object in UMemory::malloc
+  aipudrv::MemoryBase *p_mem = p_ctx->get_dev()->get_mem();
+  return p_mem->malloc(size, align, (aipudrv::BufferDesc **)handle, nullptr,
+                       (asid << 8) | AIPU_MEM_REGION_DEFAULT);
+}
+
+aipu_status_t aipu_free(const aipu_ctx_handle_t *ctx, void **handle) {
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr || handle == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    return AIPU_STATUS_ERROR_INVALID_CTX;
+
+  aipudrv::MemoryBase *p_mem = p_ctx->get_dev()->get_mem();
+  return p_mem->free((aipudrv::BufferDesc **)handle);
+}
+
+aipu_status_t aipu_memcpy(const aipu_ctx_handle_t *ctx, void *dst,
+                          const void *src, uint32_t size,
+                          aipu_memcpy_kind_t kind) {
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr || dst == nullptr || src == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    return AIPU_STATUS_ERROR_INVALID_CTX;
+
+  aipudrv::MemoryBase *p_mem = p_ctx->get_dev()->get_mem();
+  if (kind == AIPU_MEMCPY_HOST_TO_DEVICE) {
+    p_mem->write(((aipudrv::BufferDesc *)dst)->pa, src, size);
+  } else if (kind == AIPU_MEMCPY_DEVICE_TO_HOST) {
+    p_mem->read(((aipudrv::BufferDesc *)src)->pa, dst, size);
+  } else if (kind == AIPU_MEMCPY_DEVICE_TO_DEVICE) {
+    auto buf = (aipudrv::BufferDesc *)src;
+    char *src_data = nullptr;
+    p_mem->pa_to_va(buf->pa, buf->size, &src_data);
+    p_mem->write(((aipudrv::BufferDesc *)dst)->pa, src_data, size);
+  }
+
+  return AIPU_STATUS_SUCCESS;
+}
+
+aipu_status_t aipu_get_va(const aipu_ctx_handle_t *ctx, const void *buffer_desc,
+                          char **data_ptr) {
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    return AIPU_STATUS_ERROR_INVALID_CTX;
+
+  aipudrv::MemoryBase *p_mem = p_ctx->get_dev()->get_mem();
+  auto buf = (aipudrv::BufferDesc *)buffer_desc;
+  p_mem->pa_to_va(buf->pa, buf->size, data_ptr);
+  return AIPU_STATUS_SUCCESS;
+}
+
+aipu_status_t aipu_get_elf_note_size(const aipu_ctx_handle_t *ctx, uint64_t id,
+                                     const char *section_name, uint64_t *size) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::GraphBase *graph = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (!aipudrv::valid_graph_id(id))
+    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+  ret = api_get_graph(ctx, aipudrv::get_graph_id(id), &graph);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  if (!graph)
+    return AIPU_STATUS_ERROR_INVALID_GBIN;
+
+  return graph->get_elf_note_size(std::string(section_name), *size);
+}
+
+aipu_status_t aipu_read_elf_note(const aipu_ctx_handle_t *ctx, uint64_t id,
+                                 const char *section_name, char *data,
+                                 uint64_t *size) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::GraphBase *graph = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (!aipudrv::valid_graph_id(id))
+    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+  ret = api_get_graph(ctx, aipudrv::get_graph_id(id), &graph);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  if (!graph)
+    return AIPU_STATUS_ERROR_INVALID_GBIN;
+
+  return graph->get_elf_note(std::string(section_name), data, *size);
+}
+aipu_status_t aipu_get_tensor(const aipu_ctx_handle_t *ctx, uint64_t job_id,
+                              aipu_tensor_type_t type, uint32_t tensor,
+                              void *data) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::JobBase *job = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (!aipudrv::valid_job_id(job_id))
+    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+
+  ret = api_get_job(ctx, job_id, &job);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  return job->get_tensor(type, tensor, data);
+}
+
+aipu_status_t aipu_get_partition_count(const aipu_ctx_handle_t *ctx,
+                                       uint32_t *cnt) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+  else
+    ret = p_ctx->get_partition_count(cnt);
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_get_cluster_count(const aipu_ctx_handle_t *ctx,
+                                     uint32_t partition_id, uint32_t *cnt) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+  else
+    ret = p_ctx->get_cluster_count(partition_id, cnt);
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_get_core_count(const aipu_ctx_handle_t *ctx,
+                                  uint32_t partition_id, uint32_t cluster,
+                                  uint32_t *cnt) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+  else
+    ret = p_ctx->get_core_count(partition_id, cluster, cnt);
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_debugger_get_core_info(const aipu_ctx_handle_t *ctx,
+                                          uint32_t id, aipu_core_info_t *info) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if ((ctx == nullptr) || (info == nullptr)) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+  else
+    ret = p_ctx->get_core_info(id, info);
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_debugger_get_job_info(const aipu_ctx_handle_t *ctx,
+                                         uint64_t job,
+                                         aipu_debugger_job_info_t *info) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+  else
+    ret = p_ctx->debugger_get_job_info(job, info);
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_debugger_bind_job(const aipu_ctx_handle_t *ctx, uint32_t id,
+                                     uint64_t job_id) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::JobBase *job = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  ret = api_get_job(ctx, job_id, &job);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  return job->bind_core(id);
+}
+
+aipu_status_t aipu_debugger_run_job(const aipu_ctx_handle_t *ctx,
+                                    uint64_t job_id) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::JobBase *job = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  ret = api_get_job(ctx, job_id, &job);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  return job->debugger_run();
+}
+
+aipu_status_t aipu_debugger_malloc(const aipu_ctx_handle_t *ctx, uint32_t size,
+                                   void **va) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+  else
+    ret = p_ctx->debugger_malloc(size, va);
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_debugger_free(const aipu_ctx_handle_t *ctx, void *va) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+  else
+    ret = p_ctx->debugger_free(va);
+
+finish:
+  return ret;
+}
+
+aipu_status_t aipu_config_job(const aipu_ctx_handle_t *ctx, uint64_t job_id,
+                              uint64_t types, void *config) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::JobBase *job = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (!aipudrv::valid_job_id(job_id))
+    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+
+  ret = api_get_job(ctx, job_id, &job);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  if (types &
+      (AIPU_JOB_CONFIG_TYPE_DUMP_TEXT | AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT |
+       AIPU_JOB_CONFIG_TYPE_DUMP_RODATA | AIPU_JOB_CONFIG_TYPE_DUMP_DESCRIPTOR |
+       AIPU_JOB_CONFIG_TYPE_DUMP_INPUT | AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT |
+       AIPU_JOB_CONFIG_TYPE_DUMP_REUSE | AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN |
+       AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION | AIPU_JOB_CONFIG_TYPE_DUMP_PROFILE))
+    ret = job->config_mem_dump(types, (aipu_job_config_dump_t *)config);
+  else if (types == AIPU_CONFIG_TYPE_SIMULATION)
+    ret = job->config_simulation(types, (aipu_job_config_simulation_t *)config);
+  else
+    ret = AIPU_STATUS_ERROR_INVALID_CONFIG;
+
+  return ret;
+}
+
+aipu_status_t aipu_specify_iobuf(const aipu_ctx_handle_t *ctx, uint64_t job_id,
+                                 aipu_shared_tensor_info_t *tensor_info) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::JobBase *job = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (!aipudrv::valid_job_id(job_id))
+    return AIPU_STATUS_ERROR_INVALID_JOB_ID;
+
+  ret = api_get_job(ctx, job_id, &job);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  ret = job->specify_io_buffer(*tensor_info);
+  return ret;
+}
+
+aipu_status_t aipu_config_global(const aipu_ctx_handle_t *ctx, uint64_t types,
+                                 void *config) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+    goto finish;
+  }
+
+  if (types & AIPU_CONFIG_TYPE_HW) {
+    ret = p_ctx->config_hw(types, (aipu_global_config_hw_t *)config);
     if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
+      goto finish;
 
-    return job->load_output_tensor(tensor, data);
-}
-
-aipu_status_t aipu_get_tensor(const aipu_ctx_handle_t* ctx, uint64_t job_id, aipu_tensor_type_t type, uint32_t tensor,
-    void* data)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::JobBase* job = nullptr;
-
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    if (!aipudrv::valid_job_id(job_id))
-        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
-
-    ret = api_get_job(ctx, job_id, &job);
+    types &= ~AIPU_CONFIG_TYPE_HW;
+  } else if (types & AIPU_CONFIG_TYPE_SIMULATION) {
+    ret = p_ctx->config_simulation(types,
+                                   (aipu_global_config_simulation_t *)config);
     if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
+      goto finish;
 
-    return job->get_tensor(type, tensor, data);
-}
+    types &= ~AIPU_CONFIG_TYPE_SIMULATION;
+  }
 
-aipu_status_t aipu_get_partition_count(const aipu_ctx_handle_t* ctx, uint32_t* cnt)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
+  if (types & AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK) {
+    p_ctx->disable_version_check();
+    types &= ~AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK;
+  }
 
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
+  if (types & AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK) {
+    p_ctx->enable_version_check();
+    types &= ~AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK;
+  }
 
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-    else
-        ret = p_ctx->get_partition_count(cnt);
+  if (types)
+    ret = AIPU_STATUS_ERROR_INVALID_CONFIG;
 
 finish:
-    return ret;
+  return ret;
 }
 
-aipu_status_t aipu_get_cluster_count(const aipu_ctx_handle_t* ctx, uint32_t partition_id, uint32_t* cnt)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
+aipu_status_t aipu_get_target(const aipu_ctx_handle_t *ctx, char *target) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
 
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
 
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-    else
-        ret = p_ctx->get_cluster_count(partition_id, cnt);
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+    goto finish;
+  }
+
+  ret = p_ctx->aipu_get_target(target);
 
 finish:
-    return ret;
+  return ret;
 }
 
-aipu_status_t aipu_get_core_count(const aipu_ctx_handle_t* ctx, uint32_t partition_id, uint32_t cluster, uint32_t* cnt)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
+aipu_status_t aipu_get_device_status(const aipu_ctx_handle_t *ctx,
+                                     device_status_t *status) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
 
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
+  if (ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
 
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-    else
-        ret = p_ctx->get_core_count(partition_id, cluster, cnt);
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr) {
+    ret = AIPU_STATUS_ERROR_INVALID_CTX;
+    goto finish;
+  }
 
+  ret = p_ctx->aipu_get_device_status(status);
 finish:
+  return ret;
+}
+
+aipu_status_t aipu_config_batch_dump(const aipu_ctx_handle_t *ctx,
+                                     uint64_t graph_id, uint32_t queue_id,
+                                     uint64_t types,
+                                     aipu_job_config_dump_t *config) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::GraphBase *graph = nullptr;
+
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (!aipudrv::valid_graph_id(graph_id))
+    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+  ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
+  if (ret != AIPU_STATUS_SUCCESS)
     return ret;
+
+  ret = graph->config_for_batch(queue_id, types, config);
+  return ret;
 }
 
-aipu_status_t aipu_debugger_get_core_info(const aipu_ctx_handle_t* ctx, uint32_t id, aipu_core_info_t* info)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
+aipu_status_t aipu_create_batch_queue(const aipu_ctx_handle_t *ctx,
+                                      uint64_t graph_id, uint32_t *queue_id) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::GraphBase *graph = nullptr;
 
-    if ((ctx == nullptr) || (info == nullptr))
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
 
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-    else
-        ret = p_ctx->get_core_info(id, info);
+  if (!aipudrv::valid_graph_id(graph_id))
+    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
-finish:
-    return ret;
-}
+  ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
+  if (ret != AIPU_STATUS_SUCCESS)
+    goto out;
 
-aipu_status_t aipu_debugger_get_job_info(const aipu_ctx_handle_t* ctx,
-    uint64_t job, aipu_debugger_job_info_t* info)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-    else
-        ret = p_ctx->debugger_get_job_info(job, info);
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipu_debugger_bind_job(const aipu_ctx_handle_t* ctx, uint32_t id, uint64_t job_id)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::JobBase* job = nullptr;
-
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    ret = api_get_job(ctx, job_id, &job);
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    return job->bind_core(id);
-}
-
-aipu_status_t aipu_debugger_run_job(const aipu_ctx_handle_t* ctx, uint64_t job_id)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::JobBase* job = nullptr;
-
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    ret = api_get_job(ctx, job_id, &job);
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    return job->debugger_run();
-}
-
-aipu_status_t aipu_debugger_malloc(const aipu_ctx_handle_t* ctx, uint32_t size, void** va)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-    else
-        ret = p_ctx->debugger_malloc(size, va);
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipu_debugger_free(const aipu_ctx_handle_t* ctx, void* va)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-    else
-        ret = p_ctx->debugger_free(va);
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipu_config_job(const aipu_ctx_handle_t* ctx, uint64_t job_id, uint64_t types, void* config)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::JobBase* job = nullptr;
-
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    if (!aipudrv::valid_job_id(job_id))
-        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
-
-    ret = api_get_job(ctx, job_id, &job);
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    if (types & (AIPU_JOB_CONFIG_TYPE_DUMP_TEXT |
-         AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT       |
-         AIPU_JOB_CONFIG_TYPE_DUMP_RODATA       |
-         AIPU_JOB_CONFIG_TYPE_DUMP_DESCRIPTOR   |
-         AIPU_JOB_CONFIG_TYPE_DUMP_INPUT        |
-         AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT       |
-         AIPU_JOB_CONFIG_TYPE_DUMP_REUSE        |
-         AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN    |
-         AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION    |
-         AIPU_JOB_CONFIG_TYPE_DUMP_PROFILE))
-        ret = job->config_mem_dump(types, (aipu_job_config_dump_t*)config);
-    else if (types == AIPU_CONFIG_TYPE_SIMULATION)
-        ret = job->config_simulation(types, (aipu_job_config_simulation_t*)config);
-    else
-        ret = AIPU_STATUS_ERROR_INVALID_CONFIG;
-
-    return ret;
-}
-
-aipu_status_t aipu_specify_iobuf(const aipu_ctx_handle_t* ctx, uint64_t job_id,
-    aipu_shared_tensor_info_t *tensor_info)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::JobBase* job = nullptr;
-
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    if (!aipudrv::valid_job_id(job_id))
-        return AIPU_STATUS_ERROR_INVALID_JOB_ID;
-
-    ret = api_get_job(ctx, job_id, &job);
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    ret = job->specify_io_buffer(*tensor_info);
-    return ret;
-}
-
-aipu_status_t aipu_config_global(const aipu_ctx_handle_t* ctx, uint64_t types, void* config)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-        goto finish;
-    }
-
-    if (types & AIPU_CONFIG_TYPE_HW)
-    {
-        ret = p_ctx->config_hw(types, (aipu_global_config_hw_t*)config);
-        if (ret != AIPU_STATUS_SUCCESS)
-            goto finish;
-
-        types &= ~AIPU_CONFIG_TYPE_HW;
-    } else if (types & AIPU_CONFIG_TYPE_SIMULATION) {
-        ret = p_ctx->config_simulation(types, (aipu_global_config_simulation_t*)config);
-        if (ret != AIPU_STATUS_SUCCESS)
-            goto finish;
-
-        types &= ~AIPU_CONFIG_TYPE_SIMULATION;
-    }
-
-    if (types & AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK)
-    {
-        p_ctx->disable_version_check();
-        types &= ~AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK;
-    }
-
-    if (types & AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK)
-    {
-        p_ctx->enable_version_check();
-        types &= ~AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK;
-    }
-
-    if (types)
-        ret = AIPU_STATUS_ERROR_INVALID_CONFIG;
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipu_get_target(const aipu_ctx_handle_t* ctx, char *target)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-        goto finish;
-    }
-
-    ret = p_ctx->aipu_get_target(target);
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipu_get_device_status(const aipu_ctx_handle_t* ctx, device_status_t *status)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-
-    if (ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_INVALID_CTX;
-        goto finish;
-    }
-
-    ret = p_ctx->aipu_get_device_status(status);
-finish:
-    return ret;
-}
-
-aipu_status_t aipu_config_batch_dump(const aipu_ctx_handle_t* ctx, uint64_t graph_id,
-    uint32_t queue_id, uint64_t types, aipu_job_config_dump_t *config)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::GraphBase* graph = nullptr;
-
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    if (!aipudrv::valid_graph_id(graph_id))
-        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-    ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    ret = graph->config_for_batch(queue_id, types, config);
-    return ret;
-}
-
-aipu_status_t aipu_create_batch_queue(const aipu_ctx_handle_t* ctx, uint64_t graph_id,
-    uint32_t *queue_id)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::GraphBase *graph = nullptr;
-
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    if (!aipudrv::valid_graph_id(graph_id))
-        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-    ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
-    if (ret != AIPU_STATUS_SUCCESS)
-       goto out;
-
-    ret = graph->get_batch_queue_id(queue_id);
+  ret = graph->get_batch_queue_id(queue_id);
 
 out:
-    return ret;
+  return ret;
 }
 
-aipu_status_t aipu_clean_batch_queue(const aipu_ctx_handle_t* ctx, uint64_t graph_id,
-    uint32_t queue_id)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::GraphBase *graph = nullptr;
+aipu_status_t aipu_clean_batch_queue(const aipu_ctx_handle_t *ctx,
+                                     uint64_t graph_id, uint32_t queue_id) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::GraphBase *graph = nullptr;
 
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
 
-    if (!aipudrv::valid_graph_id(graph_id))
-        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+  if (!aipudrv::valid_graph_id(graph_id))
+    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
-    ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
-    if (ret != AIPU_STATUS_SUCCESS)
-       goto out;
+  ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
+  if (ret != AIPU_STATUS_SUCCESS)
+    goto out;
 
-    ret = graph->clean_batch_queue(queue_id);
+  ret = graph->clean_batch_queue(queue_id);
 out:
-    return ret;
+  return ret;
 }
 
-aipu_status_t aipu_add_batch(const aipu_ctx_handle_t* ctx, uint64_t graph_id, uint32_t queue_id,
-    char *inputs[], char *outputs[])
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::GraphBase *graph = nullptr;
-    uint32_t in_tensor_cnt = 0, out_tensor_cnt = 0;
+aipu_status_t aipu_add_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
+                             uint32_t queue_id, char *inputs[],
+                             char *outputs[]) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::GraphBase *graph = nullptr;
+  uint32_t in_tensor_cnt = 0, out_tensor_cnt = 0;
 
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
 
-    if (!aipudrv::valid_graph_id(graph_id))
-        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+  if (!aipudrv::valid_graph_id(graph_id))
+    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
-    ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
+  ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
+  if (ret != AIPU_STATUS_SUCCESS)
+    goto out;
+
+  in_tensor_cnt = graph->m_input_cnt;
+  out_tensor_cnt = graph->m_output_cnt;
+
+  if (in_tensor_cnt == 0) {
+    ret = graph->get_tensor_count(AIPU_TENSOR_TYPE_INPUT, &in_tensor_cnt);
     if (ret != AIPU_STATUS_SUCCESS)
-       goto out;
+      goto out;
 
-    in_tensor_cnt = graph->m_input_cnt;
-    out_tensor_cnt = graph->m_output_cnt;
+    graph->m_input_cnt = in_tensor_cnt;
+  }
 
-    if (in_tensor_cnt == 0)
-    {
-        ret = graph->get_tensor_count(AIPU_TENSOR_TYPE_INPUT, &in_tensor_cnt);
-        if (ret != AIPU_STATUS_SUCCESS)
-           goto out;
+  if (out_tensor_cnt == 0) {
+    ret = graph->get_tensor_count(AIPU_TENSOR_TYPE_OUTPUT, &out_tensor_cnt);
+    if (ret != AIPU_STATUS_SUCCESS)
+      goto out;
 
-        graph->m_input_cnt = in_tensor_cnt;
-    }
+    graph->m_output_cnt = out_tensor_cnt;
+  }
 
-    if (out_tensor_cnt == 0)
-    {
-        ret = graph->get_tensor_count(AIPU_TENSOR_TYPE_OUTPUT, &out_tensor_cnt);
-        if (ret != AIPU_STATUS_SUCCESS)
-           goto out;
-
-        graph->m_output_cnt = out_tensor_cnt;
-    }
-
-    ret = graph->add_batch(queue_id, inputs, in_tensor_cnt, outputs, out_tensor_cnt);
+  ret = graph->add_batch(queue_id, inputs, in_tensor_cnt, outputs,
+                         out_tensor_cnt);
 out:
-    return ret;
+  return ret;
 }
 
-aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t* ctx, uint64_t graph_id,
-    uint32_t queue_id, aipu_create_job_cfg_t *config)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
-    aipudrv::GraphBase* graph = nullptr;
+aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
+                                uint32_t queue_id,
+                                aipu_create_job_cfg_t *config) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
+  aipudrv::GraphBase *graph = nullptr;
 
-    if (ctx == nullptr || config == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
+  if (ctx == nullptr || config == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
 
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        return AIPU_STATUS_ERROR_INVALID_CTX;
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    return AIPU_STATUS_ERROR_INVALID_CTX;
 
-    if (!aipudrv::valid_graph_id(graph_id))
-        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+  if (!aipudrv::valid_graph_id(graph_id))
+    return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
 
-    ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    ret = p_ctx->run_batch(*graph, queue_id, config);
+  ret = api_get_graph(ctx, aipudrv::get_graph_id(graph_id), &graph);
+  if (ret != AIPU_STATUS_SUCCESS)
     return ret;
+
+  ret = p_ctx->run_batch(*graph, queue_id, config);
+  return ret;
 }
 
-aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd, void *arg)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    aipudrv::CtxRefMap& ctx_map = aipudrv::CtxRefMap::get_ctx_map();
-    aipudrv::MainContext* p_ctx = nullptr;
+aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd, void *arg) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  aipudrv::CtxRefMap &ctx_map = aipudrv::CtxRefMap::get_ctx_map();
+  aipudrv::MainContext *p_ctx = nullptr;
 
-    if (ctx == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
+  if (ctx == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
 
-    p_ctx = ctx_map.get_ctx_ref(ctx->handle);
-    if (p_ctx == nullptr)
-        return AIPU_STATUS_ERROR_INVALID_CTX;
+  p_ctx = ctx_map.get_ctx_ref(ctx->handle);
+  if (p_ctx == nullptr)
+    return AIPU_STATUS_ERROR_INVALID_CTX;
 
-    ret = p_ctx->ioctl_cmd(cmd, arg);
-    return ret;
+  ret = p_ctx->ioctl_cmd(cmd, arg);
+  return ret;
 }

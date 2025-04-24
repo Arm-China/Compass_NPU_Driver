@@ -2,20 +2,14 @@
 
 The samples can quickly verify the functionality of the whole UMD and KMD logic. They can be split into two parts, one is for simulation environmetn, another is for HW environment.
 
-## 1. For simulator verification
-- simulation_test: this case is for aipu v1/v2.
+## 1. Only for simulator verification
+- simulation_test: this case is for simulator.
 
 ```bash
-# ./aipu_simulation_test -s aipu_simulator_[x1|z1|z2|z3] -b aipu.bin -i input0.bin -c output.bin -d ./
-
-eg:
--s aipu_simulator_x1
-```
-
-- v3_simulation_test: this case is only for aipu v3.
-
-```bash
-# ./aipu_v3_simulation_test -b aipu.bin -i input0.bin -c output.bin -d ./
+# for x1|z1|z2|z3
+$ ./aipu_simulation_test -s /full/path/of/aipu_simulator_[x1|z1|z2|z3] -b aipu.bin -i input0.bin -c output.bin -d ./
+# for x2/x3
+$ ./aipu_simulation_test -a <target> -b aipu.bin -i input0.bin -c output.bin -d ./
 ```
 
 note:
@@ -23,57 +17,75 @@ note:
 - These cases only use UMD source code, don't need KMD part.
 - Add the library of UMD to LD_LIBRARY_PATH.
 
-## 2. For HW verifcation
+## 2. Only HW verifcation
 - benchmark_test: a general case run on HW board.
 ```bash
-# ./aipu_benchmark_test -b aipu.bin -i input0.bin -c output.bin -d ./
-```
-
-- mthread_test: create two thread to run different inference jobs.
-```bash
-# ./aipu_mthread_test [-p] -b aipu.bin -i input0.bin -c output.bin -d ./
+$ ./aipu_benchmark_test -b aipu.bin -i input0.bin -c output.bin -d ./
 ```
 
 - flush_job_test: create multiple inference jobs firstly, then get their result one by one.
 ```bash
-# ./aipu_flush_job_test -b aipu.bin -i input0.bin -c output.bin -d ./
+$ ./aipu_flush_job_test -b aipu.bin -i input0.bin -c output.bin -d ./
 ```
 
 - profiler_test: can dump profiling data if enable profile feature.
 ```bash
-# ./aipu_profiler_test -b aipu.bin -i input0.bin -c output.bin -d ./
+$ ./aipu_profiler_test -b aipu.bin -i input0.bin -c output.bin -d ./
 ```
 
 - multi_model_test: load multiple models and dispatch them to different core, only for aipu v3/v3_1.
 ```bash
-# ./aipu_multi_model_test -b aipu.bin -i input0.bin -c output.bin -d ./
-```
-
-- batch_test: load multiple input frames for one model, try to parallel frames on cores. only for aipu v3/v3_1.
-```bash
-# ./aipu_batch_test -b aipu.bin -i input0.bin -c output.bin -d ./
-```
-
-- sharebuffer_test: share some input/output buffers between graphs in one process.
-```bash
-# ./aipu_sharebuffer_test -b aipu.bin -i input0.bin -c output.bin -d ./
+$ ./aipu_multi_model_test -b aipu.bin -i input0.bin -c output.bin -d ./
 ```
 
 - dmabuf_mmap_test: asscess dma_buf via mmap in user mode
 ```bash
-# ./aipu_dmabuf_mmap_test -b aipu.bin -i input0.bin -c output.bin -d ./
+$ ./aipu_dmabuf_mmap_test -b aipu.bin -i input0.bin -c output.bin -d ./
 ```
 
 - dmabuf_vmap_test: access dma_buf via vmap in kernel mode and mmap in user mode
 ```bash
 # insmod importer.ko
-# ./aipu_dmabuf_vmap_test
+$ ./aipu_dmabuf_vmap_test
 ```
 
 - dmabuf_dma_test: access dma_buf via DMA HW in kernel mode and mmap in user mode
 ```bash
 # insmod importer.ko
-# ./aipu_dmabuf_vmap_test
+$ ./aipu_dmabuf_vmap_test
+```
+
+## 3. Support Simulator & HW verifcation
+For Simulator, if AIPU arch is v1 or v2, you should provide full path of executable simulator by '-s'.  
+If AIPU arch is v3 or upper, you should provide target by '-a'
+- batch_test: load multiple input frames for one model, try to parallel frames on cores. only for aipu v3/v3_1.
+```bash
+$ ./aipu_batch_test -b aipu.bin -i input0.bin -c output.bin -d ./
+```
+
+- mthread_test: create two thread to run different inference jobs.
+```bash
+$ ./aipu_mthread_test [-p] -b aipu.bin -i input0.bin -c output.bin -d ./
+```
+
+- sharebuffer_test: share some input/output buffers between graphs in one process.
+```bash
+$ ./aipu_sharebuffer_test -b aipu.bin -i input0.bin -c output.bin -d ./
+```
+
+- time_cost_test: calculate some sections time cost
+```bash
+$ ./aipu_time_cost_test -t flush|finish -b aipu.bin -i input0.bin -c output.bin -d ./
+```
+
+- dynamic_shape_test: support dynamic shape model, and user can provide shape information
+```bash
+$ aipu_dynamic_shape_test -b aipu.bin -i input.bin -c output.bin -d ./output/ -r shape1/shape2
+```
+
+- multiple_bss_test: multiple weight files test for LLM
+```bash
+$ ./aipu_multiple_bss_test -b aipu.bin -i input0.bin -c output.bin -w extra_wight_dir -d ./
 ```
 
 note:

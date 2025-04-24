@@ -14,6 +14,7 @@ static int init_aipu_cluster(struct aipu_partition *cluster, struct aipu_priv *a
 {
 	int ret = 0;
 	u32 val = 0;
+	u32 config = 0;
 
 	if (!cluster || !aipu || !p_dev)
 		return -EINVAL;
@@ -33,7 +34,6 @@ static int init_aipu_cluster(struct aipu_partition *cluster, struct aipu_priv *a
 	cluster->reg_attr = NULL;
 	cluster->clk_attr = NULL;
 	cluster->disable_attr = NULL;
-	cluster->config = 0;
 	cluster->max_sched_num = 0;
 	cluster->dtcm_base = 0;
 	cluster->dtcm_size = 0;
@@ -43,6 +43,13 @@ static int init_aipu_cluster(struct aipu_partition *cluster, struct aipu_priv *a
 	val = aipu_read32(cluster->reg, CLUSTER_CONFIG_REG_V3_1(0));
 	cluster->clusters[0].core_cnt = GET_AIPU_CORE_NUM_V3_1(val);
 	atomic_set(&cluster->clusters[0].en_core_cnt, GET_AIPU_CORE_NUM_V3_1(val));
+	config = GET_AIFF_NUM_V3_1(val);
+	if (config == 2)
+		cluster->config = 1304;
+	else if (config == 1)
+		cluster->config = 1204;
+	else
+		cluster->config = 0;
 	cluster->clusters[0].tec_cnt = GET_TEC_NUM_V3_1(val);
 	cluster->ops->initialize(cluster);
 

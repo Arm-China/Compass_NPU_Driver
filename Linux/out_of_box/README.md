@@ -10,7 +10,7 @@ You may update it based on the specification in AIPU Software Programming Guide
 if you need to support more features.  
 
 Before running this demo, you should ensure follows:
-1. Change `<YOUR_WORKSPACE>` to actural path in `out-of-box-test.sh` accordingly, and it will recover after running automatically
+1. Replace `<YOUR_WORKSPACE>` in `out-of-box-test.sh` by the value of `CONFIG_DRV_BTENVAR_BASE_DIR` setting in `bash_env_setup.sh`, and it will recover after running automatically
 2. Move corresponding AIPU target benchmark folder to 'out_of_box/benchmarks', and ensure it has aipu.bin,input0.bin,output.bin files
 
 To build & run this demo application, please follow these steps:

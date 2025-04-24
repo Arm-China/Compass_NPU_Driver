@@ -123,7 +123,7 @@ static struct aipu_partition *v3_create_partitions(struct aipu_priv *aipu,
 			partition_cnt = cluster_arr[2 * iter + 1] + 1;
 	}
 
-	partitions = devm_kzalloc(&p_dev->dev, sizeof(*partitions), GFP_KERNEL);
+	partitions = devm_kzalloc(&p_dev->dev, sizeof(*partitions) * partition_cnt, GFP_KERNEL);
 	if (!partitions)
 		return ERR_PTR(-ENOMEM);
 

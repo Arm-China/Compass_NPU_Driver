@@ -2,192 +2,201 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-
 /**
  * @file  standard_api.h
- * @brief Zhouyi AIPU User Mode Driver (UMD) Standard API header (for aipu v1/v2/v3)
+ * @brief Zhouyi AIPU User Mode Driver (UMD) Standard API header (for aipu
+ * v1/v2/v3)
  * @version 1.0
  */
 
 #ifndef _STANDARD_API_H_
 #define _STANDARD_API_H_
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef struct ctx_handle {
-    uint32_t handle;
+  uint32_t handle;
 } aipu_ctx_handle_t;
 
-typedef enum {
-    DEV_IDLE = 0,
-    DEV_BUSY,
-    DEV_EXCEPTION
-} device_status_t;
+typedef enum { DEV_IDLE = 0, DEV_BUSY, DEV_EXCEPTION } device_status_t;
 
 typedef enum {
-    AIPU_DATA_TYPE_NONE = 0,
-    AIPU_DATA_TYPE_BOOL = 1,
-    AIPU_DATA_TYPE_U8   = 2,
-    AIPU_DATA_TYPE_S8   = 3,
-    AIPU_DATA_TYPE_U16  = 4,
-    AIPU_DATA_TYPE_S16  = 5,
-    AIPU_DATA_TYPE_U32  = 6,
-    AIPU_DATA_TYPE_S32  = 7,
-    AIPU_DATA_TYPE_U64  = 8,
-    AIPU_DATA_TYPE_S64  = 9,
-    AIPU_DATA_TYPE_F16  = 0xa,
-    AIPU_DATA_TYPE_F32  = 0xb,
-    AIPU_DATA_TYPE_F64  = 0xc,
-    AIPU_DATA_TYPE_BF16 = 0xd,
+  AIPU_DATA_TYPE_NONE = 0,
+  AIPU_DATA_TYPE_BOOL = 1,
+  AIPU_DATA_TYPE_U8 = 2,
+  AIPU_DATA_TYPE_S8 = 3,
+  AIPU_DATA_TYPE_U16 = 4,
+  AIPU_DATA_TYPE_S16 = 5,
+  AIPU_DATA_TYPE_U32 = 6,
+  AIPU_DATA_TYPE_S32 = 7,
+  AIPU_DATA_TYPE_U64 = 8,
+  AIPU_DATA_TYPE_S64 = 9,
+  AIPU_DATA_TYPE_F16 = 0xa,
+  AIPU_DATA_TYPE_F32 = 0xb,
+  AIPU_DATA_TYPE_F64 = 0xc,
+  AIPU_DATA_TYPE_BF16 = 0xd,
 
-    // byte-aligned u/int4
-    AIPU_DATA_TYPE_ALIGNED_U4  = 0x12,
-    AIPU_DATA_TYPE_ALIGNED_S4  = 0x13,
+  // byte-aligned u/int4
+  AIPU_DATA_TYPE_ALIGNED_U4 = 0x12,
+  AIPU_DATA_TYPE_ALIGNED_S4 = 0x13,
 
-    // byte-aligned u/int12
-    AIPU_DATA_TYPE_ALIGNED_U12 = 0x14,
-    AIPU_DATA_TYPE_ALIGNED_S12 = 0x15,
+  // byte-aligned u/int12
+  AIPU_DATA_TYPE_ALIGNED_U12 = 0x14,
+  AIPU_DATA_TYPE_ALIGNED_S12 = 0x15,
 
-    AIPU_DATA_TYPE_COMPACT_U4  = 0x20,
-    AIPU_DATA_TYPE_COMPACT_S4  = 0x21,
-    AIPU_DATA_TYPE_COMPACT_U12 = 0x22,
-    AIPU_DATA_TYPE_COMPACT_S12 = 0x23,
+  AIPU_DATA_TYPE_COMPACT_U4 = 0x20,
+  AIPU_DATA_TYPE_COMPACT_S4 = 0x21,
+  AIPU_DATA_TYPE_COMPACT_U12 = 0x22,
+  AIPU_DATA_TYPE_COMPACT_S12 = 0x23,
 } aipu_data_type_t;
 
 typedef enum {
-    AIPU_TENSOR_TYPE_INPUT         = 0,
-    AIPU_TENSOR_TYPE_OUTPUT        = 1,
-    AIPU_TENSOR_TYPE_INTER_DUMP    = 2,
-    AIPU_TENSOR_TYPE_PRINTF        = 3,
-    AIPU_TENSOR_TYPE_PROFILER      = 4,
-    AIPU_TENSOR_TYPE_LAYER_COUNTER = 5,
-    AIPU_TENSOR_TYPE_ERROR_CODE    = 6, /* only for v1/v2 */
-    AIPU_TENSOR_TYPE_OUT_TENSOR_SHAPE = 7,
+  AIPU_TENSOR_TYPE_INPUT = 0,
+  AIPU_TENSOR_TYPE_OUTPUT = 1,
+  AIPU_TENSOR_TYPE_INTER_DUMP = 2,
+  AIPU_TENSOR_TYPE_PRINTF = 3,
+  AIPU_TENSOR_TYPE_PROFILER = 4,
+  AIPU_TENSOR_TYPE_LAYER_COUNTER = 5,
+  AIPU_TENSOR_TYPE_ERROR_CODE = 6, /* only for v1/v2 */
+  AIPU_TENSOR_TYPE_OUT_TENSOR_SHAPE = 7,
 } aipu_tensor_type_t;
 
-typedef struct
-{
-    uint32_t id;
-    uint32_t size;
-    float    scale;
-    int32_t  zero_point;
-    aipu_data_type_t data_type;
+typedef struct {
+  uint32_t id;
+  uint32_t size;
+  float scale;
+  int32_t zero_point;
+  aipu_data_type_t data_type;
 } aipu_tensor_desc_t;
 
 /**
- * @brief AIPU job status; returned by status querying API aipu_get_job_status().
+ * @brief AIPU job status; returned by status querying API
+ * aipu_get_job_status().
  */
 typedef enum {
-    AIPU_JOB_STATUS_NO_STATUS, /**< no status */
-    AIPU_JOB_STATUS_DONE,      /**< job execution successfully */
-    AIPU_JOB_STATUS_EXCEPTION  /**< job execution failed, encountering exception */
+  AIPU_JOB_STATUS_NO_STATUS = 0, /**< no status */
+  AIPU_JOB_STATUS_DONE,          /**< job execution successfully */
+  AIPU_JOB_STATUS_EXCEPTION, /**< job execution failed, encountering exception
+                              */
+  AIPU_JOB_COREDUMP,         /**< job triggers coredump */
 } aipu_job_status_t;
 
 typedef struct {
-    uint64_t instr_base;
-    void* simulation_aipu;
-    void* simulation_mem_engine;
+  uint64_t instr_base;
+  void *simulation_aipu;
+  void *simulation_mem_engine;
 } aipu_debugger_job_info_t;
 
 typedef enum {
-    /**
-     * AIPU_GLOBAL_CONFIG_TYPE_[*]: for aipu_config_global() only;
-     * AIPU_JOB_CONFIG_TYPE_[*]: for aipu_config_job() only;
-     * AIPU_CONFIG_TYPE_[*]: for aipu_config_global/aipu_config_job();
-     */
-    AIPU_JOB_CONFIG_TYPE_DUMP_TEXT            = 0x1,
-    AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT          = 0x2,
-    AIPU_JOB_CONFIG_TYPE_DUMP_RODATA          = 0x4,
-    AIPU_JOB_CONFIG_TYPE_DUMP_DESCRIPTOR      = 0x8,
-    AIPU_JOB_CONFIG_TYPE_DUMP_INPUT           = 0x10,
-    AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT          = 0x20,
-    AIPU_JOB_CONFIG_TYPE_DUMP_REUSE           = 0x40,
-    AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN       = 0x80,
-    AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION       = 0x100,
-    AIPU_JOB_CONFIG_TYPE_DUMP_PROFILE         = 0x200,
-    AIPU_CONFIG_TYPE_SIMULATION               = 0x400,
-    AIPU_CONFIG_TYPE_HW                       = 0x800,
-    AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK = 0x1000,
-    AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK  = 0x2000,
+  /**
+   * AIPU_GLOBAL_CONFIG_TYPE_[*]: for aipu_config_global() only;
+   * AIPU_JOB_CONFIG_TYPE_[*]: for aipu_config_job() only;
+   * AIPU_CONFIG_TYPE_[*]: for aipu_config_global/aipu_config_job();
+   */
+  AIPU_JOB_CONFIG_TYPE_DUMP_TEXT = 0x1,
+  AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT = 0x2,
+  AIPU_JOB_CONFIG_TYPE_DUMP_RODATA = 0x4,
+  AIPU_JOB_CONFIG_TYPE_DUMP_DESCRIPTOR = 0x8,
+  AIPU_JOB_CONFIG_TYPE_DUMP_INPUT = 0x10,
+  AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT = 0x20,
+  AIPU_JOB_CONFIG_TYPE_DUMP_REUSE = 0x40,
+  AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN = 0x80,
+  AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION = 0x100,
+  AIPU_JOB_CONFIG_TYPE_DUMP_PROFILE = 0x200,
+  AIPU_CONFIG_TYPE_SIMULATION = 0x400,
+  AIPU_CONFIG_TYPE_HW = 0x800,
+  AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK = 0x1000,
+  AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK = 0x2000,
 } aipu_config_type_t;
 
 typedef struct {
-    /**
-     * dump_dir is used as file dump-path
-     */
-    const char* dump_dir;
-    /**
-     * name prefix of dump files
-     */
-    const char* prefix;
-    /**
-     * name prefix of output dump files
-     */
-    const char *output_prefix;
-    /**
-     * name prefix of profile/printf data files
-     */
-    const char *misc_prefix;
+  /**
+   * dump_dir is used as file dump-path
+   */
+  const char *dump_dir;
+  /**
+   * name prefix of dump files
+   */
+  const char *prefix;
+  /**
+   * name prefix of output dump files
+   */
+  const char *output_prefix;
+  /**
+   * name prefix of profile/printf data files
+   */
+  const char *misc_prefix;
 } aipu_job_config_dump_t;
 
 typedef struct {
-    /**
-     * data_dir is used as aipu v1/v2 simulation data file directory
-     */
-    const char* data_dir;
+  /**
+   * data_dir is used as aipu v1/v2 simulation data file directory
+   */
+  const char *data_dir;
 } aipu_job_config_simulation_t;
 
 /**
  * @brief Simulation related configuration
  */
 typedef struct {
-    /**
-     * configure simulator file name for aipu v1/v2;
-     * set simulator to be NULL for aipu v3/v3_1;
-     * log_level works for all simulator versions;
-     */
-    const char *simulator;
-    const char *log_file_path;
-    const char *npu_arch_desc;
-    const char *plugin_name;
-    const char *json_filename;
-    uint32_t log_level;
-    uint32_t gm_size;
-    bool verbose;
-    bool enable_avx;
-    bool enable_calloc;
-    bool en_eval;
-    bool en_l2d;
+  /**
+   * configure simulator file name for aipu v1/v2;
+   * set simulator to be NULL for aipu v3/v3_1;
+   * log_level works for all simulator versions;
+   */
+  const char *simulator;
+  const char *log_file_path;
+  const char *npu_arch_desc;
+  const char *plugin_name;
+  const char *json_filename;
+  uint32_t log_level;
+  uint32_t gm_size;
+  bool verbose;
+  bool enable_avx;
+  bool enable_calloc;
+  bool en_eval;
+  bool en_l2d;
 
-    /**
-     * fast evaluation config for aipu v3_1
-     */
-    bool en_fast_perf;
-    uint32_t freq_mhz;
-    uint32_t ddr_latency_rd;
-    uint32_t ddr_latency_wr;
-    uint32_t ddr_bw;
-    float ddr_bw_ratio;
-    const char *perf_report;
+  /**
+   * fast evaluation config for aipu v3_1
+   */
+  bool en_fast_perf;
+  uint32_t freq_mhz;
+  uint32_t ddr_latency_rd;
+  uint32_t ddr_latency_wr;
+  uint32_t ddr_bw;
+  float ddr_bw_ratio;
+  const char *perf_report;
 } aipu_global_config_simulation_t;
 
 /**
  * @brief HW related configuration
  */
 typedef struct {
-    /**  set false if job polling thread isn't commit thread;
-     *   set true if job polling thread is commit thread.
-     *
-     *   default(no config via this structure): the polling thread is identical with commit thread.
-     *
-     *   eg: poll job in non-commit thread
-     *      hw_config->poll_in_commit_thread = false;
-     *      aipu_config_global(ctx, AIPU_CONFIG_TYPE_HW, hw_config);
-     *
-     *   note: the config is effictive in only one process contex.
-     */
-    bool poll_in_commit_thread;
+  /**
+   * set false if job polling thread isn't commit thread;
+   * set true if job polling thread is commit thread.
+   *
+   * default true(no config via this structure): the polling thread is identical
+   * with commit thread.
+   *
+   * eg: poll job in non-commit thread
+   *   hw_config->poll_in_commit_thread = false;
+   *   aipu_config_global(ctx, AIPU_CONFIG_TYPE_HW, hw_config);
+   *
+   * note: the config is effictive in only one process context.
+   */
+  bool poll_in_commit_thread;
+
+  /**
+   * only for x2, default true (no config via this structure), and we also
+   * suggest set it true in x2, some signal irqs are coupling with tec done
+   * interrupt, such as operator printf. we suggest enable tec done irq
+   * defaultly, otherwise it maybe HANG when operator has printf and tec done is
+   * disable
+   */
+  bool enable_tec_done_irq;
 } aipu_global_config_hw_t;
 
 /**
@@ -200,30 +209,32 @@ typedef struct {
  */
 #if defined(BUILD_PYTHON_API)
 #include <functional>
-typedef std::function<int(uint64_t, aipu_job_status_t)> aipu_job_callback_func_t;
+typedef std::function<int(uint64_t, aipu_job_status_t)>
+    aipu_job_callback_func_t;
 #else
-typedef int (*aipu_job_callback_func_t)(uint64_t job_id, aipu_job_status_t job_state);
+typedef int (*aipu_job_callback_func_t)(uint64_t job_id,
+                                        aipu_job_status_t job_state);
 #endif
 
 /**
  * @brief AIPU core info struct; returned by UMD API for AIPU debugger to use
  */
 typedef struct aipu_core_info {
-    uint64_t reg_base; /**< core register base address */
+  uint64_t reg_base; /**< core register base address */
 } aipu_core_info_t;
 
 typedef enum {
-    AIPU_SHARE_BUF_IN_ONE_PROCESS = 0x0,
-    AIPU_SHARE_BUF_DMABUF = 0x1,
-    AIPU_SHARE_BUF_CUSTOMED = 0x2,
-    AIPU_SHARE_BUF_ATTACH_DMABUF = 0x3
+  AIPU_SHARE_BUF_IN_ONE_PROCESS = 0x0,
+  AIPU_SHARE_BUF_DMABUF = 0x1,
+  AIPU_SHARE_BUF_CUSTOMED = 0x2,
+  AIPU_SHARE_BUF_ATTACH_DMABUF = 0x3
 } aipu_share_case_type_t;
 
 /**
- * @struct aipu_shared_tensor
+ * @struct aipu_shared_tensor_t
  *
- * @brief case1: mark one tensor buffer of one graph as shared with other graphs.
- *               (in one process context)
+ * @brief case1: mark one tensor buffer of one graph as shared with other
+ * graphs. (in one process context)
  *
  * @brief case2: describe a shared buffer based on dma_buf mechanism.
  *               this dma_buf is managed by NPU KMD. (among multiple processes)
@@ -232,198 +243,231 @@ typedef enum {
  *               (not original NPU driver)
  *
  * @brief case4: describe a shared buffer based on dma_buf mechanism.
- *               this dma_buf is managed by other modules(not KMD). (among multiple processes)
+ *               this dma_buf is managed by other modules(not KMD). (among
+ * multiple processes)
  *
  * @note for case1:
- *       the share action is based on one process contex, not among multiple processes.
- *       it has to set 'shared_case_type' as AIPU_SHARE_BUF_IN_ONE_PROCESS.
+ *       the share action is based on one process contex, not among multiple
+ * processes. it has to set 'shared_case_type' as AIPU_SHARE_BUF_IN_ONE_PROCESS.
  *       need parameters: {job id, type, tensor_idx, pa, shared_case_type}
  *
  * @note for case2:
- *       share a common buffer via dma_buf framework among multiple modules/processes.
- *       this dma_buf is managed by KMD self.
- *       it has to set 'shared_case_type' as AIPU_SHARE_BUF_DMABUF.
- *       need paramsters: {job id, type, tensor_idx, fd, offset, shared_case_type}
+ *       share a common buffer via dma_buf framework among multiple
+ * modules/processes. this dma_buf is managed by KMD self. it has to set
+ * 'shared_case_type' as AIPU_SHARE_BUF_DMABUF. need paramsters: {job id, type,
+ * tensor_idx, fd, offset, shared_case_type}
  *
  * @note for case3:
- *       specify a shared buffer allocated in customed memory manager. it has to set
- *       'shared_case_type' as AIPU_SHARE_BUF_CUSTOMED. in addition, since the buffer
- *       is not allocated by original NPU driver, it has to confirm the buffer matches
- *       the ASID constraint.
- *       need parameters: {job id, type, tensor_idx, pa, shared_case_type}
+ *       specify a shared buffer allocated in customed memory manager. it has to
+ * set 'shared_case_type' as AIPU_SHARE_BUF_CUSTOMED. in addition, since the
+ * buffer is not allocated by original NPU driver, it has to confirm the buffer
+ * matches the ASID constraint. need parameters: {job id, type, tensor_idx, pa,
+ * shared_case_type}
  *
  * @note for case4:
- *       share a common buffer via dma_buf framework among multiple modules/processes.
- *       this dma_buf is managed by other modules(not KMD).
- *       it has to set 'shared_case_type' as AIPU_SHARE_BUF_ATTACH_DMABUF.
- *       need paramsters: {job id, type, tensor_idx, fd, offset, shared_case_type}
+ *       share a common buffer via dma_buf framework among multiple
+ * modules/processes. this dma_buf is managed by other modules(not KMD). it has
+ * to set 'shared_case_type' as AIPU_SHARE_BUF_ATTACH_DMABUF. need paramsters:
+ * {job id, type, tensor_idx, fd, offset, shared_case_type}
+ *
+ * @attention if buffer is from external, such as case3/case4, we suggest
+ * provided_size=actural_size + 2K bytes on v3 target
  */
 typedef struct aipu_shared_tensor_info {
-    /* the common fields */
-    aipu_tensor_type_t type;     /**< the shared tensor's type: input/output */
-    uint32_t tensor_idx;         /**< the shared tensor's index */
+  /* the common fields */
+  aipu_tensor_type_t type; /**< the shared tensor's type: input/output */
+  uint32_t tensor_idx;     /**< the shared tensor's index */
 
-    /* fileds for case1 and case3, not recommended */
-    uint64_t id;                 /**< pass job ID for marking one io buffer as shared
-                                      ignored for dma_buf share */
-    uint64_t pa;                 /**< the physical address of shared tensor, ignored for dma_buf share */
+  /* fileds for case1 and case3, not recommended */
+  uint64_t id; /**< pass job ID for marking one io buffer as shared
+                    ignored for dma_buf share */
+  uint64_t pa; /**< the physical address of shared tensor, ignored for dma_buf
+                  share */
 
-    /* fields for case2, recommended */
-    int dmabuf_fd;               /**< the fd corresponding to shared buffer from dma_buf allocator */
-    uint32_t offset_in_dmabuf;   /**< the shared address offset in dma_buf which is specified by 'fd' */
+  /* fields for case2, recommended */
+  int dmabuf_fd; /**< the fd corresponding to shared buffer from dma_buf
+                    allocator */
+  uint32_t offset_in_dmabuf; /**< the shared address offset in dma_buf which is
+                                specified by 'fd' */
 
-    /**
-     * it has to set this type, indicates sharing is for which case.
-     */
-    int shared_case_type;
+  /**
+   * it has to set this type, indicates sharing is for which case.
+   */
+  int shared_case_type;
 } aipu_shared_tensor_info_t;
 
 /**
- * @struct aipu_dmabuf_op
+ * @struct aipu_dmabuf_op_t
  *
- * @brief fill data to dma_buf or get data from dma_buf through this struct
+ * @brief fill data to dma_buf or get data from dma_buf through this struct, and
+ * maily for `aipu_ioctl`
  *
  */
-typedef struct aipu_dmabuf_op
-{
-    int dmabuf_fd;               /**< the fd corresponding to shared buffer from dma_buf allocator */
-    uint32_t offset_in_dmabuf;   /**< the shared address offset in dma_buf which is specified by 'fd' */
-    uint32_t size;               /**< the data size: filled data size or fetched data size */
-    char *data;                  /**< The data buffer: fill to or fetch from */
+typedef struct aipu_dmabuf_op {
+  int dmabuf_fd; /**< the fd corresponding to shared buffer from dma_buf
+                    allocator */
+  uint32_t offset_in_dmabuf; /**< the shared address offset in dma_buf which is
+                                specified by 'fd' */
+  uint32_t size; /**< the data size: filled data size or fetched data size */
+  char *data;    /**< The data buffer: fill to or fetch from */
 } aipu_dmabuf_op_t;
 
 /**
- * @struct aipu_share_buf
+ * @struct aipu_share_buf_t
  *
- * @brief request common share buffer, must specify 'size' field
+ * @brief request common share buffer, must specify 'size' field, and mainly for
+ * `aipu_ioctl`
  *
  */
-typedef struct aipu_share_buf
-{
-    uint64_t pa;    /**< buffer pa: filled by UMD */
-    uint64_t va;    /**< buffer va: filled by UMD */
-    uint32_t size;  /**< buffer size: filled by USER */
-    uint32_t mem_type; /**< memory region type: AIPU_MEM_REGION_DEFAULT, AIPU_MEM_REGION_SRAM */
+typedef struct aipu_share_buf {
+  uint64_t pa;       /**< buffer pa: filled by UMD */
+  uint64_t va;       /**< buffer va: filled by UMD */
+  uint32_t size;     /**< buffer size: filled by USER */
+  uint32_t mem_type; /**< memory region type: AIPU_MEM_REGION_DEFAULT,
+                        AIPU_MEM_REGION_SRAM */
 } aipu_share_buf_t;
+
+/**
+ * @struct aipu_dma_buf_req_t
+ *
+ * @brief request dma-buf from KMD, @param bytes is provided by user, @param fd
+ * will be filled by KMD, and mainly for `aipu_ioctl`
+ *
+ * @note map to KMD's `struct aipu_dma_buf_request`
+ */
+typedef struct aipu_dma_buf_req {
+  int fd;
+  uint64_t bytes;
+} aipu_dma_buf_req_t;
+
+/**
+ * @struct aipu_dma_buf_desc_t
+ *
+ * @brief dma-buf descriptor structure
+ *
+ * @note map to KMD's `struct aipu_dma_buf`
+ */
+typedef struct aipu_dma_buf_desc {
+  int fd;
+  uint64_t pa;
+  uint64_t bytes;
+} aipu_dma_buf_desc_t;
 
 /**
  * @struct aipu_driver_version
  *
- * @brief get version number of UMD & KMD
+ * @brief get version number of UMD & KMD, and mainly for `aipu_ioctl`
  *
  * @note the version number is determined in compiling phase,
  *       currently both version numbers is identical. the max
  *       buffer space is 16 bytes.
  */
-typedef struct aipu_driver_version
-{
-    char umd_version[16]; /**< the buffer for storing UMD version string */
-    char kmd_version[16]; /**< the buffer for storing KMD version string */
+typedef struct aipu_driver_version {
+  char umd_version[16]; /**< the buffer for storing UMD version string */
+  char kmd_version[16]; /**< the buffer for storing KMD version string */
 } aipu_driver_version_t;
 
 /**
- * @struct aipu_bin_buildversion
+ * @struct aipu_bin_buildversion_t
  *
- * @brief get build version number of model binary
+ * @brief get build version number of model binary, and mainly for `aipu_ioctl`
  *
  * @note the version number is determined by NN compiler.
  */
-typedef struct aipu_bin_buildversion
-{
-    uint64_t graph_id; /**< the graph id to be searched */
-    uint32_t aipubin_buildversion; /**< the build version of searched graph */
+typedef struct aipu_bin_buildversion {
+  uint64_t graph_id;             /**< the graph id to be searched */
+  uint32_t aipubin_buildversion; /**< the build version of searched graph */
 } aipu_bin_buildversion_t;
 
 /**
- * @struct aipu_dynshape_num
+ * @struct aipu_dynshape_num_t
  *
- * @brief get how many kinds of dynamic shape supported.
+ * @brief get how many kinds of dynamic shape supported, and mainly for
+ * `aipu_ioctl`
  *
  * @note dynamic shape is generated by NN compiler. eg:
  *       [[N1*H1*W1*C1], [N2*H2*W2*C2]], ds_num is 2.
  */
-typedef struct aipu_dynshape_num
-{
-    uint64_t graph_id; /**< the graph id to be searched */
-    uint32_t *ds_num; /**< the dynamic shape count graph support */
+typedef struct aipu_dynshape_num {
+  uint64_t graph_id; /**< the graph id to be searched */
+  uint32_t *ds_num;  /**< the dynamic shape count graph support */
 } aipu_dynshape_num_t;
 
 /**
- * @struct aipu_dynshape_dim_num
+ * @struct aipu_dynshape_dim_num_t
  *
- * @brief get specific shape dimensions of specified shape.
+ * @brief get specific shape dimensions of specified shape, and mainly for
+ * `aipu_ioctl`
  *
  * @note 'ds_dim_num' indicates the shape has how many uint32 words,
  *       N*H*W*C => 4 words
  */
-typedef struct aipu_dynshape_dim_num
-{
-    uint64_t graph_id;    /**< the graph id to be inquired */
-    uint32_t ds_idx;      /**< the dynamic shape index */
-    bool  max_threshhold; /**< true: for max shape, false: for min shape */
-    uint32_t *ds_dim_num; /**< the dynamic dim number of requested shape index */
+typedef struct aipu_dynshape_dim_num {
+  uint64_t graph_id;    /**< the graph id to be inquired */
+  uint32_t ds_idx;      /**< the dynamic shape index */
+  bool max_threshhold;  /**< true: for max shape, false: for min shape */
+  uint32_t *ds_dim_num; /**< the dynamic dim number of requested shape index */
 } aipu_dynshape_dim_num_t;
 
 /**
- * @struct aipu_dynshape_info
+ * @struct aipu_dynshape_info_t
  *
- * @brief dynamic shape information generated by NN compiler.
+ * @brief dynamic shape information generated by NN compiler, and mainly for
+ * `aipu_ioctl`
  *
  * @note 'ds_data' is uint32 array indicates a shape, eg:
  *        N*H*W*C => [u32_N, u32_H, u32_W, u32_C], total 4 words.
  */
-typedef struct aipu_dynshape_info
-{
-    uint64_t graph_id;    /**< the graph id to be searched */
-    uint32_t ds_idx;      /**< the dynamic shape index */
-    bool  max_threshhold; /**< true: for max shape, false: for min shape */
-    uint32_t *ds_data;    /**< the dynamic shape information of inquired */
+typedef struct aipu_dynshape_info {
+  uint64_t graph_id;   /**< the graph id to be searched */
+  uint32_t ds_idx;     /**< the dynamic shape index */
+  bool max_threshhold; /**< true: for max shape, false: for min shape */
+  uint32_t *ds_data;   /**< the dynamic shape information of inquired */
 } aipu_dynshape_info_t;
 
 /**
- * @struct aipu_dynshape_param
+ * @struct aipu_dynshape_param_t
  *
  * @brief dynamic shape information to be confirgured for one graph.
  *
  * @note 'ds_data' is uint32 array indicates a shape, eg:
  *        N*H*W*C => [u32_N, u32_H, u32_W, u32_C], total 4 words.
  */
-typedef struct aipu_dynshape_item
-{
-    uint32_t ds_idx;      /**< the dynamic shape index */
-    uint32_t *ds_data;    /**< the dynamic shape information of configured */
+typedef struct aipu_dynshape_item {
+  uint32_t ds_idx;   /**< the dynamic shape index */
+  uint32_t *ds_data; /**< the dynamic shape information of configured */
 } aipu_dynshape_item_t;
 
 /**
- * @struct aipu_dynshape_param
+ * @struct aipu_dynshape_param_t
  *
  * @brief dynamic shape information to be confirgured for one graph.
  *
- * @note input_shape_cnt can be less than input tensors number of graph, but you are suggested to providing
- *       full input shapes. Otherwise, not provided shape will be set as minimum shape which is same with building time
+ * @note input_shape_cnt can be less than input tensors number of graph, but you
+ * are suggested to providing full input shapes. Otherwise, not provided shape
+ * will be set as minimum shape which is same with building time
  */
-typedef struct aipu_dynshape_param
-{
-    uint32_t input_shape_cnt; /**< input shape counter provided */
-    aipu_dynshape_item_t *shape_items; /**< configured input shape info */
+typedef struct aipu_dynshape_param {
+  uint32_t input_shape_cnt;          /**< input shape counter provided */
+  aipu_dynshape_item_t *shape_items; /**< configured input shape info */
 } aipu_dynshape_param_t;
 
 typedef enum {
-    AIPU_JOB_PART0 = 0x0,
-    AIPU_JOB_PART1 = 0x1,
-    AIPU_JOB_PART2 = 0x2,
-    AIPU_JOB_PART3 = 0x3,
+  AIPU_JOB_PART0 = 0x0,
+  AIPU_JOB_PART1 = 0x1,
+  AIPU_JOB_PART2 = 0x2,
+  AIPU_JOB_PART3 = 0x3,
 } aipu_job_part_t;
 
 typedef enum {
-    AIPU_JOB_QOS_SLOW = 0x0,
-    AIPU_JOB_QOS_HIGH = 0x1
+  AIPU_JOB_QOS_SLOW = 0x0,
+  AIPU_JOB_QOS_HIGH = 0x1
 } aipu_job_qos_t;
 
 typedef enum {
-    AIPU_MEM_REGION_DEFAULT = 0,
-    AIPU_MEM_REGION_SRAM    = 1,
-    AIPU_MEM_REGION_DTCM    = 2
+  AIPU_MEM_REGION_DEFAULT = 0, /**< DDR */
+  AIPU_MEM_REGION_SRAM = 1,    /**< On-Chip Memory */
+  AIPU_MEM_REGION_DTCM = 2,    /**< Data Tightly Couped Memory, only for v2 */
 } aipu_mem_region_t;
 
 /**
@@ -432,35 +476,36 @@ typedef enum {
  * @brief support some configuration done in loading graph stage.
  *
  * @note wt_mem_region
- *       if config weight buffer region for aipu v1/v2, just ignore partition_id & qos_level,
- *       set them as 0 and only set fm_mem_region field.
- *       the buffer is allocated successfully only if there's enough space in
- *       region marked by `fm_mem_region`.
+ *       if config weight buffer region for aipu v1/v2, just ignore partition_id
+ * & qos_level, set them as 0 and only set fm_mem_region field. the buffer is
+ * allocated successfully only if there's enough space in region marked by
+ * `fm_mem_region`.
  *
- *       usually it only needs to set `fm_mem_region` in struct aipu_create_job_cfg to
- *       control feature map buffer allocated from which memory region.
- *       if it's sure that the region's free space is enough large, you can set
- *       `wt_mem_region` to try to allocate buffer from it. if it fail to allocate
- *       buffer from marked region, it will try according to region order: DTCM->SRAM->DDR.
+ *       usually it only needs to set `fm_mem_region` in struct
+ * aipu_create_job_cfg to control feature map buffer allocated from which memory
+ * region. if it's sure that the region's free space is enough large, you can
+ * set `wt_mem_region` to try to allocate buffer from it. if it fail to allocate
+ *       buffer from marked region, it will try according to region order:
+ * DTCM->SRAM->DDR.
  *
- *       if it hopes to allcate weight buffer from SRAM, it has to confirm the SRAM range locates in
- *       ASID1 address scope.
+ *       if it hopes to allcate weight buffer from SRAM, it has to confirm the
+ * SRAM range locates in ASID1 address scope.
  *
  * @note wt_idxes
- *       the indexes of weight tensors, those tensor buffers firstly try to be allocated from
- *       region specified in 'wt_mem_region'.
+ *       the indexes of weight tensors, those tensor buffers firstly try to be
+ * allocated from region specified in 'wt_mem_region'.
  */
 typedef struct aipu_load_graph_cfg {
-    union {
-        uint32_t misc = 0;
-        struct {
-            uint8_t wt_mem_region:4; /**< default 0, weight buffer memory region */
-        };
+  union {
+    uint32_t misc = 0;
+    struct {
+      uint8_t wt_mem_region : 4; /**< default 0, weight buffer memory region */
     };
+  };
 
-    int32_t *wt_idxes;      /**< specify weights allocated from 'wt_mem_region' */
-    int32_t wt_idxes_cnt;   /**< the emement number in wt_idxes */
-    const char *extra_weight_path;/**< the extra weight files path */
+  int32_t *wt_idxes;    /**< specify weights allocated from 'wt_mem_region' */
+  int32_t wt_idxes_cnt; /**< the emement number in wt_idxes */
+  const char *extra_weight_path; /**< the extra weight files path */
 } aipu_load_graph_cfg_t;
 
 /**
@@ -469,139 +514,153 @@ typedef struct aipu_load_graph_cfg {
  * @brief config job's partition, qos(priority), feature map
  *        and weight buffer region on creating a job.
  * @note fm_mem_region
- *       if config feature buffer region for aipu v1/v2, just ignore partition_id & qos_level,
- *       set them as 0 and only set fm_mem_region field.
- *       the buffer is allocated successfully only if there's enough space in
- *       region marked by `fm_mem_region`.
+ *       if config feature buffer region for aipu v1/v2, just ignore
+ * partition_id & qos_level, set them as 0 and only set fm_mem_region field. the
+ * buffer is allocated successfully only if there's enough space in region
+ * marked by `fm_mem_region`.
  *
  * @note fm_idxes
- *       the indexes of feature map tensors, those tensor buffers will firstly try to be allocated from
- *       region specified in 'fm_mem_region'.
+ *       the indexes of feature map tensors, those tensor buffers will firstly
+ * try to be allocated from region specified in 'fm_mem_region'.
  *
  *
  * @note dbg_dispatch and dbg_core_id
- *       it can dispatch job to some core for debug. it needs not to set them in normal cases.
+ *       it can dispatch job to some core for debug. it needs not to set them in
+ * normal cases.
  */
 typedef struct aipu_create_job_cfg {
-    union {
-        uint32_t misc = 0;
-        struct {
-            uint8_t partition_id:4;  /**< defalut 0, in partition-0, only for aipu v3 */
-            uint8_t dbg_dispatch:1;  /**< debug dispatch flag, set 1 to indicate specify job
-                                          to debug core to run */
-            uint8_t dbg_core_id:3;   /**< specify debug core id, [0, max_core_id in cluster] */
-            uint8_t qos_level:4;     /**< defalut 0, low priority, only for aipu v3 */
-            uint8_t fm_mem_region:4; /**< default 0, feature map buffer memory region */
-        };
+  union {
+    uint32_t misc = 0;
+    struct {
+      uint8_t
+          partition_id : 4; /**< defalut 0, in partition-0, only for aipu v3 */
+      uint8_t dbg_dispatch : 1; /**< debug dispatch flag, set 1 to indicate
+                                   specify job to debug core to run */
+      uint8_t dbg_core_id : 3;  /**< specify debug core id, [0, max_core_id in
+                                   cluster] */
+      uint8_t qos_level : 4; /**< defalut 0, low priority, only for aipu v3 */
+      uint8_t
+          fm_mem_region : 4; /**< default 0, feature map buffer memory region */
     };
+  };
 
-    int32_t *fm_idxes;      /**< specify feature maps allocated from 'fm_mem_region' */
-    int32_t fm_idxes_cnt;   /**< the emement number in fm_idxes */
+  int32_t *fm_idxes; /**< specify feature maps allocated from 'fm_mem_region' */
+  int32_t fm_idxes_cnt; /**< the emement number in fm_idxes */
 
-    aipu_dynshape_param_t *dynshape; /**< dynamic shape parameter */
+  aipu_dynshape_param_t *dynshape; /**< dynamic shape parameter */
 } aipu_create_job_cfg_t;
 
 /**
- * @brief ioctl commands to operate shared tensor buffer for KMD
+ * @brief ioctl commands for scattered operations
+ *
+ * @note it should be named `AIPU_UMD_IOCTL_xx`
  */
 typedef enum {
-    AIPU_IOCTL_SET_PROFILE = 255,
-    AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION,
-    AIPU_IOCTL_GET_DS_NUM,
-    AIPU_IOCTL_GET_DS_DIM_NUM,
-    AIPU_IOCTL_GET_DS_INFO,
-    AIPU_IOCTL_IS_DYNAMIC_SHAPE,
-    AIPU_IOCTL_ALLOC_SHARE_BUF,
-    AIPU_IOCTL_FREE_SHARE_BUF,
-    AIPU_IOCTL_ALLOC_DMABUF,
-    AIPU_IOCTL_FREE_DMABUF,
-    AIPU_IOCTL_WRITE_DMABUF,
-    AIPU_IOCTL_READ_DMABUF,
-    AIPU_IOCTL_ATTACH_DMABUF,
-    AIPU_IOCTL_DETACH_DMABUF,
-    AIPU_IOCTL_GET_VERSION
+  AIPU_IOCTL_SET_PROFILE = 255,
+  AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION,
+  AIPU_IOCTL_GET_DS_NUM,
+  AIPU_IOCTL_GET_DS_DIM_NUM,
+  AIPU_IOCTL_GET_DS_INFO,
+  AIPU_IOCTL_ALLOC_SHARE_BUF,
+  AIPU_IOCTL_FREE_SHARE_BUF,
+
+  /* map to KMD's ioctl */
+  AIPU_IOCTL_ALLOC_DMABUF,
+  AIPU_IOCTL_FREE_DMABUF,
+  AIPU_IOCTL_GET_DMABUF_INFO,
+  AIPU_IOCTL_WRITE_DMABUF,
+  AIPU_IOCTL_READ_DMABUF,
+  AIPU_IOCTL_ATTACH_DMABUF,
+  AIPU_IOCTL_DETACH_DMABUF,
+  AIPU_IOCTL_GET_VERSION,
+  AIPU_IOCTL_ABORT_CMDPOOL,
+  AIPU_IOCTL_ENABLE_TICKCOUNTER,
+  AIPU_IOCTL_DISABLE_TICKCOUNTER,
 } aipu_ioctl_cmd_t;
 
 /**
  * @brief This aipu_status_t enumeration captures the result of any API function
  *        that has been executed. Success is represented by AIPU_STATUS_SUCCESS
- *        which has a value of zero. Error statuses are assigned positive integers
- *        and their identifiers start with the AIPU_STATUS_ERROR prefix.
+ *        which has a value of zero. Error statuses are assigned positive
+ * integers and their identifiers start with the AIPU_STATUS_ERROR prefix.
  */
 typedef enum {
-    /* AIPU driver runtime error code */
-    AIPU_STATUS_SUCCESS                    = 0x0,
-    AIPU_STATUS_ERROR_NULL_PTR             = 0x1,
-    AIPU_STATUS_ERROR_INVALID_CTX          = 0x2,
-    AIPU_STATUS_ERROR_OPEN_DEV_FAIL        = 0x3,
-    AIPU_STATUS_ERROR_DEV_ABNORMAL         = 0x4,
-    AIPU_STATUS_ERROR_DEINIT_FAIL          = 0x5,
-    AIPU_STATUS_ERROR_INVALID_CONFIG       = 0x6,
-    AIPU_STATUS_ERROR_UNKNOWN_BIN          = 0x7,
-    AIPU_STATUS_ERROR_GVERSION_UNSUPPORTED = 0x8,
-    AIPU_STATUS_ERROR_INVALID_GBIN         = 0x9,
-    AIPU_STATUS_ERROR_TARGET_NOT_FOUND     = 0xA,
-    AIPU_STATUS_ERROR_INVALID_GRAPH_ID     = 0xB,
-    AIPU_STATUS_ERROR_OPEN_FILE_FAIL       = 0xC,
-    AIPU_STATUS_ERROR_MAP_FILE_FAIL        = 0xD,
-    AIPU_STATUS_ERROR_READ_FILE_FAIL       = 0xE,
-    AIPU_STATUS_ERROR_WRITE_FILE_FAIL      = 0xF,
-    AIPU_STATUS_ERROR_INVALID_JOB_ID       = 0x10,
-    AIPU_STATUS_ERROR_JOB_EXCEPTION        = 0x11,
-    AIPU_STATUS_ERROR_JOB_TIMEOUT          = 0x12,
-    AIPU_STATUS_ERROR_OP_NOT_SUPPORTED     = 0x13,
-    AIPU_STATUS_ERROR_INVALID_OP           = 0x14,
-    AIPU_STATUS_ERROR_INVALID_SIZE         = 0x15,
-    AIPU_STATUS_ERROR_BUF_ALLOC_FAIL       = 0x16,
-    AIPU_STATUS_ERROR_BUF_FREE_FAIL        = 0x17,
-    AIPU_STATUS_ERROR_INVALID_CORE_ID      = 0x18,
-    AIPU_STATUS_ERROR_RESERVE_SRAM_FAIL    = 0x19,
-    AIPU_STATUS_ERROR_INVALID_TENSOR_ID    = 0x1A,
-    AIPU_STATUS_ERROR_INVALID_CLUSTER_ID   = 0x1B,
-    AIPU_STATUS_ERROR_INVALID_PARTITION_ID = 0x1C,
-    AIPU_STATUS_ERROR_PRINTF_FAIL          = 0x1D,
-    AIPU_STATUS_ERROR_INVALID_TENSOR_TYPE  = 0x1E,
-    AIPU_STATUS_ERROR_INVALID_GM           = 0x1F,
-    AIPU_STATUS_ERROR_INVALID_SEGMMU       = 0x20,
-    AIPU_STATUS_ERROR_INVALID_QOS          = 0x21,
-    AIPU_STATUS_ERROR_INVALID_TENSOR_CNT   = 0x22,
-    AIPU_STATUS_ERROR_TIMEOUT              = 0x23,
-    AIPU_STATUS_ERROR_NO_BATCH_QUEUE       = 0x24,
-    AIPU_STATUS_ERROR_MARK_SHARED_TENSOR   = 0x25,
-    AIPU_STATUS_ERROR_SET_SHARED_TENSOR    = 0x26,
-    AIPU_STATUS_ERROR_DMABUF_SHARED_IO     = 0x27,
-    AIPU_STATUS_ERROR_GET_SHAPE_FAILED     = 0x28,
-    AIPU_STATUS_ERROR_SET_SHAPE_FAILED     = 0x29,
-    AIPU_STATUS_ERROR_NOT_CONFIG_SHAPE     = 0x30,
-    AIPU_STATUS_ERROR_UNMATCH_OUT_SHAPE    = 0x31,
-    AIPU_STATUS_ERROR_ZERO_TENSOR_SIZE     = 0x32,
-    AIPU_STATUS_ERROR_ALLOC_GRIP_ID        = 0x33,
-    AIPU_STATUS_ERROR_ALLOC_GROUP_ID       = 0x34,
-    AIPU_STATUS_MAX                        = 0x35,
-    /* AIPU layer library runtime error code */
-    AIPU_STATUS_ERROR_UNKNOWN_ERROR        = 0x200,
-    AIPU_STATUS_ERROR_KEYBOARD_INTERRUPT   = 0x300,
-    AIPU_STATUS_ERROR_SYSTEM_ERR           = 0x301,
-    AIPU_STATUS_ERROR_OUT_OF_SPEC          = 0x380,
-    AIPU_STATUS_ERROR_OUT_OF_AIFF_SPEC     = 0x381,
-    AIPU_STATUS_ERROR_OUT_OF_TPC_SPEC      = 0x382,
-    AIPU_STATUS_ERROR_OUT_OF_DMA_SPEC      = 0x383,
-    AIPU_STATUS_ERROR_OUT_OF_MEM_RANGE     = 0x400,
-    AIPU_STATUS_ERROR_OUT_OF_SRAM_RANGE    = 0x401,
-    AIPU_STATUS_ERROR_OUT_OF_LSRAM0_RANGE  = 0x402,
-    AIPU_STATUS_ERROR_OUT_OF_LSRAM1_RANGE  = 0x403,
-    AIPU_STATUS_ERROR_OUT_OF_LSRAM_RANGE   = 0x404,
-    AIPU_STATUS_ERROR_OUT_OF_GSRAM0_RANGE  = 0x405,
-    AIPU_STATUS_ERROR_OUT_OF_GSRAM1_RANGE  = 0x406,
-    AIPU_STATUS_ERROR_OUT_OF_GSRAM_RANGE   = 0x407,
-    AIPU_STATUS_ERROR_ARITHMETIC_ERR       = 0x480,
-    AIPU_STATUS_ERROR_FLOAT_POINT_ERR      = 0x481,
-    AIPU_STATUS_ERROR_UNDERFLOW_ERR        = 0x482,
-    AIPU_STATUS_ERROR_OVERFLOW_ERR         = 0x483,
-    AIPU_STATUS_ERROR_NOT_A_NUMBER_ERR     = 0x484,
-    AIPU_STATUS_ERROR_INFINITY_ERR         = 0x485,
-    AIPU_STATUS_ERROR_STRING_LENGTH_ERR    = 0x486,
-    AIPU_STATUS_ERROR_ZERO_DIVISION_ERR    = 0x487,
+  /* AIPU driver runtime error code */
+  AIPU_STATUS_SUCCESS = 0x0,
+  AIPU_STATUS_ERROR_NULL_PTR = 0x1,
+  AIPU_STATUS_ERROR_INVALID_CTX = 0x2,
+  AIPU_STATUS_ERROR_OPEN_DEV_FAIL = 0x3,
+  AIPU_STATUS_ERROR_DEV_ABNORMAL = 0x4,
+  AIPU_STATUS_ERROR_DEINIT_FAIL = 0x5,
+  AIPU_STATUS_ERROR_INVALID_CONFIG = 0x6,
+  AIPU_STATUS_ERROR_UNKNOWN_BIN = 0x7,
+  AIPU_STATUS_ERROR_GVERSION_UNSUPPORTED = 0x8,
+  AIPU_STATUS_ERROR_INVALID_GBIN = 0x9,
+  AIPU_STATUS_ERROR_TARGET_NOT_FOUND = 0xA,
+  AIPU_STATUS_ERROR_INVALID_GRAPH_ID = 0xB,
+  AIPU_STATUS_ERROR_OPEN_FILE_FAIL = 0xC,
+  AIPU_STATUS_ERROR_MAP_FILE_FAIL = 0xD,
+  AIPU_STATUS_ERROR_READ_FILE_FAIL = 0xE,
+  AIPU_STATUS_ERROR_WRITE_FILE_FAIL = 0xF,
+  AIPU_STATUS_ERROR_INVALID_JOB_ID = 0x10,
+  AIPU_STATUS_ERROR_JOB_EXCEPTION = 0x11,
+  AIPU_STATUS_ERROR_JOB_TIMEOUT = 0x12,
+  AIPU_STATUS_ERROR_OP_NOT_SUPPORTED = 0x13,
+  AIPU_STATUS_ERROR_INVALID_OP = 0x14,
+  AIPU_STATUS_ERROR_INVALID_SIZE = 0x15,
+  AIPU_STATUS_ERROR_BUF_ALLOC_FAIL = 0x16,
+  AIPU_STATUS_ERROR_BUF_FREE_FAIL = 0x17,
+  AIPU_STATUS_ERROR_INVALID_CORE_ID = 0x18,
+  AIPU_STATUS_ERROR_RESERVE_SRAM_FAIL = 0x19,
+  AIPU_STATUS_ERROR_INVALID_TENSOR_ID = 0x1A,
+  AIPU_STATUS_ERROR_INVALID_CLUSTER_ID = 0x1B,
+  AIPU_STATUS_ERROR_INVALID_PARTITION_ID = 0x1C,
+  AIPU_STATUS_ERROR_PRINTF_FAIL = 0x1D,
+  AIPU_STATUS_ERROR_INVALID_TENSOR_TYPE = 0x1E,
+  AIPU_STATUS_ERROR_INVALID_GM = 0x1F,
+  AIPU_STATUS_ERROR_INVALID_SEGMMU = 0x20,
+  AIPU_STATUS_ERROR_INVALID_QOS = 0x21,
+  AIPU_STATUS_ERROR_INVALID_TENSOR_CNT = 0x22,
+  AIPU_STATUS_ERROR_TIMEOUT = 0x23,
+  AIPU_STATUS_ERROR_NO_BATCH_QUEUE = 0x24,
+  AIPU_STATUS_ERROR_MARK_SHARED_TENSOR = 0x25,
+  AIPU_STATUS_ERROR_SET_SHARED_TENSOR = 0x26,
+  AIPU_STATUS_ERROR_DMABUF_SHARED_IO = 0x27,
+  AIPU_STATUS_ERROR_GET_SHAPE_FAILED = 0x28,
+  AIPU_STATUS_ERROR_SET_SHAPE_FAILED = 0x29,
+  AIPU_STATUS_ERROR_NOT_CONFIG_SHAPE = 0x30,
+  AIPU_STATUS_ERROR_UNMATCH_OUT_SHAPE = 0x31,
+  AIPU_STATUS_ERROR_ZERO_TENSOR_SIZE = 0x32,
+  AIPU_STATUS_ERROR_ALLOC_GRIP_ID = 0x33,
+  AIPU_STATUS_ERROR_ALLOC_GROUP_ID = 0x34,
+  AIPU_STATUS_ERROR_NOT_FOUND_IN_HASHTABLE = 0x35,
+  AIPU_STATUS_ERROR_INVALID_COREDUMP = 0x36,
+  AIPU_STATUS_ERROR_JOB_DISPATCH_FAIL = 0x37,
+  AIPU_STATUS_MAX = 0x38,
+  /* AIPU layer library runtime error code */
+  AIPU_STATUS_ERROR_UNKNOWN_ERROR = 0x200,
+  AIPU_STATUS_ERROR_KEYBOARD_INTERRUPT = 0x300,
+  AIPU_STATUS_ERROR_SYSTEM_ERR = 0x301,
+  AIPU_STATUS_ERROR_OUT_OF_SPEC = 0x380,
+  AIPU_STATUS_ERROR_OUT_OF_AIFF_SPEC = 0x381,
+  AIPU_STATUS_ERROR_OUT_OF_TPC_SPEC = 0x382,
+  AIPU_STATUS_ERROR_OUT_OF_DMA_SPEC = 0x383,
+  AIPU_STATUS_ERROR_OUT_OF_MEM_RANGE = 0x400,
+  AIPU_STATUS_ERROR_OUT_OF_SRAM_RANGE = 0x401,
+  AIPU_STATUS_ERROR_OUT_OF_LSRAM0_RANGE = 0x402,
+  AIPU_STATUS_ERROR_OUT_OF_LSRAM1_RANGE = 0x403,
+  AIPU_STATUS_ERROR_OUT_OF_LSRAM_RANGE = 0x404,
+  AIPU_STATUS_ERROR_OUT_OF_GSRAM0_RANGE = 0x405,
+  AIPU_STATUS_ERROR_OUT_OF_GSRAM1_RANGE = 0x406,
+  AIPU_STATUS_ERROR_OUT_OF_GSRAM_RANGE = 0x407,
+  AIPU_STATUS_ERROR_ARITHMETIC_ERR = 0x480,
+  AIPU_STATUS_ERROR_FLOAT_POINT_ERR = 0x481,
+  AIPU_STATUS_ERROR_UNDERFLOW_ERR = 0x482,
+  AIPU_STATUS_ERROR_OVERFLOW_ERR = 0x483,
+  AIPU_STATUS_ERROR_NOT_A_NUMBER_ERR = 0x484,
+  AIPU_STATUS_ERROR_INFINITY_ERR = 0x485,
+  AIPU_STATUS_ERROR_STRING_LENGTH_ERR = 0x486,
+  AIPU_STATUS_ERROR_ZERO_DIVISION_ERR = 0x487,
 } aipu_status_t;
 
 #ifdef __cplusplus
@@ -611,680 +670,661 @@ extern "C" {
 /**
  * @brief This API is used to initialize AIPU UMD context
  *
- * @param[out] ctx Pointer to a memory location allocated by application where UMD stores the
- *                     opaque context handle struct
+ * @param[out] ctx Pointer to a memory location allocated by application where
+ * UMD stores the opaque context handle struct
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_OPEN_DEV_FAIL
- * @retval AIPU_STATUS_ERROR_DEV_ABNORMAL
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
- * @note Before invoking any other UMD API calls, any UMD application must initialize a context first.
+ * @note Before invoking any other UMD API calls, any UMD application must
+ * initialize a context first.
  */
-aipu_status_t aipu_init_context(aipu_ctx_handle_t** ctx);
+aipu_status_t aipu_init_context(aipu_ctx_handle_t **ctx);
 
 /**
  * @brief This API is used to destroy AIPU UMD context
  *
- * @param[in] ctx Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx Pointer to a context handle struct returned by
+ * aipu_init_context
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_DEINIT_FAIL
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_deinit_context(const aipu_ctx_handle_t* ctx);
+aipu_status_t aipu_deinit_context(const aipu_ctx_handle_t *ctx);
 
 /**
- * @brief This API is used to track what happens when an error code is returned by a UMD API.
+ * @brief This API is used to track what happens when an error code is returned
+ * by a UMD API.
  *
- * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
+ * @param[in]  ctx    Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in]  status Status returned by UMD standard API
- * @param[out] msg    Pointer to a memory location allocated by application where UMD stores the
- *                        message string pointer
+ * @param[out] msg    Pointer to a memory location allocated by application
+ * where UMD stores the message string pointer
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_get_error_message(const aipu_ctx_handle_t* ctx, aipu_status_t status, const char** msg);
+aipu_status_t aipu_get_error_message(const aipu_ctx_handle_t *ctx,
+                                     aipu_status_t status, const char **msg);
 
 /**
  * @brief This API is used to configure a specified global option.
  *
- * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
+ * @param[in]  ctx    Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in]  types  Configuration type(s)
- * @param[out] config Pointer to a memory location allocated by application where application stores the
- *                        configuration data struct
+ * @param[out] config Pointer to a memory location allocated by application
+ * where application stores the configuration data struct
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_CONFIG
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
- * @note accepted types/config: AIPU_CONFIG_TYPE_SIMULATION/aipu_global_config_simulation_t
+ * @note accepted types/config:
+ * AIPU_CONFIG_TYPE_SIMULATION/aipu_global_config_simulation_t
  * @note accepted types/config: AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK/none
  * @note accepted types/config: AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK/none
  * @note accepted types/config: AIPU_CONFIG_TYPE_HW
  */
-aipu_status_t aipu_config_global(const aipu_ctx_handle_t* ctx, uint64_t types, void* config);
+aipu_status_t aipu_config_global(const aipu_ctx_handle_t *ctx, uint64_t types,
+                                 void *config);
 
 /**
- * @brief This API loads an offline built AIPU executable graph binary from file system.
+ * @brief This API loads an offline built AIPU executable graph binary from file
+ * system.
  *
- * @param[in]  ctx   Pointer to a context handle struct returned by aipu_init_context
+ * @param[in]  ctx   Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in]  garph Executable graph binary file path
- * @param[out] id    Pointer to a memory location allocated by application where UMD stores the
- *                       graph ID
+ * @param[out] id    Pointer to a memory location allocated by application where
+ * UMD stores the graph ID
  * @param[in]  config Pointer to specific configuration struct
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_OPEN_FILE_FAIL
- * @retval AIPU_STATUS_ERROR_MAP_FILE_FAIL
- * @retval AIPU_STATUS_ERROR_UNKNOWN_BIN
- * @retval AIPU_STATUS_ERROR_GVERSION_UNSUPPORTED
- * @retval AIPU_STATUS_ERROR_INVALID_GBIN
- * @retval AIPU_STATUS_ERROR_TARGET_NOT_FOUND
- * @retval AIPU_STATUS_ERROR_BUF_ALLOC_FAIL
- * @retval AIPU_STATUS_ERROR_RESERVE_SRAM_FAIL
- * @retval AIPU_STATUS_ERROR_INVALID_GM
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_load_graph(const aipu_ctx_handle_t* ctx, const char* graph,
-    uint64_t* id, aipu_load_graph_cfg_t *config = nullptr);
+aipu_status_t aipu_load_graph(const aipu_ctx_handle_t *ctx, const char *graph,
+                              uint64_t *id,
+                              aipu_load_graph_cfg_t *config = nullptr);
 
 /**
- * @brief This API loads a graph with the form of AIPU executable graph binary array.
+ * @brief This API loads a graph with the form of AIPU executable graph binary
+ * array.
  *
- * @param[in]  ctx   Pointer to a context handle struct returned by aipu_init_context
- * @param[in]  graph_buf The start address of buffer which stores graph binary data
+ * @param[in]  ctx   Pointer to a context handle struct returned by
+ * aipu_init_context
+ * @param[in]  graph_buf The start address of buffer which stores graph binary
+ * data
  * @param[in]  graph_size The byte size of graph binary data in 'graph_buf'
- * @param[out] id    Pointer to a memory location allocated by application where UMD stores the
- *                       graph ID
+ * @param[out] id    Pointer to a memory location allocated by application where
+ * UMD stores the graph ID
  * @param[in]  config Pointer to specific configuration struct
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_SIZE
- * @retval AIPU_STATUS_ERROR_OPEN_FILE_FAIL
- * @retval AIPU_STATUS_ERROR_MAP_FILE_FAIL
- * @retval AIPU_STATUS_ERROR_UNKNOWN_BIN
- * @retval AIPU_STATUS_ERROR_GVERSION_UNSUPPORTED
- * @retval AIPU_STATUS_ERROR_INVALID_GBIN
- * @retval AIPU_STATUS_ERROR_TARGET_NOT_FOUND
- * @retval AIPU_STATUS_ERROR_BUF_ALLOC_FAIL
- * @retval AIPU_STATUS_ERROR_RESERVE_SRAM_FAIL
- * @retval AIPU_STATUS_ERROR_INVALID_GM
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_load_graph_helper(const aipu_ctx_handle_t* ctx, const char* graph_buf,
-    uint32_t graph_size, uint64_t* id, aipu_load_graph_cfg_t *config = nullptr);
+aipu_status_t aipu_load_graph_helper(const aipu_ctx_handle_t *ctx,
+                                     const char *graph_buf, uint32_t graph_size,
+                                     uint64_t *id,
+                                     aipu_load_graph_cfg_t *config = nullptr);
+
+/**
+ * @brief This API loads an offline built and share weight AIPU binary from file
+ * system.
+ *
+ * @param[in]  ctx    Pointer to a context handle struct returned by
+ * aipu_init_context
+ * @param[in]  share_weight_graph File path of share weight file
+ * @param[out] ids    Pointer to returned ids by driver, and length is @param
+ * id_cnt return by driver
+ * @param[out] id_cnt Num of ids returned by driver
+ * @note Use 'aipu_unload_graph' to unload share weight graph one by one
+ */
+aipu_status_t aipu_load_share_weight_graph(const aipu_ctx_handle_t *ctx,
+                                           const char *share_weight_graph,
+                                           uint64_t **ids, uint32_t *id_cnt);
 
 /**
  * @brief This API is used to unload a loaded graph
  *
- * @param[in] ctx   Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx   Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in] graph Graph ID returned by aipu_load_graph
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_unload_graph(const aipu_ctx_handle_t* ctx, uint64_t graph);
+aipu_status_t aipu_unload_graph(const aipu_ctx_handle_t *ctx, uint64_t graph);
 
 /**
- * @brief This API is used to create a new job for a graph with provided buffer handle.
+ * @brief This API is used to create a new job for a graph with provided buffer
+ * handle.
  *
- * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
+ * @param[in]  ctx    Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in]  graph  Graph ID returned by aipu_load_graph
- * @param[out] job    Pointer to a memory location allocated by application where UMD stores
- *                        the new created job ID
- * @param[in]  config Specify job's partition id and QoS level, only for aipu v3.
- *                        specify memory region for feature map and weight buffer
+ * @param[out] job    Pointer to a memory location allocated by application
+ * where UMD stores the new created job ID
+ * @param[in]  config Specify job's partition id and QoS level, only for aipu
+ * v3. specify memory region for feature map and weight buffer
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
- * @retval AIPU_STATUS_ERROR_BUF_ALLOC_FAIL
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
- * @note The application can create one or multiple jobs by calling this API one or multiple times.
- * @note The application can schedule one created job one or multiple times by calling
- *           aipu_finish_job/aipu_flush_job, and at last clean it by calling aipu_clean_job.
- * @note Through 'config' parameter, the feature map and weight buffer can be allocated from
- *           specific memory regions. The allocate order is: DTCM->SRAM->DDR.
- *           For example: if if intend to allocate feature map buffer from DTCM, it will try to
- *           allocate from DTCM, if there's no enough free space, it tries to check SRAM, then
- *           DDR until fail.
+ * @note The application can create one or multiple jobs by calling this API one
+ * or multiple times.
+ * @note The application can schedule one created job one or multiple times by
+ * calling aipu_finish_job/aipu_flush_job, and at last clean it by calling
+ * aipu_clean_job.
+ * @note Through 'config' parameter, the feature map and weight buffer can be
+ * allocated from specific memory regions. The allocate order is:
+ * DTCM->SRAM->DDR. For example: if if intend to allocate feature map buffer
+ * from DTCM, it will try to allocate from DTCM, if there's no enough free
+ * space, it tries to check SRAM, then DDR until fail.
  */
-aipu_status_t aipu_create_job(const aipu_ctx_handle_t* ctx, uint64_t graph,
-    uint64_t* job, aipu_create_job_cfg_t *config = nullptr);
+aipu_status_t aipu_create_job(const aipu_ctx_handle_t *ctx, uint64_t graph,
+                              uint64_t *job,
+                              aipu_create_job_cfg_t *config = nullptr);
 
 /**
  * @brief This API is used to flush a new computation job onto AIPU (blocking)
  *
- * @param[in] ctx      Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx      Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in] job      Job ID returned by aipu_create_job
- * @param[in] time_out Time out (in millisecond) specified by application for this job
- *                     (A timeout of value <= 0 means an infinite timeout.)
+ * @param[in] time_out Time out (in millisecond) specified by application for
+ * this job (A timeout of value <= 0 means an infinite timeout.)
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
- * @retval AIPU_STATUS_ERROR_INVALID_OP
- * @retval AIPU_STATUS_ERROR_JOB_EXCEPTION
- * @retval AIPU_STATUS_ERROR_JOB_TIMEOUT
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_finish_job(const aipu_ctx_handle_t* ctx, uint64_t job, int32_t time_out);
+aipu_status_t aipu_finish_job(const aipu_ctx_handle_t *ctx, uint64_t job,
+                              int32_t time_out);
 
 /**
- * @brief This API is used to flush a new computation job onto AIPU (non-blocking)
+ * @brief This API is used to flush a new computation job onto AIPU
+ * (non-blocking)
  *
- * @param[in] ctx      Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx      Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in] job      Job ID returned by aipu_create_job
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
- * @retval AIPU_STATUS_ERROR_INVALID_OP
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
- * @note A flushed job cannot be flushed again before the previous scheduled one is done.
+ * @note A flushed job cannot be flushed again before the previous scheduled one
+ * is done.
  */
-aipu_status_t aipu_flush_job(const aipu_ctx_handle_t* ctx, uint64_t job,
-    aipu_job_callback_func_t cb_func = nullptr);
+aipu_status_t aipu_flush_job(const aipu_ctx_handle_t *ctx, uint64_t job,
+                             aipu_job_callback_func_t cb_func = nullptr);
 
 /**
- * @brief This API is used to get the execution status of a flushed job (non-blocking)
+ * @brief This API is used to get the execution status of a flushed job
+ * (non-blocking)
  *
- * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
+ * @param[in]  ctx    Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in]  job    Job ID returned by aipu_create_job
- * @param[out] status Pointer to a memory location allocated by the application where UMD stores the job status
- *                    AIPU_JOB_STATUS_DONE: job is normally done
+ * @param[out] status Pointer to a memory location allocated by the application
+ * where UMD stores the job status AIPU_JOB_STATUS_DONE: job is normally done
  *                    AIPU_JOB_STATUS_EXCEPTION: exception occurring on this job
  *                    AIPU_JOB_STATUS_NO_STATUS: job is in handling
  * @param[in]  timeout timeout value(ms) to poll job's status
  *                     timeout > 0: the max polling time window is 'timeout'
- *                     timeout = 0: non-blocking and return job's status immediately.
- *                     timeout = -1: blocking until job is really done or exception.
+ *                     timeout = 0: non-blocking and return job's status
+ * immediately. timeout = -1: blocking until job is really done or exception.
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
- * @retval AIPU_STATUS_ERROR_TIMEOUT
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
- * @note This API should be used by the application after aipu_flush_job successfully returns.
+ * @note This API should be used by the application after aipu_flush_job
+ * successfully returns.
  */
-aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t* ctx, uint64_t job,
-    aipu_job_status_t* status, int32_t timeout = 0);
+aipu_status_t aipu_get_job_status(const aipu_ctx_handle_t *ctx, uint64_t job,
+                                  aipu_job_status_t *status,
+                                  int32_t timeout = 0);
 
 /**
- * @brief This API is used to clean a finished job object scheduled by aipu_finish_job/aipu_flush_job
+ * @brief This API is used to clean a finished job object scheduled by
+ * aipu_finish_job/aipu_flush_job
  *
- * @param[in] ctx Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in] job Job ID returned by aipu_create_job
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_clean_job(const aipu_ctx_handle_t* ctx, uint64_t job);
+aipu_status_t aipu_clean_job(const aipu_ctx_handle_t *ctx, uint64_t job);
 
 /**
  * @brief This API is used to get tensor count of specified type
  *
- * @param[in]  ctx  Pointer to a context handle struct returned by aipu_init_context
- * @param[in]  id   Job ID returned by aipu_create_job, or graph ID returned by aipu_load_graph
+ * @param[in]  ctx  Pointer to a context handle struct returned by
+ * aipu_init_context
+ * @param[in]  id   Job ID returned by aipu_create_job, or graph ID returned by
+ * aipu_load_graph
  * @param[in]  type Tensor type
- * @param[out] cnt  Pointer to a memory location allocated by application where UMD stores the count
+ * @param[out] cnt  Pointer to a memory location allocated by application where
+ * UMD stores the count
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_get_tensor_count(const aipu_ctx_handle_t* ctx, uint64_t id, aipu_tensor_type_t type, uint32_t* cnt);
+aipu_status_t aipu_get_tensor_count(const aipu_ctx_handle_t *ctx, uint64_t id,
+                                    aipu_tensor_type_t type, uint32_t *cnt);
 
 /**
  * @brief This API is used to get tensor's descriptor of specified type
  *
- * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
- * @param[in]  id     Job ID returned by aipu_create_job, or graph ID returned by aipu_load_graph
+ * @param[in]  ctx    Pointer to a context handle struct returned by
+ * aipu_init_context
+ * @param[in]  id     Job ID returned by aipu_create_job, or graph ID returned
+ * by aipu_load_graph
  * @param[in]  type   Tensor type
  * @param[in]  tensor Tensor ID
- * @param[out] desc   Pointer to a memory location allocated by application where UMD stores the tensor descriptor
+ * @param[out] desc   Pointer to a memory location allocated by application
+ * where UMD stores the tensor descriptor
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
- * @retval AIPU_STATUS_ERROR_INVALID_TENSOR_ID
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_get_tensor_descriptor(const aipu_ctx_handle_t* ctx, uint64_t id, aipu_tensor_type_t type,
-    uint32_t tensor, aipu_tensor_desc_t* desc);
+aipu_status_t aipu_get_tensor_descriptor(const aipu_ctx_handle_t *ctx,
+                                         uint64_t id, aipu_tensor_type_t type,
+                                         uint32_t tensor,
+                                         aipu_tensor_desc_t *desc);
 
 /**
  * @brief This API is used to load input tensor data
  *
- * @param[in] ctx    Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx    Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in] job    Job ID returned by aipu_create_job
  * @param[in] tensor Input tensor ID
  * @param[in] data   Data of input tensor
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
- * @retval AIPU_STATUS_ERROR_INVALID_TENSOR_ID
- * @retval AIPU_STATUS_ERROR_INVALID_OP
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_load_tensor(const aipu_ctx_handle_t* ctx, uint64_t job, uint32_t tensor, const void* data);
+aipu_status_t aipu_load_tensor(const aipu_ctx_handle_t *ctx, uint64_t job,
+                               uint32_t tensor, const void *data);
 
 /**
  * @brief This API is used to get tensor data of specified type
  *
- * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
+ * @param[in]  ctx    Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in]  job    Job ID returned by aipu_create_job
  * @param[in]  type   Tensor type
  * @param[in]  tensor Input tensor ID
  * @param[out] data   Data of output tensor
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
- * @retval AIPU_STATUS_ERROR_INVALID_TENSOR_ID
- * @retval AIPU_STATUS_ERROR_INVALID_OP
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_get_tensor(const aipu_ctx_handle_t* ctx, uint64_t job,
-    aipu_tensor_type_t type, uint32_t tensor, void* data);
+aipu_status_t aipu_get_tensor(const aipu_ctx_handle_t *ctx, uint64_t job,
+                              aipu_tensor_type_t type, uint32_t tensor,
+                              void *data);
 
 /**
  * @brief This API is used to configure a specified option of a job.
  *
- * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
+ * @param[in]  ctx    Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in]  job    Job ID returned by aipu_create_job
  * @param[in]  types  Configuration type(s)
- * @param[out] config Pointer to a memory location allocated by application where application stores the
- *                        configuration data struct
+ * @param[out] config Pointer to a memory location allocated by application
+ * where application stores the configuration data struct
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
- * @retval AIPU_STATUS_ERROR_INVALID_CONFIG
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
- * @note accepted types/config: AIPU_JOB_CONFIG_TYPE_DUMP_[*]/aipu_job_config_dump_t
- * @note accepted types/config: AIPU_CONFIG_TYPE_SIMULATION/aipu_job_config_simulation_t
+ * @note accepted types/config:
+ * AIPU_JOB_CONFIG_TYPE_DUMP_[*]/aipu_job_config_dump_t
+ * @note accepted types/config:
+ * AIPU_CONFIG_TYPE_SIMULATION/aipu_job_config_simulation_t
  */
-aipu_status_t aipu_config_job(const aipu_ctx_handle_t* ctx, uint64_t job, uint64_t types, void* config);
+aipu_status_t aipu_config_job(const aipu_ctx_handle_t *ctx, uint64_t job,
+                              uint64_t types, void *config);
 
 /**
  * @brief This API is used to specify a shared buffer as job's io buffer.
  *
- * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
+ * @param[in]  ctx    Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in]  job    Job ID returned by aipu_create_job
- * @param[in]  shared_buf Pointer to shared buffer allcated through dma_buf system
+ * @param[in]  shared_buf Pointer to shared buffer allcated through dma_buf
+ * system
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
- * @retval AIPU_STATUS_ERROR_DMABUF_SHARED_IO
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
- * @note this API is just used on HW
+ * @note this API is only used on HW
+ * @note please set `disable_input_buffer_reuse` and
+ * `disable_output_buffer_reuse` in compiling phase
  */
-aipu_status_t aipu_specify_iobuf(const aipu_ctx_handle_t* ctx, uint64_t job_id,
-    aipu_shared_tensor_info_t *shared_buf);
+aipu_status_t aipu_specify_iobuf(const aipu_ctx_handle_t *ctx, uint64_t job_id,
+                                 aipu_shared_tensor_info_t *shared_buf);
 
 /**
  * @brief This API is used to get AIPU cluster count.
  *
- * @param[in]  ctx Pointer to a context handle struct returned by aipu_init_context
- * @param[out] cnt Pointer to a memory location allocated by application where UMD stores the partition count
+ * @param[in]  ctx Pointer to a context handle struct returned by
+ * aipu_init_context
+ * @param[out] cnt Pointer to a memory location allocated by application where
+ * UMD stores the partition count
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_OP
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_get_partition_count(const aipu_ctx_handle_t* ctx, uint32_t* cnt);
+aipu_status_t aipu_get_partition_count(const aipu_ctx_handle_t *ctx,
+                                       uint32_t *cnt);
 
 /**
  * @brief This API is used to get AIPU cluster count.
  *
- * @param[in]  ctx Pointer to a context handle struct returned by aipu_init_context
+ * @param[in]  ctx Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in]  partition_id Which partition it get cluster count from
- * @param[out] cnt Pointer to a memory location allocated by application where UMD stores the cluster count
+ * @param[out] cnt Pointer to a memory location allocated by application where
+ * UMD stores the cluster count
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_OP
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_get_cluster_count(const aipu_ctx_handle_t* ctx, uint32_t partition_id, uint32_t* cnt);
+aipu_status_t aipu_get_cluster_count(const aipu_ctx_handle_t *ctx,
+                                     uint32_t partition_id, uint32_t *cnt);
 
 /**
  * @brief This API is used to get AIPU core count in a specific cluster.
  *
- * @param[in]  ctx     Pointer to a context handle struct returned by aipu_init_context
+ * @param[in]  ctx     Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in]  partition_id Partition ID
  * @param[in]  cluster Cluster ID
- * @param[out] cnt     Pointer to a memory location allocated by application where UMD stores the core count
+ * @param[out] cnt     Pointer to a memory location allocated by application
+ * where UMD stores the core count
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_OP
- * @retval AIPU_STATUS_ERROR_INVALID_CLUSTER_ID
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
  * @note Cluster ID is numbered within [0, cluster_cnt).
  */
-aipu_status_t aipu_get_core_count(const aipu_ctx_handle_t* ctx, uint32_t partition_id, uint32_t cluster, uint32_t* cnt);
+aipu_status_t aipu_get_core_count(const aipu_ctx_handle_t *ctx,
+                                  uint32_t partition_id, uint32_t cluster,
+                                  uint32_t *cnt);
 
 /**
- * @brief This API is used to get information of an AIPU core for debugger to use
+ * @brief This API is used to get information of an AIPU core for debugger to
+ use
  *
- * @param[in]  ctx     Pointer to a context handle struct returned by AIPU_init_ctx
+ * @param[in]  ctx     Pointer to a context handle struct returned by
+ AIPU_init_ctx
  * @param[in]  id      core_id for aipu v1/v2, partition_id for aipu v3
- * @param[out] info    Pointer to a memory location allocated by application where UMD stores
+ * @param[out] info    Pointer to a memory location allocated by application
+ where UMD stores
  *                     the core information
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_CORE_ID
- * @retval AIPU_STATUS_ERROR_DEV_ABNORMAL
+ * @retval AIPU_STATUS_SUCCESS if successful
 
- * @note The core or partition ID should be less than core count returned by aipu_get_core_count.
+ * @note The core or partition ID should be less than core count returned by
+ aipu_get_core_count.
  */
-aipu_status_t aipu_debugger_get_core_info(const aipu_ctx_handle_t* ctx, uint32_t id, aipu_core_info_t* info);
+aipu_status_t aipu_debugger_get_core_info(const aipu_ctx_handle_t *ctx,
+                                          uint32_t id, aipu_core_info_t *info);
 
 /**
  * @brief This API is used by debugger to get information of a job
  *
- * @param[in]  ctx  Pointer to a context handle struct returned by aipu_init_context
+ * @param[in]  ctx  Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in]  job  Job ID
- * @param[out] info Pointer to a memory location allocated by application where UMD stores
- *                      a pointer to the job information
+ * @param[out] info Pointer to a memory location allocated by application where
+ * UMD stores a pointer to the job information
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_debugger_get_job_info(const aipu_ctx_handle_t* ctx,
-    uint64_t job, aipu_debugger_job_info_t* info);
+aipu_status_t aipu_debugger_get_job_info(const aipu_ctx_handle_t *ctx,
+                                         uint64_t job,
+                                         aipu_debugger_job_info_t *info);
 
 /**
  * @brief This API bind a created job to an idle AIPU core for execution later;
- *        External registers of the specified AIPU core is writen after this API returns,
+ *        External registers of the specified AIPU core is writen after this API
+ returns,
  *        but the start PC register is not triggerred to run.
  *
- * @param[in] ctx     Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx     Pointer to a context handle struct returned by
+ aipu_init_context
  * @param[in] job_id  Job ID returned by aipu_create_job
  * @param[in] id      ID of an AIPU core or ID of a AIPU partition
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_CORE_ID
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
- * @retval AIPU_STATUS_ERROR_INVALID_OP
+ * @retval AIPU_STATUS_SUCCESS if successful
 
- * @note For the same core or job, it should only be bind once, unless the job is done.
- * @note The core or partition to be bind should be in idle state; otherwise UMD returns error code
+ * @note For the same core or job, it should only be bind once, unless the job
+ is done.
+ * @note The core or partition to be bind should be in idle state; otherwise UMD
+ returns error code
  */
-aipu_status_t aipu_debugger_bind_job(const aipu_ctx_handle_t* ctx, uint32_t id, uint64_t job_id);
+aipu_status_t aipu_debugger_bind_job(const aipu_ctx_handle_t *ctx, uint32_t id,
+                                     uint64_t job_id);
 
 /**
  * @brief This API trigger a previously bind job to run on a target AIPU core;
- *        This API is a blocking API which returns after the job execution ends on hardware.
+ *        This API is a blocking API which returns after the job execution ends
+ * on hardware.
  *
- * @param[in] ctx     Pointer to a context handle struct returned by aipu_init_context
- * @param[in] job_id  Job ID returned by aipu_create_job and bind by aipu_debugger_bind_job
+ * @param[in] ctx     Pointer to a context handle struct returned by
+ * aipu_init_context
+ * @param[in] job_id  Job ID returned by aipu_create_job and bind by
+ * aipu_debugger_bind_job
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_JOB_ID
- * @retval AIPU_STATUS_ERROR_JOB_EXCEPTION
- * @retval AIPU_STATUS_ERROR_INVALID_OP
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_debugger_run_job(const aipu_ctx_handle_t* ctx, uint64_t job_id);
+aipu_status_t aipu_debugger_run_job(const aipu_ctx_handle_t *ctx,
+                                    uint64_t job_id);
 
 /**
  * @brief This API allocates a buffer for AIPU debugger's usage
  *
- * @param[in] ctx     Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx     Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in] size    Size of the requested buffer in byte
- * @param[out] va     Pointer to a virtual address stores the base address of the buffer
+ * @param[out] va     Pointer to a virtual address stores the base address of
+ * the buffer
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_SIZE
- * @retval AIPU_STATUS_ERROR_BUF_ALLOC_FAIL
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
- * @note This API shall be used after aipu_load_graph and before calling aipu_debugger_bind_job.
- * @note When this API is used in multi-core scenario, only the core under debugging should
- *       be used to schedule a debugger job (in a single user thread), and other cores should
- *       keep in idle state.
+ * @note This API shall be used after aipu_load_graph and before calling
+ * aipu_debugger_bind_job.
+ * @note When this API is used in multi-core scenario, only the core under
+ * debugging should be used to schedule a debugger job (in a single user
+ * thread), and other cores should keep in idle state.
  */
-aipu_status_t aipu_debugger_malloc(const aipu_ctx_handle_t* ctx, uint32_t size, void** va);
+aipu_status_t aipu_debugger_malloc(const aipu_ctx_handle_t *ctx, uint32_t size,
+                                   void **va);
 
 /**
  * @brief This API frees a buffer allocated by aipu_debugger_malloc
  *
- * @param[in] ctx  Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx  Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in] va   Virtual address to free
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_BUF_FREE_FAIL
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_debugger_free(const aipu_ctx_handle_t* ctx, void* va);
+aipu_status_t aipu_debugger_free(const aipu_ctx_handle_t *ctx, void *va);
 
 /**
- * @brief this API print AIPU execution log information after corresponding job ends
+ * @brief this API print AIPU execution log information after corresponding job
+ * ends
  *
- * @param[in] printf_base   Pointer to a tensor buffer where stores the printf log data
+ * @param[in] printf_base   Pointer to a tensor buffer where stores the printf
+ * log data
  * @param[in] redirect_file File path to store printf data
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_PRINTF_FAIL
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
- * @note Application should get the printf log data via aipu_get_tensor before print it.
- *       Only support aipu v1/v2.
+ * @note Application should get the printf log data via aipu_get_tensor before
+ * print it. Only support aipu v1/v2.
  */
-aipu_status_t aipu_printf(char* printf_base, char* redirect_file);
+aipu_status_t aipu_printf(char *printf_base, char *redirect_file);
 
 /**
  * @brief This API is used to get NPU's ARCH information.
  *
- * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
- * @param[out] target Pointer to a memory location allocated by application where UMD stores
- *                    HW ARCH information
+ * @param[in]  ctx    Pointer to a context handle struct returned by
+ * aipu_init_context
+ * @param[out] target Pointer to a memory location allocated by application
+ * where UMD stores HW ARCH information
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
- * @note Simulator should not use this API, because simulator has specified target at beginning.
+ * @note Simulator should not use this API, because simulator has specified
+ * target at beginning.
  */
 aipu_status_t aipu_get_target(const aipu_ctx_handle_t *ctx, char *target);
 
 /**
  * @brief This API is used to get NPU status.
  *
- * @param[in]  ctx    Pointer to a context handle struct returned by aipu_init_context
- * @param[out] status Pointer to a memory location allocated by application where UMD stores
- *                    NPU status information
+ * @param[in]  ctx    Pointer to a context handle struct returned by
+ * aipu_init_context
+ * @param[out] status Pointer to a memory location allocated by application
+ * where UMD stores NPU status information
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_get_device_status(const aipu_ctx_handle_t* ctx, device_status_t *status);
+aipu_status_t aipu_get_device_status(const aipu_ctx_handle_t *ctx,
+                                     device_status_t *status);
 
 /**
  * @brief This API is used to create a batch queue.
  *
- * @param[in] ctx      Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx      Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in] graph_id Graph id
  * @param[out] queue_id Pointer to store batch queue id
  *
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
- * @note Each thread is subject to call this function to get private batch queue ID.
- *       It isn't allowed to share batch queue ID between threads.
+ * @note Each thread is subject to call this function to get private batch queue
+ * ID. It isn't allowed to share batch queue ID between threads.
  */
-aipu_status_t aipu_create_batch_queue(const aipu_ctx_handle_t *ctx, uint64_t graph_id, uint32_t *queue_id);
+aipu_status_t aipu_create_batch_queue(const aipu_ctx_handle_t *ctx,
+                                      uint64_t graph_id, uint32_t *queue_id);
 
 /**
  * @brief This API is used to clean a specific batch queue.
  *
- * @param[in] ctx      Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx      Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in] graph_id Graph id
  * @param[in] queue_id Pointer to store batch queue id
  *
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
-aipu_status_t aipu_clean_batch_queue(const aipu_ctx_handle_t *ctx, uint64_t graph_id, uint32_t queue_id);
+aipu_status_t aipu_clean_batch_queue(const aipu_ctx_handle_t *ctx,
+                                     uint64_t graph_id, uint32_t queue_id);
 
 /**
- * @brief This API is used to do basic config for batch inference on simulator and HW.
+ * @brief This API is used to do basic config for batch inference on simulator
+ * and HW.
  *
- * @param[in] ctx      Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx      Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in] graph_id Graph id
  * @param[in] queue_id Batch queue id
  * @param[in] types    Dump options for each batch job
  * @param[in] dump_cfg The root path to store dump files of each batch
  *
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
- * @retval AIPU_STATUS_ERROR_NO_BATCH_QUEUE
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
- * @note
- *      For simulation for aipu v1/v2: has to set AIPU_CONFIG_TYPE_SIMULATION.
- *      For dump: set dump options(AIPU_JOB_CONFIG_TYPE_DUMP_TEXT ...)
+ * @note set dump options(AIPU_JOB_CONFIG_TYPE_DUMP_TEXT ...)
  */
-aipu_status_t aipu_config_batch_dump(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
-    uint32_t queue_id, uint64_t types, aipu_job_config_dump_t *dump_cfg);
+aipu_status_t aipu_config_batch_dump(const aipu_ctx_handle_t *ctx,
+                                     uint64_t graph_id, uint32_t queue_id,
+                                     uint64_t types,
+                                     aipu_job_config_dump_t *dump_cfg);
 
 /**
- * @brief This API is used to add a group buffers of one frame inference to batch queue.
+ * @brief This API is used to add a group buffers of one frame inference to
+ * batch queue.
  *
- * @param[in] ctx        Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx        Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in] graph_id   Graph id
  * @param[in] queue_id   Batch queue id
  * @param[in] inputs     Buffer pointers for input tensors
  * @param[in] outputs    Buffer pointers for output tensors
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
- * @retval AIPU_STATUS_ERROR_NO_BATCH_QUEUE
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
 aipu_status_t aipu_add_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
-    uint32_t queue_id, char *inputs[], char *outputs[]);
+                             uint32_t queue_id, char *inputs[],
+                             char *outputs[]);
 
 /**
  * @brief This API is used to run multiple batch inference.
  *
- * @param[in] ctx      Pointer to a context handle struct returned by aipu_init_context
+ * @param[in] ctx      Pointer to a context handle struct returned by
+ * aipu_init_context
  * @param[in] graph_id Graph id
  * @param[in] queue_id Batch queue id
  * @param[in] create_cfg Config for all batches in one queue
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_INVALID_GRAPH_ID
- * @retval AIPU_STATUS_ERROR_NO_BATCH_QUEUE
+ * @retval AIPU_STATUS_SUCCESS if successful
  */
 aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
-    uint32_t queue_id, aipu_create_job_cfg_t *create_cfg);
+                                uint32_t queue_id,
+                                aipu_create_job_cfg_t *create_cfg);
 
 /**
  * @brief This API is used to send specific command to NPU driver.
  *
- * @param[in] ctx Pointer to a context handle struct returned by aipu_init_context
- * @param[in] cmd cmd
+ * @param[in] ctx Pointer to a context handle struct returned by
+ * aipu_init_context
+ * @param[in] cmd command in @note part
  * @param[inout] arg input or output argument according to 'cmd'
  *
- * @retval AIPU_STATUS_SUCCESS
- * @retval AIPU_STATUS_ERROR_NULL_PTR
- * @retval AIPU_STATUS_ERROR_INVALID_CTX
- * @retval AIPU_STATUS_ERROR_DEV_ABNORMAL
+ * @retval AIPU_STATUS_SUCCESS if successful
  *
  * @note support commands currently
- *       AIPU_IOCTL_ALLOC_SHARE_BUF:
- *           request a shared buffer.
- *           arg: { aipu_share_buf_t* }
- *       AIPU_IOCTL_FREE_SHARE_BUF:
- *           free a shared buffer.
- *           arg: { aipu_share_buf_t* }
- *       AIPU_IOCTL_ENABLE_TICK_COUNTER:
- *           enable performance counter, no arg
- *       AIPU_IOCTL_DISABLE_TICK_COUNTER:
- *           disable performance counter, no arg
- *       AIPU_IOCTL_CONFIG_CLUSTERS:
- *           config number of enabled cores in a cluster.
- *           it is used to disable some core's clock to reduce power consumption.
- *           arg: { struct aipu_config_clusters* }
  *       AIPU_IOCTL_SET_PROFILE:
  *           dynamically enable/disable profiling feature of aipu v3 simulation.
- *           arg: {1/0}
- *           1: enable profiling
- *           0: disable profiling
+ *           arg: pointer of int
+ *            - 1: enable profiling
+ *            - 0: disable profiling
+ *       AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION:
+ *           get model binary's build version.
+ *           arg: pointer of struct `aipu_bin_buildversion_t`
+ *       AIPU_IOCTL_GET_DS_NUM:
+ *           get dynamic shape input number of provided graph id (acturally
+ * return all inputs number) arg: pointer of struct `aipu_dynshape_num_t`
+ *       AIPU_IOCTL_GET_DS_DIM_NUM:
+ *           get rank of specified graph id, input idx
+ *           arg: pointer of struct `aipu_dynshape_dim_num_t`
+ *       AIPU_IOCTL_GET_DS_INFO:
+ *           get min/max dimensions of specified graph id, input idx and min/max
+ * flag arg: pointer of struct `aipu_dynshape_info_t`
+ *       AIPU_IOCTL_ALLOC_SHARE_BUF:
+ *           request a shared buffer.
+ *           arg: pointer of struct `aipu_share_buf_t`
+ *       AIPU_IOCTL_FREE_SHARE_BUF:
+ *           free a shared buffer.
+ *           arg: pointer of struct `aipu_share_buf_t`
  *       AIPU_IOCTL_ALLOC_DMABUF
  *           request dma_buf from KMD.
- *           arg: {struct aipu_dma_buf_request* }
- *           aipu_dma_buf_request->bytes: request size (filled by UMD)
- *           aipu_dma_buf_request->fd: fd corresponding to dma_buf (filled by KMD)
+ *           arg: pointer of struct `aipu_dma_buf_req_t`
+ *            - bytes: request size (filled by user)
+ *            - fd: fd corresponding to dma_buf (filled by KMD)
  *       AIPU_IOCTL_FREE_DMABUF
  *           free a dma_buf with its fd.
- *           arg: { dmabuf_fd }
- *       AIPU_IOCTL_WRITE_DMABUF
- *           write a dma_buf allocated via 'AIPU_IOCTL_ALLOC_DMABUF'.
- *           arg: aipu_shared_tensor_info_t* { fd, size, data }
- *       AIPU_IOCTL_READ_DMABUF
- *           read data from a dma_buf allocated via 'AIPU_IOCTL_ALLOC_DMABUF'.
- *           arg: aipu_shared_tensor_info_t* { fd, size, buffer }
- *       IPU_IOCTL_ATTACH_DMABUF
- *           attach a dma_buf's fd exported from other modules.
- *           arg: aipu_dma_buf* { dmabuf_fd }
- *       AIPU_IOACTL_DETACH_DMABUF
+ *           arg: pointer of int which is a dmabuf fd returned by
+ * `AIPU_IOCTL_ALLOC_DMABUF` AIPU_IOCTL_GET_DMABUF_INFO: get dma_buf infomation,
+ * which includes pa and bytes by provide dma_buf fd arg: pointer of struct
+ * `aipu_dma_buf_desc_t` AIPU_IOCTL_WRITE_DMABUF write a existing buffer to the
+ * dma_buf allocated via `AIPU_IOCTL_ALLOC_DMABUF`. arg: pointer of struct
+ * `aipu_dmabuf_op_t` AIPU_IOCTL_READ_DMABUF provide a buffer to read data from
+ * then dma_buf allocated via 'AIPU_IOCTL_ALLOC_DMABUF'. arg: pointer of struct
+ * `aipu_dmabuf_op_t` AIPU_IOCTL_ATTACH_DMABUF attach a dma_buf's fd exported
+ * from other modules. arg: pointer of struct `aipu_dma_buf_desc_t`
+ *       AIPU_IOCTL_DETACH_DMABUF
  *           detatch a dma_buf based on its fd
- *           arg: { dmabuf_fd }
+ *           arg: pointer of int which is dmabuf fd exported from other modules
  *       AIPU_IOCTL_GET_VERSION
  *           get UMD and KMD release version.
- *           arg: { aipu_driver_version_t* }
- *       AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION
- *           get model binary's build version.
- *           arg: { aipu_bin_buildversion_t* }
+ *           arg: pointer of struct `aipu_driver_version_t`
+ *       AIPU_IOCTL_ABORT_CMDPOOL:
+ *           abort hw command pool manually, v3_1 command pool will be destroyed
+ * when all jobs done, then if you try to abort command pool, it will return
+ * fail arg: no AIPU_IOCTL_ENABLE_TICKCOUNTER: enable performance counter arg:
+ * no AIPU_IOCTL_DISABLE_TICKCOUNTER: disable performance counter arg: no
  */
-aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd, void *arg = nullptr);
+aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd,
+                         void *arg = nullptr);
 
 #ifdef __cplusplus
 }

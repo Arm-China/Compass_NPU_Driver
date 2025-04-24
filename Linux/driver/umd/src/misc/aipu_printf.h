@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-
 /**
  * @file  aipu_printf.h
  * @brief AIPU Debug Log print header
@@ -25,8 +24,8 @@
  * buffer header format
  */
 typedef struct {
-    int overwrite_flag;
-    int write_offset;
+  int overwrite_flag;
+  int write_offset;
 } aipu_log_buffer_header_t;
 
 #endif /* _AIPU_PRINTF_H_ */

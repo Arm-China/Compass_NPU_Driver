@@ -27,23 +27,13 @@ else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_V2)
                 $(SRC_DIR)/armchina-npu/zhouyi/v1v2_priv.o
     EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V2
 else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_V3)
-    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v1.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/v2.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/v1v2_priv.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/v3.o \
+    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v3.o \
                 $(SRC_DIR)/armchina-npu/zhouyi/v3_priv.o
-    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V1 \
-                    -DCONFIG_ARMCHINA_NPU_ARCH_V2 \
-                    -DCONFIG_ARMCHINA_NPU_ARCH_V3
+    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V3
 else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_V3_1)
-    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v1.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/v2.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/v1v2_priv.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/v3_1.o \
+    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v3_1.o \
                 $(SRC_DIR)/armchina-npu/zhouyi/v3_1_priv.o
-    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V1 \
-                    -DCONFIG_ARMCHINA_NPU_ARCH_V2 \
-                    -DCONFIG_ARMCHINA_NPU_ARCH_V3_1
+    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V3_1
 else
     #build all
     AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v1.o \
@@ -61,8 +51,15 @@ endif
 
 ifeq ($(BUILD_TARGET_PLATFORM_KMD), BUILD_PLATFORM_R329)
     INIT_OBJ  := $(SRC_DIR)/armchina-npu/r329/r329.o
+else ifeq ($(BUILD_TARGET_PLATFORM_KMD), BUILD_PLATFORM_SKY1)
+    INIT_OBJ := $(SRC_DIR)/armchina-npu/sky1/sky1.o
+    EXTRA_CFLAGS += -DCONFIG_SKY1
 else
     INIT_OBJ := $(SRC_DIR)/armchina-npu/default/default.o
+endif
+
+ifneq ($(BUILD_NPU_DEVFREQ), n)
+    EXTRA_CFLAGS  += -DCONFIG_ENABLE_DEVFREQ
 endif
 
 OBJS     := $(COMM_OBJ) $(AIPU_OBJ) $(SOC_OBJ)

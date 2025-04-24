@@ -267,10 +267,10 @@ int aipu_priv_io_rw(struct aipu_priv *aipu, struct aipu_io_req *io_req)
 	int ret = -EINVAL;
 	int id = 0;
 
-	if (!aipu || !io_req || io_req->core_id >= aipu->partition_cnt)
+	if (!aipu || !io_req || io_req->partition_id >= aipu->partition_cnt)
 		return ret;
 
-	id = io_req->core_id;
+	id = io_req->partition_id;
 	return aipu->partitions[id].ops->io_rw(&aipu->partitions[id], io_req);
 }
 

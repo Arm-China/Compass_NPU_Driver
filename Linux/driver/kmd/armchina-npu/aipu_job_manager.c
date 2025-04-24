@@ -29,36 +29,35 @@ static struct aipu_thread_wait_queue *do_create_thread_wait_queue(int uthread_id
 	return new_wait_queue;
 }
 
+static struct aipu_thread_wait_queue *get_thread_wait_queue(struct aipu_thread_wait_queue *head,
+							    int uthread_id, struct file *filp)
+{
+	struct aipu_thread_wait_queue *curr = NULL;
+
+	if (unlikely(!head))
+		return ERR_PTR(-EINVAL);
+
+	list_for_each_entry(curr, &head->node, node) {
+		if ((curr->uthread_id == uthread_id && uthread_id) ||
+		    (curr->filp == filp && filp))
+			return curr;
+		}
+	return ERR_PTR(-EINVAL);
+}
+
 static struct aipu_thread_wait_queue *create_thread_wait_queue(struct aipu_thread_wait_queue *head,
 							       int uthread_id, struct file *filp)
 {
-       return do_create_thread_wait_queue(uthread_id, filp);
-}
+	struct aipu_thread_wait_queue *queue = get_thread_wait_queue(head, uthread_id, filp);
 
-static void add_wait_queue_to_list(struct aipu_job_manager *manager,
-				   struct aipu_thread_wait_queue *queue)
-{
-	struct aipu_thread_wait_queue *head = NULL;
-	struct aipu_thread_wait_queue *curr = NULL;
-	struct aipu_thread_wait_queue *next = NULL;
-	bool flag = true;
-
-	if (!manager || !queue)
-		return;
-
-	head = manager->wait_queue_head;
-
-	mutex_lock(&manager->wq_lock);
-	list_for_each_entry_safe(curr, next, &head->node, node) {
-		if (curr == queue) {
-			flag = false;
-			break;
-		}
+	if (IS_ERR(queue)) {
+		queue = do_create_thread_wait_queue(uthread_id, filp);
+		if (!IS_ERR(queue) && head)
+			list_add_tail(&queue->node, &head->node);
+		else
+			return queue;
 	}
-
-	if (flag)
-		list_add_tail(&queue->node, &head->node);
-	mutex_unlock(&manager->wq_lock);
+	return queue;
 }
 
 static void delete_wait_queue(struct aipu_thread_wait_queue **wait_queue_head)
@@ -76,6 +75,33 @@ static void delete_wait_queue(struct aipu_thread_wait_queue **wait_queue_head)
 	}
 }
 
+static void delete_thread_wait_queue(struct aipu_thread_wait_queue *head,
+				     int uthread_id, struct file *filp)
+{
+	struct aipu_thread_wait_queue *curr = NULL;
+	struct aipu_thread_wait_queue *next = NULL;
+
+	if (unlikely(!head))
+		return;
+	list_for_each_entry_safe(curr, next, &head->node, node) {
+		if (curr && !curr->ref_cnt) {
+			list_del(&curr->node);
+			kfree(curr);
+		}
+	}
+}
+
+static void delete_wait_node(struct aipu_thread_wait_queue **wait_queue_head,
+			     wait_queue_head_t *wait_node)
+{
+	struct aipu_thread_wait_queue *job_queue = NULL;
+
+	job_queue =
+		container_of(wait_node, struct aipu_thread_wait_queue, p_wait);
+
+	job_queue->ref_cnt--;
+}
+
 static int init_aipu_job(struct aipu_job_manager *manager, struct aipu_job *job,
 			 struct aipu_job_desc *desc, struct aipu_thread_wait_queue *queue,
 			 struct file *filp)
@@ -88,13 +114,12 @@ static int init_aipu_job(struct aipu_job_manager *manager, struct aipu_job *job,
 	else
 		memset(&job->desc, 0, sizeof(job->desc));
 
-	mutex_lock(&manager->wq_lock);
 	if (queue) {
 		job->thread_queue = &queue->p_wait;
 		queue->ref_cnt++;
-	} else
+	} else {
 		job->thread_queue = NULL;
-	mutex_unlock(&manager->wq_lock);
+	}
 
 	job->filp = filp;
 	job->uthread_id = task_pid_nr(current);
@@ -118,8 +143,6 @@ static int init_aipu_job(struct aipu_job_manager *manager, struct aipu_job *job,
 
 static void destroy_aipu_job(struct aipu_job_manager *manager, struct aipu_job *job)
 {
-	struct aipu_thread_wait_queue *job_aipu_wait_queue = NULL;
-
 	WARN_ON(!job);
 
 #if AIPU_CONFIG_ENABLE_INTR_PROFILING
@@ -144,12 +167,6 @@ static void destroy_aipu_job(struct aipu_job_manager *manager, struct aipu_job *
 	}
 #endif
 
-	if (likely(job->thread_queue)) {
-		job_aipu_wait_queue =
-			container_of(job->thread_queue, struct aipu_thread_wait_queue, p_wait);
-		if (job_aipu_wait_queue->ref_cnt)
-			job_aipu_wait_queue->ref_cnt--;
-	}
 	kmem_cache_free(manager->job_cache, job);
 }
 
@@ -321,6 +338,7 @@ static void reserve_core_for_job_no_lock(struct aipu_job_manager *manager, struc
 					 int do_trigger)
 {
 	struct aipu_partition *sched_core = NULL;
+	int ret = 0;
 
 	WARN_ON(job->core_id < 0);
 	WARN_ON(job->core_id >= manager->partition_cnt);
@@ -332,10 +350,9 @@ static void reserve_core_for_job_no_lock(struct aipu_job_manager *manager, struc
 		job->sched_time = ktime_get();
 	}
 
-	if (do_trigger)
+	ret = sched_core->ops->reserve(sched_core, &job->desc, do_trigger, 0);
+	if (do_trigger && !ret)
 		job->state = AIPU_JOB_STATE_RUNNING;
-
-	sched_core->ops->reserve(sched_core, &job->desc, do_trigger, 0);
 
 	if (do_trigger)
 		dev_dbg(sched_core->dev, "[Job %lld of Thread %d] trigger job running done\n",
@@ -518,15 +535,15 @@ static int schedule_new_job(struct aipu_job_manager *manager, struct aipu_job_de
 	else
 		queue = create_thread_wait_queue(manager->wait_queue_head,
 						 task_pid_nr(current), NULL);
-	mutex_unlock(&manager->wq_lock);
 
 	WARN_ON(IS_ERR(queue));
 
 	kern_job = create_aipu_job(manager, user_job, queue, filp);
-	if (IS_ERR(kern_job))
+	if (IS_ERR(kern_job)) {
+		mutex_unlock(&manager->wq_lock);
 		return PTR_ERR(kern_job);
-
-	add_wait_queue_to_list(manager, queue);
+	}
+	mutex_unlock(&manager->wq_lock);
 
 	if (user_job->aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3) {
 		ret = aipu_mm_hold_tcb_buf_alloc(manager->mm, kern_job);
@@ -543,12 +560,14 @@ static int schedule_new_job(struct aipu_job_manager *manager, struct aipu_job_de
 
 		if (user_job->aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3_1) {
 			ret = schedule_v3_1_job_no_lock(manager, kern_job);
-			if (!ret)
+			if (!ret) {
 				kern_job->state = AIPU_JOB_STATE_RUNNING;
-			else if (ret == ZHOUYI_V3_1_COMMAND_POOL_FULL)
+			} else if (ret == ZHOUYI_V3_1_COMMAND_POOL_FULL) {
 				kern_job->state = AIPU_JOB_STATE_PENDING;
-			else
+				ret = 0;
+			} else {
 				kern_job->state = AIPU_JOB_STATE_EXCEP;
+			}
 		} else if (user_job->aipu_version == AIPU_ISA_VERSION_ZHOUYI_V3) {
 			ret = schedule_v3_job_no_lock(manager, kern_job);
 			if (!ret)
@@ -929,8 +948,14 @@ static void aipu_job_manager_dump_pdata(struct aipu_job_manager *manager,
 }
 #endif
 
+static bool is_curr_irq_job(struct aipu_job *job, struct job_irq_info *info, u64 asid_base)
+{
+	return info->tail_tcbp >= (u32)((job->desc.first_task_tcb_pa - asid_base)) &&
+		   info->tail_tcbp <= (u32)(job->desc.last_task_tcb_pa - asid_base);
+}
+
 static bool is_v3x_job_done_or_excep(struct aipu_job *job, struct job_irq_info *info,
-				      u64 asid_base, int flag)
+				     u64 asid_base, int flag)
 {
 	return info->tail_tcbp == (u32)(job->desc.last_task_tcb_pa - asid_base) &&
 	       (IS_DONE_IRQ(flag) || IS_EXCEPTION_IRQ(flag));
@@ -1014,6 +1039,16 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 				aipu_job_manager_real_time_get_pdata(manager, info);
 			}
 #endif
+			if (IS_COREDUMP_SIGNAL_V3_1(info->sig_flag)) {
+				spin_lock(&manager->lock);
+				list_for_each_entry(curr, &manager->scheduled_head->node, node) {
+					if (is_curr_irq_job(curr, info, manager->asid0_base)) {
+						curr->state = AIPU_JOB_STATE_CORED;
+						break;
+					}
+				}
+				spin_unlock(&manager->lock);
+			}
 			return;
 		}
 	} else if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
@@ -1027,25 +1062,43 @@ void aipu_job_manager_irq_upper_half(struct aipu_partition *partition, int flag,
 				aipu_job_manager_real_time_get_pdata(manager, info);
 			}
 #endif
+			if (IS_COREDUMP_SIGNAL(info->sig_flag)) {
+				spin_lock(&manager->lock);
+				list_for_each_entry(curr, &manager->scheduled_head->node, node) {
+					if (is_curr_irq_job(curr, info, manager->asid0_base)) {
+						curr->state = AIPU_JOB_STATE_CORED;
+						break;
+					}
+				}
+				spin_unlock(&manager->lock);
+			}
 			return;
 		}
 	}
 
 	spin_lock(&manager->lock);
+
+	/* soft reset association irq not in coredump scope */
+	bool abort_cmdpool = false;
 	if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V3_1) {
-		if (do_abortion_V3_1(flag, info)) {
-			if (manager->pools[partition->id].created) {
-				partition->ops->abort_command_pool(partition, 0);
-				if (manager->pools)
-					manager->pools[partition->id].aborted = true;
+		if (do_abortion_V3_1(flag, info) && manager->pools[partition->id].created)
+			abort_cmdpool = true;
+	} else if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+		if (do_abortion(flag, info))
+			abort_cmdpool = true;
+	}
+
+	if (abort_cmdpool) {
+		list_for_each_entry(curr, &manager->scheduled_head->node, node) {
+			/* coredump irq follows fault irq */
+			if (curr->desc.is_coredump_en) {
+				spin_unlock(&manager->lock);
+				return;
 			}
 		}
-	} else if (manager->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
-		if (do_abortion(flag, info)) {
-			partition->ops->abort_command_pool(partition, 0);
-			if (manager->pools)
-				manager->pools[partition->id].aborted = true;
-		}
+		partition->ops->abort_command_pool(partition, 0);
+		if (manager->pools)
+			manager->pools[partition->id].aborted = true;
 	}
 
 	list_for_each_entry(curr, &manager->scheduled_head->node, node) {
@@ -1189,7 +1242,7 @@ void aipu_job_manager_irq_bottom_half(struct aipu_partition *core)
 		}
 
 		/* destroy the v3 command pool if all jobs are done */
-		if (curr->state < AIPU_JOB_STATE_EXCEP)
+		if (curr->state < AIPU_JOB_STATE_EXCEP || curr->desc.is_coredump_en)
 			do_destroy = false;
 	}
 
@@ -1231,11 +1284,14 @@ int aipu_job_manager_abort_cmd_pool(struct aipu_job_manager *manager)
 	if (!manager)
 		return -EINVAL;
 
+	if (!manager->pools->created)
+		return -ENODEV;
+
 	partition = &manager->partitions[0];
 
 	spin_lock_irqsave(&manager->lock, flags);
-	partition->ops->abort_command_pool(partition, 0);
-	if (manager->pools)
+	ret = partition->ops->abort_command_pool(partition, 0);
+	if (!ret && manager->pools)
 		manager->pools[partition->id].aborted = true;
 
 	list_for_each_entry(curr, &manager->scheduled_head->node, node) {
@@ -1262,14 +1318,24 @@ int aipu_job_manager_cancel_jobs(struct aipu_job_manager *manager, struct file *
 	unsigned long flags;
 	struct aipu_job *curr = NULL;
 	struct aipu_job *next = NULL;
-	struct aipu_thread_wait_queue *curr_wq = NULL;
-	struct aipu_thread_wait_queue *next_wq = NULL;
 	struct aipu_partition *par = NULL;
 	bool multi_process = false;
 	bool abort_cmd_pool = false;
+	int job_total = 0;
+	int job_index = 0;
+	struct aipu_job **delete_jobs = NULL;
 
 	if (!manager || !filp)
 		return -EINVAL;
+	spin_lock_irqsave(&manager->lock, flags);
+	list_for_each_entry_safe(curr, next, &manager->scheduled_head->node, node) {
+		if (curr->filp == filp)
+			job_total++;
+	}
+	spin_unlock_irqrestore(&manager->lock, flags);
+	delete_jobs = kcalloc(job_total, sizeof(*delete_jobs), GFP_KERNEL);
+	if (!delete_jobs)
+		return -ENOMEM;
 
 	/* jobs should be cleaned first */
 	spin_lock_irqsave(&manager->lock, flags);
@@ -1285,8 +1351,9 @@ int aipu_job_manager_cancel_jobs(struct aipu_job_manager *manager, struct file *
 			     manager->version == AIPU_ISA_VERSION_ZHOUYI_V3_1) &&
 				curr->state == AIPU_JOB_STATE_RUNNING)
 				abort_cmd_pool = true;
-
-			remove_aipu_job(manager, curr);
+			delete_jobs[job_index] = curr;
+			job_index++;
+			list_del(&curr->node);
 		} else {
 			multi_process = true;
 		}
@@ -1306,14 +1373,14 @@ int aipu_job_manager_cancel_jobs(struct aipu_job_manager *manager, struct file *
 		aipu_job_manager_abort_cmd_pool(manager);
 
 	mutex_lock(&manager->wq_lock);
-	list_for_each_entry_safe(curr_wq, next_wq, &manager->wait_queue_head->node, node) {
-		if (!curr_wq->ref_cnt) {
-			list_del(&curr_wq->node);
-			kfree(curr_wq);
-		}
+	for (job_index = 0; job_index < job_total; job_index++) {
+		delete_wait_node(&manager->wait_queue_head, delete_jobs[job_index]->thread_queue);
+		kmem_cache_free(manager->job_cache, delete_jobs[job_index]);
 	}
+	delete_thread_wait_queue(manager->wait_queue_head, task_pid_nr(current), filp);
 	mutex_unlock(&manager->wq_lock);
 
+	kfree(delete_jobs);
 	return 0;
 }
 
@@ -1338,11 +1405,16 @@ int aipu_job_manager_invalidate_timeout_job(struct aipu_job_manager *manager, in
 	list_for_each_entry_safe(curr, next, &manager->scheduled_head->node, node) {
 		if (curr->uthread_id == task_pid_nr(current) &&
 		    curr->desc.job_id == job_id) {
-			remove_aipu_job(manager, curr);
+			list_del(&curr->node);
 			break;
 		}
 	}
 	spin_unlock_irqrestore(&manager->lock, flags);
+
+	mutex_lock(&manager->wq_lock);
+	delete_wait_node(&manager->wait_queue_head, curr->thread_queue);
+	destroy_aipu_job(manager, curr);
+	mutex_unlock(&manager->wq_lock);
 
 	return ret;
 }
@@ -1395,16 +1467,23 @@ int aipu_job_manager_get_job_status(struct aipu_job_manager *manager,
 		    !job_status->of_this_thread) {
 			status[poll_iter].job_id = curr->desc.job_id;
 			status[poll_iter].thread_id = curr->uthread_id;
-			status[poll_iter].state = (curr->state == AIPU_JOB_STATE_SUCCESS) ?
-			    AIPU_JOB_STATE_DONE : AIPU_JOB_STATE_EXCEPTION;
+			if (curr->state == AIPU_JOB_STATE_SUCCESS)
+				status[poll_iter].state = AIPU_JOB_STATE_DONE;
+			else if (curr->state == AIPU_JOB_STATE_CORED)
+				status[poll_iter].state = AIPU_JOB_STATE_COREDUMP;
+			else
+				status[poll_iter].state = AIPU_JOB_STATE_EXCEPTION;
+
 			if (curr->desc.enable_prof || curr->pdata.tick_counter)
 				status[poll_iter].pdata = curr->pdata;
 
 			done_jobs[poll_iter] = curr;
+			list_del(&curr->node);
 			job_status->poll_cnt++;
 			poll_iter++;
 		}
 	}
+	spin_unlock_irqrestore(&manager->lock, flags);
 
 #if AIPU_CONFIG_ENABLE_INTR_PROFILING
 	spin_unlock_irqrestore(&manager->lock, flags);
@@ -1415,9 +1494,12 @@ int aipu_job_manager_get_job_status(struct aipu_job_manager *manager,
 	spin_lock_irqsave(&manager->lock, flags);
 #endif
 
-	for (poll_iter = 0; poll_iter < job_status->poll_cnt; poll_iter++)
-		remove_aipu_job(manager, done_jobs[poll_iter]);
-	spin_unlock_irqrestore(&manager->lock, flags);
+	mutex_lock(&manager->wq_lock);
+	for (poll_iter = 0; poll_iter < job_status->poll_cnt; poll_iter++) {
+		delete_wait_node(&manager->wait_queue_head, done_jobs[poll_iter]->thread_queue);
+		destroy_aipu_job(manager, done_jobs[poll_iter]);
+	}
+	mutex_unlock(&manager->wq_lock);
 
 	ret = copy_to_user((struct job_status_desc __user *)job_status->status, status,
 			   job_status->poll_cnt * sizeof(*status));

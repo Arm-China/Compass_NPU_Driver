@@ -18,14 +18,9 @@ static void zhouyi_v3_1_enable_core_cnt(struct aipu_partition *cluster, u32 clus
 	u32 en_aiff_cnt = GET_AIFF_NUM_V3_1(nums);
 	u32 config = CONFIG_CLUSTER_V3_1(0xf, en_core_cnt, en_aiff_cnt,
 				       4, cluster->partition_mode);
-	u32 status = 0;
 
 	config |= ((1 << en_core_cnt) - 1) << 24;
 	aipu_write32(cluster->reg, CLUSTER_CONTROL_REG_V3_1(cluster_id), config);
-
-	status = aipu_read32(cluster->reg, TSM_STATUS_REG_V3_1);
-	if (!en_core_cnt && IS_CMD_FAIL_V3_1(status))
-		aipu_write32(cluster->reg, TSM_STATUS_REG_V3_1, CLEAR_CMD_FAIL_V3_1(status));
 
 	atomic_set(&cluster->clusters[cluster_id].en_core_cnt, en_core_cnt);
 	dev_info(cluster->dev, "configure cluster #%u done: en_core_cnt %u (0x%x)\n",
@@ -93,7 +88,7 @@ static int zhouyi_v3_1_abort_command_pool(struct aipu_partition *cluster, int po
 		return -EFAULT;
 	}
 
-	for (cnt = 0; cnt < 5; cnt++) {
+	for (cnt = 0; cnt < 10; cnt++) {
 		status = aipu_read32(cluster->reg, TSM_STATUS_REG_V3_1);
 		if (IS_ABORT_DONE(status, abort_done_bit)) {
 			aipu_write32(cluster->reg, TSM_STATUS_REG_V3_1,
@@ -115,28 +110,20 @@ static int zhouyi_v3_1_abort_command_pool(struct aipu_partition *cluster, int po
 static int zhouyi_v3_1_destroy_command_pool(struct aipu_partition *cluster, int pool)
 {
 	int status = 0;
-	bool try_again = false;
 
 	if (pool == ZHOUYI_COMMAND_POOL_PCP) {
 		if (IS_POOL_BUSY(aipu_read32(cluster->reg, COMMAND_POOL_PCP_STATUS_REG)))
-			return -EINVAL;
+			return -EBUSY;
 	}
 
-try_again:
+
 	aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG_V3_1,
 		     TSM_DESTROY_CMD_POOL_V3_1(cluster->id) | pool);
 	status = aipu_read32(cluster->reg, TSM_STATUS_REG_V3_1);
 	if (IS_CMD_FAIL_V3_1(status)) {
 		aipu_write32(cluster->reg, TSM_STATUS_REG_V3_1, CLEAR_CMD_FAIL_V3_1(status));
-
-		if (try_again) {
-			dev_err(cluster->dev, "destroy command pool failed\n");
-			return -EFAULT;
-		}
-
-		try_again = true;
-		zhouyi_v3_1_abort_command_pool(cluster, pool);
-		goto try_again;
+		dev_err(cluster->dev, "destroy command pool failed\n");
+		return -EFAULT;
 	}
 
 	dev_dbg(cluster->dev, "command pool was destroyed\n");
@@ -245,25 +232,19 @@ static void zhouyi_v3_1_initialize(struct aipu_partition *cluster)
 	zhouyi_v3_1_disable_tick_counter(cluster);
 }
 
-static int zhouyi_v3_1_soft_reset_type(struct aipu_partition *cluster,
+static void zhouyi_v3_1_soft_reset_type(struct aipu_partition *cluster,
 				     struct job_irq_info *info, int status)
 {
-	int ret = 0;
-
-	if (cluster->partition_mode == PARTITION_MODE_NONE) {
-		if (IS_CLUSTER_IRQ_V3_1(status) && IS_FAULT_IRQ_V3_1(status)) {
-			dev_err(cluster->dev, "cluster fault global reset event.\n");
-			cluster->event_type = AIPU_IRQ_EVENT_RESET;
-		} else if (IS_POOL_IRQ_V3_1(status) && (IS_TIMEOUT_IRQ_V3_1(status) ||
-				   IS_ERROR_IRQ_V3_1(status))) {
-			dev_err(cluster->dev, "pool error/timeout global reset event.\n");
-			cluster->event_type = AIPU_IRQ_EVENT_RESET;
-		} else if (IS_TEC_IRQ_V3_1(status) && (IS_FAULT_IRQ_V3_1(status))) {
-			dev_err(cluster->dev, "TEC Fault Error.\n");
-		}
+	if (IS_CLUSTER_IRQ_V3_1(status) && IS_FAULT_IRQ_V3_1(status)) {
+		dev_err(cluster->dev, "cluster fault global reset event.\n");
+		cluster->event_type = AIPU_IRQ_EVENT_RESET;
+	} else if (IS_POOL_IRQ_V3_1(status) && (IS_TIMEOUT_IRQ_V3_1(status) ||
+				IS_ERROR_IRQ_V3_1(status))) {
+		dev_err(cluster->dev, "pool error/timeout global reset event.\n");
+		cluster->event_type = AIPU_IRQ_EVENT_RESET;
+	} else if (IS_TEC_IRQ_V3_1(status) && (IS_FAULT_IRQ_V3_1(status))) {
+		dev_err(cluster->dev, "TEC Fault Error.\n");
 	}
-
-	return ret;
 }
 
 static int zhouyi_v3_1_upper_half(void *data)
@@ -288,15 +269,12 @@ static int zhouyi_v3_1_upper_half(void *data)
 		info.core_id = GET_INTR_CORE_ID_V3_1(status);
 		info.tec_id = GET_INTR_TEC_ID_V3_1(status);
 
-		if (IS_CORE_IRQ_V3_1(status))
-			continue;
-		else if (IS_TEC_IRQ_V3_1(status) && (IS_DONE_IRQ_V3_1(status)))
+		if (IS_TEC_IRQ_V3_1(status) && (IS_DONE_IRQ_V3_1(status)))
 			continue;
 
 		//check if do global soft reset
 		if (IS_RESET(status)) {
-			if (zhouyi_v3_1_soft_reset_type(cluster, &info, status))
-				dev_err(cluster->dev, "global reset fail.\n");
+			zhouyi_v3_1_soft_reset_type(cluster, &info, status);
 		}
 		aipu_job_manager_irq_upper_half(cluster, status, &info);
 		aipu_irq_schedulework(cluster->irq_obj);
@@ -367,17 +345,6 @@ int zhouyi_v3_1_soft_reset(struct aipu_partition *cluster, bool init_regs)
 	cluster->ops->initialize(cluster);
 	return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
 
 static struct aipu_operations zhouyi_v3_1_ops = {
 	.get_config = NULL,

@@ -25,6 +25,11 @@ static struct aipu_priv *aipu;
 static int aipu_open(struct inode *inode, struct file *filp)
 {
 	filp->private_data = aipu;
+
+	if(aipu && aipu->soc_ops && aipu->soc_ops->soc_pm_runtime_get_sync)
+	{
+		aipu->soc_ops->soc_pm_runtime_get_sync(aipu->dev,aipu->soc);
+	}
 	return aipu_priv_check_status(aipu);
 }
 
@@ -38,6 +43,11 @@ static int aipu_release(struct inode *inode, struct file *filp)
 		return ret;
 
 	aipu_mm_free_buffers(&aipu->mm, filp);
+
+	if(aipu && aipu->soc_ops && aipu->soc_ops->soc_pm_runtime_put)
+	{
+		aipu->soc_ops->soc_pm_runtime_put(aipu->dev,aipu->soc);
+	}
 	return 0;
 }
 

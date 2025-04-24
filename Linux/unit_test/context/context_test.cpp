@@ -201,7 +201,7 @@ TEST_CASE_FIXTURE(ContextTest, "ioctl_cmd")
     ret = p_ctx->ioctl_cmd(AIPU_IOCTL_SET_PROFILE, nullptr);
     CHECK(ret == AIPU_STATUS_ERROR_NULL_PTR);
 
-    ret = p_ctx->ioctl_cmd(AIPU_IOCTL_GET_DRIVER_VERSION, kmd_version);
+    ret = p_ctx->ioctl_cmd(AIPU_IOCTL_GET_VERSION, kmd_version);
     CHECK(ret == AIPU_STATUS_SUCCESS);
 }
 

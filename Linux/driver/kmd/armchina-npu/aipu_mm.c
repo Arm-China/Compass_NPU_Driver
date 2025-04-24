@@ -13,6 +13,7 @@
 #include <linux/iommu.h>
 #include <linux/bitmap.h>
 #include <linux/version.h>
+#include <linux/iova.h>
 #include "config.h"
 #include "aipu_priv.h"
 #include "aipu_mm.h"
@@ -21,6 +22,24 @@
 #include "v2.h"
 
 #define EXIT_ENCODE_BUF_SIZE (1024)
+#define IOVA_FREE  false
+#define IOVA_ALLOC true
+
+enum iommu_dma_cookie_type {
+	IOMMU_DMA_IOVA_COOKIE,
+	IOMMU_DMA_MSI_COOKIE,
+};
+
+struct iommu_dma_cookie {
+	enum iommu_dma_cookie_type	type;
+	union {
+		struct iova_domain	iovad;
+		dma_addr_t		msi_iova;
+	};
+	struct list_head		msi_page_list;
+	struct iommu_domain		*fq_domain;
+};
+
 static struct aipu_mem_region *aipu_mm_find_region_no_lock(struct aipu_memory_manager *mm,
 							   u64 iova, char *log_str);
 static struct aipu_tcb_buf *aipu_mm_find_tbuf_in_region_no_lock(struct aipu_memory_manager *mm,
@@ -173,6 +192,7 @@ int aipu_mm_hold_tcb_buf_alloc(struct aipu_memory_manager *mm, struct aipu_job *
 	memcpy(tcb, prev, sizeof(struct aipu_tcb));
 	tcb->flag = TCB_FLAG_TASK_TYPE_TASK;
 	tcb->flag |= TCB_FLAG_END_TYPE_GROUP_END;
+	tcb->interrupt &= ~INTERRUPT_TEC;
 	tcb->next = 0;
 	tcb->spc = lower_32_bits(htbuf->head + encode_offset -
 				 aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_0));
@@ -254,10 +274,11 @@ void aipu_mm_hold_tcb_buf_free(struct aipu_memory_manager *mm)
 		return;
 
 	list_for_each_entry_safe(htbuf, next, &htbuf_head->node, node) {
-		dev_info(mm->dev, "t %d i %d s %d f %d ch 0x%llx pht 0x%llx pt 0x%llx ph 0x%llx nh 0x%llx\n",
-			 htbuf_head->nums, htbuf->index,  htbuf->status,
-			 htbuf_head->hold_index, htbuf->head, htbuf->prev_hold_tcb,
-			 htbuf->prev_tail, htbuf->prev_head, htbuf->next_head);
+		dev_dbg(mm->dev, "t %d i %d s %d f %d ch 0x%llx pht 0x%llx"
+			" pt 0x%llx ph 0x%llx nh 0x%llx\n", htbuf_head->nums,
+			htbuf->index,  htbuf->status, htbuf_head->hold_index,
+			htbuf->head, htbuf->prev_hold_tcb, htbuf->prev_tail,
+			htbuf->prev_head, htbuf->next_head);
 		memset(&buf, 0, sizeof(buf));
 		buf.pa = htbuf->head;
 		buf.region = AIPU_BUF_REGION_DEFAULT;
@@ -480,7 +501,7 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 	reg->obj = obj;
 
 	/* we use child dev to support multiple reserved regions */
-	if (reserved)
+	if (reserved && !mm->has_iommu)
 		reg->dev = aipu_mm_create_child_dev(mm->dev, idx);
 	else
 		reg->dev = mm->dev;
@@ -497,7 +518,7 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 	if (!size)
 		return reg;
 
-	if (reserved) {
+	if (reserved && !mm->has_iommu) {
 		ret = of_reserved_mem_device_init_by_idx(reg->dev, mm->dev->of_node, idx);
 		if (ret) {
 			dev_err(reg->dev, "init reserved mem failed: idx %d (%d)\n",
@@ -507,18 +528,13 @@ static struct aipu_mem_region *aipu_mm_create_region(struct aipu_memory_manager 
 	}
 
 	if (mm->has_iommu) {
-		ret = dma_set_mask_and_coherent(reg->dev, DMA_BIT_MASK(32));
+		ret = dma_set_mask_and_coherent(mm->dev, DMA_BIT_MASK(mm->dma_mask));
 		if (ret) {
 			dev_err(reg->dev, "DMA set coherent mask failed: idx %d (%d)!\n", idx, ret);
 			goto err;
 		}
-
-#if (KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE)
-		reg->dev->bus_dma_limit = 0xc0000000;
-#elif (KERNEL_VERSION(4, 19, 0) <= LINUX_VERSION_CODE)
-		reg->dev->bus_dma_mask = 0xc0000000;
-#endif
 	}
+
 	va = dma_alloc_attrs(reg->dev, reg->bytes, &reg->base_pa, GFP_KERNEL, reg->attrs);
 	if (!va) {
 		dev_err(reg->dev, "dma_alloc_attrs failed: idx %d (bytes: 0x%llx, attrs %ld)\n",
@@ -691,9 +707,8 @@ static int aipu_mm_alloc_in_region_no_lock(struct aipu_memory_manager *mm,
 	buf_req->desc.asid = buf_req->asid;
 	buf_req->desc.region = reg->type;
 
-	dev_dbg(reg->dev,
-		"allocation in region done: asid %d iova 0x%llx, bytes 0x%llx, type %d\n", buf_req->asid,
-		buf_req->desc.pa, buf_req->desc.bytes, buf_req->data_type);
+	dev_dbg(reg->dev, "allocation in region done: asid %d iova 0x%llx, bytes 0x%llx, type %d\n",
+		buf_req->asid, buf_req->desc.pa, buf_req->desc.bytes, buf_req->data_type);
 	return 0;
 
 fail:
@@ -842,6 +857,132 @@ static void add_region_list(struct aipu_memory_manager *mm, int asid,
 
 	list_add(&obj->list, &mm->ase[asid].head->list);
 	mm->ase[asid].cnt++;
+}
+
+static int aipu_mm_reserved_iova_for_never_map(struct aipu_memory_manager *mm, bool flag)
+{
+	struct iommu_domain *iommu_domain = NULL;
+	struct iommu_dma_cookie *cookie = NULL;
+	struct iova_domain *iovad = NULL;
+	u64 bus_dma_limit;
+	unsigned long lo, hi;
+	struct iova *iova;
+	unsigned long iova_start;
+	unsigned long  iova_len = 0x40000000;
+
+	if (!mm)
+		return -EINVAL;
+
+	iommu_domain = mm->iommu_domain;
+	cookie = iommu_domain->iova_cookie;
+	iovad = &cookie->iovad;
+#if (KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE)
+	bus_dma_limit = mm->dev->bus_dma_limit;
+#elif (KERNEL_VERSION(4, 19, 0) <= LINUX_VERSION_CODE)
+	bus_dma_limit = mm->dev->bus_dma_mask;
+#endif
+	if (bus_dma_limit == 0xc0000000)
+		bus_dma_limit = 0x100000000;
+
+	do {
+		iova_start = bus_dma_limit - iova_len;
+		lo = iova_start >> PAGE_SHIFT;
+		hi = (iova_start + iova_len) >> PAGE_SHIFT;
+		iova = reserve_iova(iovad, lo, hi - 1);
+		if (!flag)
+			__free_iova(iovad, iova);
+		bus_dma_limit -= 0x100000000;
+	} while (bus_dma_limit > 0);
+
+	return 0;
+}
+
+static int aipu_mm_add_iova_region(struct aipu_memory_manager *mm)
+{
+	struct aipu_mem_region_obj *obj = NULL;
+	struct aipu_mem_region *reg = NULL;
+	int iova_region = 1;
+	unsigned long iova_region_size = 0;
+#if (KERNEL_VERSION(5, 0, 0) <= LINUX_VERSION_CODE)
+	unsigned long page_cnt = totalram_pages();
+#else
+	unsigned long page_cnt = totalram_pages;
+#endif
+	unsigned long mem_tot = page_cnt * PAGE_SIZE;
+	int asid_idx = 0;
+	int region_idx = 0;
+
+	if (!mm)
+		return -EINVAL;
+
+	if (mem_tot > 0x400000000) { //18GB for 32GB
+		iova_region = 6;
+		iova_region_size = 0xc0000000;
+	} else if (mem_tot > 0x200000000) { //12GB for 16GB
+		iova_region = 4;
+		iova_region_size = 0xc0000000;
+	} else if (mem_tot > 0x100000000) { //4GB for 8GB
+		iova_region = 1;
+		iova_region_size = 0xc0000000;
+	} else if (mem_tot > 0x80000000) { //2GB for 4GB
+		iova_region = 1;
+		iova_region_size = 0x80000000;
+	} else if (mem_tot > 0x40000000) { //1GB for 2GB
+		iova_region = 1;
+		iova_region_size = 0x40000000;
+	} else {
+		iova_region = 1;
+		iova_region_size = 0x10000000;
+	}
+
+#if (KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE)
+	mm->dev->bus_dma_limit = 0x800000000;
+#elif (KERNEL_VERSION(4, 19, 0) <= LINUX_VERSION_CODE)
+	mm->dev->bus_dma_mask = 0x800000000;
+#endif
+	mm->dma_mask = 35;
+
+	if (aipu_mm_reserved_iova_for_never_map(mm, IOVA_ALLOC)) {
+		dev_err(mm->dev, "fail to reserve iova region for never map.");
+		mm->dma_mask = 32;
+#if (KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE)
+		mm->dev->bus_dma_limit = 0xc0000000;
+#elif (KERNEL_VERSION(4, 19, 0) <= LINUX_VERSION_CODE)
+		mm->dev->bus_dma_mask = 0xc0000000;
+#endif
+		goto FINISH;
+	}
+
+	do {
+		obj = aipu_mm_create_region_object(mm, AIPU_MEM_REGION_TYPE_MEMORY,
+						   iova_region_size - 1, 0, asid_idx, NULL, true);
+		if (!obj) {
+			dev_err(mm->dev, "create iova region failed (ret = %ld)", PTR_ERR(reg));
+			mm->dma_mask = 32;
+#if (KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE)
+			mm->dev->bus_dma_limit = 0xc0000000;
+#elif (KERNEL_VERSION(4, 19, 0) <= LINUX_VERSION_CODE)
+			mm->dev->bus_dma_mask = 0xc0000000;
+#endif
+			break;
+		}
+
+		reg = obj->reg;
+
+		list_add(&obj->list, &mm->mem.head->list);
+		if (mm->version > AIPU_ISA_VERSION_ZHOUYI_V1) {
+			add_region_list(mm, asid_idx, reg);
+			if (iova_region == 1)
+				add_region_list(mm, AIPU_BUF_ASID_1, reg);
+		} else {
+			add_region_list(mm, AIPU_BUF_ASID_0, reg);
+		}
+		asid_idx++;
+		region_idx++;
+	} while (region_idx < iova_region);
+
+FINISH:
+	return region_idx;
 }
 
 static int aipu_mm_add_reserved_regions(struct aipu_memory_manager *mm)
@@ -1118,6 +1259,7 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	if (group) {
 		mm->valid_asid_cnt = ZHOUYI_ASID_COUNT;
 		mm->has_iommu = true;
+		mm->iommu_domain = iommu_get_domain_for_dev(mm->dev);
 	}
 	iommu_group_put(group);
 	dev_info(mm->dev, "AIPU is%s behind an IOMMU\n", mm->has_iommu ? "" : " not");
@@ -1130,6 +1272,8 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	 */
 	if (!mm->has_iommu)
 		mm->res_cnt = aipu_mm_add_reserved_regions(mm);
+	else
+		mm->res_cnt = aipu_mm_add_iova_region(mm);
 
 	if (version > AIPU_ISA_VERSION_ZHOUYI_V1 && mm->res_cnt)
 		aipu_mm_set_asid_base(mm);
@@ -1187,6 +1331,8 @@ int aipu_deinit_mm(struct aipu_memory_manager *mm)
 		}
 	}
 
+	if (mm->has_iommu)
+		aipu_mm_reserved_iova_for_never_map(mm, IOVA_FREE);
 	mm->res_cnt = 0;
 	kmem_cache_destroy(mm->obj_cache);
 	mm->obj_cache = NULL;
@@ -1194,6 +1340,7 @@ int aipu_deinit_mm(struct aipu_memory_manager *mm)
 	mm->reg_cache = NULL;
 	kmem_cache_destroy(mm->tbuf_cache);
 	mm->tbuf_cache = NULL;
+	mm->iommu_domain = NULL;
 	return 0;
 }
 
@@ -1226,6 +1373,48 @@ static int aipu_mm_direct_alloc(struct aipu_memory_manager *mm, struct aipu_buf_
 err:
 	aipu_mm_destroy_region_object(mm, obj);
 	return ret;
+}
+
+static bool aipu_mm_check_address_validity(struct aipu_memory_manager *mm,
+					   struct aipu_buf_desc *desc)
+{
+	u64 asid_size = 0;
+	u64 asid_base = 0;
+	u64 remainder = 0;
+	u64 lower_bound = 0;
+	u64 upper_bound = 0;
+	u64 desc_end = 0;
+	u64 asid0_base = 0;
+	u64 size_4G = 0x100000000ULL;
+
+	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+		remainder = desc->pa % size_4G;
+		if ((remainder + desc->bytes) >= size_4G)
+			return false;
+	}
+
+	asid_size = aipu_mm_get_asid_size(mm, desc->asid);
+	if (asid_size <= SZ_2G)
+		return true;
+
+	asid_base = aipu_mm_get_asid_base(mm, desc->asid);
+	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3_1 ||
+	    mm->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+		lower_bound = asid_base + size_4G - SZ_1G;
+		upper_bound = asid_base + size_4G;
+
+		if (desc->asid > AIPU_BUF_ASID_0) {
+			asid0_base = aipu_mm_get_asid_base(mm, AIPU_BUF_ASID_0);
+			if (asid0_base != asid_base)
+				lower_bound += SZ_512M;
+		}
+
+		desc_end = desc->pa + desc->bytes;
+		if (desc->pa < upper_bound && desc_end >= lower_bound)
+			return false;
+	}
+
+	return true;
 }
 
 /**
@@ -1305,7 +1494,7 @@ alloc:
 			type = AIPU_MEM_REGION_TYPE_MEMORY;
 			fall_back = true;
 			goto alloc;
-		} else if (buf_req->asid > AIPU_BUF_ASID_0){
+		} else if (buf_req->asid > AIPU_BUF_ASID_0) {
 			dev_dbg(mm->dev, "fail to malloc memory size 0x%llx from asid %d ",
 				buf_req->bytes, buf_req->asid);
 			buf_req->asid++;
@@ -1327,16 +1516,31 @@ tcb_handle:
 		spin_unlock_irqrestore(&mm->slock, flags);
 	}
 
+	if ((mm->version == AIPU_ISA_VERSION_ZHOUYI_V3 ||
+	     mm->version == AIPU_ISA_VERSION_ZHOUYI_V3_1) &&
+	    !mm->has_iommu) {
+		if (!aipu_mm_check_address_validity(mm, &buf_req->desc)) {
+			aipu_mm_free(mm, &buf_req->desc, filp, true);
+			allocated = false;
+			ret = -ENOMEM;
+		}
+	}
+
 	if (!allocated) {
 		dev_err(mm->dev,
-			"failed in allocating for: bytes 0x%llx, page align %d, type %d\n",
-			buf_req->bytes, buf_req->align_in_page, buf_req->data_type);
+			"failed allocating: asid %d iova 0x%llx, bytes 0x%llx,"
+			" page align %d, type %d\n",
+			buf_req->asid, buf_req->desc.pa,
+			buf_req->bytes, buf_req->align_in_page,
+			buf_req->data_type);
 	} else {
 		dev_dbg(mm->dev,
-			"allocate done (%s): asid %d iova 0x%llx, type %d, bytes 0x%llx (al %d, rg %d)\n",
-			fall_back ? "fall back to memory" : "as requested", buf_req->asid,
-			buf_req->desc.pa, buf_req->data_type, buf_req->bytes,
-			buf_req->align_in_page, buf_req->desc.region);
+			"allocate done (%s): asid %d iova 0x%llx, type %d, "
+			"bytes 0x%llx (al %d, rg %d)\n",
+			fall_back ? "fall back to memory" : "as requested",
+			buf_req->asid, buf_req->desc.pa, buf_req->data_type,
+			buf_req->bytes, buf_req->align_in_page,
+			buf_req->desc.region);
 	}
 	return ret;
 }
@@ -1747,13 +1951,14 @@ int aipu_mm_unlink_tcb(struct aipu_memory_manager *mm, u64 curr_hold, bool free_
 	temp = tbuf->tail_tcb->next;
 	htbuf->prev_head = 0;
 	htbuf->prev_tail = 0;
-	if (htbuf->status == AIPU_MEM_HOLD_TYPE_LINKED) {
+
+	if (htbuf->status == AIPU_MEM_HOLD_TYPE_LINKED)
 		htbuf->status = AIPU_MEM_HOLD_TYPE_LINK_NEXT;
-	} else if (htbuf->status == AIPU_MEM_HOLD_TYPE_LINK_PREV) {
+	else if (htbuf->status == AIPU_MEM_HOLD_TYPE_LINK_PREV)
 		htbuf->status = AIPU_MEM_HOLD_TYPE_IDLE;
-	} else {
+	else
 		dev_info(mm->dev, "ABNORMAL UNLINK CUR HOLD TCB STATUS %d\n", htbuf->status);
-	}
+
 	dev_dbg(mm->dev, "unlink prev hold index %d status %d, "
 		"unlink curr hold tcb index %d status %d final holder index %d",
 		prev_index, prev_status, htbuf->index, htbuf->status,
@@ -1816,12 +2021,12 @@ u64 aipu_mm_get_asid_size(struct aipu_memory_manager *mm, u32 asid)
 void aipu_mm_get_asid(struct aipu_memory_manager *mm, struct aipu_cap *cap)
 {
 	int i;
+
 	if (!mm || !cap)
 		return;
 
-	for(i = 0; i < mm->valid_asid_cnt; i++){
+	for (i = 0; i < mm->valid_asid_cnt; i++)
 		cap->asid_base[i] = aipu_mm_get_asid_base(mm, i);
-	}
 }
 
 u32 aipu_mm_get_asid_cnt(struct aipu_memory_manager *mm)

@@ -127,6 +127,46 @@ template <class S> class note_section_accessor_template
         note_section->append_data( buffer );
     }
 
+    //------------------------------------------------------------------------------
+    bool remove_note( Elf_Word index )
+    {
+        if ( index >= note_start_positions.size() ) {
+            return false;
+        }
+
+        const char* sec_data   = note_section->get_data();
+        Elf_Xword   sec_size   = note_section->get_size();
+        Elf_Xword   note_start = note_start_positions[index];
+        const char* note_data  = sec_data + note_start;
+
+        const endianess_convertor& convertor = elf_file.get_convertor();
+        Elf_Word name_size = convertor( *(const Elf_Word*)( note_data ) );
+        Elf_Word desc_size =
+            convertor( *(const Elf_Word*)( note_data + sizeof( name_size ) ) );
+
+        Elf_Xword max_name_size = sec_size - note_start;
+        if ( name_size < 1 || name_size > max_name_size ||
+             (Elf_Xword)name_size + desc_size > max_name_size ) {
+            return false;
+        }
+
+        Elf_Xword align     = sizeof( Elf_Word );
+        Elf_Xword note_size = 3 * align +
+                              ( ( name_size + align - 1 ) / align ) * align +
+                              ( ( desc_size + align - 1 ) / align ) * align;
+        Elf_Xword new_sec_size = sec_size - note_size;
+
+        if ( 0 != new_sec_size ) {
+            std::memcpy( ( void * ) ( sec_data + note_start ),
+                         ( void * ) ( note_data + note_size ),
+                                      sec_size - note_start - note_size );
+        }
+        note_section->set_size( new_sec_size );
+        process_section();
+
+        return true;
+    }
+
   private:
     //------------------------------------------------------------------------------
     void process_section()

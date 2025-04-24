@@ -226,6 +226,8 @@ struct aipu_memory_manager {
 	struct kmem_cache *hold_tbuf_cache;
 	struct aipu_dma_buf_importer *importer_bufs;
 	struct aipu_hold_tcb_buf *hold_tcb_head;
+	struct iommu_domain *iommu_domain;
+	u64 dma_mask;
 };
 
 int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, int version);

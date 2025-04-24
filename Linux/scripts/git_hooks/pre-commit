@@ -1,0 +1,62 @@
+#!/bin/bash
+#
+# An hook script to verify and check what is about to be committed.
+# Called by "git commit" with no arguments.
+# The hook exits with non-zero status and stops the commit if extra
+# changes are needed.
+
+STYLE=$(git config --get hooks.clangformat.style)
+if [ -n "${STYLE}" ] ; then
+  STYLEARG="-style=${STYLE}"
+else
+  STYLEARG=""
+fi
+
+format_file() {
+  file="${1}"
+  if [ -f $file ]; then
+    clang-format -i ${STYLEARG} ${1}
+    git add ${1}
+  fi
+}
+
+current_workspace=`pwd`
+hook_failed=0
+case "${1}" in
+  --about )
+    echo "Runs clang-format on source files"
+    ;;
+  * )
+    # Only check the files in status A(added), C(copied) and M(modified).
+    # Ignore D(deleted), U(unmerged), T(type changed), R(renamed) and X(unknown).
+    files_to_check=`git diff-index --cached --name-only --diff-filter=ACM HEAD`
+    pattern3=".*\/out_of_box\/.*\.(cpp|cc|h|hpp)"
+    for file in ${files_to_check} ; do
+      # Convert to lower case
+      lc_file=${file,,}
+      if [[ ${lc_file} =~ .*\/umd\/include\/.*\.(cpp|cc|h|hpp) ]] ||
+         [[ ${lc_file} =~ .*\/umd\/src\/.*\.(cpp|cc|h|hpp) ]] ||
+         [[ ${lc_file} =~ .*\/samples\/.*\.(cpp|cc|h|hpp) ]] ||
+         [[ ${lc_file} =~ .*\/out_of_box\/.*\.(cpp|cc|h|hpp) ]]
+      then
+        format_file "${file}"
+      elif [[ ${lc_file} =~ .*\.py ]]
+      then
+        # Call format_pyfile to check format of Parser python code
+        basedir=`dirname $0`
+        ${basedir}/pre-commit.d/format_pyfile "${current_workspace}/${file}"
+        exit_status=$?
+        if [[ ${exit_status} != 0 ]]
+        then
+          hook_failed=1
+        fi
+      fi
+    done
+    ;;
+esac
+
+if [[ ${hook_failed} != 0 ]]
+then
+  echo "----------- pre-commit hook failed -----------"
+  exit 1
+fi

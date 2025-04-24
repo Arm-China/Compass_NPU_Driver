@@ -1,0 +1,73 @@
+#!/bin/bash
+#
+# The script will use autopep8 to scan and format python files.
+#
+# Usage:
+# format_pyfile file-to-check
+#
+# Arguments:
+# - file-to-check: the path of one file or paths of multiple files
+#                  that need to be checked and reformatted.
+# Returns:
+#   0 means pass checking and no differences;
+#   1 means error exit, which requires checking input file(s);
+#   2 means differences exist and file(s) has/have been reformatted.
+
+# autopep8 is a tool used to automatically formats Python code.
+# It's under path /arm/tools/python/python/3.6.5/rhe7-x86_64/bin/
+autopep8="/arm/tools/python/python/3.6.5/rhe7-x86_64/bin/autopep8"
+
+usage="Usage:\n  $0 file-to-check [file-to-check]\n\n"
+current_workspace=`pwd`
+failed_checking=0
+
+files_to_check=$*
+if [[ -z ${files_to_check} ]]
+then
+  printf "Error: No input file(s) provided to $0\n\n"
+  printf ${usage}
+  exit 1
+fi
+
+for file in ${files_to_check}
+do
+  if [[ ! -f ${file} ]]
+  then
+    printf ${usage}
+    exit 1
+  fi
+
+  # Use autopep8 to check code format for parser's python files
+  printf "autopep8: Checking ${file} "
+  # Options of autopep8:
+  #  --in-place: make changes to files in place
+  #  --exit-code: return 2 if differences exist
+  autopep8_output=`${autopep8} --verbose --in-place --exit-code --max-line-length=120 ${file} 2>&1`
+  exit_code=$?
+  if [[ ${exit_code} = 2 ]]
+  then
+    printf "[modified]\n"
+    failed_files="${failed_files} ${file}"
+    failed_checking=1
+  elif [[ ${exit_code} = 0 ]]
+  then
+    printf "[passed]\n"
+  else
+    printf "[error]\nAdditional output of autopep8:\n${autopep8_output}\n\n"
+    exit 1
+  fi
+done
+
+if [[ ${failed_checking} = 1 ]]
+then
+  printf "File(s) did not comply with code format.\n"
+  printf "Please add changes made by autopep8 for the following file(s):\n"
+  for file in ${failed_files}
+  do
+    printf "    ${file}\n"
+  done
+  printf "\n"
+  exit 2
+else
+  exit 0
+fi

@@ -3,12 +3,15 @@ import os
 import sys
 import argparse
 
+
 class Parse_Cmdline:
     m_benchmark_path = ""
     m_group_benchmark_path = ""
     m_dump_path = ""
     m_so_lib_path = ""
-    m_emulator_path = "./"
+    m_simulator_path = "./"
+    m_extra_weight_path = ""
+    m_simulator = ""
     m_input_shape = []
 
     # [
@@ -27,19 +30,23 @@ class Parse_Cmdline:
 
     def __init__(self, logger):
         self.logger = logger
-        parser = argparse.ArgumentParser(description="Cmdline Parser")
-        parser.add_argument('-s', '--single_benchmark_path', type=str, \
-            help='-s: specify the single benchmark path, eg: resnet {aipu.bin, input0.bin, output.bin}')
-        parser.add_argument('-g', '--group_benchmark_path', type=str, \
-            help='-g: specify top path for benchmarks, eg: top_dir {resnet {bins}, yolo {bins}}')
-        parser.add_argument('-d', '--dump_path', type=str, \
-            help='-d: specify dump path')
-        parser.add_argument('-l', '--so_lib_path', type=str, \
-            help='-l: specify aipu driver so library path')
-        parser.add_argument('-e', '--emulator_path', type=str, \
-            help='-e: specify emulator path, just for simulation')
-        parser.add_argument('-r', '--input_shape', type=str, \
-            help='-r: specify new input shape for all input tensors')
+        parser = argparse.ArgumentParser(description="Cmdline Parser", add_help=True)
+        parser.add_argument('-s', '--single_benchmark_path', type=str,
+                            help='-s: specify the single benchmark path, eg: resnet {aipu.bin, input0.bin, output.bin}')
+        parser.add_argument('-g', '--group_benchmark_path', type=str,
+                            help='-g: specify top path for benchmarks, eg: top_dir {resnet {bins}, yolo {bins}}')
+        parser.add_argument('-d', '--dump_path', type=str,
+                            help='-d: specify dump path')
+        parser.add_argument('-l', '--so_lib_path', type=str,
+                            help='-l: specify aipu driver so library path')
+        parser.add_argument('-e', '--simulator_path', type=str,
+                            help='-e: specify emulator path, just for simulation')
+        parser.add_argument('-r', '--input_shape', type=str,
+                            help='-r: specify new input shape for all input tensors')
+        parser.add_argument('-w', '--extra_weight_path', type=str,
+                            help='-w: specify extra weight path')
+        parser.add_argument('-sim', '--simulator', type=str,
+                            help='--simulator: full path of v1&v2 executable simulator file')
         args = parser.parse_args()
 
         if args.single_benchmark_path != None:
@@ -76,23 +83,28 @@ class Parse_Cmdline:
                 self.logger.error(f'-l arg: {args.so_lib_path} [not exist]')
                 exit(-1)
 
-        if args.emulator_path != None:
-            self.m_emulator_path = args.emulator_path
+        if args.simulator_path != None:
+            self.m_simulator_path = args.simulator_path
 
         if args.input_shape != None:
-            self.m_input_shape = [ [ int(dim_val) for dim_val in shape_str.split(",") ] \
-                 for shape_str in args.input_shape.split("/")]
+            self.m_input_shape = [[int(dim_val) for dim_val in shape_str.split(",")]
+                                  for shape_str in args.input_shape.split("/")]
 
-    def help(self):
-        help_str = \
-            '''help:
-                -s: specify the single benchmark path, eg: resnet {aipu.bin, input0.bin, output.bin}
-                -g: specify top path for benchmarks, eg: top_dir {resnet {bins}, yolo {bins}}
-                -d: specify dump path for dumped files
-                -h: display this help
-            '''
-        print(help_str)
-        exit(0)
+        if args.extra_weight_path != None:
+            self.logger.debug(f"-d arg: {args.extra_weight_path}")
+            if os.path.isdir(args.extra_weight_path):
+                self.m_extra_weight_path = args.extra_weight_path
+            else:
+                self.logger.error(f'-w arg: {args.extra_weight_path} [not exist]')
+                exit(-1)
+
+        if args.simulator != None:
+            self.logger.debug(f"--simulator arg: {args.simulator}")
+            if os.path.isfile(args.simulator):
+                self.m_simulator = args.simulator
+            else:
+                self.logger.error(f'--simulator arg: {args.simulator} [not exist]')
+                exit(-1)
 
     def parse_single_benchmark(self, bench_dir):
         self.logger.debug(f'benchdir: {bench_dir}')
@@ -112,7 +124,6 @@ class Parse_Cmdline:
         for i in range(10):
             input_bin = bench_dir + "/input" + str(i) + ".bin"
             if os.path.exists(input_bin) == False:
-                self.logger.debug(f'{input_bin} [not exist]')
                 break
             else:
                 input_bins.append(input_bin)
@@ -130,8 +141,10 @@ class Parse_Cmdline:
             bench_full_path = os.path.join(bench_dir, entry)
             self.parse_single_benchmark(bench_full_path)
 
+
 class Help:
     m_logger = None
+
     def __init__(self, logger):
         self.m_logger = logger
 
@@ -160,14 +173,16 @@ class Help:
             offset = 0
             for id in range(len(outputs)):
                 self.m_logger.debug(f'out{id}: {output_descs[id].size:x} bytes')
-                if bytes(outputs[id]) == mm[offset : offset + output_descs[id].size]:
+                if bytes(outputs[id]) == mm[offset: offset + output_descs[id].size]:
                     self.m_logger.alert(f'Test Result Check PASS! ({id + 1}/{len(outputs)})')
                 else:
                     self.m_logger.alert(f'Test Result Check Faild! ({id + 1}/{len(outputs)})')
 
                 offset += output_descs[id].size
 
+
 def hw_env_check(log):
     if os.path.exists("/dev/aipu") == False:
-        log.error('Need intall NPU driver: insmod aipu.ko')
-        exit(-1)
+        log.info('no device: /dev/aipu, will try to run simulator')
+        return False
+    return True

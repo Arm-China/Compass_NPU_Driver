@@ -18,20 +18,7 @@ SRC_UTIL = $(SRC_ROOT)/utils/
 SRC_DEVICE = $(SRC_ROOT)/device/
 
 CXXFLAGS := -std=c++14 -fPIC -Wall -Werror -rdynamic
-INCD := -I$(INC_DIR) -I$(SRC_ROOT) -I$(SRC_COMMON) -I$(SRC_DEVICE) \
-        -I$(SRC_MISC) -I$(SRC_UTIL)
-
-ifeq ($(BUILD_AIPU_VERSION), aipu_v1v2)
-INCD += -I$(SRC_ZHOUYI_V1V2)
-else ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
-INCD += -I$(SRC_ZHOUYI_V1V2)
-INCD += -I$(SRC_ZHOUYI_V3X_COMMON)
-INCD += -I$(SRC_ZHOUYI_V3)
-else ifeq ($(BUILD_AIPU_VERSION), aipu_v3_1)
-INCD += -I$(SRC_ZHOUYI_V1V2)
-INCD += -I$(SRC_ZHOUYI_V3X_COMMON)
-INCD += -I$(SRC_ZHOUYI_V3_1)
-endif
+INCD := -I$(INC_DIR) -I$(SRC_ROOT) -I$(SRC_COMMON)
 
 LDFLAGS = -shared -Wl,-soname,$(COMPASS_DRV_BTENVAR_UMD_SO_NAME)
 ANDROIDCXXFLAGS := --target=aarch64-none-linux-android21 \
@@ -84,7 +71,8 @@ SRCS = $(SRC_COMMON)/context.cpp           \
        $(SRC_COMMON)/memory_base.cpp       \
        $(SRC_COMMON)/standard_api_impl.cpp \
        $(SRC_COMMON)/status_string.cpp     \
-       $(SRC_MISC)/aipu_printf.cpp       \
+       $(SRC_COMMON)/share_weight_mgr.cpp  \
+       $(SRC_MISC)/aipu_printf.cpp         \
        $(SRC_UTIL)/helper.cpp
 
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
@@ -109,10 +97,13 @@ SRCS += $(V1V2_SRCS)
 # V3 deps
 V3_INCD += -I./3rdparty
 V3_SRCS += $(SRC_ZHOUYI_V3X_COMMON)/graph_v3x.cpp  \
+        $(SRC_ZHOUYI_V3X_COMMON)/job_v3x.cpp  \
         $(SRC_ZHOUYI_V3X_COMMON)/parser_elf.cpp \
         $(SRC_ZHOUYI_V3X_COMMON)/dynamic_shape.cpp \
+        $(SRC_ZHOUYI_V3X_COMMON)/coredump.cpp \
         $(SRC_ZHOUYI_V3)/job_v3.cpp \
-        $(SRC_ZHOUYI_V3)/gm.cpp
+        $(SRC_ZHOUYI_V3)/gm_v3.cpp
+
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
     V3_LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X2_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X2_SIM_LNAME)
     V3_SRCS += $(SRC_DEVICE)/simulator/simulator_v3.cpp
@@ -127,10 +118,13 @@ endif
 # V3_1 deps
 V3_1_INCD += -I./3rdparty
 V3_1_SRCS += $(SRC_ZHOUYI_V3X_COMMON)/graph_v3x.cpp  \
+        $(SRC_ZHOUYI_V3X_COMMON)/job_v3x.cpp \
         $(SRC_ZHOUYI_V3X_COMMON)/parser_elf.cpp \
         $(SRC_ZHOUYI_V3X_COMMON)/dynamic_shape.cpp \
+        $(SRC_ZHOUYI_V3X_COMMON)/coredump.cpp \
         $(SRC_ZHOUYI_V3_1)/job_v3_1.cpp \
-        $(SRC_ZHOUYI_V3_1)/gm.cpp
+        $(SRC_ZHOUYI_V3_1)/gm_v3_1.cpp
+
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
     V3_1_LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X3_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X3_SIM_LNAME)
     V3_1_SRCS += $(SRC_DEVICE)/simulator/simulator_v3_1.cpp

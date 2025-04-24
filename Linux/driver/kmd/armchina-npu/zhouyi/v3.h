@@ -383,6 +383,7 @@
 #define IS_EXCEPTION_SIGNAL(flag)                   ((flag) >> 30)
 #define IS_PRINTF_SIGNAL(flag)                      (((flag) >> 29) & 0x1)
 #define IS_PROFILER_SIGNAL(flag)                    (((flag) >> 28) & 0x1)
+#define IS_COREDUMP_SIGNAL(flag)                    (((flag) >> 27) & 0x1)
 #define GET_ERR_CODE(flag)                          ((flag) & 0xFFFF)
 #define GET_PRINF_SIZE(flag)                        ((flag) & 0xFFFF)
 #define GET_PROFILER_BUF_PA(flag)                   (((flag) & 0xFFFFF) << 12)

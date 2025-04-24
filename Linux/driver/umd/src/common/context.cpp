@@ -2,1139 +2,1249 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-
 /**
  * @file  context.cpp
  * @brief AIPU User Mode Driver (UMD) context module implementation
  */
 
-#include <set>
-#include <queue>
+#include "context.h"
+
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/time.h>
+#include <unistd.h>
+
 #include <iomanip>
 #include <iostream>
-#include <unistd.h>
-#include <string.h>
-#include <sys/time.h>
-#include "context.h"
+#include <queue>
+#include <set>
+
+#include "device/device.h"
 #include "type.h"
-#include "utils/log.h"
 #include "utils/debug.h"
 #include "utils/helper.h"
-#include "device.h"
+#include "utils/log.h"
 
 #if (defined ZHOUYI_V12)
-#include "graph_v1v2.h"
+#include "zhouyi_v1v2/graph_v1v2.h"
 #endif
 
 #if (defined ZHOUYI_V3) || (defined ZHOUYI_V3_1)
-#include "graph_v3x.h"
+#include "zhouyi_v3x/common/graph_v3x.h"
 #endif
 
-#include "super_graph.h"
 #include "job_base.h"
+#include "memory_base.h"
 #include "parser_base.h"
+#include "super_graph.h"
 
 volatile int32_t UMD_LOG_LEVEL = LOG_WARN;
 volatile char UMD_LOG_TIMESTAMP = 'n';
-aipudrv::MainContext::MainContext()
-{
-    const char *umd_log_level_env = getenv("UMD_LOG_LEVEL");
-    const char *umd_log_timestamp_env = getenv("UMD_LOG_TIMESTAMP");
 
-    m_dev = nullptr;
-    m_dram = nullptr;
-    pthread_rwlock_init(&m_glock, NULL);
+#ifndef MACRO_UMD_VERSION
+#define MACRO_UMD_VERSION "0.0"
+#endif
+
+namespace aipudrv {
+MainContext::MainContext() {
+  const char *umd_log_level_env = getenv("UMD_LOG_LEVEL");
+  const char *umd_log_timestamp_env = getenv("UMD_LOG_TIMESTAMP");
+
+  m_dev = nullptr;
+  m_dram = nullptr;
+  pthread_rwlock_init(&m_glock, NULL);
+  pthread_rwlock_init(&m_lock_share_graph, NULL);
+  m_sim_cfg.simulator = nullptr;
+  m_sim_cfg.npu_arch_desc = nullptr;
+  m_sim_cfg.plugin_name = nullptr;
+  m_sim_cfg.json_filename = nullptr;
+  m_sim_cfg.log_file_path = new char[BUF_LEN];
+  strcpy((char *)m_sim_cfg.log_file_path, "./");
+  m_sim_cfg.log_level = 0;
+  m_sim_cfg.verbose = false;
+  m_sim_cfg.enable_avx = false;
+  m_sim_cfg.enable_calloc = false;
+  m_sim_cfg.en_eval = false;
+  m_sim_cfg.en_l2d = false;
+#if (defined ZHOUYI_V3)
+  m_sim_cfg.gm_size = 4 * MB_SIZE;
+#else
+  m_sim_cfg.gm_size = 8 * MB_SIZE;
+#endif
+
+  m_sim_cfg.en_fast_perf = 0;
+  m_sim_cfg.freq_mhz = 1000;
+  m_sim_cfg.ddr_latency_rd = 0;
+  m_sim_cfg.ddr_latency_wr = 0;
+  m_sim_cfg.ddr_bw = 512;
+  m_sim_cfg.ddr_bw_ratio = 1.0;
+  m_sim_cfg.perf_report = nullptr;
+
+  m_hw_cfg.poll_in_commit_thread = true;
+  m_hw_cfg.enable_tec_done_irq = true;
+  if (umd_log_level_env != nullptr) {
+    int32_t log_level = umd_log_level_env[0] - '0';
+    if (log_level > LOG_WARN && log_level <= LOG_CLOSE)
+      UMD_LOG_LEVEL = log_level;
+  }
+
+  if (umd_log_timestamp_env != nullptr) {
+    UMD_LOG_TIMESTAMP = umd_log_timestamp_env[0];
+  }
+}
+
+MainContext::~MainContext() {
+  pthread_rwlock_destroy(&m_glock);
+  pthread_rwlock_destroy(&m_lock_share_graph);
+  if (m_sim_cfg.simulator != nullptr) {
+    delete[] m_sim_cfg.simulator;
     m_sim_cfg.simulator = nullptr;
+  }
+
+  if (m_sim_cfg.npu_arch_desc != nullptr) {
+    delete[] m_sim_cfg.npu_arch_desc;
     m_sim_cfg.npu_arch_desc = nullptr;
+  }
+
+  if (m_sim_cfg.plugin_name != nullptr) {
+    delete[] m_sim_cfg.plugin_name;
     m_sim_cfg.plugin_name = nullptr;
+  }
+
+  if (m_sim_cfg.json_filename != nullptr) {
+    delete[] m_sim_cfg.json_filename;
     m_sim_cfg.json_filename = nullptr;
-    m_sim_cfg.log_file_path = new char[BUF_LEN];
-    strcpy((char*)m_sim_cfg.log_file_path, "./");
-    m_sim_cfg.log_level = 0;
-    m_sim_cfg.verbose = false;
-    m_sim_cfg.enable_avx = false;
-    m_sim_cfg.enable_calloc = false;
-    m_sim_cfg.en_eval = false;
-    m_sim_cfg.en_l2d = false;
+  }
+
+  if (m_sim_cfg.perf_report != nullptr) {
+    delete[] m_sim_cfg.perf_report;
+    m_sim_cfg.perf_report = nullptr;
+  }
+
+  if (m_sim_cfg.log_file_path != nullptr) {
+    delete[] m_sim_cfg.log_file_path;
+    m_sim_cfg.log_file_path = nullptr;
+  }
+}
+
+bool MainContext::is_deinit_ok() { return true; }
+
+aipu_status_t MainContext::init() {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+  /* arm64 platform init m_dev here; simulation re-init m_dev later again. */
+  ret = get_device(&m_dev);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  /* init m_dram here as debugger may allocate buffer after contex initializing
+   * done */
+  if (m_dev != nullptr && m_dev->get_mem() != nullptr)
+    m_dram = m_dev->get_mem();
+
+  m_umd_version = MACRO_UMD_VERSION;
+
+  return ret;
+}
+
+void MainContext::force_deinit() {
+  GraphTable::iterator iter;
+
+  pthread_rwlock_wrlock(&m_lock_share_graph);
+  for (auto iter = m_share_graphs.begin(); iter != m_share_graphs.end();) {
+    free_shared_weight(iter->first);
+    iter = m_share_graphs.erase(iter);
+  }
+  pthread_rwlock_unlock(&m_lock_share_graph);
+
+  pthread_rwlock_wrlock(&m_glock);
+  for (iter = m_graphs.begin(); iter != m_graphs.end(); iter++)
+    iter->second->unload();
+
+  m_graphs.clear();
+
+  if (put_device(&m_dev))
+    m_dram = nullptr;
+
+  pthread_rwlock_unlock(&m_glock);
+}
+
+aipu_status_t MainContext::deinit() {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+  if (!is_deinit_ok()) {
+    ret = AIPU_STATUS_ERROR_DEINIT_FAIL;
+    goto finish;
+  }
+
+  force_deinit();
+
+finish:
+  return ret;
+}
+
+aipu_status_t MainContext::get_status_msg(aipu_status_t status,
+                                          const char **msg) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+  if (msg == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  if ((status > AIPU_STATUS_MAX) && (status == m_last_err))
+    *msg = m_last_err_msg;
+  else
+    *msg = get_static_msg(status);
+
+finish:
+  return ret;
+}
+
+GRAPH_ID MainContext::create_unique_graph_id() {
+  GRAPH_ID id_candidate = (1UL << 32);
+
+  pthread_rwlock_wrlock(&m_glock);
+  while (m_graphs.count(id_candidate) == 1)
+    id_candidate += (1UL << 32);
+
+  /* push nullptr into graphs to pin this graph ID */
+  m_graphs[id_candidate] = nullptr;
+  pthread_rwlock_unlock(&m_glock);
+  return id_candidate;
+}
+
+void MainContext::erase_unique_graph_id(GRAPH_ID id) {
+  pthread_rwlock_wrlock(&m_glock);
+  if (m_graphs.count(id) != 0)
+    m_graphs.erase(id);
+  pthread_rwlock_unlock(&m_glock);
+}
+
+GraphBase *MainContext::get_graph_object(GRAPH_ID id) {
+  GraphBase *p_gobj = nullptr;
+  pthread_rwlock_rdlock(&m_glock);
+  if (m_graphs.count(id) != 0)
+    p_gobj = m_graphs[id];
+  pthread_rwlock_unlock(&m_glock);
+
+  return p_gobj;
+}
+
+JobBase *MainContext::get_job_object(JOB_ID id) {
+  GraphBase *p_gobj = get_graph_object(job_id2graph_id(id));
+  if (p_gobj == nullptr)
+    return nullptr;
+
+  return p_gobj->get_job(id);
+}
+
+aipu_status_t MainContext::destroy_graph_object(GraphBase **gobj) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+  if ((gobj == nullptr) || ((*gobj) == nullptr)) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  ret = (*gobj)->unload();
+  if (ret != AIPU_STATUS_SUCCESS)
+    goto finish;
+
+  /* success */
+  delete *gobj;
+  *gobj = nullptr;
+
+finish:
+  return ret;
+}
+
+aipu_status_t MainContext::create_graph_object(std::istream &gbin,
+                                               uint32_t size, GRAPH_ID *id,
+                                               GraphBase **gobj) {
+  static std::mutex mtex;
+
+  *id = create_unique_graph_id();
+
+  uint32_t g_version = ParserBase::get_graph_bin_version(gbin);
+  aipu_status_t ret = set_device_cfg(g_version, &m_dev, &m_sim_cfg);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  {
+    std::lock_guard<std::mutex> lock_(mtex);
+    if (m_dram == nullptr)
+      m_dram = m_dev->get_mem();
+  }
+
+  GraphBase *pobj = nullptr;
+#if (defined ZHOUYI_V12)
+  if (g_version == AIPU_LOADABLE_GRAPH_V0005)
+    pobj = new GraphV12(this, *id, m_dev);
+#endif
+#if (defined ZHOUYI_V3) || (defined ZHOUYI_V3_1)
+  if (g_version == AIPU_LOADABLE_GRAPH_ELF_V0)
+    pobj = new GraphV3X(this, *id, m_dev);
+#endif
+
+  /* success: update graphs[id] */
+  pthread_rwlock_wrlock(&m_glock);
+  m_graphs[*id] = pobj;
+  pthread_rwlock_unlock(&m_glock);
+
+  *gobj = pobj;
+  return AIPU_STATUS_SUCCESS;
+}
+
+aipu_status_t MainContext::load_graph(const char *graph_file, GRAPH_ID *id,
+                                      aipu_load_graph_cfg_t *config) {
+  if ((graph_file == nullptr) || (id == nullptr))
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  std::ifstream gbin;
+  gbin.open(graph_file, std::ifstream::in | std::ifstream::binary);
+  if (!gbin.is_open())
+    return AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
+
+  gbin.seekg(0, gbin.end);
+  uint32_t size = gbin.tellg();
+  gbin.seekg(0, gbin.beg);
+
+  GraphBase *p_gobj = nullptr;
+  aipu_status_t ret = create_graph_object(gbin, size, id, &p_gobj);
+  if (ret != AIPU_STATUS_SUCCESS)
+    goto finish;
+
+  if (p_gobj == nullptr) {
+    ret = AIPU_STATUS_ERROR_GVERSION_UNSUPPORTED;
+    goto finish;
+  }
+
+  ret = p_gobj->load(gbin, size, m_do_vcheck, config);
+  if (ret != AIPU_STATUS_SUCCESS)
+    goto finish;
+
+  ret = p_gobj->alloc_weight_buffer();
+  if (ret != AIPU_STATUS_SUCCESS)
+    goto finish;
+
+finish:
+  if (ret != AIPU_STATUS_SUCCESS) {
+    erase_unique_graph_id(*id);
+    if (p_gobj != nullptr)
+      destroy_graph_object(&p_gobj);
+  }
+
+  gbin.close();
+  return ret;
+}
+
+aipu_status_t MainContext::load_graph(const char *graph_buf,
+                                      uint32_t graph_size, GRAPH_ID *id,
+                                      aipu_load_graph_cfg_t *config) {
+  if ((graph_buf == nullptr) || (id == nullptr))
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if ((graph_size <= 0) || (graph_size > UINT32_MAX))
+    return AIPU_STATUS_ERROR_INVALID_SIZE;
+
+  CustomMemBuf buf(const_cast<char *>(graph_buf), graph_size);
+  std::istream gbin(&buf);
+  if (gbin.fail())
+    return AIPU_STATUS_ERROR_READ_FILE_FAIL;
+
+  GraphBase *p_gobj = nullptr;
+  aipu_status_t ret = create_graph_object(gbin, graph_size, id, &p_gobj);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  if (p_gobj == nullptr) {
+    ret = AIPU_STATUS_ERROR_GVERSION_UNSUPPORTED;
+    goto finish;
+  }
+
+  ret = p_gobj->load(gbin, graph_size, m_do_vcheck, config);
+  if (ret != AIPU_STATUS_SUCCESS)
+    goto finish;
+
+  ret = p_gobj->alloc_weight_buffer();
+  if (ret != AIPU_STATUS_SUCCESS)
+    goto finish;
+
+finish:
+  if (ret != AIPU_STATUS_SUCCESS) {
+    erase_unique_graph_id(*id);
+    if (p_gobj != nullptr)
+      destroy_graph_object(&p_gobj);
+  }
+  return ret;
+}
+
+aipu_status_t MainContext::load_share_weight_graph(const char *graph_file,
+                                                   GRAPH_ID **ids,
+                                                   uint32_t *id_cnt) {
+  if (graph_file == nullptr || ids == nullptr || id_cnt == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  aipudrv::ShareWeightMgr sw_mgr(graph_file);
+  aipu_status_t ret = sw_mgr.parse();
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  auto &elfs = sw_mgr.get_elfs();
+  *id_cnt = elfs.size();
+  if (*id_cnt < 2) {
+    LOG(LOG_ERR, "there has less then 2 graphs in zip file, please use "
+                 "'aipu_load_graph()' API");
+    return AIPU_STATUS_ERROR_INVALID_GBIN;
+  }
+
+  std::vector<GRAPH_ID> graph_ids(*id_cnt, 0);
+  void *elf = nullptr;
+  uint32_t elf_size = 0;
+  uint32_t offsets_start = 0;
+  SharedGraphTable::iterator it;
+
+  for (uint32_t i = 0; i < *id_cnt; ++i) {
+    elf_size = elfs[i].size;
+    ret = umd_mmap_file_helper(sw_mgr.file_path().c_str(), &elf, elf_size,
+                               elfs[i].offset);
+    if (ret != AIPU_STATUS_SUCCESS)
+      goto finish;
+
+    CustomMemBuf buf(reinterpret_cast<char *>(elf), elf_size);
+    std::istream gbin(&buf);
+    if (gbin.fail()) {
+      ret = AIPU_STATUS_ERROR_READ_FILE_FAIL;
+      goto finish;
+    }
+
+    GraphBase *p_gobj = nullptr;
+    ret = create_graph_object(gbin, elf_size, &graph_ids[i], &p_gobj);
+    if (ret != AIPU_STATUS_SUCCESS)
+      goto finish;
+
+    if (p_gobj == nullptr) {
+      ret = AIPU_STATUS_ERROR_GVERSION_UNSUPPORTED;
+      goto finish;
+    }
+
+    Graph *graph = reinterpret_cast<Graph *>(p_gobj);
+    graph->set_sw_mgr(&sw_mgr);
+    graph->set_shared_weight(sw_mgr.get_weight());
+    graph->set_shared_offset(sw_mgr.get_offset(), offsets_start);
+
+    ret = graph->load(gbin, elf_size, m_do_vcheck);
+    if (ret != AIPU_STATUS_SUCCESS)
+      goto finish;
+
+    offsets_start += graph->get_hashtable_items_cnt() * sizeof(uint64_t);
+
+    munmap(elf, elf_size);
+    elf = nullptr;
+  }
+
+  ret = alloc_shared_weight(graph_ids);
+  if (ret != AIPU_STATUS_SUCCESS)
+    goto finish;
+
+  pthread_rwlock_wrlock(&m_lock_share_graph);
+  it = m_share_graphs.begin();
+  for (; it != m_share_graphs.end(); ++it) {
+    if (it->first == graph_ids) {
+      *ids = const_cast<GRAPH_ID *>(it->first.data());
+      break;
+    }
+  }
+  if (it == m_share_graphs.end()) {
+    ret = AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+    pthread_rwlock_unlock(&m_lock_share_graph);
+    goto finish;
+  }
+  pthread_rwlock_unlock(&m_lock_share_graph);
+
+finish:
+  if (ret != AIPU_STATUS_SUCCESS) {
+    if (elf != nullptr)
+      munmap(elf, elf_size);
+
+    for (auto id : graph_ids) {
+      GraphBase *p_gobj = get_graph_object(id);
+      if (p_gobj != nullptr)
+        destroy_graph_object(&p_gobj);
+      erase_unique_graph_id(id);
+    }
+
+    pthread_rwlock_wrlock(&m_lock_share_graph);
+    free_shared_weight(graph_ids);
+    m_share_graphs.erase(graph_ids);
+    pthread_rwlock_unlock(&m_lock_share_graph);
+  }
+  return ret;
+}
+
+aipu_status_t MainContext::unload_graph(GRAPH_ID id) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  GraphBase *p_gobj = nullptr;
+
+  p_gobj = get_graph_object(id);
+  if (p_gobj == nullptr) {
+    ret = AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+    goto finish;
+  }
+
+  ret = destroy_graph_object(&p_gobj);
+  if (ret != AIPU_STATUS_SUCCESS)
+    goto finish;
+
+  /* success */
+  pthread_rwlock_wrlock(&m_glock);
+  m_graphs.erase(id);
+  pthread_rwlock_unlock(&m_glock);
+
+  pthread_rwlock_wrlock(&m_lock_share_graph);
+  free_shared_weight({id});
+  for (auto it = m_share_graphs.begin(); it != m_share_graphs.end(); ++it) {
+    if (std::find(it->first.begin(), it->first.end(), id) != it->first.end()) {
+      if (it->second.weight_ref_cnt == 0)
+        m_share_graphs.erase(it);
+      break;
+    }
+  }
+  pthread_rwlock_unlock(&m_lock_share_graph);
+
+finish:
+  return ret;
+}
+
+aipu_status_t MainContext::create_job(GRAPH_ID graph, JOB_ID *id,
+                                      aipu_create_job_cfg_t *config) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  GraphBase *p_gobj = nullptr;
+
+  if (id == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  p_gobj = get_graph_object(graph);
+  if (p_gobj == nullptr) {
+    ret = AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+    goto finish;
+  }
+
+  ret = p_gobj->create_job(id, &m_sim_cfg, &m_hw_cfg, config);
+
+finish:
+  return ret;
+}
+
+aipu_status_t MainContext::get_simulation_instance(void **simulator,
+                                                   void **memory) {
+  return m_dev->get_simulation_instance(simulator, memory);
+}
+
+aipu_status_t MainContext::get_partition_count(uint32_t *cnt) {
+  return m_dev->get_partition_count(cnt);
+}
+
+aipu_status_t MainContext::get_cluster_count(uint32_t partition_id,
+                                             uint32_t *cnt) {
+  return m_dev->get_cluster_count(partition_id, cnt);
+}
+
+aipu_status_t MainContext::get_core_count(uint32_t partition_id,
+                                          uint32_t cluster, uint32_t *cnt) {
+  return m_dev->get_core_count(partition_id, cluster, cnt);
+}
+
+aipu_status_t MainContext::get_core_info(uint32_t id, aipu_core_info_t *info) {
+  return m_dev->get_core_info(id, info);
+}
+
+aipu_status_t
+MainContext::debugger_get_job_info(uint64_t job,
+                                   aipu_debugger_job_info_t *info) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  GraphBase *p_gobj = get_graph_object(get_graph_id(job));
+  if (p_gobj == nullptr) {
+    ret = AIPU_STATUS_ERROR_INVALID_JOB_ID;
+    goto finish;
+  }
+
+  if (info == nullptr) {
+    ret = AIPU_STATUS_ERROR_NULL_PTR;
+    goto finish;
+  }
+
+  ret = get_simulation_instance(&info->simulation_aipu,
+                                &info->simulation_mem_engine);
+  if (ret != AIPU_STATUS_SUCCESS)
+    goto finish;
+
+  info->instr_base = p_gobj->debugger_get_instr_base();
+
+finish:
+  return ret;
+}
+
+aipu_status_t
+MainContext::config_simulation(uint64_t types,
+                               aipu_global_config_simulation_t *config) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  char *sim_npu_arch_env = getenv("SIM_NPU_ARCH");
+
+  // aipu v3 GM size
+  std::set<uint32_t> gm_sz_cfg = {512 << 10, // 512KB
+                                  1 << 20,   // 1MB
+                                  2 << 20,   4 << 20,  8 << 20,
+                                  16 << 20,  32 << 20, 64 << 20};
+
+  if (config == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  if (config->simulator != nullptr) {
+    if (m_sim_cfg.simulator == nullptr)
+      m_sim_cfg.simulator = new char[BUF_LEN];
+
+    strncpy((char *)m_sim_cfg.simulator, config->simulator, BUF_LEN);
+  }
+
+  if (config->plugin_name != nullptr) {
+    if (m_sim_cfg.plugin_name == nullptr)
+      m_sim_cfg.plugin_name = new char[BUF_LEN];
+
+    strncpy((char *)m_sim_cfg.plugin_name, config->plugin_name, BUF_LEN);
+  }
+
+  if (config->json_filename != nullptr) {
+    if (m_sim_cfg.json_filename == nullptr)
+      m_sim_cfg.json_filename = new char[BUF_LEN];
+
+    strncpy((char *)m_sim_cfg.json_filename, config->json_filename, BUF_LEN);
+  }
+
+  if (config->log_file_path != nullptr) {
+    strncpy((char *)m_sim_cfg.log_file_path, config->log_file_path, BUF_LEN);
+  }
+
+  m_sim_cfg.log_level = config->log_level;
+  m_sim_cfg.verbose = config->verbose;
+  m_sim_cfg.enable_avx = config->enable_avx;
+  m_sim_cfg.enable_calloc = config->enable_calloc;
+  m_sim_cfg.en_eval = config->en_eval;
+  m_sim_cfg.en_l2d = config->en_l2d;
+
+  m_sim_cfg.gm_size = config->gm_size;
+  if (gm_sz_cfg.count(m_sim_cfg.gm_size) != 1) {
 #if (defined ZHOUYI_V3)
     m_sim_cfg.gm_size = 4 * MB_SIZE;
 #else
     m_sim_cfg.gm_size = 8 * MB_SIZE;
 #endif
+  }
 
-    m_sim_cfg.en_fast_perf = 0;
-    m_sim_cfg.freq_mhz = 1000;
-    m_sim_cfg.ddr_latency_rd = 0;
-    m_sim_cfg.ddr_latency_wr = 0;
-    m_sim_cfg.ddr_bw = 512;
-    m_sim_cfg.ddr_bw_ratio = 1.0;
-    m_sim_cfg.perf_report = nullptr;
+  m_sim_cfg.en_fast_perf = config->en_fast_perf;
+  m_sim_cfg.freq_mhz = config->freq_mhz;
+  m_sim_cfg.ddr_latency_rd = config->ddr_latency_rd;
+  m_sim_cfg.ddr_latency_wr = config->ddr_latency_wr;
+  m_sim_cfg.ddr_bw = config->ddr_bw;
+  m_sim_cfg.ddr_bw_ratio = config->ddr_bw_ratio;
+  if (config->perf_report != nullptr) {
+    if (m_sim_cfg.perf_report == nullptr)
+      m_sim_cfg.perf_report = new char[BUF_LEN];
 
-    m_hw_cfg.poll_in_commit_thread = true;
-    if (umd_log_level_env != nullptr)
-    {
-        int32_t log_level = umd_log_level_env[0] - '0';
-        if (log_level > LOG_WARN && log_level <= LOG_CLOSE)
-            UMD_LOG_LEVEL = log_level;
-    }
+    strncpy((char *)m_sim_cfg.perf_report, config->perf_report, BUF_LEN);
+  }
 
-    if (umd_log_timestamp_env != nullptr)
-    {
-        UMD_LOG_TIMESTAMP = umd_log_timestamp_env[0];
-    }
-}
+  if ((config->npu_arch_desc != nullptr) || (sim_npu_arch_env != nullptr)) {
+    if (m_sim_cfg.npu_arch_desc == nullptr)
+      m_sim_cfg.npu_arch_desc = new char[64];
 
-aipudrv::MainContext::~MainContext()
-{
-    pthread_rwlock_destroy(&m_glock);
-    if (m_sim_cfg.simulator != nullptr)
-    {
-        delete[] m_sim_cfg.simulator;
-        m_sim_cfg.simulator = nullptr;
-    }
-
-    if (m_sim_cfg.npu_arch_desc != nullptr)
-    {
-        delete[] m_sim_cfg.npu_arch_desc;
-        m_sim_cfg.npu_arch_desc = nullptr;
-    }
-
-    if (m_sim_cfg.plugin_name != nullptr)
-    {
-        delete[] m_sim_cfg.plugin_name;
-        m_sim_cfg.plugin_name = nullptr;
-    }
-
-    if (m_sim_cfg.json_filename != nullptr)
-    {
-        delete[] m_sim_cfg.json_filename;
-        m_sim_cfg.json_filename = nullptr;
-    }
-
-    if (m_sim_cfg.perf_report != nullptr)
-    {
-        delete[] m_sim_cfg.perf_report;
-        m_sim_cfg.perf_report = nullptr;
-    }
-
-    if (m_sim_cfg.log_file_path != nullptr)
-    {
-        delete[] m_sim_cfg.log_file_path;
-        m_sim_cfg.log_file_path = nullptr;
-    }
-}
-
-bool aipudrv::MainContext::is_deinit_ok()
-{
-    return true;
-}
-
-aipu_status_t aipudrv::MainContext::init()
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-
-    /* arm64 platform init m_dev here; simulation init m_dev later */
-    ret = get_device(&m_dev);
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    /* init m_dram here as debugger may allocate buffer after contex initializing done */
-#ifndef SIMULATION
-    if (m_dev->get_mem() != nullptr)
-        m_dram = m_dev->get_mem();
-#endif
-
-    m_umd_version = MACRO_UMD_VERSION;
-
-    return ret;
-}
-
-void aipudrv::MainContext::force_deinit()
-{
-    GraphTable::iterator iter;
-
-    pthread_rwlock_wrlock(&m_glock);
-    for (iter = m_graphs.begin(); iter != m_graphs.end(); iter++)
-        iter->second->unload();
-
-    m_graphs.clear();
-
-    if (put_device(m_dev))
-        m_dram = nullptr;
-
-    pthread_rwlock_unlock(&m_glock);
-}
-
-aipu_status_t aipudrv::MainContext::deinit()
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-
-    if (!is_deinit_ok())
-    {
-        ret = AIPU_STATUS_ERROR_DEINIT_FAIL;
-        goto finish;
-    }
-
-    force_deinit();
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipudrv::MainContext::get_status_msg(aipu_status_t status, const char** msg)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-
-    if (msg == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    if ((status > AIPU_STATUS_MAX) && (status == m_last_err))
-        *msg = m_last_err_msg;
+    if (config->npu_arch_desc != nullptr)
+      strncpy((char *)m_sim_cfg.npu_arch_desc, config->npu_arch_desc, 64);
     else
-        *msg = get_static_msg(status);
+      strncpy((char *)m_sim_cfg.npu_arch_desc, sim_npu_arch_env, 64);
 
-finish:
-    return ret;
-}
-
-uint64_t aipudrv::MainContext::create_unique_graph_id_inner() const
-{
-    uint64_t id_candidate = (1UL << 32);
-
-    while (m_graphs.count(id_candidate) == 1)
-        id_candidate += (1UL << 32);
-
-    return id_candidate;
-}
-
-aipu_status_t aipudrv::MainContext::create_graph_object(std::istream& gbin, uint32_t size,
-    uint64_t id, GraphBase** gobj, aipu_load_graph_cfg_t *config)
-{
-    static std::mutex mtex;
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    GraphBase* p_gobj = nullptr;
-    uint32_t g_version = 0;
-
-    if (gobj == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    g_version = ParserBase::get_graph_bin_version(gbin);
-    ret = test_get_device(g_version, &m_dev, &m_sim_cfg);
+    ret = set_device_cfg(AIPU_LOADABLE_GRAPH_ELF_V0, &m_dev, &m_sim_cfg);
     if (ret != AIPU_STATUS_SUCCESS)
-        goto finish;
-
-    {
-        std::lock_guard<std::mutex> lock_(mtex);
-        if (m_dram == nullptr)
-            m_dram = m_dev->get_mem();
-    }
-
-#if (defined ZHOUYI_V12)
-    if (g_version == AIPU_LOADABLE_GRAPH_V0005)
-        p_gobj = new GraphV12(this, id, m_dev);
-#endif
-#if (defined ZHOUYI_V3) || (defined ZHOUYI_V3_1)
-    if (g_version == AIPU_LOADABLE_GRAPH_ELF_V0)
-        p_gobj = new GraphV3X(this, id, m_dev);
-#endif
-
-    if (p_gobj == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_GVERSION_UNSUPPORTED;
-        goto finish;
-    }
-
-    ret = p_gobj->load(gbin, size, m_do_vcheck, config);
-    if (ret != AIPU_STATUS_SUCCESS)
-    {
-        destroy_graph_object(&p_gobj);
-        goto finish;
-    }
-
-    /* success or return nullptr */
-    *gobj = p_gobj;
-
-finish:
-    return ret;
-}
-
-aipudrv::GraphBase* aipudrv::MainContext::get_graph_object(GRAPH_ID id)
-{
-    GraphBase* p_gobj = nullptr;
-    pthread_rwlock_rdlock(&m_glock);
-    if (m_graphs.count(id) != 0)
-        p_gobj = m_graphs[id];
-    pthread_rwlock_unlock(&m_glock);
-
-    return p_gobj;
-}
-
-aipudrv::JobBase* aipudrv::MainContext::get_job_object(JOB_ID id)
-{
-    GraphBase* p_gobj = get_graph_object(job_id2graph_id(id));
-    if (p_gobj == nullptr)
-        return nullptr;
-
-    return p_gobj->get_job(id);
-}
-
-aipu_status_t aipudrv::MainContext::destroy_graph_object(GraphBase** gobj)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-
-    if ((gobj == nullptr) || ((*gobj) == nullptr))
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    ret = (*gobj)->unload();
-    if (ret != AIPU_STATUS_SUCCESS)
-        goto finish;
-
-    /* success */
-    delete *gobj;
-    *gobj = nullptr;
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipudrv::MainContext::load_graph(const char* graph_file, GRAPH_ID* _id,
-    aipu_load_graph_cfg_t *config)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    GraphBase* gobj = nullptr;
-    uint64_t id = 0;
-    std::ifstream gbin;
-    int fsize = 0;
-
-    if ((graph_file == nullptr) || (_id == nullptr))
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    gbin.open(graph_file, std::ifstream::in | std::ifstream::binary);
-    if (!gbin.is_open())
-        return AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
-
-    gbin.seekg(0, gbin.end);
-    fsize = gbin.tellg();
-    gbin.seekg(0, gbin.beg);
-
-    /* push nullptr into graphs to pin this graph ID */
-    pthread_rwlock_wrlock(&m_glock);
-    id = create_unique_graph_id_inner();
-    m_graphs[id] = nullptr;
-    pthread_rwlock_unlock(&m_glock);
-
-    ret = create_graph_object(gbin, fsize, id, &gobj, config);
-    if (ret != AIPU_STATUS_SUCCESS)
-    {
-        pthread_rwlock_wrlock(&m_glock);
-        m_graphs.erase(id);
-        pthread_rwlock_unlock(&m_glock);
-        goto finish;
-    }
-
-    /* success: update graphs[id] */
-    pthread_rwlock_wrlock(&m_glock);
-    m_graphs[id] = gobj;
-    pthread_rwlock_unlock(&m_glock);
-    *_id = id;
-
-finish:
-    gbin.close();
-    return ret;
-}
-
-aipu_status_t aipudrv::MainContext::load_graph(const char* graph_buf, uint32_t graph_size,
-    GRAPH_ID* _id, aipu_load_graph_cfg_t *config)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    GraphBase* gobj = nullptr;
-    uint64_t id = 0;
-
-    if ((graph_buf == nullptr) || (_id == nullptr))
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        return ret;
-    }
-
-    if ((graph_size <= 0) || (graph_size > UINT32_MAX))
-    {
-        ret = AIPU_STATUS_ERROR_INVALID_SIZE;
-        return ret;
-    }
-
-    /* push nullptr into graphs to pin this graph ID */
-    pthread_rwlock_wrlock(&m_glock);
-    id = create_unique_graph_id_inner();
-    m_graphs[id] = nullptr;
-    pthread_rwlock_unlock(&m_glock);
-
-    CustomMemBuf buf(const_cast<char*>(graph_buf), graph_size);
-    std::istream gbin(&buf);
-    if (gbin.fail())
-    {
-        ret = AIPU_STATUS_ERROR_READ_FILE_FAIL;
-        goto finish;
-    }
-
-    ret = create_graph_object(gbin, graph_size, id, &gobj, config);
-    if (ret != AIPU_STATUS_SUCCESS)
-    {
-        pthread_rwlock_wrlock(&m_glock);
-        m_graphs.erase(id);
-        pthread_rwlock_unlock(&m_glock);
-        goto finish;
-    }
-
-    /* success: update graphs[id] */
-    pthread_rwlock_wrlock(&m_glock);
-    m_graphs[id] = gobj;
-    pthread_rwlock_unlock(&m_glock);
-    *_id = id;
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipudrv::MainContext::unload_graph(GRAPH_ID id)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    GraphBase* p_gobj = nullptr;
-
-    p_gobj = get_graph_object(id);
-    if (p_gobj == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-        goto finish;
-    }
-
-    ret = destroy_graph_object(&p_gobj);
-    if (ret != AIPU_STATUS_SUCCESS)
-        goto finish;
-
-    /* p_gobj becomes NULL after destroy */
-
-    /* success */
-    pthread_rwlock_wrlock(&m_glock);
-    m_graphs.erase(id);
-    pthread_rwlock_unlock(&m_glock);
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipudrv::MainContext::create_job(GRAPH_ID graph, JOB_ID* id, aipu_create_job_cfg_t *config)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    GraphBase* p_gobj = nullptr;
-
-    if (id == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    p_gobj = get_graph_object(graph);
-    if (p_gobj == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-        goto finish;
-    }
-
-    ret = p_gobj->create_job(id, &m_sim_cfg, &m_hw_cfg, config);
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipudrv::MainContext::get_simulation_instance(void** simulator, void** memory)
-{
-    return m_dev->get_simulation_instance(simulator, memory);
-}
-
-aipu_status_t aipudrv::MainContext::get_partition_count(uint32_t* cnt)
-{
-    return m_dev->get_partition_count(cnt);
-}
-
-aipu_status_t aipudrv::MainContext::get_cluster_count(uint32_t partition_id, uint32_t* cnt)
-{
-    return m_dev->get_cluster_count(partition_id, cnt);
-}
-
-aipu_status_t aipudrv::MainContext::get_core_count(uint32_t partition_id, uint32_t cluster, uint32_t* cnt)
-{
-    return m_dev->get_core_count(partition_id, cluster, cnt);
-}
-
-aipu_status_t aipudrv::MainContext::get_core_info(uint32_t id, aipu_core_info_t* info)
-{
-    return m_dev->get_core_info(id, info);
-}
-
-aipu_status_t aipudrv::MainContext::debugger_get_job_info(uint64_t job, aipu_debugger_job_info_t* info)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    GraphBase* p_gobj = get_graph_object(get_graph_id(job));
-    if (p_gobj == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_INVALID_JOB_ID;
-        goto finish;
-    }
-
-    if (info == nullptr)
-    {
-        ret = AIPU_STATUS_ERROR_NULL_PTR;
-        goto finish;
-    }
-
-    ret = get_simulation_instance(&info->simulation_aipu, &info->simulation_mem_engine);
-    if (ret != AIPU_STATUS_SUCCESS)
-        goto finish;
-
-    info->instr_base = p_gobj->debugger_get_instr_base();
-
-finish:
-    return ret;
-}
-
-aipu_status_t aipudrv::MainContext::config_simulation(uint64_t types, aipu_global_config_simulation_t* config)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    char *sim_npu_arch_env = getenv("SIM_NPU_ARCH");
-
-    // aipu v3 GM size
-    std::set<uint32_t> gm_sz_cfg = {
-        512 << 10, // 512KB
-        1 << 20,   // 1MB
-        2 << 20,
-        4 << 20,
-        8 << 20,
-        16 << 20,
-        32 << 20,
-        64 << 20
-    };
-
-    if (config == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    if (config->simulator != nullptr)
-    {
-        if (m_sim_cfg.simulator == nullptr)
-            m_sim_cfg.simulator = new char[BUF_LEN];
-
-        strncpy((char*)m_sim_cfg.simulator, config->simulator, BUF_LEN);
-    }
-
-    if (config->plugin_name != nullptr)
-    {
-        if (m_sim_cfg.plugin_name == nullptr)
-            m_sim_cfg.plugin_name = new char[BUF_LEN];
-
-        strncpy((char*)m_sim_cfg.plugin_name, config->plugin_name, BUF_LEN);
-    }
-
-    if (config->json_filename != nullptr)
-    {
-        if (m_sim_cfg.json_filename == nullptr)
-            m_sim_cfg.json_filename = new char[BUF_LEN];
-
-        strncpy((char*)m_sim_cfg.json_filename, config->json_filename, BUF_LEN);
-    }
-
-    if (config->log_file_path != nullptr)
-    {
-        strncpy((char*)m_sim_cfg.log_file_path, config->log_file_path, BUF_LEN);
-    }
-
-    m_sim_cfg.log_level = config->log_level;
-    m_sim_cfg.verbose = config->verbose;
-    m_sim_cfg.enable_avx = config->enable_avx;
-    m_sim_cfg.enable_calloc = config->enable_calloc;
-    m_sim_cfg.en_eval = config->en_eval;
-    m_sim_cfg.en_l2d = config->en_l2d;
-
-    m_sim_cfg.gm_size = config->gm_size;
-    if (gm_sz_cfg.count(m_sim_cfg.gm_size) != 1)
-    {
-#if (defined ZHOUYI_V3)
-        m_sim_cfg.gm_size = 4 * MB_SIZE;
-#else
-        m_sim_cfg.gm_size = 8 * MB_SIZE;
-#endif
-    }
-
-    m_sim_cfg.en_fast_perf = config->en_fast_perf;
-    m_sim_cfg.freq_mhz = config->freq_mhz;
-    m_sim_cfg.ddr_latency_rd = config->ddr_latency_rd;
-    m_sim_cfg.ddr_latency_wr = config->ddr_latency_wr;
-    m_sim_cfg.ddr_bw = config->ddr_bw;
-    m_sim_cfg.ddr_bw_ratio = config->ddr_bw_ratio;
-    if (config->perf_report != nullptr)
-    {
-        if (m_sim_cfg.perf_report == nullptr)
-            m_sim_cfg.perf_report = new char[BUF_LEN];
-
-        strncpy((char*)m_sim_cfg.perf_report, config->perf_report, BUF_LEN);
-    }
-
-    if ((config->npu_arch_desc != nullptr) || (sim_npu_arch_env != nullptr))
-    {
-        if (m_sim_cfg.npu_arch_desc == nullptr)
-            m_sim_cfg.npu_arch_desc = new char[64];
-
-        if (config->npu_arch_desc != nullptr)
-            strncpy((char*)m_sim_cfg.npu_arch_desc, config->npu_arch_desc, 64);
-        else
-            strncpy((char*)m_sim_cfg.npu_arch_desc, sim_npu_arch_env, 64);
-
-        ret = set_target(AIPU_LOADABLE_GRAPH_ELF_V0, &m_dev, &m_sim_cfg);
-        if (ret != AIPU_STATUS_SUCCESS)
-            goto out;
-    }
+      goto out;
+  }
 
 out:
-    return ret;
+  return ret;
 }
 
-aipu_status_t aipudrv::MainContext::config_hw(uint64_t types, aipu_global_config_hw_t *config)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+aipu_status_t MainContext::config_hw(uint64_t types,
+                                     aipu_global_config_hw_t *config) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    if (config == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
+  if (config == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
 
-    m_hw_cfg = *config;
-    return ret;
+  m_hw_cfg = *config;
+  return ret;
 }
 
-aipu_status_t aipudrv::MainContext::debugger_malloc(uint32_t size, void** va)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    BufferDesc *buf = nullptr;
-    char* alloc_va = nullptr;
-    uint32_t core_cnt = 0;
+aipu_status_t MainContext::debugger_malloc(uint32_t size, void **va) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  BufferDesc *buf = nullptr;
+  char *alloc_va = nullptr;
 
-    if ((va == nullptr) || (m_dram == nullptr))
-        return AIPU_STATUS_ERROR_NULL_PTR;
+  if ((va == nullptr) || (m_dram == nullptr))
+    return AIPU_STATUS_ERROR_NULL_PTR;
 
-    ret = m_dram->malloc(size, 1, &buf, "dbg");
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    if (m_dram->pa_to_va(buf->pa, buf->size, &alloc_va) != 0)
-        return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
-
-    /**
-     * debugger for Jtag-only need data address 0/1 register (0x14/0x18) as
-     * channel between server & client
-     *
-     * for all cores:
-     * dreg0: buffer base address in device space
-     * dreg1: magic number requested by debugger
-     */
-    m_dev->get_core_count(0, 0, &core_cnt);
-    if ((m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3) ||
-        (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3_1))
-    {
-        m_dev->write_reg(0, 0x0c, buf->pa);
-        m_dev->write_reg(0, 0x08, 0x1248FFA5);
-    } else {
-        for (uint32_t id = 0; id < core_cnt; id++)
-        {
-            m_dev->write_reg(id, 0x14, buf->pa);
-            m_dev->write_reg(id, 0x18, 0x1248FFA5);
-        }
-    }
-
-    m_dbg_buffers[alloc_va] = buf;
-    *va = alloc_va;
+  ret = m_dram->malloc(size, 1, &buf, "dbg");
+  if (ret != AIPU_STATUS_SUCCESS)
     return ret;
+
+  if (m_dram->pa_to_va(buf->pa, buf->size, &alloc_va) != 0)
+    return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
+
+  /**
+   * debugger for Jtag-only need data address 0/1 register (0x14/0x18) of V1/V2
+   * or the TSM command schedule address hi/lo register (0x8/0xc) of V3x as
+   * channel between server & client
+   *
+   * dreg0: buffer base address in device space
+   * dreg1: magic number requested by debugger
+   */
+  if ((m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3) ||
+      (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3_1)) {
+    m_dev->write_reg(0, 0x0c, buf->pa);
+    m_dev->write_reg(0, 0x08, 0x1248FFA5);
+  } else {
+    m_dev->write_reg(0, 0x14, buf->pa);
+    m_dev->write_reg(0, 0x18, 0x1248FFA5);
+  }
+
+  m_dbg_buffers[alloc_va] = buf;
+  *va = alloc_va;
+  return ret;
 }
 
-aipu_status_t aipudrv::MainContext::debugger_free(void* va)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+aipu_status_t MainContext::debugger_free(void *va) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-    if (va == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
+  if (va == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
 
-    if (m_dbg_buffers.count(va) == 0)
-        return AIPU_STATUS_ERROR_BUF_FREE_FAIL;
+  if (m_dbg_buffers.count(va) == 0)
+    return AIPU_STATUS_ERROR_BUF_FREE_FAIL;
 
-    ret = m_dram->free(&m_dbg_buffers[va], "dbg");
-    if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-    m_dbg_buffers.erase(va);
+  ret = m_dram->free(&m_dbg_buffers[va], "dbg");
+  if (ret != AIPU_STATUS_SUCCESS)
     return ret;
+
+  m_dbg_buffers.erase(va);
+  return ret;
 }
 
-aipu_status_t aipudrv::MainContext::aipu_get_target(char *target)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    uint32_t isa = AIPU_ISA_VERSION_ZHOUYI_V1;
-    uint32_t config = 904;
-    std::string isa_version, arch_cfg;
-    std::stringstream config_ss;
-    std::set<std::string> arch_set = {
-        "Z1_0904", "Z1_1002", "Z1_0701",
-        "Z2_1104", "Z2_1002", "Z2_0901",
-        "Z3_1104", "Z3_0901", "X1_1204",
-        "X2_1204",
-        "X3_1304",
-    };
+aipu_status_t MainContext::aipu_get_target(char *target) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  uint32_t isa = AIPU_ISA_VERSION_ZHOUYI_V1;
+  uint32_t config = 904;
+  std::string isa_version, arch_cfg;
+  std::stringstream config_ss;
+  std::set<std::string> arch_set = {
+      "Z1_0904", "Z1_1002", "Z1_0701", "Z2_1104", "Z2_1002", "Z2_0901",
+      "Z3_1104", "Z3_0901", "X1_1204", "X2_1204", "X3_1304",
+  };
 
 #if SIMULATION
-    const char *nul_ptr = "null";
-    strcpy(target, nul_ptr);
-    return ret;
+  const char *nul_ptr = "null";
+  strcpy(target, nul_ptr);
+  return ret;
 #endif
 
-    isa = m_dev->get_npu_version();
-    config = m_dev->get_npu_config();
+  isa = m_dev->get_npu_version();
+  config = m_dev->get_npu_config();
 
-    switch (isa)
-    {
-        case AIPU_ISA_VERSION_ZHOUYI_V1:
-            isa_version = "Z1_";
-            break;
-        case AIPU_ISA_VERSION_ZHOUYI_V2_0:
-            isa_version = "Z2_";
-            break;
-        case AIPU_ISA_VERSION_ZHOUYI_V2_1:
-            isa_version = "Z3_";
-            break;
-        case AIPU_ISA_VERSION_ZHOUYI_V2_2:
-            isa_version = "X1_";
-            break;
-        case AIPU_ISA_VERSION_ZHOUYI_V3:
-            isa_version = "X2_";
-            config = 1204;
-            break;
-        case AIPU_ISA_VERSION_ZHOUYI_V3_1:
-            isa_version = "X3_";
-            config = 1304;
-            break;
-        default:
-            return AIPU_STATUS_ERROR_INVALID_CONFIG;
-    }
+  switch (isa) {
+  case AIPU_ISA_VERSION_ZHOUYI_V1:
+    isa_version = "Z1_";
+    break;
+  case AIPU_ISA_VERSION_ZHOUYI_V2_0:
+    isa_version = "Z2_";
+    break;
+  case AIPU_ISA_VERSION_ZHOUYI_V2_1:
+    isa_version = "Z3_";
+    break;
+  case AIPU_ISA_VERSION_ZHOUYI_V2_2:
+    isa_version = "X1_";
+    break;
+  case AIPU_ISA_VERSION_ZHOUYI_V3:
+    isa_version = "X2_";
+    config = 1204;
+    break;
+  case AIPU_ISA_VERSION_ZHOUYI_V3_1:
+    isa_version = "X3_";
+    config = 1304;
+    break;
+  default:
+    return AIPU_STATUS_ERROR_INVALID_CONFIG;
+  }
 
-    config_ss << std::setw(4) << std::setfill('0') << config;
-    arch_cfg = isa_version + config_ss.str();
-    if (arch_set.count(arch_cfg.c_str()) == 0)
-        return AIPU_STATUS_ERROR_INVALID_CONFIG;
+  config_ss << std::setw(4) << std::setfill('0') << config;
+  arch_cfg = isa_version + config_ss.str();
+  if (arch_set.count(arch_cfg.c_str()) == 0)
+    return AIPU_STATUS_ERROR_INVALID_CONFIG;
 
-    uint32_t core_num = m_dev->get_npu_core_cnt();
-    if (core_num > 1)
-        arch_cfg = arch_cfg + "MP" + std::to_string(core_num);
+  uint32_t core_num = m_dev->get_npu_core_cnt();
+  if (core_num > 1)
+    arch_cfg = arch_cfg + "MP" + std::to_string(core_num);
 
-    strncpy(target, arch_cfg.c_str(), arch_cfg.size());
-    return ret;
+  strncpy(target, arch_cfg.c_str(), arch_cfg.size());
+  return ret;
 }
 
-aipu_status_t aipudrv::MainContext::aipu_get_device_status(device_status_t *status)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    uint32_t reg_addr = 0x4, value = 0;
+aipu_status_t MainContext::aipu_get_device_status(device_status_t *status) {
+  if (status == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
 
-    if (status == nullptr)
-        return AIPU_STATUS_ERROR_NULL_PTR;
-
-    *status = DEV_IDLE;
 #ifdef SIMULATION
-    return ret;
+  *status = DEV_IDLE;
+  return AIPU_STATUS_SUCCESS;
 #endif
-
-    if (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3)
-        reg_addr = 0x804;
-
-    ret = convert_ll_status(m_dev->read_reg(0, reg_addr, &value));
-
-    if (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3)
-    {
-        if (value & X2_CMDPOOL_IDLE)
-            *status = DEV_IDLE;
-        else if (!(value & X2_CMDPOOL_IDLE))
-            ; // *status = DEV_BUSY;
-
-        if (value & X2_CMDPOOL_EXCEPTION)
-            *status = DEV_EXCEPTION;
-    } else {
-        if (value & X1_DEV_IDLE)
-            *status = DEV_IDLE;
-        else if (!(value & X1_DEV_IDLE))
-            *status = DEV_BUSY;
-
-        if (value & X1_DEV_EXCEPTION)
-            *status = DEV_EXCEPTION;
-    }
-
-    return ret;
+  return convert_ll_status(m_dev->get_device_status(status));
 }
 
-aipu_status_t aipudrv::MainContext::get_status(JobBase *job, aipu_job_status_t *status)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    const char *msg = nullptr;
-    int timeout = 3600; // prompt per 1 hour
+aipu_status_t MainContext::get_status(JobBase *job, aipu_job_status_t *status) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  const char *msg = nullptr;
+  int timeout = 3600; // prompt per 1 hour
 
-    while ((*status != AIPU_JOB_STATUS_DONE) && (*status != AIPU_JOB_STATUS_EXCEPTION))
-    {
-        ret = job->get_status_blocking(status, 1000);
-        if (ret == AIPU_STATUS_ERROR_TIMEOUT)
-        {
-            if (--timeout == 0)
-            {
-                ret = AIPU_STATUS_ERROR_TIMEOUT;
-                LOG(LOG_WARN, "job: %p polled over 1h\n", job);
-            }
-            continue;
-        } else if (ret != AIPU_STATUS_SUCCESS) {
-            get_status_msg(ret, &msg);
-            LOG(LOG_ERR, "job status: %s\n", msg);
-            goto out;
-        }
+  while ((*status != AIPU_JOB_STATUS_DONE) &&
+         (*status != AIPU_JOB_STATUS_EXCEPTION)) {
+    ret = job->get_status_blocking(status, 1000);
+    if (ret == AIPU_STATUS_ERROR_TIMEOUT) {
+      if (--timeout == 0) {
+        ret = AIPU_STATUS_ERROR_TIMEOUT;
+        LOG(LOG_WARN, "job: %p polled over 1h", job);
+      }
+      continue;
+    } else if (ret != AIPU_STATUS_SUCCESS) {
+      get_status_msg(ret, &msg);
+      LOG(LOG_ERR, "job status: %s", msg);
+      goto out;
     }
+  }
 
 out:
-    return ret;
+  return ret;
 }
 
-aipu_status_t aipudrv::MainContext::run_batch(GraphBase &graph, uint32_t queue_id,
-    aipu_create_job_cfg_t *config)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS, oldret = AIPU_STATUS_SUCCESS;
-    JOB_ID job_id = 0;
-    JobBase *job = nullptr;
-    aipu_job_status_t status = AIPU_JOB_STATUS_NO_STATUS;
-    typedef struct job_info {
-        JOB_ID job_id;
-        JobBase *job;
-        batch_info_t *batch;
-    } job_info_t;
+aipu_status_t MainContext::run_batch(GraphBase &graph, uint32_t queue_id,
+                                     aipu_create_job_cfg_t *config) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS, oldret = AIPU_STATUS_SUCCESS;
+  JOB_ID job_id = 0;
+  JobBase *job = nullptr;
+  aipu_job_status_t status = AIPU_JOB_STATUS_NO_STATUS;
+  typedef struct job_info {
+    JOB_ID job_id;
+    JobBase *job;
+    batch_info_t *batch;
+  } job_info_t;
 
-    job_info_t job_info_item = {0};
-    std::queue<job_info_t> job_queue;
-    uint32_t types = 0;
-    uint32_t batch_num = 0;
-    uint32_t max_in_flight = 3;
-    uint32_t batch_queue_size = 0;
-    const char *umd_max_batch = getenv("UMD_MAX_BATCH");
+  job_info_t job_info_item = {0};
+  std::queue<job_info_t> job_queue;
+  uint32_t types = 0;
+  uint32_t batch_num = 0;
+  uint32_t max_in_flight = 3;
+  uint32_t batch_queue_size = 0;
+  const char *umd_max_batch = getenv("UMD_MAX_BATCH");
 
-    if (!graph.is_valid_batch_queue(queue_id))
-        return AIPU_STATUS_ERROR_NO_BATCH_QUEUE;
+  if (!graph.is_valid_batch_queue(queue_id))
+    return AIPU_STATUS_ERROR_NO_BATCH_QUEUE;
 
-    if (umd_max_batch != nullptr)
-    {
-        int max_batch = atoi(umd_max_batch);
-        max_in_flight = (max_batch != 0) ? max_batch : max_in_flight;
+  if (umd_max_batch != nullptr) {
+    int max_batch = atoi(umd_max_batch);
+    max_in_flight = (max_batch != 0) ? max_batch : max_in_flight;
+  }
+
+  batch_queue_size = graph.get_batch_queue_size(queue_id);
+  types = graph.get_batch_dump_type(queue_id);
+repeat:
+  for (; batch_num < batch_queue_size; batch_num++) {
+    if (job_queue.size() >= max_in_flight)
+      break;
+
+    batch_info_t &batch = graph.get_batch_queue_item(queue_id, batch_num);
+    ret = graph.create_job(&job_id, &m_sim_cfg, &m_hw_cfg, config);
+    if (ret == AIPU_STATUS_ERROR_BUF_ALLOC_FAIL) {
+      break;
+    } else if (ret != AIPU_STATUS_SUCCESS) {
+      oldret = ret;
+      goto poll_job_sts;
     }
 
-    batch_queue_size = graph.get_batch_queue_size(queue_id);
-    types = graph.get_batch_dump_type(queue_id);
-repeat:
-    for (; batch_num < batch_queue_size; batch_num++)
-    {
-        if (job_queue.size() >= max_in_flight)
-            break;
-
-        batch_info_t &batch = graph.get_batch_queue_item(queue_id, batch_num);
-        ret = graph.create_job(&job_id, &m_sim_cfg, &m_hw_cfg, config);
-        if (ret == AIPU_STATUS_ERROR_BUF_ALLOC_FAIL)
-        {
-            break;
-        } else if (ret != AIPU_STATUS_SUCCESS) {
-            oldret = ret;
-            goto poll_job_sts;
-        }
-
-        job = graph.get_job(job_id);
+    job = graph.get_job(job_id);
 #ifdef SIMULATION
-        if (types & AIPU_CONFIG_TYPE_SIMULATION)
-        {
-            aipu_job_config_simulation_t sim_config = {0};
+    if (types & AIPU_CONFIG_TYPE_SIMULATION) {
+      aipu_job_config_simulation_t sim_config = {0};
 
-            sim_config.data_dir = graph.get_batch_dump_path(queue_id);
-            ret = job->config_simulation(AIPU_CONFIG_TYPE_SIMULATION, &sim_config);
-            if (ret != AIPU_STATUS_SUCCESS)
-            {
-                oldret = ret;
-                goto poll_job_sts;
-            }
-        }
+      sim_config.data_dir = graph.get_batch_dump_path(queue_id);
+      ret = job->config_simulation(AIPU_CONFIG_TYPE_SIMULATION, &sim_config);
+      if (ret != AIPU_STATUS_SUCCESS) {
+        oldret = ret;
+        goto poll_job_sts;
+      }
+    }
 #endif
 
-        if (types & (~AIPU_CONFIG_TYPE_SIMULATION)) {
-            aipu_job_config_dump_t dump_config = {0};
+    if (types & (~AIPU_CONFIG_TYPE_SIMULATION)) {
+      aipu_job_config_dump_t dump_config = {0};
 
-            dump_config.dump_dir = graph.get_batch_dump_path(queue_id);
-            ret = job->config_mem_dump(types, &dump_config);
-            if (ret != AIPU_STATUS_SUCCESS)
-            {
-                oldret = ret;
-                goto poll_job_sts;
-            }
-        }
-
-        for (uint32_t in_idx = 0; in_idx < batch.inputs.size(); in_idx++)
-        {
-            ret = job->load_tensor(in_idx, batch.inputs[in_idx]);
-            if (ret != AIPU_STATUS_SUCCESS)
-            {
-                oldret = ret;
-                goto poll_job_sts;
-            }
-        }
-
-        ret = job->schedule();
-        if (ret != AIPU_STATUS_SUCCESS)
-        {
-            oldret = ret;
-            goto poll_job_sts;
-        }
-
-        job_info_item.job_id = job_id;
-        job_info_item.job = job;
-        job_info_item.batch = &batch;
-        job_queue.push(job_info_item);
+      dump_config.dump_dir = graph.get_batch_dump_path(queue_id);
+      ret = job->config_mem_dump(types, &dump_config);
+      if (ret != AIPU_STATUS_SUCCESS) {
+        oldret = ret;
+        goto poll_job_sts;
+      }
     }
+
+    for (uint32_t in_idx = 0; in_idx < batch.inputs.size(); in_idx++) {
+      ret = job->load_tensor(in_idx, batch.inputs[in_idx]);
+      if (ret != AIPU_STATUS_SUCCESS) {
+        oldret = ret;
+        goto poll_job_sts;
+      }
+    }
+
+    ret = job->schedule();
+    if (ret != AIPU_STATUS_SUCCESS) {
+      oldret = ret;
+      goto poll_job_sts;
+    }
+
+    job_info_item.job_id = job_id;
+    job_info_item.job = job;
+    job_info_item.batch = &batch;
+    job_queue.push(job_info_item);
+  }
 
 poll_job_sts:
-    while (job_queue.size() > 0)
-    {
+  while (job_queue.size() > 0) {
 #ifdef SIMULATION
-        uint32_t min_in_flight = (job_queue.size() < max_in_flight) ?
-            job_queue.size() : max_in_flight;
-        for (uint32_t i = 0; i < min_in_flight; i++)
-        {
-            job_info_item = job_queue.front();
-            job_queue.pop();
+    uint32_t min_in_flight =
+        (job_queue.size() < max_in_flight) ? job_queue.size() : max_in_flight;
+    for (uint32_t i = 0; i < min_in_flight; i++) {
+      job_info_item = job_queue.front();
+      job_queue.pop();
 
-            status = AIPU_JOB_STATUS_NO_STATUS;
-            ret = get_status(job_info_item.job, &status);
-            if (ret != AIPU_STATUS_SUCCESS)
-                goto out;
+      status = AIPU_JOB_STATUS_NO_STATUS;
+      ret = get_status(job_info_item.job, &status);
+      if (ret != AIPU_STATUS_SUCCESS)
+        goto out;
 
-            for (uint32_t out_idx = 0; out_idx < job_info_item.batch->outputs.size(); out_idx++)
-            {
-                ret = job_info_item.job->get_tensor(AIPU_TENSOR_TYPE_OUTPUT, out_idx,
-                    job_info_item.batch->outputs[out_idx]);
-                if (ret != AIPU_STATUS_SUCCESS)
-                    goto out;
-            }
+      for (uint32_t out_idx = 0; out_idx < job_info_item.batch->outputs.size();
+           out_idx++) {
+        ret = job_info_item.job->get_tensor(
+            AIPU_TENSOR_TYPE_OUTPUT, out_idx,
+            job_info_item.batch->outputs[out_idx]);
+        if (ret != AIPU_STATUS_SUCCESS)
+          goto out;
+      }
 
-            ret = graph.destroy_job(job_info_item.job_id);
-            if (ret != AIPU_STATUS_SUCCESS)
-                goto out;
-        }
+      ret = graph.destroy_job(job_info_item.job_id);
+      if (ret != AIPU_STATUS_SUCCESS)
+        goto out;
+    }
 #else
-        job_info_t job_info_item = job_queue.front();
-        job_queue.pop();
-        status = AIPU_JOB_STATUS_NO_STATUS;
-        ret = get_status(job_info_item.job, &status);
-        if (ret != AIPU_STATUS_SUCCESS)
-            goto out;
+    job_info_t job_info_item = job_queue.front();
+    job_queue.pop();
+    status = AIPU_JOB_STATUS_NO_STATUS;
+    ret = get_status(job_info_item.job, &status);
+    if (ret != AIPU_STATUS_SUCCESS)
+      goto out;
 
-        if (status == AIPU_JOB_STATUS_EXCEPTION)
-        {
-            LOG(LOG_ERR, "job exception, check HW status\n");
-            goto out;
-        }
+    if (status == AIPU_JOB_STATUS_EXCEPTION) {
+      LOG(LOG_ERR, "job exception, check HW status");
+      goto out;
+    }
 
-        for (uint32_t out_idx = 0; out_idx < job_info_item.batch->outputs.size(); out_idx++)
-        {
-            ret = job_info_item.job->get_tensor(AIPU_TENSOR_TYPE_OUTPUT, out_idx,
-                job_info_item.batch->outputs[out_idx]);
-            if (ret != AIPU_STATUS_SUCCESS)
-                goto out;
-        }
+    for (uint32_t out_idx = 0; out_idx < job_info_item.batch->outputs.size();
+         out_idx++) {
+      ret =
+          job_info_item.job->get_tensor(AIPU_TENSOR_TYPE_OUTPUT, out_idx,
+                                        job_info_item.batch->outputs[out_idx]);
+      if (ret != AIPU_STATUS_SUCCESS)
+        goto out;
+    }
 
-        ret = graph.destroy_job(job_info_item.job_id);
-        if (ret != AIPU_STATUS_SUCCESS)
-            goto out;
+    ret = graph.destroy_job(job_info_item.job_id);
+    if (ret != AIPU_STATUS_SUCCESS)
+      goto out;
 #endif
 
-        if ((oldret == AIPU_STATUS_SUCCESS) && (batch_num < graph.get_batch_queue_size(queue_id)) )
-            goto repeat;
-    }
+    if ((oldret == AIPU_STATUS_SUCCESS) &&
+        (batch_num < graph.get_batch_queue_size(queue_id)))
+      goto repeat;
+  }
 
 out:
-    for(uint32_t i = 0; i < job_queue.size(); i++)
-    {
-        job_info_t job_info_item = job_queue.front();
-        job_queue.pop();
-        graph.destroy_job(job_info_item.job_id);
-    }
-    graph.clean_batches(queue_id);
+  for (uint32_t i = 0; i < job_queue.size(); i++) {
+    job_info_t job_info_item = job_queue.front();
+    job_queue.pop();
+    graph.destroy_job(job_info_item.job_id);
+  }
+  graph.clean_batches(queue_id);
 
-    if (oldret != AIPU_STATUS_SUCCESS)
-        return oldret;
-    else
-        return ret;
+  if (oldret != AIPU_STATUS_SUCCESS)
+    return oldret;
+  else
+    return ret;
 }
 
-aipu_status_t aipudrv::MainContext::ioctl_cmd(uint32_t cmd, void *arg)
-{
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
-    GraphBase* p_gobj = nullptr;
+aipu_status_t MainContext::ioctl_cmd(uint32_t cmd, void *arg) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  GraphBase *p_gobj = nullptr;
 
-    if (cmd != AIPU_IOCTL_ENABLE_TICK_COUNTER &&
-        cmd != AIPU_IOCTL_DISABLE_TICK_COUNTER &&
-        cmd != AIPU_IOCTL_ABORT_CMD_POOL)
-    {
-        if (arg == nullptr)
-            return AIPU_STATUS_ERROR_NULL_PTR;
+  if (cmd != AIPU_IOCTL_ENABLE_TICKCOUNTER &&
+      cmd != AIPU_IOCTL_DISABLE_TICKCOUNTER &&
+      cmd != AIPU_IOCTL_ABORT_CMDPOOL) {
+    if (arg == nullptr)
+      return AIPU_STATUS_ERROR_NULL_PTR;
+  }
+
+  if (cmd >= AIPU_IOCTL_SET_PROFILE && cmd <= AIPU_IOCTL_FREE_SHARE_BUF) {
+    switch (cmd) {
+    case AIPU_IOCTL_SET_PROFILE:
+      m_dev->enable_profiling((*(int32_t *)arg) != 0);
+      break;
+
+    case AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION: {
+      aipu_bin_buildversion_t *buildver = (aipu_bin_buildversion_t *)arg;
+
+      if (!valid_graph_id(buildver->graph_id))
+        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+      p_gobj = get_graph_object(buildver->graph_id);
+      if (p_gobj == nullptr)
+        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+      buildver->aipubin_buildversion = p_gobj->get_buildversion();
+    } break;
+
+    case AIPU_IOCTL_ALLOC_SHARE_BUF: {
+      aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
+      BufferDesc *buf = nullptr;
+      uint32_t pad_size = 0;
+#if defined(ZHOUYI_V3) && !defined(SIMULATION)
+      pad_size = 0x800;
+#endif
+      ret = m_dram->malloc(share_buf->size + pad_size, 1, &buf, "share",
+                           share_buf->mem_type);
+      if (ret != AIPU_STATUS_SUCCESS)
+        return ret;
+
+      if (m_dram->pa_to_va(buf->pa, buf->size, (char **)&share_buf->va) != 0)
+        return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
+      share_buf->pa = buf->pa;
+    } break;
+
+    case AIPU_IOCTL_FREE_SHARE_BUF: {
+      aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
+      Buffer buffer;
+
+      if (m_dram->get_shared_buffer(share_buf->pa, share_buf->size, buffer) !=
+          0)
+        return AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
+
+      ret = m_dram->free(&buffer.desc, "share");
+      if (ret != AIPU_STATUS_SUCCESS)
+        return ret;
+    } break;
+
+    case AIPU_IOCTL_GET_DS_NUM: {
+      aipu_dynshape_num_t *ds_num = (aipu_dynshape_num_t *)arg;
+
+      if (!valid_graph_id(ds_num->graph_id))
+        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+      p_gobj = get_graph_object(ds_num->graph_id);
+      if (p_gobj == nullptr)
+        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+      if (ds_num->ds_num != nullptr) {
+        *ds_num->ds_num = p_gobj->get_dynamic_shape_num();
+      } else {
+        LOG(LOG_ERR, "ds_num ptr is NULL");
+        return AIPU_STATUS_ERROR_NULL_PTR;
+      }
+    } break;
+
+    case AIPU_IOCTL_GET_DS_DIM_NUM: {
+      aipu_dynshape_dim_num_t *ds_dim_num = (aipu_dynshape_dim_num_t *)arg;
+
+      if (!valid_graph_id(ds_dim_num->graph_id))
+        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+      p_gobj = get_graph_object(ds_dim_num->graph_id);
+      if (p_gobj == nullptr)
+        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+      if (ds_dim_num->ds_dim_num != nullptr) {
+        *ds_dim_num->ds_dim_num = p_gobj->get_dynamic_shape_dim_num(
+            ds_dim_num->ds_idx, ds_dim_num->max_threshhold);
+      } else {
+        LOG(LOG_ERR, "ds_dim_num ptr is NULL");
+        return AIPU_STATUS_ERROR_NULL_PTR;
+      }
+    } break;
+
+    case AIPU_IOCTL_GET_DS_INFO: {
+      aipu_dynshape_info_t *ds_info = (aipu_dynshape_info_t *)arg;
+
+      if (!valid_graph_id(ds_info->graph_id))
+        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+      p_gobj = get_graph_object(ds_info->graph_id);
+      if (p_gobj == nullptr)
+        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+      bool success = p_gobj->get_dynamic_shape_data(
+          ds_info->ds_idx, ds_info->max_threshhold, ds_info->ds_data);
+      if (!success) {
+        LOG(LOG_ERR, "get dynamic shape failed");
+        return AIPU_STATUS_ERROR_GET_SHAPE_FAILED;
+      }
+    } break;
+
+    default:
+      LOG(LOG_ERR, "invalid command");
+      return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
     }
-
-    if (cmd >= AIPU_IOCTL_SET_PROFILE && cmd <= AIPU_IOCTL_FREE_SHARE_BUF)
-    {
-        switch(cmd)
-        {
-            case AIPU_IOCTL_SET_PROFILE:
-                m_dev->enable_profiling((*(int32_t *)arg) != 0);
-                break;
-
-            case AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION:
-                {
-                    aipu_bin_buildversion_t *buildver = (aipu_bin_buildversion_t *)arg;
-
-                    if (!aipudrv::valid_graph_id(buildver->graph_id))
-                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-                    p_gobj = get_graph_object(buildver->graph_id);
-                    if (p_gobj == nullptr)
-                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-                    buildver->aipubin_buildversion = p_gobj->get_buildversion();
-                }
-                break;
-
-            case AIPU_IOCTL_ALLOC_SHARE_BUF:
-                {
-                    aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
-                    BufferDesc *buf = nullptr;
-
-                    ret = m_dram->malloc(share_buf->size, 1, &buf, "share", share_buf->mem_type);
-                    if (ret != AIPU_STATUS_SUCCESS)
-                        return ret;
-
-                    if (m_dram->pa_to_va(buf->pa, buf->size, (char **)&share_buf->va) != 0)
-                        return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
-                    share_buf->pa = buf->pa;
-                }
-                break;
-
-            case AIPU_IOCTL_FREE_SHARE_BUF:
-                {
-                    aipu_share_buf_t *share_buf = (aipu_share_buf_t *)arg;
-                    Buffer buffer;
-
-                    if(m_dram->get_shared_buffer(share_buf->pa, share_buf->size, buffer) != 0)
-                        return AIPU_STATUS_ERROR_SET_SHARED_TENSOR;
-
-                    ret = m_dram->free(&buffer.desc, "share");
-                    if (ret != AIPU_STATUS_SUCCESS)
-                        return ret;
-                }
-                break;
-
-            case AIPU_IOCTL_GET_DS_NUM:
-                {
-                    aipu_dynshape_num_t *ds_num = (aipu_dynshape_num_t *)arg;
-
-                    if (!aipudrv::valid_graph_id(ds_num->graph_id))
-                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-                    p_gobj = get_graph_object(ds_num->graph_id);
-                    if (p_gobj == nullptr)
-                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-                    if (ds_num->ds_num != nullptr) {
-                        *ds_num->ds_num = p_gobj->get_dynamic_shape_num();
-                    } else {
-                        LOG(LOG_ERR, "ds_num ptr is NULL\n");
-                        return AIPU_STATUS_ERROR_NULL_PTR;
-                    }
-                }
-                break;
-
-            case AIPU_IOCTL_GET_DS_DIM_NUM:
-                {
-                    aipu_dynshape_dim_num_t *ds_dim_num = (aipu_dynshape_dim_num_t *)arg;
-
-                    if (!aipudrv::valid_graph_id(ds_dim_num->graph_id))
-                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-                    p_gobj = get_graph_object(ds_dim_num->graph_id);
-                    if (p_gobj == nullptr)
-                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-                    if (ds_dim_num->ds_dim_num != nullptr) {
-                        *ds_dim_num->ds_dim_num =
-                            p_gobj->get_dynamic_shape_dim_num(ds_dim_num->ds_idx,
-                                ds_dim_num->max_threshhold);
-                    } else {
-                        LOG(LOG_ERR, "ds_dim_num ptr is NULL\n");
-                        return AIPU_STATUS_ERROR_NULL_PTR;
-                    }
-                }
-                break;
-
-            case AIPU_IOCTL_GET_DS_INFO:
-                {
-                    aipu_dynshape_info_t *ds_info = (aipu_dynshape_info_t *)arg;
-
-                    if (!aipudrv::valid_graph_id(ds_info->graph_id))
-                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-                    p_gobj = get_graph_object(ds_info->graph_id);
-                    if (p_gobj == nullptr)
-                        return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
-
-                    bool success = p_gobj->get_dynamic_shape_data(ds_info->ds_idx,
-                        ds_info->max_threshhold, ds_info->ds_data);
-                    if (!success)
-                    {
-                        LOG(LOG_ERR, "get dynamic shape failed\n");
-                        return AIPU_STATUS_ERROR_GET_SHAPE_FAILED;
-                    }
-                }
-                break;
-
-            default:
-                LOG(LOG_ERR, "invalid command\n");
-                return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
-        }
-    } else {
+  } else {
 #ifndef SIMULATION
-        ret = convert_ll_status(m_dev->ioctl_cmd(cmd, arg));
+    ret = convert_ll_status(m_dev->ioctl_cmd(cmd, arg));
 #endif
 
-        if (ret == AIPU_STATUS_SUCCESS)
-        {
-            switch (cmd)
-            {
-                case AIPU_IOCTL_GET_VERSION:
-                    aipu_driver_version_t *drv_ver = (aipu_driver_version_t *)arg;
-                    strncpy(drv_ver->umd_version, m_umd_version.c_str(),
-                        m_umd_version.length());
-                    break;
-            }
-        }
+    if (ret == AIPU_STATUS_SUCCESS) {
+      switch (cmd) {
+      case AIPU_IOCTL_GET_VERSION:
+        aipu_driver_version_t *drv_ver = (aipu_driver_version_t *)arg;
+        strncpy(drv_ver->umd_version, m_umd_version.c_str(),
+                m_umd_version.length());
+        break;
+      }
     }
+  }
 
-   return ret;
+  return ret;
 }
 
+void MainContext::free_shared_weight(const std::vector<GRAPH_ID> &graph_ids) {
+  if (m_share_graphs.count(graph_ids) != 0) {
+    for (auto &buf : m_share_graphs.at(graph_ids).weight_buf_info) {
+      if (buf.wb_weight != nullptr && buf.wb_weight->size != 0)
+        m_dram->free(&buf.wb_weight);
+      if (buf.wb_zerocpy_const != nullptr && buf.wb_zerocpy_const->size != 0)
+        m_dram->free(&buf.wb_zerocpy_const);
+    }
+    m_share_graphs.at(graph_ids).weight_ref_cnt = 0;
+  }
+
+  if (graph_ids.size() == 1) {
+    for (auto it = m_share_graphs.begin(); it != m_share_graphs.end(); ++it) {
+      if (std::find(it->first.begin(), it->first.end(), graph_ids[0]) !=
+          it->first.end()) {
+        if (--it->second.weight_ref_cnt == 0) {
+          std::vector<WeightBufferInfo> &weight_buf_info =
+              it->second.weight_buf_info;
+          for (auto &buf : weight_buf_info) {
+            if (buf.wb_weight != nullptr && buf.wb_weight->size != 0)
+              m_dram->free(&buf.wb_weight);
+            if (buf.wb_zerocpy_const != nullptr &&
+                buf.wb_zerocpy_const->size != 0)
+              m_dram->free(&buf.wb_zerocpy_const);
+          }
+        }
+        break;
+      }
+    }
+  }
+}
+
+aipu_status_t
+MainContext::alloc_shared_weight(const std::vector<GRAPH_ID> &graph_ids) {
+  std::vector<Graph *> gobjs;
+  for (auto &id : graph_ids) {
+    Graph *gobj = reinterpret_cast<Graph *>(get_graph_object(id));
+    if (gobj == nullptr)
+      return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+    gobjs.push_back(gobj);
+  }
+
+  uint32_t max_bss_cnt = 0;
+  std::for_each(gobjs.begin(), gobjs.end(), [&max_bss_cnt](Graph *gobj) {
+    if (gobj->get_bss_cnt() > max_bss_cnt)
+      max_bss_cnt = gobj->get_bss_cnt();
+  });
+
+  /* 1.alloc */
+  std::vector<WeightBufferInfo> weight_buf_info(max_bss_cnt);
+  uint32_t pad_size = gobjs[0]->get_alloc_pad_size();
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  for (uint32_t bss_id = 0; bss_id < max_bss_cnt; ++bss_id) {
+    uint32_t max_cts_size = 0;
+    uint32_t max_zcy_cst_size = 0;
+
+    for (uint32_t idx = 0; idx < gobjs.size(); ++idx) {
+      /* assume that bss corresponding in each graph */
+      if (bss_id < gobjs[idx]->get_bss_cnt()) {
+        /* default to align page at beginning of each bss in different graph */
+        gobjs[idx]->set_bss_base_offset(ALIGN_PAGE(max_cts_size));
+        max_cts_size =
+            ALIGN_PAGE(max_cts_size) + gobjs[idx]->get_const_size(bss_id);
+        gobjs[idx]->set_bss_zcy_base_offset(ALIGN_PAGE(max_zcy_cst_size));
+        max_zcy_cst_size = ALIGN_PAGE(max_zcy_cst_size) +
+                           gobjs[idx]->get_zerocpy_const_size(bss_id);
+      }
+    }
+    LOG(LOG_INFO, "[alloc actual] bss id: %u, weight size: %u, zcopy: %u",
+        bss_id, max_cts_size, max_zcy_cst_size);
+
+    if (max_cts_size > 0) {
+      ret = m_dram->malloc(max_cts_size + pad_size, 1,
+                           &weight_buf_info[bss_id].wb_weight, "weight",
+                           AIPU_ASID1 | AIPU_MEM_REGION_DEFAULT);
+      if (ret != AIPU_STATUS_SUCCESS)
+        return ret;
+
+      weight_buf_info[bss_id].wb_asid_base =
+          weight_buf_info[bss_id].wb_weight->asid_base;
+    }
+
+    if (max_zcy_cst_size > 0) {
+      ret =
+          m_dram->malloc(max_zcy_cst_size + pad_size, 0,
+                         &weight_buf_info[bss_id].wb_zerocpy_const,
+                         "zerocpy_const", AIPU_ASID0 | AIPU_MEM_REGION_DEFAULT);
+      if (ret != AIPU_STATUS_SUCCESS)
+        return ret;
+    }
+  }
+
+  /* 2.write */
+  for (auto &gobj : gobjs) {
+    uint32_t bss_cnt = gobj->get_bss_cnt();
+    std::vector<WeightBufferInfo> info(weight_buf_info.begin(),
+                                       weight_buf_info.begin() + bss_cnt);
+    gobj->set_weight_buffer_info(info);
+    ret = gobj->write_weight_buffer();
+    if (ret != AIPU_STATUS_SUCCESS)
+      return ret;
+  }
+
+  SharedGraphInfo info;
+  info.weight_ref_cnt = graph_ids.size();
+  info.weight_buf_info = weight_buf_info;
+  pthread_rwlock_wrlock(&m_lock_share_graph);
+  m_share_graphs.insert({graph_ids, info});
+  pthread_rwlock_unlock(&m_lock_share_graph);
+  return AIPU_STATUS_SUCCESS;
+}
+
+} // namespace aipudrv
