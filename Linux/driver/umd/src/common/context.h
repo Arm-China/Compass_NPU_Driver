@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -12,6 +12,7 @@
 
 #include <pthread.h>
 
+#include <algorithm>
 #include <cstring>
 #include <fstream>
 #include <map>
@@ -20,18 +21,14 @@
 #include "graph.h"
 #include "graph_base.h"
 #include "memory_base.h"
+#include "share_weight_mgr.h"
 #include "standard_api.h"
 
 namespace aipudrv {
 #define BUF_LEN 1204
 
-struct SharedGraphInfo {
-  uint32_t weight_ref_cnt;
-  std::vector<WeightBufferInfo> weight_buf_info; /* shared weight buffer info */
-};
-
 typedef std::map<GRAPH_ID, GraphBase *> GraphTable;
-typedef std::map<std::vector<GRAPH_ID>, SharedGraphInfo> SharedGraphTable;
+typedef std::map<std::vector<GRAPH_ID>, SharedWeightMgr *> SharedGraphTable;
 
 class MainContext {
 private:
@@ -64,9 +61,6 @@ private:
                                     GRAPH_ID *id, GraphBase **gobj);
   aipu_status_t destroy_graph_object(GraphBase **gobj);
 
-  aipu_status_t alloc_shared_weight(const std::vector<GRAPH_ID> &graph_ids);
-  void free_shared_weight(const std::vector<GRAPH_ID> &graph_ids);
-
 private:
   bool is_deinit_ok();
 
@@ -87,7 +81,8 @@ public:
                            GRAPH_ID *id,
                            aipu_load_graph_cfg_t *config = nullptr);
   aipu_status_t load_share_weight_graph(const char *graph_file, uint64_t **ids,
-                                        uint32_t *id_cnt);
+                                        uint32_t *id_cnt,
+                                        aipu_load_graph_cfg_t *config);
   aipu_status_t unload_graph(GRAPH_ID id);
   aipu_status_t get_simulation_instance(void **simulator, void **memory);
   aipu_status_t create_job(GRAPH_ID graph, JOB_ID *id,

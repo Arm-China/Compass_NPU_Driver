@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -73,7 +73,7 @@ int main(int argc, char *argv[]) {
   uint32_t flush_dur = 0, flush_total = 0;
   uint32_t finish_dur = 0, finish_total = 0;
   cmd_opt_t opt;
-  int pass = 0;
+  int pass = -1;
   bool flush_time = false;
 
   AIPU_CRIT()
@@ -105,10 +105,7 @@ int main(int argc, char *argv[]) {
 
   flush_time = opt.flush_time;
   mem_dump_config.dump_dir = opt.dump_dir;
-  if (opt.log_level_set)
-    sim_glb_config.log_level = opt.log_level;
-  else
-    sim_glb_config.log_level = 0;
+  sim_glb_config.log_level = opt.log_level;
 
   sim_glb_config.simulator = opt.simulator;
   sim_glb_config.verbose = opt.verbose;
@@ -125,11 +122,11 @@ int main(int argc, char *argv[]) {
 
   if (opt.loop_cnt != 0)
     AIPU_CRIT()
-    ("aipu_time_cost_test doesn't support to specify outer loop counter\n");
+  ("aipu_time_cost_test doesn't support to specify outer loop counter\n");
 
   if (opt.frame_cnt != 0)
     AIPU_CRIT()
-    ("aipu_time_cost_test doesn't support to specify inner loop counter\n");
+  ("aipu_time_cost_test doesn't support to specify inner loop counter\n");
 
   if (run_on_platform == ON_SIMULATOR) {
     ret = aipu_config_global(ctx, AIPU_CONFIG_TYPE_SIMULATION, &sim_glb_config);
@@ -147,7 +144,7 @@ int main(int argc, char *argv[]) {
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
       AIPU_ERR()
-      ("aipu_load_graph_helper: %s (%s)\n", msg, opt.bin_files[loop].c_str());
+      ("aipu_load_graph: %s (%s)\n", msg, opt.bin_files[loop].c_str());
       goto deinit_ctx;
     }
     AIPU_INFO()("\n");
@@ -301,7 +298,6 @@ int main(int argc, char *argv[]) {
         } else if (ret != AIPU_STATUS_SUCCESS) {
           aipu_get_error_message(ctx, ret, &msg);
           AIPU_ERR()("aipu_get_job_status: %s\n", msg);
-          pass = -1;
           goto clean_job;
         }
         // AIPU_INFO()("job %lu still running...\n", job_id[job]);
@@ -334,6 +330,8 @@ int main(int argc, char *argv[]) {
                     job, i, i+1, output_cnt);
             }
             pass = check_result_helper(job_outputs[job], output_desc_vec[job], opt.gts, opt.gts_size);
+            if (pass == -1)
+                break;
 #endif
     }
 
@@ -345,6 +343,7 @@ int main(int argc, char *argv[]) {
     ("time/job: %d us (%.3f ms)\n", pre_total / len,
      float(pre_total) / len / 1000);
     AIPU_INFO()("\n");
+    pass = 0;
   } else {
     for (uint32_t job = 0; job < len; job++) {
       if (mem_dump_config.dump_dir[0] != '\0') {
@@ -402,12 +401,17 @@ int main(int argc, char *argv[]) {
       }
       pass = check_result_helper(job_outputs[job], output_desc_vec[job],
                                  opt.gts, opt.gts_size);
+      if (pass == -1)
+        break;
     }
   }
 
   AIPU_INFO()("----infer end----\n\n");
 
 clean_job:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   for (uint32_t job = 0; job < len; job++) {
     for (uint32_t i = 0; i < job_outputs[job].size(); i++) {
       delete job_outputs[job][i];
@@ -424,6 +428,9 @@ clean_job:
   AIPU_INFO()("aipu_clean_job success\n");
 
 unload_graph:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   for (uint32_t gid = 0; gid < len; gid++) {
     ret = aipu_unload_graph(ctx, graph_id[gid]);
     if (ret != AIPU_STATUS_SUCCESS) {
@@ -435,6 +442,9 @@ unload_graph:
   AIPU_INFO()("aipu_unload_graph success\n");
 
 deinit_ctx:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   ret = aipu_deinit_context(ctx);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
@@ -444,7 +454,7 @@ deinit_ctx:
   AIPU_INFO()("aipu_deinit_ctx success\n");
 
 finish:
-  if (AIPU_STATUS_SUCCESS != ret)
+  if (ret != AIPU_STATUS_SUCCESS)
     pass = -1;
 
   deinit_test_bench(&opt);

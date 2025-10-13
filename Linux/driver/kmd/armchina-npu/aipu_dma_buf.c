@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #include <linux/version.h>
 #include <linux/module.h>
@@ -150,26 +150,61 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 	struct aipu_dma_buf_priv *priv = NULL;
 	char *va = NULL;
 	struct dma_buf *dmabuf = NULL;
+	struct aipu_phy_block *block;
 
 	DEFINE_DMA_BUF_EXPORT_INFO(exp);
 
 	if (!mm || !request || !request->bytes)
 		return -EINVAL;
+	if(mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2 && mm->has_iommu) {
+		memset(&inter_req, 0, sizeof(struct aipu_buf_request));
+		inter_req.bytes = request->bytes;
+		inter_req.align_in_page = 1;
+		inter_req.region = AIPU_BUF_REGION_DEFAULT;
+		inter_req.asid = AIPU_BUF_ASID_0;
+		inter_req.reserve_iova_size = 0;
+#if AIPU_USE_STANDARD_DMA_API_FOR_V3_2
+		inter_req.exec_id = 0;
+		inter_req.alloc_mode = AIPU_DMA_BUF_MALLOC_DEFAULT;
+#else
+		inter_req.exec_id = DMA_BUF_EXEC_ID;
+		inter_req.alloc_mode = AIPU_DMA_BUF_MALLOC_IOVA_PHY;
+#endif
+		ret = aipu_alloc_dma_iova_phy(mm,  &inter_req, NULL);
+		if (ret) {
+			dev_err(mm->dev, "alloc phy memory fail.");
+			return ret;
+		}
+#if AIPU_USE_STANDARD_DMA_API_FOR_V3_2
+		va = aipu_mm_get_va(mm, inter_req.desc.pa);
+		if (!va) {
+			ret = -EFAULT;
+			goto fail;
+		}
+#else
+		block = aipu_get_block_buffer(mm, inter_req.desc.pa, "aipu_alloc_dma_buf");
+		va = block->va;
+#endif
+	} else {
+		memset(&inter_req, 0, sizeof(struct aipu_buf_request));
+		inter_req.bytes = request->bytes;
+		inter_req.align_in_page = 1;
+		inter_req.region = AIPU_BUF_REGION_DEFAULT;
+		inter_req.asid = AIPU_BUF_ASID_0;
+		inter_req.exec_id = 0;
+		inter_req.alloc_mode = AIPU_DMA_BUF_MALLOC_DEFAULT;
 
-	memset(&inter_req, 0, sizeof(struct aipu_buf_request));
-	inter_req.bytes = request->bytes;
-	inter_req.align_in_page = 1;
-	inter_req.region = AIPU_BUF_REGION_DEFAULT;
-	inter_req.asid = AIPU_BUF_ASID_0;
+		ret = aipu_alloc_dma_iova_phy(mm,  &inter_req, NULL);
+		if (ret) {
+			dev_err(mm->dev, "alloc phy memory fail.");
+			return ret;
+		}
 
-	ret = aipu_mm_alloc(mm, &inter_req, NULL);
-	if (ret)
-		return ret;
-
-	va = aipu_mm_get_va(mm, inter_req.desc.pa);
-	if (!va) {
-		ret = -EFAULT;
-		goto fail;
+		va = aipu_mm_get_va(mm, inter_req.desc.pa);
+		if (!va) {
+			ret = -EFAULT;
+			goto fail;
+		}
 	}
 
 	priv = devm_kzalloc(mm->dev, sizeof(*priv), GFP_KERNEL);
@@ -195,13 +230,18 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 		goto fail;
 	}
 
+	if(mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2)
+		block->dmabuf = dmabuf;
 	request->fd = dma_buf_fd(dmabuf, exp.flags);
 	return 0;
 
 fail:
 	if (priv)
 		devm_kfree(mm->dev, priv);
-	aipu_mm_free(mm, &inter_req.desc, NULL, true);
+	if(mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2)
+		aipu_free_dma_iova_phy(mm, &inter_req.desc, NULL);
+	else
+		aipu_mm_free(mm, &inter_req.desc, NULL, true);
 	return ret;
 }
 
@@ -216,8 +256,10 @@ int aipu_free_dma_buf(struct aipu_memory_manager *mm, int fd)
 		return -EINVAL;
 
 	dmabuf = dma_buf_get(fd);
-	if (!dmabuf)
+	if (!dmabuf) {
+		dev_err(mm->dev, "can't get dmabuf by fd.\n");
 		return -EINVAL;
+	}
 
 	priv = (struct aipu_dma_buf_priv *)dmabuf->priv;
 
@@ -226,8 +268,17 @@ int aipu_free_dma_buf(struct aipu_memory_manager *mm, int fd)
 	buf.bytes = priv->bytes;
 	buf.region = AIPU_BUF_REGION_DEFAULT;
 	buf.asid = AIPU_BUF_ASID_0;
-	ret = aipu_mm_free(mm, &buf, NULL, true);
+	if(mm->has_iommu && mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2) {
+#if AIPU_USE_STANDARD_DMA_API_FOR_V3_2
+		buf.exec_id = 0;
+#else
+		buf.exec_id = DMA_BUF_EXEC_ID;
+#endif
+	} else {
+		buf.exec_id = 0;
+	}
 
+	ret = aipu_free_dma_iova_phy(mm, &buf, NULL);
 	if (priv->sgt) {
 		devm_kfree(mm->dev, priv->sgt);
 		priv->sgt = NULL;

@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -68,7 +68,7 @@ aipu_status_t umd_load_file_helper(const char *fname, void *dest,
  * @retval AIPU_STATUS_ERROR_MAP_FILE_FAIL
  */
 aipu_status_t umd_mmap_file_helper(const char *fname, void **data,
-                                   uint64_t *size);
+                                   uint64_t *size, bool readonly = false);
 
 /**
  * @brief This function is used to open and mmap a file into memory
@@ -84,7 +84,8 @@ aipu_status_t umd_mmap_file_helper(const char *fname, void **data,
  * @retval AIPU_STATUS_ERROR_MAP_FILE_FAIL
  */
 aipu_status_t umd_mmap_file_helper(const char *fname, void **data,
-                                   uint64_t size, uint64_t offset = 0);
+                                   uint64_t size, uint64_t offset = 0,
+                                   bool readonly = false);
 
 /**
  * @brief This function is used to draw a line composed of a character into an
@@ -128,6 +129,18 @@ std::string umd_timestamp_helper(int time_stamp_type = 0);
 std::vector<std::string> split_string(const std::string &s,
                                       const std::string &splitter,
                                       const int keep_spliter = 0);
+
+/**
+ * @brief This function is used to replace a old charactor in string with a new
+ * charactor
+ */
+std::string &replace(std::string &s, char old_c, char new_c);
+
+/**
+ * This function is used to replace a old sub-string in string with a new string
+ */
+std::string &replace(std::string &s, const std::string &old_s,
+                     const std::string &new_s);
 
 /**
  * @brief This class is for generating runtime.cfg for simulation.

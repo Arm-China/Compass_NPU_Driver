@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -33,9 +33,11 @@ public:
                   uint32_t rev) override;
   aipu_status_t schedule(const JobDesc &job) override;
   aipu_ll_status_t read_reg(uint32_t partition_id, uint32_t offset,
-                            uint32_t *value) override;
+                            uint32_t *value,
+                            RegType type = RegType::AIPU_HOST_REG) override;
   aipu_ll_status_t write_reg(uint32_t partition_id, uint32_t offset,
-                             uint32_t value) override;
+                             uint32_t value,
+                             RegType type = RegType::AIPU_HOST_REG) override;
   aipu_ll_status_t poll_status(uint32_t max_cnt, int32_t time_out,
                                bool of_this_thread,
                                void *jobbase = nullptr) override;
@@ -45,6 +47,7 @@ public:
   int get_grid_id(uint16_t &grid_id) override;
   int get_start_group_id(int group_cnt, uint16_t &start_group_id) override;
   int put_start_group_id(uint16_t start_group_id, int group_cnt) override;
+  const char *get_config_code() const override;
 
 public:
   static aipu_status_t get_aipu(DeviceBase **dev) {
@@ -94,7 +97,7 @@ private:
   static std::mutex m_tex;
   static Aipu *m_aipu;
   std::mutex m_group_id_mtx;
-  std::map<uint16_t, struct aipu_group_id_desc> m_group_id_table;
+  std::map<uint16_t, struct aipu_id_desc> m_group_id_table;
   std::mutex m_dma_buf_mtx;
   std::map<int, struct aipu_dma_buf> m_dma_buf_map;
 };

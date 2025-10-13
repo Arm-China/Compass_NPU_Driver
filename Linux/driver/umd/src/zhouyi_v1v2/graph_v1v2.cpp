@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -43,7 +43,7 @@ aipu_status_t GraphV12::create_job(JOB_ID *id,
 }
 
 aipu_status_t GraphV12::get_tensor_count(aipu_tensor_type_t type,
-                                         uint32_t *cnt) {
+                                         uint32_t *cnt) const {
   if (cnt == nullptr)
     return AIPU_STATUS_ERROR_NULL_PTR;
 
@@ -73,7 +73,7 @@ aipu_status_t GraphV12::get_tensor_count(aipu_tensor_type_t type,
 
 aipu_status_t GraphV12::get_tensor_descriptor(aipu_tensor_type_t type,
                                               uint32_t tensor,
-                                              aipu_tensor_desc_t *desc) {
+                                              aipu_tensor_desc_t *desc) const {
   uint32_t cnt = 0;
   GraphIOTensorDesc io;
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -82,10 +82,13 @@ protected:
   uint32_t m_asid_flag = 0;
   uint32_t m_remap_flag = 0;
   uint32_t m_sram_flag = 0;
-  uint32_t m_wt_mem_region = AIPU_MEM_REGION_DEFAULT;
   bool m_disable_input_reuse = false;
   bool m_disable_output_reuse = false;
-  std::set<uint32_t> m_wt_idxes;
+  std::string m_mapped_gfile;
+
+  /* specified weight information */
+  uint32_t m_swt_mem_region = AIPU_MEM_REGION_DEFAULT;
+  std::set<uint32_t> m_swt_idxes;
 
 protected:
   DeviceBase *m_dev;
@@ -95,6 +98,7 @@ protected:
   std::map<JOB_ID, JobBase *> m_jobs;
 
 protected:
+  virtual aipu_status_t collect_fm_sections() { return AIPU_STATUS_SUCCESS; };
   virtual JOB_ID create_job_id_inner();
   JOB_ID add_job(JobBase *job);
   aipu_status_t destroy_jobs();
@@ -109,9 +113,12 @@ public:
   virtual aipu_status_t load(std::istream &gbin, uint32_t size,
                              bool ver_check = true,
                              aipu_load_graph_cfg_t *config = nullptr) = 0;
+  virtual aipu_status_t load(const char *graph_file, bool ver_check = true,
+                             aipu_load_graph_cfg_t *config = nullptr) {
+    return AIPU_STATUS_SUCCESS;
+  };
   virtual aipu_status_t unload() = 0;
   virtual aipu_status_t alloc_weight_buffer() = 0;
-  virtual aipu_status_t write_weight_buffer() = 0;
 
   virtual void print_parse_info() = 0;
   virtual aipu_status_t create_job(JOB_ID *id,
@@ -119,16 +126,15 @@ public:
                                    aipu_global_config_hw_t *hw_cfg,
                                    aipu_create_job_cfg_t *config = nullptr) = 0;
   virtual aipu_status_t get_tensor_count(aipu_tensor_type_t type,
-                                         uint32_t *cnt) = 0;
-  virtual aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type,
-                                              uint32_t tensor,
-                                              aipu_tensor_desc_t *desc) = 0;
-  virtual DEV_PA_64 debugger_get_instr_base() = 0;
-  virtual uint32_t get_dynamic_shape_num() = 0;
+                                         uint32_t *cnt) const = 0;
+  virtual aipu_status_t
+  get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor,
+                        aipu_tensor_desc_t *desc) const = 0;
+  virtual uint32_t get_dynamic_shape_num() const = 0;
   virtual int32_t get_dynamic_shape_dim_num(uint32_t idx,
-                                            bool max_shape_dim) = 0;
+                                            bool max_shape_dim) const = 0;
   virtual bool get_dynamic_shape_data(uint32_t idx, bool max_shape_dim,
-                                      uint32_t *data) = 0;
+                                      uint32_t *data) const = 0;
 
   virtual aipu_status_t get_elf_note_size(const std::string &note_name,
                                           uint64_t &size) {
@@ -184,6 +190,7 @@ public:
 
   /* Get functions */
   uint32_t get_gversion() { return m_gversion; }
+  uint32_t get_hw_version() { return m_hw_version; }
   uint32_t get_remap_flag() { return m_remap_flag; }
   uint32_t get_config() { return m_hw_config; }
   uint32_t get_buildversion() { return m_aipubin_buildversion; }

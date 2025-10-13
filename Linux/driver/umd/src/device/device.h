@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -22,8 +22,8 @@
 #include "device/simulator/simulator_v3.h"
 #endif
 
-#ifdef ZHOUYI_V3_1
-#include "device/simulator/simulator_v3_1.h"
+#ifdef ZHOUYI_V3_2
+#include "device/simulator/simulator_v3_2.h"
 #endif
 
 #else
@@ -66,17 +66,18 @@ set_device_cfg(uint32_t graph_version, DeviceBase **dev,
       return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
     } else {
       *dev = SimulatorV3::get_v3_simulator(cfg);
-      ret = reinterpret_cast<SimulatorV3 *>(*dev)->init();
+      ret = reinterpret_cast<SimulatorV3 *>(*dev)
+                ->init(); /* TODO: can we init() after graph parse */
     }
   }
-#elif (defined ZHOUYI_V3_1)
+#elif (defined ZHOUYI_V3_2)
   if (graph_version == AIPU_LOADABLE_GRAPH_ELF_V0) {
     if ((*dev != nullptr) &&
-        ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V3_1)) {
+        ((*dev)->get_dev_type() != DEV_TYPE_SIMULATOR_V3_2)) {
       return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
     } else {
-      *dev = SimulatorV3_1::get_v3_1_simulator(cfg);
-      ret = reinterpret_cast<SimulatorV3_1 *>(*dev)->init();
+      *dev = SimulatorV3_2::get_v3_2_simulator(cfg);
+      ret = reinterpret_cast<SimulatorV3_2 *>(*dev)->init();
     }
   }
 #endif
@@ -102,9 +103,9 @@ inline aipu_status_t get_device(DeviceBase **dev) {
 #if defined(ZHOUYI_V3)
   /* only get UMD simulator object, doesn't initialize Simulator object */
   *dev = SimulatorV3::get_v3_simulator(nullptr);
-#elif defined(ZHOUYI_V3_1)
+#elif defined(ZHOUYI_V3_2)
   /* only get UMD simulator object, doesn't initialize Simulator object */
-  *dev = SimulatorV3_1::get_v3_1_simulator(nullptr);
+  *dev = SimulatorV3_2::get_v3_2_simulator(nullptr);
 #endif
 #else
   ret = Aipu::get_aipu(dev);

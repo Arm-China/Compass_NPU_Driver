@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -146,6 +146,7 @@ private:
   ELFIO::section *m_crodata = nullptr;
   ELFIO::section *m_data = nullptr;
   ELFIO::section *m_note = nullptr;
+  ELFIO::section *m_comment = nullptr;
 
   BinSection sections[ELFSectionCnt];
   const char *ELFSectionName[ELFSectionCnt] = {"rodata",
@@ -163,6 +164,7 @@ private:
                                                "constanthashtable"};
 
 private:
+  aipu_status_t parse_graph_common(Graph &gobj);
   ELFIO::section *get_elf_section(const std::string &section_name);
   aipu_status_t parse_subgraph(char *start, uint32_t id, GraphV3X &gobj,
                                uint64_t &sg_desc_size);
@@ -175,8 +177,9 @@ private:
 
 public:
   BinSection get_bin_note(const std::string &note_name);
-  virtual aipu_status_t parse_graph(std::istream &gbin, uint32_t size,
-                                    Graph &gobj);
+  aipu_status_t parse_graph(std::istream &gbin, uint32_t size,
+                            Graph &gobj) override;
+  aipu_status_t parse_graph(const char *file, Graph &gobj) override;
 
 protected:
   aipu_status_t parse_reuse_section(char *bss, uint32_t count, uint32_t id,

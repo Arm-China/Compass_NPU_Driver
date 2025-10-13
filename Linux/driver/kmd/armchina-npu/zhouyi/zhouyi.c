@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #include <linux/platform_device.h>
 #include <linux/delay.h>
@@ -129,8 +129,8 @@ int zhouyi_get_hw_version_number(struct io_region *io, int *rev)
 		return AIPU_ISA_VERSION_ZHOUYI_V3;
 	case ZHOUYI_V3_REVISION_ID_R0P3:
 		return AIPU_ISA_VERSION_ZHOUYI_V3;
-	case ZHOUYI_V3_1_REVISION_ID_R0P0:
-		return AIPU_ISA_VERSION_ZHOUYI_V3_1;
+	case ZHOUYI_V3_2_REVISION_ID_R1P0:
+		return AIPU_ISA_VERSION_ZHOUYI_V3_2;
 	}
 
 	return 0;

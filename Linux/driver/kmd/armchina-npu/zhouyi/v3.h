@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #ifndef __V3_H__
 #define __V3_H__
@@ -416,6 +416,9 @@
  */
 #define _GET_GM_SIZE(val_32)                        (((val_32) >> 16) & 0xF)
 
+#define DEBUG_CLUSTER_STATUS                    0x2004
+#define DEBUG_CORE_STATUS                    0x3004
+#define DEBUG_CLUSTER_IDLE_STATUS                    0x2008
 #define DEBUG_CLUSTER_GM_CONTROL                    0x2070
 
 #define ZHOUYI_V3_MAX_REG_OFFSET                    0x322C

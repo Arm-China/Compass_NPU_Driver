@@ -3,12 +3,12 @@
 The samples can quickly verify the functionality of the whole UMD and KMD logic. They can be split into two parts, one is for simulation environmetn, another is for HW environment.
 
 ## 1. Only for simulator verification
-- simulation_test: this case is for simulator.
+- simulation_test: this case is for simulator, and you can do simulator profiler with it.
 
 ```bash
 # for x1|z1|z2|z3
 $ ./aipu_simulation_test -s /full/path/of/aipu_simulator_[x1|z1|z2|z3] -b aipu.bin -i input0.bin -c output.bin -d ./
-# for x2/x3
+# for x2/x3p
 $ ./aipu_simulation_test -a <target> -b aipu.bin -i input0.bin -c output.bin -d ./
 ```
 
@@ -18,7 +18,7 @@ note:
 - Add the library of UMD to LD_LIBRARY_PATH.
 
 ## 2. Only HW verifcation
-- benchmark_test: a general case run on HW board.
+- benchmark_test: a general case run on HW board, and you can bind core by enabling macro and setting core id.
 ```bash
 $ ./aipu_benchmark_test -b aipu.bin -i input0.bin -c output.bin -d ./
 ```
@@ -33,7 +33,7 @@ $ ./aipu_flush_job_test -b aipu.bin -i input0.bin -c output.bin -d ./
 $ ./aipu_profiler_test -b aipu.bin -i input0.bin -c output.bin -d ./
 ```
 
-- multi_model_test: load multiple models and dispatch them to different core, only for aipu v3/v3_1.
+- multi_model_test: load multiple models and dispatch them to different core, only for aipu v3/v3_2.
 ```bash
 $ ./aipu_multi_model_test -b aipu.bin -i input0.bin -c output.bin -d ./
 ```
@@ -58,7 +58,7 @@ $ ./aipu_dmabuf_vmap_test
 ## 3. Support Simulator & HW verifcation
 For Simulator, if AIPU arch is v1 or v2, you should provide full path of executable simulator by '-s'.  
 If AIPU arch is v3 or upper, you should provide target by '-a'
-- batch_test: load multiple input frames for one model, try to parallel frames on cores. only for aipu v3/v3_1.
+- batch_test: load multiple input frames for one model, try to parallel frames on cores. only for aipu v3/v3_2.
 ```bash
 $ ./aipu_batch_test -b aipu.bin -i input0.bin -c output.bin -d ./
 ```

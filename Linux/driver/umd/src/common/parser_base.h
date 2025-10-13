@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -46,9 +46,11 @@ struct BinHeaderTop {
 struct BinSection {
   const char *va;
   uint64_t size;
-  void init(const char *_va, uint64_t _size) {
+  uint64_t offset;
+  void init(const char *_va, uint64_t _size, uint64_t _offset = 0) {
     va = _va;
     size = _size;
+    offset = _offset;
   }
 };
 
@@ -93,6 +95,7 @@ enum SubSectionType {
   SECTION_TYPE_INPUT = 0,
   SECTION_TYPE_OUTPUT = 1,
   SECTION_TYPE_INTER_DUMP = 2,
+  SECTION_TYPE_CONSTANT = 4,
   SECTION_TYPE_PROF_DATA = 10,
   SECTION_TYPE_PLOG_DATA = 12,
   SECTION_TYPE_LAYER_COUNTER = 13,
@@ -221,6 +224,7 @@ protected:
 public:
   virtual aipu_status_t parse_graph(std::istream &gbin, uint32_t size,
                                     Graph &gobj) = 0;
+  virtual aipu_status_t parse_graph(const char *file, Graph &gobj) = 0;
 
 public:
   static uint32_t get_graph_bin_version(std::istream &gbin);

@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -18,6 +18,7 @@
 #include "elfio/elfio_note.hpp"
 #include "kmd/tcb.h"
 #include "memory_base.h"
+#include "parser_base.h"
 #include "standard_api.h"
 
 namespace aipudrv {
@@ -92,8 +93,17 @@ struct NoteCommonBuffer {
   }
 };
 
+struct CoredumpAttr {
+  uint32_t cluster_cnt;
+  uint32_t core_cnt; /* per-cluster */
+  uint32_t tec_cnt;  /* per-core */
+  uint32_t lm_size;  /* local memory size */
+  uint32_t sm_size;  /* share memory size */
+  uint32_t gm_size;  /* global memory size(in-use) */
+};
+
 /* base, offsets */
-using regs_map = std::map<uint32_t, std::vector<uint32_t>>;
+using RegsMap = std::map<uint32_t, std::vector<uint32_t>>;
 
 class JobV3X;
 class Coredump {
@@ -109,27 +119,36 @@ private:
   const std::string COREDUMP_FILE_PREFIX = "aipu.coredump";
 
   bool m_is_initialized = false;
-  uint32_t m_clusters_per_partition =
-      0;                            /* assume cluster per partition are same */
-  uint32_t m_cores_per_cluster = 0; /* assume cores per cluster are same */
-  uint32_t m_tecs_per_core = 0;     /* assume tecs per core are same */
-  uint32_t m_lsm_size = 0;
-  uint32_t m_sm_size = 0;
+  CoredumpAttr m_attr = {0};
   uint32_t m_gm_cnt = 1;
   std::vector<std::pair<DEV_PA_32, char *>> m_tecs_bufs;
   std::vector<std::pair<BufferDesc *, char *>> m_gm_bufs;
   std::vector<char *> m_sm_bufs;
   std::map<uint32_t, BufferDesc *> m_job_gm_bufs;
-  BufferDesc *m_tec_buf_desc = nullptr;
-  BufferDesc *m_share_buf_desc = nullptr;
+  BufferDesc *m_desc = nullptr;
 
+  aipu_status_t get_lm_sm_info();
   std::vector<std::pair<uint32_t, uint32_t>> get_tsm_regs(uint32_t,
                                                           uint32_t core_id);
-  std::vector<regs_map> get_v3_tsm_regs(uint32_t cluster_id, uint32_t core_id);
-  std::vector<regs_map> get_v3_1_tsm_regs(uint32_t cluster_id,
-                                          uint32_t core_id);
+  std::vector<RegsMap> get_v3_tsm_regs(uint32_t cluster_id, uint32_t core_id);
+  std::vector<RegsMap> get_v3_2_tsm_regs(uint32_t cluster_id, uint32_t core_id);
   bool get_note_idx(const std::string &name, uint32_t &idx);
   void remove_note(const std::string &name);
+
+  static uint32_t get_total_tec_size(const CoredumpAttr &attr) {
+    uint32_t total_tecs = attr.cluster_cnt * attr.core_cnt * attr.tec_cnt;
+    uint32_t each_tec_buffer_size =
+        aligned(sizeof(CoredumpBufferTec) + attr.lm_size, ALIGNMENT_ADDR);
+    return total_tecs * each_tec_buffer_size;
+  }
+
+  static uint32_t get_total_share_size(const CoredumpAttr &attr) {
+    uint32_t total_cores = attr.cluster_cnt * attr.core_cnt;
+    uint32_t total_share_size =
+        sizeof(uint32_t) +
+        (1 /*gm*/ + total_cores) * sizeof(CoredumpBufferShare::DdrInfo);
+    return total_share_size + attr.gm_size + total_cores * attr.sm_size;
+  }
 
 public:
   Coredump(JobV3X *job, DeviceBase *dev);
@@ -137,8 +156,14 @@ public:
   Coredump(const Coredump &Coredump) = delete;
   Coredump &operator=(const Coredump &Coredump) = delete;
 
+  /* no Coredump object, can get coredump required size */
+  static uint32_t get_coredump_buffer_size(const CoredumpAttr &attr);
+
   aipu_status_t init();
-  aipu_status_t alloc_coredump();
+  /* coredump buffer from inner */
+  aipu_status_t alloc_setup_buffer();
+  /* coredump buffer from outer */
+  aipu_status_t setup_coredump_buffer(const BufferDesc &desc);
   void free_coredump();
 
   aipu_status_t do_coredump();
@@ -157,6 +182,7 @@ public:
       return AIPU_STATUS_ERROR_INVALID_GM;
 
     m_job_gm_bufs[gm_id] = buf;
+    m_attr.gm_size = buf->size;
     return AIPU_STATUS_SUCCESS;
   }
 };

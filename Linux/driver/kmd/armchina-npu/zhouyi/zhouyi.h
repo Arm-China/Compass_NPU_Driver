@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #ifndef __AIPU_ZHOUYI_H__
 #define __AIPU_ZHOUYI_H__
@@ -22,10 +22,10 @@
 
 #define ZHOUYI_AIPU_IDLE_STATUS               0x70000
 
-#define ZHOUYI_ASID_COUNT                     32
+#define ZHOUYI_ASID_COUNT                     4
 
 /*
- * Revision ID for V1 ~ V3_1
+ * Revision ID for V1 ~ V3_2
  */
 #define ZHOUYI_V1_REVISION_ID                 0x0
 #define ZHOUYI_V2_0_REVISION_ID               0x100
@@ -33,7 +33,7 @@
 #define ZHOUYI_V2_2_REVISION_ID               0x300
 #define ZHOUYI_V3_REVISION_ID_R0P2            0x10000
 #define ZHOUYI_V3_REVISION_ID_R0P3            0x10003
-#define ZHOUYI_V3_1_REVISION_ID_R0P0          0x10100
+#define ZHOUYI_V3_2_REVISION_ID_R1P0          0x10210
 
 /*
  * Soft Reset
@@ -52,7 +52,7 @@
  */
 #define ZHOUYI_COMMAND_POOL_DEFAULT           0
 #define ZHOUYI_COMMAND_POOL_PCP               0
-#define ZHOUYI_V3_1_COMMAND_POOL_FULL         0xFFFF
+#define ZHOUYI_V3_2_COMMAND_POOL_FULL         0xFFFF
 
 #define PARTITION_MODE_NONE                   0
 
@@ -83,8 +83,6 @@
 #define ZHOUYI_TRIGGER_TYPE_UPDATE_DISPATCH      1
 #define ZHOUYI_TRIGGER_TYPE_DISPATCH             2
 #define ZHOUYI_TRIGGER_TYPE_DEBUG_DISPATCH       3
-
-
 
 int zhouyi_read_status_reg(struct io_region *io);
 void zhouyi_clear_qempty_interrupt(struct io_region *io);

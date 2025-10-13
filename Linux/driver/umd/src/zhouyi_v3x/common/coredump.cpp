@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -14,7 +14,6 @@
 #include <vector>
 
 #include "device/aipu/ukmemory.h"
-#include "parser_base.h"
 #include "standard_api.h"
 #include "zhouyi_v3x/common/job_v3x.h"
 
@@ -30,7 +29,7 @@ Coredump::Coredump(JobV3X *job, DeviceBase *dev) {
 }
 
 Coredump::~Coredump() {
-  if (m_tec_buf_desc != nullptr || m_share_buf_desc != nullptr)
+  if (m_desc != nullptr)
     free_coredump();
 }
 
@@ -44,33 +43,33 @@ aipu_status_t Coredump::init() {
   if (ret != AIPU_STATUS_SUCCESS)
     return ret;
 
-  ret = m_dev->get_cluster_count(0, &m_clusters_per_partition);
+  ret = m_dev->get_cluster_count(0, &m_attr.cluster_cnt);
   if (ret != AIPU_STATUS_SUCCESS)
     return ret;
 
-  ret = m_dev->get_core_count(0, 0, &m_cores_per_cluster);
+  ret = m_dev->get_core_count(0, 0, &m_attr.core_cnt);
   if (ret != AIPU_STATUS_SUCCESS)
     return ret;
 
-  m_tecs_per_core = m_dev->tec_cnt_per_core(0);
+  m_attr.tec_cnt = m_dev->tec_cnt_per_core(0);
 
   LOG(LOG_INFO,
       "partition cnt: %u, cluster per partition: %u, core per cluster: %u, tec "
       "per core: %u",
-      partition_cnt, m_clusters_per_partition, m_cores_per_cluster,
-      m_tecs_per_core);
+      partition_cnt, m_attr.cluster_cnt, m_attr.core_cnt, m_attr.tec_cnt);
 
-  m_sm_size = m_mem->get_sm_size();
-  m_lsm_size = m_mem->get_lm_size();
+  ret = get_lm_sm_info();
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
 
   if (m_mem->get_gm_size(1) != 0)
     m_gm_cnt = 2;
 
-  if (m_sm_size == 0 || m_lsm_size == 0) {
+  if (m_attr.sm_size == 0 || m_attr.lm_size == 0) {
     LOG(LOG_ERR,
         "exist 0 size memory. core shared memory size: %u, tec local memory "
         "size: %u",
-        m_sm_size, m_lsm_size);
+        m_attr.sm_size, m_attr.lm_size);
     return AIPU_STATUS_ERROR_INVALID_SIZE;
   }
 
@@ -78,70 +77,29 @@ aipu_status_t Coredump::init() {
   return AIPU_STATUS_SUCCESS;
 }
 
-aipu_status_t Coredump::alloc_coredump() {
-  const std::string buf_name = "coredump";
-  uint32_t total_tecs =
-      m_clusters_per_partition * m_cores_per_cluster * m_tecs_per_core;
-  uint32_t total_cores = m_clusters_per_partition * m_cores_per_cluster;
+uint32_t Coredump::get_coredump_buffer_size(const CoredumpAttr &attr) {
+  return ALIGN_PAGE(get_total_tec_size(attr)) + get_total_share_size(attr);
+}
 
-  uint32_t each_tec_buffer_size =
-      aligned(sizeof(CoredumpBufferTec) + m_lsm_size, ALIGNMENT_ADDR);
-  uint32_t tecs_buf_size = total_tecs * each_tec_buffer_size;
+aipu_status_t Coredump::setup_coredump_buffer(const BufferDesc &desc) {
+  uint32_t total_tec_size = get_total_tec_size(m_attr);
+
+  DEV_PA_32 tec_pa_base = desc.align_asid_pa;
+  DEV_PA_32 share_pa_base = tec_pa_base + ALIGN_PAGE(total_tec_size);
   char *tec_va_base = nullptr;
-  std::string tec_buf_name = buf_name + "_tec";
-
-  auto malloc_ = [this](uint32_t size, BufferDesc **desc, char **va_base,
-                        const char *name) -> aipu_status_t {
-    aipu_status_t ret = m_mem->malloc(size, ALIGN_ADDR(ALIGNMENT_ADDR), desc,
-                                      name, (0 << 8) | AIPU_BUF_REGION_DEFAULT);
-    if (ret != AIPU_STATUS_SUCCESS)
-      return ret;
-
-    if (m_tec_buf_desc->asid != 0) {
-      LOG(LOG_ERR, "core dump buffer must be in asid0, but now %d",
-          m_tec_buf_desc->asid);
-      return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
-    }
-
-    m_mem->mem_bzero((*desc)->pa, (*desc)->size);
-    if (m_mem->pa_to_va((*desc)->pa, (*desc)->size, va_base) != 0)
-      return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
-    return AIPU_STATUS_SUCCESS;
-  };
-
-  aipu_status_t ret = malloc_(tecs_buf_size, &m_tec_buf_desc, &tec_va_base,
-                              tec_buf_name.c_str());
-  if (ret != AIPU_STATUS_SUCCESS)
-    return ret;
-
-  uint32_t use_gm_cnt = m_job_gm_bufs.size();
-  uint32_t gm_buf_size = 0;
-  std::for_each(m_job_gm_bufs.begin(), m_job_gm_bufs.end(),
-                [&](const auto &it) { gm_buf_size += it.second->size; });
-  uint32_t share_buf_size =
-      sizeof(uint32_t) +
-      (use_gm_cnt + total_cores) * sizeof(CoredumpBufferShare::DdrInfo);
-  share_buf_size += gm_buf_size + total_cores * m_sm_size;
-  char *share_va_base = nullptr;
-  std::string share_buf_name = buf_name + "_share";
-  ret = malloc_(share_buf_size, &m_share_buf_desc, &share_va_base,
-                share_buf_name.c_str());
-  if (ret != AIPU_STATUS_SUCCESS) {
-    m_mem->free(&m_tec_buf_desc);
-    m_tec_buf_desc = nullptr;
-    return ret;
-  }
+  if (m_mem->pa_to_va(desc.pa, desc.size, &tec_va_base) != 0)
+    return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
+  char *share_va_base = tec_va_base + ALIGN_PAGE(total_tec_size);
 
   /* coredump tec buffer */
-  DEV_PA_32 tec_pa_base = get_low_32(m_tec_buf_desc->align_asid_pa);
-  DEV_PA_32 share_pa_base = get_low_32(m_share_buf_desc->align_asid_pa);
+  uint32_t total_tecs = m_attr.cluster_cnt * m_attr.core_cnt * m_attr.tec_cnt;
+  uint32_t each_tec_buffer_size =
+      aligned(sizeof(CoredumpBufferTec) + m_attr.lm_size, ALIGNMENT_ADDR);
   for (uint32_t i = 0; i < total_tecs; ++i) {
     CoredumpBufferTec *coredump_buffer_tec =
         (CoredumpBufferTec *)(tec_va_base + each_tec_buffer_size * i);
-    coredump_buffer_tec->buf_shared_address =
-        share_pa_base |
-        0x29A; // TODO: each tec corresponding shared buffer address?
-    coredump_buffer_tec->lsram_info.size = m_lsm_size;
+    coredump_buffer_tec->buf_shared_address = share_pa_base | 0x29A;
+    coredump_buffer_tec->lsram_info.size = m_attr.lm_size;
     std::pair<DEV_PA_32, char *> pa_va_pair =
         std::make_pair(tec_pa_base + each_tec_buffer_size * i,
                        tec_va_base + each_tec_buffer_size * i);
@@ -149,9 +107,10 @@ aipu_status_t Coredump::alloc_coredump() {
   }
 
   /* coredump share buffer */
+  uint32_t total_cores = m_attr.cluster_cnt * m_attr.core_cnt;
   CoredumpBufferShare *coredump_buffer_share =
       (CoredumpBufferShare *)share_va_base;
-  coredump_buffer_share->memory_count = total_cores + use_gm_cnt;
+  coredump_buffer_share->memory_count = total_cores + 1 /*gm*/;
   CoredumpBufferShare::DdrInfo *ddr_info =
       (CoredumpBufferShare::DdrInfo *)(share_va_base + sizeof(uint32_t));
   char *sm_buf_base = share_va_base + sizeof(uint32_t) +
@@ -159,11 +118,12 @@ aipu_status_t Coredump::alloc_coredump() {
                           sizeof(CoredumpBufferShare::DdrInfo);
   for (uint32_t i = 0; i < total_cores; ++i) {
     ddr_info[i].addr = 0;
-    ddr_info[i].size = m_sm_size;
-    m_sm_bufs.push_back(sm_buf_base + i * m_sm_size);
+    ddr_info[i].size = m_attr.sm_size;
+    m_sm_bufs.push_back(sm_buf_base + i * m_attr.sm_size);
   }
 
-  char *gm_buf_base = sm_buf_base + total_cores * m_sm_size;
+  /* coredump gm buffer */
+  char *gm_buf_base = sm_buf_base + total_cores * m_attr.sm_size;
   uint32_t i = 0;
   uint32_t offset = 0;
   for (auto &it : m_job_gm_bufs) {
@@ -176,12 +136,20 @@ aipu_status_t Coredump::alloc_coredump() {
   return AIPU_STATUS_SUCCESS;
 }
 
-void Coredump::free_coredump() {
-  if (m_tec_buf_desc != nullptr && m_tec_buf_desc->size != 0)
-    m_mem->free(&m_tec_buf_desc, "coredump_tec");
+aipu_status_t Coredump::alloc_setup_buffer() {
+  uint32_t size = get_coredump_buffer_size(m_attr);
+  aipu_status_t ret =
+      m_mem->malloc(size, ALIGN_ADDR(ALIGNMENT_ADDR), &m_desc, "coredump",
+                    (0 << 8) | AIPU_BUF_REGION_DEFAULT);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
 
-  if (m_share_buf_desc != nullptr && m_share_buf_desc->size != 0)
-    m_mem->free(&m_share_buf_desc, "coredump_share");
+  return setup_coredump_buffer(*m_desc);
+}
+
+void Coredump::free_coredump() {
+  if (m_desc != nullptr && m_desc->size != 0)
+    m_mem->free(&m_desc, "coredump");
 }
 
 aipu_status_t Coredump::do_coredump() {
@@ -192,7 +160,7 @@ aipu_status_t Coredump::do_coredump() {
   misc.process_id = static_cast<uint32_t>(getpid());
   misc.thread_id = std::hash<std::thread::id>{}(std::this_thread::get_id());
   misc.npu_arch = m_dev->get_npu_version();
-  misc.instr_base = m_job->get_graph().m_text->align_asid_pa;
+  misc.instr_base = m_job->m_text->align_asid_pa;
   misc.graph_id = get_graph_id(m_job->m_id);
   misc.job_id = m_job->m_id;
   misc.write(oss);
@@ -212,11 +180,11 @@ aipu_status_t Coredump::do_coredump() {
   /* note: text */
   ELFIO::section *text = m_elf.sections.add(".text");
   text->set_type(SHT_PROGBITS);
-  DEV_PA_64 text_pa = m_job->get_graph().m_text->pa;
+  DEV_PA_64 text_pa = m_job->m_text->pa;
   char *text_va = nullptr;
-  m_mem->pa_to_va(text_pa, m_job->get_graph().m_btext.size + 16, &text_va);
+  m_mem->pa_to_va(text_pa, m_job->graph().m_btext.size + 16, &text_va);
   text->set_address(misc.instr_base);
-  text->set_data((const char *)text_va, m_job->get_graph().m_btext.size + 16);
+  text->set_data((const char *)text_va, m_job->graph().m_btext.size + 16);
 
   std::vector<uint32_t> buf_valid_idx;
   for (uint32_t i = 0; i < m_tecs_bufs.size(); i++) {
@@ -275,7 +243,7 @@ aipu_status_t Coredump::do_coredump() {
             ->gpr[29]; /* m_sgt_allocated[0]->tasks[0].stack->align_asid_pa */
     char *sp_va = nullptr;
     uint32_t stack_size =
-        reinterpret_cast<tcb_t *>(tcbp_va)->sp - tec_buf->gpr[29];
+        reinterpret_cast<tcb_t *>(tcbp_va)->task.sp - tec_buf->gpr[29];
     m_mem->pa_to_va(sp_pa, stack_size, &sp_va);
     note_name = "stack_" + common_suffix;
     oss.clear();
@@ -287,10 +255,10 @@ aipu_status_t Coredump::do_coredump() {
     /* note: sm */
     note_name = std::string("sm_cluster") + std::to_string(cluster_id) +
                 "core" + std::to_string(core_id);
-    uint32_t buf_idx = cluster_id * m_cores_per_cluster + core_id;
+    uint32_t buf_idx = cluster_id * m_attr.core_cnt + core_id;
     uint32_t buf_cnt = m_sm_bufs.size();
     if (buf_cnt > buf_idx)
-      set_bin_note(m_sm_bufs[buf_idx], m_mem->get_sm_size(), note_name);
+      set_bin_note(m_sm_bufs[buf_idx], m_attr.sm_size, note_name);
     else
       LOG(LOG_WARN,
           "shared memory is invalid: buffers count: %u, buffer required index: "
@@ -325,9 +293,45 @@ aipu_status_t Coredump::do_coredump() {
 
   write();
 
-  if (m_job->get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3_1)
+  if (m_job->graph().m_hw_version >= AIPU_ISA_VERSION_ZHOUYI_V3_2)
     ret =
-        convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_ABORT_CMD_POOL, nullptr));
+        convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_ABORT_CMDPOOL, nullptr));
+
+  return ret;
+}
+
+/* note: lm/sm only used in coredump, and page selection is not thread-safe */
+aipu_status_t Coredump::get_lm_sm_info() {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  static std::mutex mtx;
+
+  std::lock_guard<std::mutex> lg(mtx);
+  uint32_t core_id = 0;
+  m_dev->write_reg(core_id, TSM_PAGE_SELECTION_CONTROL,
+                   EN_SELECT(1) | EN_CLUSTER(0) | EN_CORE(0));
+
+  int32_t kret =
+      m_dev->read_reg(core_id, TSM_LOCAL_MEMORY_FEATURE, &m_attr.lm_size);
+  if (kret != AIPU_LL_STATUS_SUCCESS) {
+    m_attr.lm_size = 0;
+    LOG(LOG_ERR, "get invalid tec local memory size, set to 0!");
+    ret = AIPU_STATUS_ERROR_INVALID_SIZE;
+    goto out;
+  }
+  m_attr.lm_size = (1 << ((m_attr.lm_size & 0xF) - 1)) * 32768;
+
+  kret = m_dev->read_reg(core_id, TSM_SHARE_MEMORY_FEATURE, &m_attr.sm_size);
+  if (kret != AIPU_LL_STATUS_SUCCESS) {
+    m_attr.sm_size = 0;
+    LOG(LOG_ERR, "get invalid core share memory size!");
+    ret = AIPU_STATUS_ERROR_INVALID_SIZE;
+    goto out;
+  }
+  m_attr.sm_size = (1 << ((m_attr.sm_size & 0xF) - 1)) * 32768;
+
+out:
+  m_dev->write_reg(core_id, TSM_PAGE_SELECTION_CONTROL,
+                   EN_SELECT(0) | EN_CLUSTER(0) | EN_CORE(0));
   return ret;
 }
 
@@ -389,10 +393,10 @@ void Coredump::write() {
   m_elf.save(filename);
 }
 
-std::vector<regs_map> Coredump::get_v3_tsm_regs(uint32_t, uint32_t core_id) {
+std::vector<RegsMap> Coredump::get_v3_tsm_regs(uint32_t, uint32_t core_id) {
   // clang-format off
     /* tsm base */
-    const static regs_map tsm_base_map = {
+    const static RegsMap tsm_base_map = {
         {0x00,
             {
                 0x00, 0x04, 0x08, 0x0c, 0x10, 0x14, 0x18, 0x20, 0x50, 0x60, 0x64, 0x68,
@@ -411,7 +415,7 @@ std::vector<regs_map> Coredump::get_v3_tsm_regs(uint32_t, uint32_t core_id) {
     };
 
     /* debug selection */
-    const static regs_map ahb_cluster = {
+    const static RegsMap ahb_cluster = {
         {0x2000,
             {
                 0x00, 0x04, 0x08, 0x20, 0x30, 0x34, 0x38, 0x3c,
@@ -428,7 +432,7 @@ std::vector<regs_map> Coredump::get_v3_tsm_regs(uint32_t, uint32_t core_id) {
             }
         },
     };
-    const static regs_map ahb_core = {
+    const static RegsMap ahb_core = {
         {0x3000,
             {
                 0x00, 0x04, 0x08, 0x20, 0x24, 0x50, 0x54, 0x80,
@@ -445,10 +449,10 @@ std::vector<regs_map> Coredump::get_v3_tsm_regs(uint32_t, uint32_t core_id) {
   return {tsm_base_map, ahb_cluster, ahb_core};
 }
 
-std::vector<regs_map> Coredump::get_v3_1_tsm_regs(uint32_t, uint32_t core_id) {
+std::vector<RegsMap> Coredump::get_v3_2_tsm_regs(uint32_t, uint32_t core_id) {
   // clang-format off
     /* tsm base */
-    const static regs_map tsm_base_map = {
+    const static RegsMap tsm_base_map = {
         {0x00,
             {
                 0x00, 0x08, 0x0c, 0x10, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x2c, 0x30, 0x4c,
@@ -480,7 +484,7 @@ std::vector<regs_map> Coredump::get_v3_1_tsm_regs(uint32_t, uint32_t core_id) {
     };
 
     /* debug selection */
-    const static regs_map ahb_cluster = {
+    const static RegsMap ahb_cluster = {
         {0x2000,
             {
                 0x00, 0x04, 0x24, 0x40, 0x48, 0x4c, 0x50, 0x58, 0x5c,
@@ -494,7 +498,7 @@ std::vector<regs_map> Coredump::get_v3_1_tsm_regs(uint32_t, uint32_t core_id) {
             }
         },
     };
-    const static regs_map ahb_core = {
+    const static RegsMap ahb_core = {
         {0x3000,
             {
                 0x00, 0x04, 0x08, 0x0c, 0x20, 0x24, 0x4c, 0x50, 0x54,
@@ -517,11 +521,11 @@ std::vector<std::pair<uint32_t, uint32_t>>
 Coredump::get_tsm_regs(uint32_t cluster_id, uint32_t core_id) {
   static std::mutex debug_link_mutex;
   std::lock_guard<std::mutex> lock(debug_link_mutex);
-  std::vector<regs_map> regs;
+  std::vector<RegsMap> regs;
 #if (defined ZHOUYI_V3)
   regs = get_v3_tsm_regs(cluster_id, core_id);
-#elif (defined ZHOUYI_V3_1)
-  regs = get_v3_1_tsm_regs(cluster_id, core_id);
+#elif (defined ZHOUYI_V3_2)
+  regs = get_v3_2_tsm_regs(cluster_id, core_id);
 #endif
 
   /* core_id will not impact tsm base registers and cluster */

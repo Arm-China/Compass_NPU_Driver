@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -12,6 +12,7 @@
 #include <getopt.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include <iomanip>
 #include <iostream>
@@ -36,6 +37,8 @@ static struct option opts[] = {{"bin", required_argument, NULL, 'b'},
                                {"weight_dir", optional_argument, NULL, 'w'},
                                {"loop_cnt", optional_argument, NULL, 'n'},
                                {"frame_cnt", optional_argument, NULL, 'f'},
+                               {"graph_idx", optional_argument, NULL, 'g'},
+                               {"profile_en", optional_argument, NULL, 'p'},
                                {NULL, 0, NULL, 0}};
 
 void help(void) {
@@ -47,12 +50,11 @@ void help(void) {
       "   -i: input bins\n"
       "   -c: output bin\n"
       "   -d: dump path, once provided, samples will do a full dump\n"
-      "   -a: aipu v3 arch (X2_1204/X2_1204MP3), aipu v3_1 "
-      "arch(X3_1304/X3_1304MP2)\n"
+      "   -a: aipu v3 arch (X2_1204/X2_1204MP3), aipu v3_2 arch(X3P_1304...)\n"
       "   -t: test flush or finish job time(flush | finish), only for "
       "basic_time_test\n"
-      "   -l: simulator log level(0-3)\n"
-      "   -v: simulator verbose(0, 1)\n"
+      "   -l: simulator log level(0-3), default 1\n"
+      "   -v: simulator verbose(0, 1), default 1\n"
       "   -r: dynamic real input shape(eg: 1,480,640,3;if multi tensors, "
       "use'/' for isolation: 1,480,640,3/1,480,640,3)\n"
       "   -w: extra weight bin path,(note: weight bin name is like "
@@ -62,7 +64,11 @@ void help(void) {
       "   -f: inner frame counter, represents frame counter of each "
       "context/graph/job\n"
       "   -g: idx of runnig graph, only for shared weight, if not provided, "
-      "run all graph\n";
+      "run all graph\n"
+      "   -p: enable profile, only for simulation_test&benchmark_test, "
+      "attention: \n"
+      "       1.only valid when aipu.bin enables profiler\n"
+      "       2.v3_2 simulator enables profile, its' results may not match\n";
 
   std::cout << help_info;
   exit(0);
@@ -85,7 +91,7 @@ int init_test_bench(int argc, char *argv[], cmd_opt_t *opt,
   }
 
   while (1) {
-    c = getopt_long(argc, argv, "hs:C:b:i:c:d:a:s:z:q:k:x:o:l:t:r:w:n:f:g:v",
+    c = getopt_long(argc, argv, "hs:b:i:c:d:a:s:z:q:k:x:o:l:t:r:w:n:m:f:g:v:p",
                     opts, &opt_idx);
     if (-1 == c)
       break;
@@ -152,6 +158,13 @@ int init_test_bench(int argc, char *argv[], cmd_opt_t *opt,
 
     case 'd':
       strcpy(opt->dump_dir, optarg);
+      struct stat info;
+      if (stat(opt->dump_dir, &info) != 0) {
+        if (mkdir(opt->dump_dir, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) != 0) {
+          AIPU_ERR()("create directory %s failed\n", opt->dump_dir);
+          goto finish;
+        }
+      }
       break;
 
     case 'a':
@@ -163,12 +176,11 @@ int init_test_bench(int argc, char *argv[], cmd_opt_t *opt,
       break;
 
     case 'l':
-      opt->log_level_set = true;
       opt->log_level = atoi(optarg);
       break;
 
     case 'v':
-      opt->verbose = true;
+      opt->verbose = atoi(optarg);
       break;
 
     case 't':
@@ -198,6 +210,12 @@ int init_test_bench(int argc, char *argv[], cmd_opt_t *opt,
       opt->graph_idx = atoi(optarg);
       break;
 
+    case 'p':
+      opt->profile_en = true;
+      break;
+    case 'm':
+      opt->thread_num = atoi(optarg);
+      break;
     case 'h':
       help();
       break;

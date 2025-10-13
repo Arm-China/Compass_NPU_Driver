@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -14,7 +14,7 @@
 #define PRINT_MACRO(x) #x " is defined to be " __PRINT_MACRO(x)
 
 #define RTDEBUG_TRACKING_MEM_OPERATION 0
-#define DUMP_ALL_MEM_OP_MASK 0x3f
+#define DUMP_ALL_MEM_OP_MASK 0xff
 #if RTDEBUG_TRACKING_MEM_OPERATION
 #define DUMP_MEM_OP_MASK (DUMP_ALL_MEM_OP_MASK)
 #else

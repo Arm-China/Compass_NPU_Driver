@@ -7,7 +7,7 @@ Compass_NPU_driver includes two parts: kernel mode driver(KMD) and user mode lib
 |v1|z1|
 |v2|z2/z3/x1|
 |v3|x2|
-|v3_1|x3|
+|v3_2|x3p|
 
 ## 1. Folders
 ### driver
@@ -93,8 +93,8 @@ $ source env_setup.sh
 # for aipu v1/v2/v3
 $ ./build_all.sh -p juno -v v3 -a python_api [-d]
 
-# for aipu v3_1
-$ ./build_all.sh -p juno -v v3_1 -a python_api [-d]
+# for aipu v3_2
+$ ./build_all.sh -p juno -v v3_2 -a python_api [-d]
 ```
 
 - If the command run normally, a folder named 'bin' is created, the corresponding KMD driver(aipu.ko) and UMD library(libaipudrv.so) are generated and stored in it.
@@ -113,6 +113,7 @@ Set below env variables accordingly.
     |   |-- aipu_simulator_x1
     |   |-- aipu_simulator_x2
     |   |-- aipu_simulator_x3
+    |   |-- aipu_simulator_x3p
     |   |-- aipu_simulator_z1
     |   |-- aipu_simulator_z2
     |   |-- aipu_simulator_z3
@@ -121,6 +122,7 @@ Set below env variables accordingly.
         |-- libaipu_simulator_x1.so
         |-- libaipu_simulator_x2.so
         |-- libaipu_simulator_x3.so
+        |-- libaipu_simulator_x3p.so
         |-- libaipu_simulator_z1.so
         |-- libaipu_simulator_z2.so
         |-- libaipu_simulator_z3.so
@@ -136,7 +138,7 @@ CONFIG_DRV_RTENVAR_SIM_BASE_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_SIMULATOR
 CONFIG_DRV_BRENVAR_X86_CLPATH=/arm/tools/gnu/gcc/7.3.0/rhe7-x86_64/lib64 (optional)
 COMPASS_DRV_BTENVAR_X86_CXX=g++
 
-- specify path where store aipu v1/v2/v3/v3_1 simulators and libraries
+- specify path where store aipu v1/v2/v3/v3_2 simulators and libraries
 CONFIG_DRV_RTENVAR_SIM_PATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/bin/
 COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/lib/
 
@@ -170,8 +172,8 @@ $ source env_setup.sh (for csh env)
 # for aipu v1/v2/v3
 $ ./build_all.sh -p sim -v v3 -a python_api [-d]
 
-# for aipu v3_1
-$ ./build_all.sh -p sim -v v3_1 -a python_api [-d]
+# for aipu v3_2
+$ ./build_all.sh -p sim -v v3_2 -a python_api [-d]
 ```
 
 - If the command run normally, a folder named 'bin' is created, the UMD library(libaipudrv.so)

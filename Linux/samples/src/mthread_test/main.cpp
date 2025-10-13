@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -66,7 +66,7 @@ void non_pipeline(uint32_t frame_cnt) {
   aipu_job_config_simulation_t sim_job_config = {0};
   aipu_job_config_dump_t mem_dump_config = {0};
   aipu_load_graph_cfg_t load_graph_cfg = {0};
-  int pass = 0;
+  int pass = -1;
 
   AIPU_DBG() << "non_pipeline()";
 
@@ -76,8 +76,7 @@ void non_pipeline(uint32_t frame_cnt) {
                         &load_graph_cfg);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
-    AIPU_ERR()
-    ("aipu_load_graph_helper: %s (%s)\n", msg, opt.bin_files[0].c_str());
+    AIPU_ERR()("aipu_load_graph: %s (%s)\n", msg, opt.bin_files[0].c_str());
     goto finish;
   }
   AIPU_INFO() << "Graph id= " << std::hex << graph_id;
@@ -275,7 +274,7 @@ void pipeline(uint32_t pipe_cnt) {
   aipu_job_config_simulation_t sim_job_config = {0};
   aipu_job_config_dump_t mem_dump_config = {0};
   aipu_load_graph_cfg_t load_graph_cfg = {0};
-  int pass = 0;
+  int pass = -1;
 
   AIPU_DBG() << "pipeline()";
 
@@ -286,8 +285,7 @@ void pipeline(uint32_t pipe_cnt) {
 
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
-    AIPU_ERR()
-    ("aipu_load_graph_helper: %s (%s)\n", msg, opt.bin_files[0].c_str());
+    AIPU_ERR()("aipu_load_graph: %s (%s)\n", msg, opt.bin_files[0].c_str());
     goto finish;
   }
   AIPU_INFO() << "Graph id= " << std::hex << graph_id;
@@ -511,6 +509,7 @@ int main(int argc, char *argv[]) {
   const char *msg = nullptr;
   bool pipeline_enable = false;
   uint32_t frame_cnt = 2;
+  int thread_num = 2;
   vector<shared_ptr<thread>> thd_vec;
   void (*thread_cb)(uint32_t frame_cnt);
 
@@ -535,17 +534,9 @@ int main(int argc, char *argv[]) {
 
   if (opt.loop_cnt != 0)
     AIPU_CRIT()
-    ("aipu_mthread_test doesn't support to specify outer loop counter\n");
+  ("aipu_mthread_test doesn't support to specify outer loop counter\n");
 
-  if (opt.log_level_set) {
-    sim_glb_config.log_level = opt.log_level;
-  } else {
-#if ((defined RTDEBUG) && (RTDEBUG == 1))
-    sim_glb_config.log_level = 3;
-#else
-    sim_glb_config.log_level = 0;
-#endif
-  }
+  sim_glb_config.log_level = opt.log_level;
   sim_glb_config.verbose = opt.verbose;
   sim_glb_config.en_eval = false;
   sim_glb_config.simulator = opt.simulator;
@@ -576,10 +567,12 @@ int main(int argc, char *argv[]) {
   if (opt.frame_cnt != 0)
     frame_cnt = opt.frame_cnt;
 
-  for (int i = 0; i < THREAD_NUM; i++)
+  if (opt.thread_num != 0)
+    thread_num = opt.thread_num;
+  for (int i = 0; i < thread_num; i++)
     thd_vec.push_back(make_shared<thread>(thread_cb, frame_cnt));
 
-  for (int i = 0; i < THREAD_NUM; i++)
+  for (int i = 0; i < thread_num; i++)
     thd_vec[i]->join();
 
   ret = aipu_deinit_context(ctx);

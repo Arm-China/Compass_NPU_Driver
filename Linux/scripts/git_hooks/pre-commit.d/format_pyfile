@@ -15,7 +15,7 @@
 
 # autopep8 is a tool used to automatically formats Python code.
 # It's under path /arm/tools/python/python/3.6.5/rhe7-x86_64/bin/
-autopep8="/arm/tools/python/python/3.6.5/rhe7-x86_64/bin/autopep8"
+autopep8="/arm/tools/python/python/3.10.12/rhe7-x86_64/bin/autopep8"
 
 usage="Usage:\n  $0 file-to-check [file-to-check]\n\n"
 current_workspace=`pwd`

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #include <linux/slab.h>
 #include <linux/of_address.h>
@@ -8,7 +8,7 @@
 #include "v1.h"
 #include "v2.h"
 #include "v3.h"
-#include "v3_1.h"
+#include "v3_2.h"
 
 static int init_misc_dev(struct aipu_priv *aipu)
 {
@@ -71,6 +71,9 @@ int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,
 	aipu->reg.kern = NULL;
 	aipu->reg.phys = 0;
 	aipu->reg.size = 0;
+	aipu->dbg_reg.kern = NULL;
+	aipu->dbg_reg.phys = 0;
+	aipu->dbg_reg.size = 0;
 	aipu->ops = NULL;
 
 	zhouyi_detect_aipu_version(p_dev, &version, &config, &revision);
@@ -78,9 +81,9 @@ int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,
 	aipu->version = version;
 	aipu->revision = revision;
 
-#ifdef CONFIG_ARMCHINA_NPU_ARCH_V3_1
-	if (version == AIPU_ISA_VERSION_ZHOUYI_V3_1) {
-		aipu->ops = get_v3_1_priv_ops();
+#if defined(CONFIG_ARMCHINA_NPU_ARCH_V3_2)
+	if (version >= AIPU_ISA_VERSION_ZHOUYI_V3_2) {
+		aipu->ops = get_v3_2_priv_ops();
 		aipu->core_reset_delay_us = AIPU_CONFIG_CORE_RESET_DELAY_US;
 	}
 #endif

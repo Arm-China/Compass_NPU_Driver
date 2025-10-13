@@ -10,8 +10,8 @@ The samples can quickly deploy NPU inference application through exported UMD Py
 # for aipu v1/v2/v3
 $ ./build_all.sh -p <sim/juno> -v v3 -a python_api [-d]
 
-# for aipu v3_1
-$ ./build_all.sh -p <sim/juno> -v v3_1 -a python_api [-d]
+# for aipu v3_2
+$ ./build_all.sh -p <sim/juno> -v v3_2 -a python_api [-d]
 ```
 Refer to Linux/README.md for more detai information.
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -26,10 +26,8 @@ static int aipu_open(struct inode *inode, struct file *filp)
 {
 	filp->private_data = aipu;
 
-	if(aipu && aipu->soc_ops && aipu->soc_ops->soc_pm_runtime_get_sync)
-	{
-		aipu->soc_ops->soc_pm_runtime_get_sync(aipu->dev,aipu->soc);
-	}
+	if (aipu && aipu->soc_ops && aipu->soc_ops->soc_pm_runtime_get_sync)
+		aipu->soc_ops->soc_pm_runtime_get_sync(aipu->dev, aipu->soc);
 	return aipu_priv_check_status(aipu);
 }
 
@@ -44,10 +42,8 @@ static int aipu_release(struct inode *inode, struct file *filp)
 
 	aipu_mm_free_buffers(&aipu->mm, filp);
 
-	if(aipu && aipu->soc_ops && aipu->soc_ops->soc_pm_runtime_put)
-	{
-		aipu->soc_ops->soc_pm_runtime_put(aipu->dev,aipu->soc);
-	}
+	if (aipu && aipu->soc_ops && aipu->soc_ops->soc_pm_runtime_put)
+		aipu->soc_ops->soc_pm_runtime_put(aipu->dev, aipu->soc);
 	return 0;
 }
 
@@ -69,10 +65,14 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct aipu_config_clusters config_clusters;
 	struct aipu_dma_buf_request dmabuf_req;
 	struct aipu_dma_buf dmabuf_info;
-	struct aipu_group_id_desc group_id_desc;
+	struct aipu_id_desc id_desc;
+	struct aipu_cluster_status cluster_status;
+	struct aipu_running_job_query running_job_query;
 	int fd = 0;
 
 	u64 job_id;
+	struct aipu_rebind_buf_desc rebind_buf;
+	struct aipu_bind_buf_desc bind_buf;
 
 	switch (cmd) {
 	case AIPU_IOCTL_QUERY_CAP:
@@ -98,7 +98,18 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	case AIPU_IOCTL_REQ_BUF:
 		if (!copy_from_user(&buf_req, (struct aipu_buf_request __user *)arg,
 				    sizeof(buf_req))) {
-			ret = aipu_mm_alloc(&aipu->mm, &buf_req, filp);
+			if (!aipu->mm.has_iommu)
+				buf_req.alloc_mode = AIPU_DMA_BUF_MALLOC_DEFAULT;
+
+			if (buf_req.alloc_mode == AIPU_DMA_BUF_MALLOC_IOVA ||
+			    buf_req.alloc_mode == AIPU_DMA_BUF_MALLOC_IOVA_PHY) {
+			    ret = aipu_job_manager_alloc_exec_id(manager, &buf_req.exec_id);
+			    if (ret)
+			    	return ret;
+			} else {
+				buf_req.exec_id = 0;
+			}
+			ret = aipu_alloc_dma_iova_phy(&aipu->mm, &buf_req, filp);
 			if (!ret &&
 			    copy_to_user((struct aipu_buf_request __user *)arg, &buf_req,
 					 sizeof(buf_req)))
@@ -109,7 +120,7 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 	case AIPU_IOCTL_FREE_BUF:
 		if (!copy_from_user(&desc, (struct buf_desc __user *)arg, sizeof(desc)))
-			ret = aipu_mm_free(&aipu->mm, &desc, filp, true);
+			ret = aipu_free_dma_iova_phy(&aipu->mm, &desc, filp);
 		else
 			ret = -EINVAL;
 		break;
@@ -228,21 +239,85 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			ret = copy_to_user((char __user *)arg, &ret, sizeof(ret));
 		break;
 	case AIPU_IOCTL_ALLOC_GROUP_ID:
-		if (!copy_from_user(&group_id_desc, (struct aipu_group_id_desc __user *)arg,
-				    sizeof(group_id_desc))) {
-			ret = aipu_job_manager_alloc_group_id(manager, &group_id_desc);
-			if (!ret && copy_to_user((char __user *)arg, &group_id_desc,
-						 sizeof(group_id_desc)))
+		if (!copy_from_user(&id_desc, (struct aipu_id_desc __user *)arg,
+				    sizeof(id_desc))) {
+			ret = aipu_job_manager_alloc_group_id(manager, &id_desc);
+			if (!ret && copy_to_user((char __user *)arg, &id_desc,
+						 sizeof(id_desc)))
 				ret = -EINVAL;
 		} else {
 			ret = -EINVAL;
 		}
 		break;
 	case AIPU_IOCTL_FREE_GROUP_ID:
-		if (!copy_from_user(&group_id_desc, (struct aipu_group_id_desc __user *)arg,
-				    sizeof(group_id_desc)))
-			ret = aipu_job_manager_free_group_id(manager, &group_id_desc);
+		if (!copy_from_user(&id_desc, (struct aipu_id_desc __user *)arg,
+				    sizeof(id_desc)))
+			ret = aipu_job_manager_free_group_id(manager, &id_desc);
 		else
+			ret = -EINVAL;
+		break;
+	case AIPU_IOCTL_GET_CLUSTER_STATUS:
+		if (!copy_from_user(&cluster_status, (struct aipu_cluster_status __user *)arg,
+				    sizeof(cluster_status))) {
+			if (aipu && aipu->ops && aipu->ops->get_partition_status) {
+				ret = aipu->ops->get_partition_status(aipu, &cluster_status);
+				if (!ret && copy_to_user((char __user *)arg, &cluster_status,
+							 sizeof(cluster_status)))
+					ret = -EINVAL;
+			} else {
+				ret = -EINVAL;
+			}
+		} else {
+			ret = -EINVAL;
+		}
+		break;
+	case AIPU_IOCTL_GET_RUNNING_JOB_THREAD_ID:
+		if (!copy_from_user(&running_job_query, (struct aipu_running_job_query __user *)arg,
+				    sizeof(running_job_query))) {
+			ret = aipu_job_manager_get_running_job_thread(manager, &running_job_query);
+			if (!ret && copy_to_user((char __user *)arg, &running_job_query,
+						 sizeof(running_job_query)))
+				ret = -EINVAL;
+		} else {
+			ret = -EINVAL;
+		}
+		break;
+	case AIPU_IOCTL_ALLOC_SFLAG_ID:
+		if (!copy_from_user(&id_desc, (struct aipu_id_desc __user *)arg,
+				    sizeof(id_desc))) {
+			ret = aipu_job_manager_alloc_sflag_id(manager, &id_desc);
+			if (!ret && copy_to_user((char __user *)arg, &id_desc,
+						 sizeof(id_desc)))
+				ret = -EINVAL;
+		} else {
+			ret = -EINVAL;
+		}
+		break;
+	case AIPU_IOCTL_FREE_SFLAG_ID:
+		if (!copy_from_user(&id_desc, (struct aipu_id_desc __user *)arg,
+				    sizeof(id_desc)))
+			ret = aipu_job_manager_free_sflag_id(manager, &id_desc);
+		else
+			ret = -EINVAL;
+		break;
+	case AIPU_IOCTL_REBIND_DMA_BUF:
+		if (!copy_from_user(&rebind_buf, (struct buf_desc __user *)arg, sizeof(rebind_buf))) {
+			ret = aipu_rebind_dma_iova_phy(&aipu->mm, &rebind_buf, filp);
+			if (!ret &&
+			    copy_to_user((struct aipu_buf_request __user *)arg, &rebind_buf,
+					 sizeof(rebind_buf)))
+				ret = -EINVAL;
+		} else
+			ret = -EINVAL;
+		break;
+	case AIPU_IOCTL_BIND_DMA_BUF:
+		if (!copy_from_user(&bind_buf, (struct buf_desc __user *)arg, sizeof(bind_buf))) {
+			ret = aipu_bind_dma_iova_phy(&aipu->mm, &bind_buf, filp);
+			if (!ret &&
+			    copy_to_user((struct aipu_buf_request __user *)arg, &bind_buf,
+					 sizeof(bind_buf)))
+				ret = -EINVAL;
+		} else
 			ret = -EINVAL;
 		break;
 	default:

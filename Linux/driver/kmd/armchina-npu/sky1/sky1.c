@@ -33,7 +33,7 @@ static struct aipu_soc sky1 = {
 
 static struct cix_aipu_priv *cix_aipu_priv;
 
-struct cix_aipu_priv* sky1_priv_init(struct device *dev)
+struct cix_aipu_priv *sky1_priv_init(struct device *dev)
 {
 	cix_aipu_priv = devm_kzalloc(dev, sizeof(*cix_aipu_priv), GFP_KERNEL);
 	if (!cix_aipu_priv)

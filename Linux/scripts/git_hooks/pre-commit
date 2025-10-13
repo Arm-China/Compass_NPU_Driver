@@ -34,6 +34,13 @@ case "${1}" in
     for file in ${files_to_check} ; do
       # Convert to lower case
       lc_file=${file,,}
+
+      # skip
+      if [[ ${lc_file} =~ .*\/umd\/include\/simulator\/.*\.(cpp|cc|h|hpp) ]]
+      then
+        continue
+      fi
+
       if [[ ${lc_file} =~ .*\/umd\/include\/.*\.(cpp|cc|h|hpp) ]] ||
          [[ ${lc_file} =~ .*\/umd\/src\/.*\.(cpp|cc|h|hpp) ]] ||
          [[ ${lc_file} =~ .*\/samples\/.*\.(cpp|cc|h|hpp) ]] ||

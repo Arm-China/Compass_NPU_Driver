@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #ifndef __AIPU_SOC_H__
 #define __AIPU_SOC_H__
@@ -30,7 +30,7 @@ struct aipu_soc {
  * @is_aipu_irq:        is the shared interrupt is for an AIPU core or not
  * @soc_pm_runtime_get_sync: synchronously get runtime PM reference for the AIPU SoC.
  * @soc_pm_runtime_put: release runtime PM reference for the AIPU SoC.
- *
+ * @hw_reset: implement soc level hardware reset.
  * SoC vendors should register the SoC operations into struct aipu_private while
  * probing if they would like to implement and use their private SoC operation methods.
  */
@@ -45,6 +45,7 @@ struct aipu_soc_operations {
 	bool (*is_aipu_irq)(struct device *dev, struct aipu_soc *soc, int core_id);
 	int (*soc_pm_runtime_get_sync)(struct device *dev, struct aipu_soc *soc);
 	int (*soc_pm_runtime_put)(struct device *dev, struct aipu_soc *soc);
+	void (*hw_reset)(struct device *dev, struct aipu_soc *soc);
 };
 
 int armchina_aipu_probe(struct platform_device *p_dev, struct aipu_soc *soc,

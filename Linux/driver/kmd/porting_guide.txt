@@ -41,9 +41,9 @@
 |   |   |-- v3.c                    -> Zhouyi V3 specific
 |   |   |-- v3.h
 |   |   |-- v3_priv.c
-|   |   |-- v3_1.c                  -> Zhouyi V3_1 specific
-|   |   |-- v3_1.h
-|   |   |-- v3_1_priv.c
+|   |   |-- v3_2.c                  -> Zhouyi v3_2 specific
+|   |   |-- v3_2.h
+|   |   |-- v3_2_priv.c
 |   |   |-- zhouyi.c                -> Common for Zhouyi architectures
 |   |   `-- zhouyi.h
 |   |-- default                     -> SoC integration implementation sample (default version)
@@ -86,7 +86,7 @@ If you would like to build for a single/compatible Zhouyi architecture(s), try t
     $./build_all.sh -p MY_SOC -v v1     #build Zhouyi V1 only
     $./build_all.sh -p MY_SOC -v v2     #build Zhouyi V2 compatible version (including Z2/Z3/X1)
     $./build_all.sh -p MY_SOC -v v3     #build Zhouyi V3 only
-    $./build_all.sh -p MY_SOC -v v3_1   #build Zhouyi V3_1 only
+    $./build_all.sh -p MY_SOC -v v3_2   #build Zhouyi V3_2 only
 
 2.2 Build in kernel
 -------------------
@@ -124,11 +124,11 @@ KMD supports to be built in Linux kernel. To build NPU driver in-tree, please fo
             to set CONFIG_ARMCHINA_NPU_ARCH_V3. CONFIG_ARMCHINA_NPU will be set
             if you select this config.
 
-        4.4. if you use Zhouyi V3_1 NPUs, please select
+        4.4. if you use Zhouyi V3_2 NPUs, please select
 
-                "ArmChina NPU architecture: v3_1"
+                "ArmChina NPU architecture: v3_2"
 
-            to set CONFIG_ARMCHINA_NPU_ARCH_V3_1. CONFIG_ARMCHINA_NPU will be set
+            to set CONFIG_ARMCHINA_NPU_ARCH_V3_2. CONFIG_ARMCHINA_NPU will be set
             if you select this config.
 
         4.5. if you use the default SoC API implementations provided by ArmChina,
@@ -165,8 +165,8 @@ the value of the compatible attribute should be one of the following strings:
     "armchina,zhouyi-v1"    ->  Zhouyi V1
     "armchina,zhouyi-v2"    ->  Zhouyi V2
     "armchina,zhouyi-v3"    ->  Zhouyi V3
-    "armchina,zhouyi-v3_1"  ->  Zhouyi V3_1
-    "armchina,zhouyi"       ->  Zhouyi V1/V2/V3
+    "armchina,zhouyi-v3_2"  ->  Zhouyi V3_2
+    "armchina,zhouyi"       ->  Zhouyi V1/V2/V3/V3_2
 
 For example, you may configure for Zhouyi V2 AIPU as:
 
@@ -211,7 +211,7 @@ For example, assume that your SoC contains 2 Zhouyi AIPU cores, you may configur
         /* ... */
     };
 
-This attribute is mandatory for V1/V2 multiple instances scenario. For a single core case or V3 or V3_1,
+This attribute is mandatory for V1/V2 multiple instances scenario. For a single core case or V3,
 you can omit it.
 
 3.1.3 Register Base
@@ -352,6 +352,8 @@ Example 2:
         memory-region = <&aipu_res_0>;
     };
 
+NOTE: DTCM and SRAM memory type are not supportd in dynamic asid0 feature.
+
 3.1.4.1 Without A SMMU
 ----------------------
 Memory region(s) should be reserved for this scenario. To put it specifically, SoC vendor may choose to
@@ -366,7 +368,7 @@ region reserved/allocated for AIPU:
     > For Zhouyi V1: within [0x0, 0xC0000000);
     > For Zhouyi V2: lower 32 bits address within [0x0, 0xC0000000); no limits for higher 32 bits;
     > For Zhouyi V3: lower 32 bits address within [0x0, 0xE0000000); no limits for higher 32 bits;
-    > For Zhouyi V3_1: lower 32 bits address within [0x0, 0xE0000000); no limits for higher 32 bits;
+    > For Zhouyi V3_2: address starts from asidX base [base, base + 3.5GB); no limits for higher 32 bits;
 
 Note that how many bytes to reserve depends on your target application scenario. The following values
 to reserve are just for the purpose of usage demo. For example,
@@ -437,11 +439,16 @@ it as followed:
 
         compatible = "armchina,zhouyi";
         iommus = <&smmuv3 0x0>;
+        dma-ranges = <0x0 0x0 0x0 0x0 0xC0000000>;
         /* other attributes */
         /* ... */
     };
-When a SMMU presents, kmd can assign asid region and region size according to system memory size and
-allocate specified size for reserved memory management and keep IOVA 3G-4G gap reserved.
+
+NOTES:
+1 dynamic asid0 is just for smmu memory type. by mutiple asids extend iova address range,
+so don't need to config dma-ranges for v3_2.
+2 reserve 3GB smmu type memory by function aipu_mm_add_iova_region in kmd code for v3.
+Dynamic asid0 feature can't support v3.
 
 3.1.4.3 SoC SRAM
 ----------------
@@ -569,7 +576,7 @@ to use host-aipu-offset instead of dma-ranges to specify this value.
 
 3.1.5 ASID Region Base & Size
 -----------------------------
-Zhouyi V3 & V3_1 NPUs support N groups of ASID regions, which are used to direct different types
+Zhouyi V2 & V3 NPUs support 4 groups of ASID regions, which are used to direct different types
 of data to different address spaces. The base addresses and size of the ASID regions should be
 configured in NPU device tree.
 
@@ -579,7 +586,7 @@ For the n^th ASE region, the addresses used to access the system memory are calc
 
     where:
         PA_64 is a 64 bits physical address used to access the system memory finally
-        n is the id of ASE, i.e. ASID, 0 <= n
+        n is the id of ASE, i.e. ASID, 0 <= n <= 3
         ASE_n_64 is a 64 bits base address configured in the ASE register #n and used to
             extend the address space of NPU
         VA_32 is a 32 bits virtual address configured in external registers or rodata sections
@@ -587,12 +594,13 @@ For the n^th ASE region, the addresses used to access the system memory are calc
 
 If you have reserved memory region(s), please configure the ASID in the reserved memory node as:
 
-    asid = <id_0 id_1 id_2 id_3 .... >; /* variable array contains the id(s) this mem region supports */
+    asid = <id_0 id_1 id_2 id_3>; /* variable array contains the id(s) this mem region supports */
 
-Currently, the Zhouyi SDK enable ASID 0, ASID 1, ..., and ASID n. there must be at least one region
-belongs to ASID 0 and ASID 1, respectively.
+Currently, the Zhouyi SDK only enable ASID 0 and ASID 1. Therefore, your reserved region should be
+ASID 0 and/or 1, and there must be at least one region belongs to ASID 0 and ASID 1, respectively.
 
-It should be noted that if multiple bss feature is enabled, multiple regsions can't share the same ASID.
+It should be noted that if multiple regions share the same ASID, the high 32 bits of their base addresses
+should be identical.
 
 For example,
 
@@ -650,20 +658,11 @@ For example,
             reg = <0x3 0xA0000000 0x0 0x20000000>;
             asid = <3>;
         };
-
-        ...
-
-        aipu_res_n: memory@NN0000000 {
-            compatible = "shared-dma-pool";
-            reusable;
-            reg = <0xN 0xN0000000 0x0 0x20000000>;
-            asid = <n>;
-        };
     };
 
     aipu0@64000000 {
         /* other attributes */
-        memory-region = <&aipu_res_0 &aipu_res_1 &aipu_res_2 &aipu_res_3 &aipu_res_4 ... &aipu_res_n>;
+        memory-region = <&aipu_res_0 &aipu_res_1 &aipu_res_2 &aipu_res_3 &aipu_res_4>;
     };
 
     /* case 3 */
@@ -869,11 +868,11 @@ the following situations:
 
 You may also add your specific implementations about soft reset.
 
-5.4 Zhouyi V3_1
+5.4 Zhouyi V3_2
 -------------
-Zhouyi V3_1 NPUs support soft reset function. Host CPU can trigger a soft reset operation by
+Zhouyi V3_2 NPUs support soft reset function. Host CPU can trigger a soft reset operation by
 configuring external register: TSM Soft Reset Register (0x20). You can find the speficication
-of this register in the Zhouyi V3_1 NPU TRM doc.
+of this register in the Zhouyi V3_2 NPU TRM doc.
 
 Please be noted that a command pool abortion command will result in a soft reset internally
 as well. You should try to use command pool abortion first rather than to use soft reset directly.
@@ -884,6 +883,8 @@ the following situations:
     1. insmod/rmmod Zhouyi KMD (reset the whole NPUs);
     2. a runtime pool error/timeout, cluster fault occur, KMD reset the whole NPUs;
     3. a runtime tec fault/exception signal occurs in an NPU job (abort the command pool);
+    4. Don't access any npu register during abortion;
+    5. customer can implement soc level hardware reset;
 
 You may also add your specific implementations about soft reset.
 
@@ -894,7 +895,7 @@ to set the soft-reset delay time. When a soft-reset is triggered, driver will ch
 status after this time delay since the reset happens. If the status is abnormal, driver will report
 error and stop to schedule tasks. By default this delay value is 50us.
 
-This feature only works for V2 (X1), V3 v3_1.
+This feature only works for V2 (X1), V3 v3_2.
 
 6. Sysfs Debug Interfaces
 =========================
@@ -1018,6 +1019,14 @@ To disbale/enable AIPU core #0, execute:
     $echo 0 > /sys/devices/platform/64000000.aipu0/disable      #enable
 
 This feature only works for V1/V2.
+
+6.4 soc level hardware reset interface
+
+kmd reserves hardware reset interface for soc level, Need customer impplements it when software reset can't take effect.
+struct aipu_soc_operations {
+    ....
+	void (*hw_reset)(struct device *dev, struct aipu_soc *soc);
+};
 
 7. Configurations in KMD
 ========================

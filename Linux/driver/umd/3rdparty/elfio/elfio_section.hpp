@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include <string>
 #include <iostream>
 #include <new>
+#include <string.h>
 
 namespace ELFIO {
 
@@ -48,6 +49,7 @@ class section
     ELFIO_GET_SET_ACCESS_DECL( Elf_Xword, size );
     ELFIO_GET_SET_ACCESS_DECL( Elf_Word, name_string_offset );
     ELFIO_GET_ACCESS_DECL( Elf64_Off, offset );
+    ELFIO_SET_ACCESS_DECL( int32_t, fd );
 
     virtual const char* get_data() const                                = 0;
     virtual void        set_data( const char* pData, Elf_Word size )    = 0;
@@ -62,6 +64,7 @@ class section
     ELFIO_SET_ACCESS_DECL( Elf_Half, index );
 
     virtual void load( std::istream& stream, std::streampos header_offset ) = 0;
+    virtual void load( const void* ptr, size_t size, std::streampos header_offset ) = 0;
     virtual void save( std::ostream&  stream,
                        std::streampos header_offset,
                        std::streampos data_offset )                         = 0;
@@ -85,7 +88,7 @@ template <class T> class section_impl : public section
     }
 
     //------------------------------------------------------------------------------
-    ~section_impl() { delete[] data; }
+    ~section_impl() { if ( fd == 0 ) { delete[] data; } }
 
     //------------------------------------------------------------------------------
     // Section info functions
@@ -107,6 +110,9 @@ template <class T> class section_impl : public section
 
     //------------------------------------------------------------------------------
     void set_name( std::string name ) { this->name = name; }
+
+    //------------------------------------------------------------------------------
+    void set_fd( int32_t fd ) { this->fd = fd; }
 
     //------------------------------------------------------------------------------
     void set_address( Elf64_Addr value )
@@ -216,6 +222,29 @@ template <class T> class section_impl : public section
     }
 
     //------------------------------------------------------------------------------
+    void load( const void* ptr, size_t stream_size, std::streampos header_offset )
+    {
+        std::fill_n( reinterpret_cast<char*>( &header ), sizeof( header ),
+                     '\0' );
+
+        set_stream_size(stream_size);
+
+        memcpy(reinterpret_cast<char*>( &header ), reinterpret_cast<const char*>( ptr ) + header_offset, sizeof( header ));
+
+        Elf_Xword size = get_size();
+        if ( 0 == data && SHT_NULL != get_type() && SHT_NOBITS != get_type() &&
+             size < get_stream_size() ) {
+            data = ( char* )ptr + header.sh_offset;
+            if ( ( 0 != size ) && ( 0 != data ) ) {
+                data_size  = size;
+            }
+            else {
+                data_size = 0;
+            }
+        }
+    }
+
+    //------------------------------------------------------------------------------
     void save( std::ostream&  stream,
                std::streampos header_offset,
                std::streampos data_offset )
@@ -265,6 +294,7 @@ template <class T> class section_impl : public section
     const endianess_convertor* convertor;
     bool                       is_address_set;
     size_t                     stream_size;
+    int32_t                    fd = 0;
 };
 
 } // namespace ELFIO

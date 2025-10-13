@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -100,7 +100,7 @@ finish:
   if (fd > 0) {
     close(fd);
   }
-  if ((ret < 0) && (nullptr != dest) && (nullptr != *dest)) {
+  if ((ret < 0) && (dest != nullptr) && (*dest != nullptr)) {
     delete[] * dest;
     *dest = nullptr;
   }

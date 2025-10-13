@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #ifndef __AIPU_PRIV_H__
 #define __AIPU_PRIV_H__
@@ -26,6 +26,7 @@ struct aipu_priv_operations {
 						    struct platform_device *p_dev);
 	void (*destroy_partitions)(struct aipu_priv *aipu);
 	int (*global_soft_reset)(struct aipu_priv *aipu);
+	int (*get_partition_status)(struct aipu_priv *aipu, struct aipu_cluster_status *status);
 };
 
 /**
@@ -71,6 +72,7 @@ struct aipu_priv {
 	int reset_delay_us;
 	int core_reset_delay_us;
 	bool is_init;
+	struct io_region dbg_reg;
 };
 
 int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,

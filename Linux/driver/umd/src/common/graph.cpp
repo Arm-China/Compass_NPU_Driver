@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -10,10 +10,12 @@
 #include "graph.h"
 
 #include <sys/mman.h>
+#include <sys/stat.h>
 
 #include <cstring>
 
 #include "parser_base.h"
+#include "share_weight_mgr.h"
 #include "utils/helper.h"
 #include "utils/log.h"
 
@@ -34,17 +36,34 @@ Graph::~Graph() {}
 aipu_status_t Graph::load(std::istream &gbin, uint32_t size, bool ver_check,
                           aipu_load_graph_cfg_t *config) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  ret = load_config(config);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
 
-  /**
-   * decide weight allocation strategy
-   */
+  ret = m_parser->parse_graph(gbin, size, *this);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  return load_common(ver_check);
+}
+
+aipu_status_t Graph::load(const char *file, bool ver_check,
+                          aipu_load_graph_cfg_t *config) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+  ret = load_config(config);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  ret = m_parser->parse_graph(file, *this);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  return load_common(ver_check);
+}
+
+aipu_status_t Graph::load_config(aipu_load_graph_cfg_t *config) {
   if (config != nullptr) {
-    m_wt_mem_region = config->wt_mem_region;
-    if (config->wt_idxes) {
-      for (int i = 0; i < config->wt_idxes_cnt; i++)
-        m_wt_idxes.insert(config->wt_idxes[i]);
-    }
-
     if (config->extra_weight_path != nullptr) {
       if (access(config->extra_weight_path, F_OK) == 0) {
         m_bweight.extra_weight_path = config->extra_weight_path;
@@ -54,202 +73,327 @@ aipu_status_t Graph::load(std::istream &gbin, uint32_t size, bool ver_check,
         return AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
       }
     }
+
+    m_swt_mem_region = config->wt_mem_region;
+    if (config->wt_idxes) {
+      for (int i = 0; i < config->wt_idxes_cnt; i++)
+        m_swt_idxes.insert(config->wt_idxes[i]);
+    }
+
+    m_put_weight_gm = config->put_weight_gm;
+    m_put_desc_gm = config->put_desc_gm;
+    m_put_ws_gm = config->put_ws_gm;
   }
+  return AIPU_STATUS_SUCCESS;
+}
 
-  ret = m_parser->parse_graph(gbin, size, *this);
-  if (ret != AIPU_STATUS_SUCCESS)
-    goto finish;
-
+aipu_status_t Graph::load_common(bool ver_check) {
   m_mem->dump_tracking_log_start();
   m_do_vcheck = ver_check;
   if (ver_check &&
-      !m_dev->has_target(m_arch, m_hw_version, m_hw_config, m_hw_revision))
+      !m_dev->has_target(m_arch, m_hw_version, m_hw_config, m_hw_revision)) {
+    LOG(LOG_ERR, "aipu.bin's isa is %s, please build correct driver version",
+        get_arch_name(m_hw_version, m_hw_revision).c_str());
     return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
+  }
+  m_dev->set_hw_config(m_hw_config);
 
-  /* alloc and load text buffer */
-  if (m_btext.size != 0) {
-    /**
-     * expand 16 bytes more to export RO base for debugger.
-     * there is no effect for text self.
-     */
-    ret = m_mem->malloc(m_btext.size + 16, 0, &m_text, "text");
-    if (ret != AIPU_STATUS_SUCCESS)
-      goto finish;
-    m_mem->write(m_text->pa, m_btext.va, m_btext.size);
+  if (m_hw_version > AIPU_ISA_VERSION_ZHOUYI_V3)
+    m_dynamic_asid0 = true;
+
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+  if (!m_dynamic_asid0) {
+    if (m_btext.size != 0) {
+      /**
+       * expand 16 bytes more to export RO base for debugger.
+       * there is no effect for text self.
+       */
+      ret = m_mem->malloc(m_btext.size + 16, 0, &m_text, "text");
+      if (ret != AIPU_STATUS_SUCCESS)
+        return ret;
+      m_mem->write(m_text->pa, m_btext.va, m_btext.size);
+    }
+
+    if (m_bcrodata.size != 0) {
+      ret = m_mem->malloc(m_bcrodata.size, 0, &m_crodata, "crodata");
+      if (ret != AIPU_STATUS_SUCCESS)
+        return ret;
+      m_mem->write(m_crodata->pa, m_bcrodata.va, m_bcrodata.size);
+    }
   }
 
-  if (m_bcrodata.size != 0) {
-    ret = m_mem->malloc(m_bcrodata.size, 0, &m_crodata, "crodata");
-    if (ret != AIPU_STATUS_SUCCESS)
-      goto finish;
-    m_mem->write(m_crodata->pa, m_bcrodata.va, m_bcrodata.size);
-  }
-
-  /* weight buffer is deferred, because shared weight between graphs need all
-   * graphs information */
-
-finish:
-  return ret;
+  return collect_fm_sections();
 }
 
-aipu_status_t Graph::write_weight_buffer() {
-  if (m_weight.size() != get_bss_cnt()) {
+/**
+ * aipu.bin file + extra_weight.bin
+ * aipu.bin buffer + extra_weight.bin
+ */
+BLOCKS_TABLE Graph::slice_weight(uint32_t bss_id) {
+  BLOCKS_TABLE blk_table;
+  for (auto &blk : blk_table)
+    blk.clear();
+
+  if (m_mapped_gfile.empty() && bss_id == 0)
+    return blk_table;
+
+  std::vector<GraphSectionDesc> &static_sections =
+      get_static_section_ref(bss_id);
+  uint32_t start = 0;
+  bool new_blk = true;
+  for (uint32_t i = 0; i < static_sections.size(); ++i) {
+    if (new_blk) {
+      auto blk = std::make_shared<Block>();
+      if (bss_id > 0 && !m_bweight.extra_weight_infos.empty()) {
+        blk->file = m_bweight.extra_weight_infos[bss_id - 1].file;
+        blk->offset_to_file = static_sections[i].src_offset;
+      } else {
+        blk->file = m_mapped_gfile;
+        blk->offset_to_file =
+            m_bweight.weight[0].offset + static_sections[i].src_offset;
+      }
+      blk->offset_to_weight = static_sections[i].src_offset;
+      blk_table[0][i] = blk;
+      start = static_sections[i].src_offset;
+      new_blk = false;
+    }
+
+    if (!new_blk) {
+      if ((i + 1 == static_sections.size()) ||
+          ((i + 1 < static_sections.size()) &&
+           (static_sections[i + 1].src_offset - start >= MAX_BLOCK_SIZE))) {
+        auto &start_blk = blk_table[0].rbegin()->second;
+        start_blk->size =
+            static_sections[i].src_offset - start + static_sections[i].size;
+        blk_table[1][i] = start_blk;
+        new_blk = true;
+      }
+    }
+  }
+  return blk_table;
+}
+
+/**
+ * @brief zcy nullptr placeholder for >=v3_2
+ *        according provided base pa of weight and zcy, generates each static
+ * section desc, and write data into desc
+ */
+aipu_status_t Graph::setup_weight_buffer(std::vector<WeightBufferInfo> &weights,
+                                         bool setup_zcy) {
+  if (weights.size() != get_bss_cnt()) {
     LOG(LOG_ERR, "weight buffer vector size: %zu is not equal to bss cnt: %u",
-        m_weight.size(), get_bss_cnt());
+        weights.size(), get_bss_cnt());
     return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
   }
 
-  GraphSectionDesc *static_section = nullptr;
-  for (uint32_t bss_id = 0; bss_id < get_bss_cnt(); bss_id++) {
-    if (!has_weight(bss_id))
-      continue;
+  if (!has_weight())
+    return AIPU_STATUS_SUCCESS;
 
-    uint32_t base_offset = get_bss_base_offset(bss_id);
-    uint32_t zcy_base_offset = get_bss_zcy_base_offset(bss_id);
+  for (uint32_t bss_id = 0; bss_id < get_bss_cnt(); bss_id++) {
+    weights[bss_id].wb_weights.clear();
+
+    auto blk_table = slice_weight(bss_id);
+
+    uint32_t blk_offset = 0;
+    const char *va = nullptr;
+    if (bss_id < m_bweight.weight.size())
+      va = m_bweight.weight[bss_id].va;
+
     std::vector<GraphSectionDesc> &static_sections =
         get_static_section_ref(bss_id);
     for (uint32_t i = 0; i < static_sections.size(); i++) {
-      BufferDesc *buf = new BufferDesc;
-      buf->reset();
-      static_section = &static_sections[i];
-
-      aipu_status_t ret = write_static_section(bss_id, static_section, buf,
-                                               base_offset, zcy_base_offset);
-      if (ret != AIPU_STATUS_SUCCESS)
-        return ret;
-
-      if (static_section->type == SECTION_TYPE_ZEROCPY_CONSTANT) {
-        LOG(LOG_DEBUG,
-            "zerocpy in static_sections[%d], size=0x%x, pa=0x%lx, a_b=0x%lx, "
-            "asid_pa=0x%lx, dst_offset=0x%x",
-            i, static_section->size, buf->pa, buf->asid_base,
-            buf->align_asid_pa, static_section->dst_offset);
+      if (blk_table[0].count(i) != 0) {
+        umd_mmap_file_helper(blk_table[0][i]->file.c_str(), (void **)&va,
+                             blk_table[0][i]->size,
+                             blk_table[0][i]->offset_to_file, true);
+        blk_offset = blk_table[0][i]->offset_to_weight;
       }
 
-      m_weight[bss_id].wb_weights.push_back(buf);
+      DEV_PA_64 pa = 0;
+      BufferDesc *buf = nullptr;
+
+      /* DONT use with dynamic asid0/1 */
+      if (m_swt_idxes.count(i) == 0) {
+        if (static_sections[i].type == SECTION_TYPE_CONSTANT) {
+          buf = new BufferDesc;
+          buf->reset();
+
+          pa = weights[bss_id].wb_weight->pa + static_sections[i].dst_offset;
+          buf->init(weights[bss_id].wb_weight->asid_base, pa,
+                    static_sections[i].size, static_sections[i].size, 0,
+                    (m_mem->get_asid1() << 8) | AIPU_MEM_REGION_DEFAULT);
+          if (m_mem->write(pa, va + static_sections[i].src_offset - blk_offset,
+                           static_sections[i].size) != static_sections[i].size)
+            return AIPU_STATUS_ERROR_INVALID_SIZE;
+        } else if (static_sections[i].type == SECTION_TYPE_ZEROCPY_CONSTANT &&
+                   setup_zcy) {
+          buf = new BufferDesc;
+          buf->reset();
+
+          pa = weights[bss_id].wb_zerocpy_const->pa +
+               static_sections[i].dst_offset;
+          buf->init(weights[bss_id].wb_zerocpy_const->asid_base, pa,
+                    static_sections[i].size, static_sections[i].size);
+          if (m_mem->write(pa, va + static_sections[i].src_offset - blk_offset,
+                           static_sections[i].size) != static_sections[i].size)
+            return AIPU_STATUS_ERROR_INVALID_SIZE;
+        }
+      } else {
+        std::string name = std::string("weight_") + std::to_string(i);
+        aipu_status_t ret =
+            m_mem->malloc(static_sections[i].size + get_alloc_pad_size(),
+                          static_sections[i].align_in_page, &buf, name.c_str(),
+                          (m_mem->get_asid1() << 8) | m_swt_mem_region);
+        if (ret != AIPU_STATUS_SUCCESS) {
+          LOG(LOG_ERR, "malloc from memory type %u fail", m_swt_mem_region);
+          return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
+        }
+
+        DEV_PA_64 base_pa = static_sections[i].type == SECTION_TYPE_CONSTANT
+                                ? weights[bss_id].wb_weight->pa
+                                : weights[bss_id].wb_zerocpy_const->pa;
+        pa = buf->pa;
+        if (buf->pa < base_pa || buf->pa + buf->size - base_pa > 0xE0000000) {
+          LOG(LOG_ERR,
+              "please make sure sram address is in asid 3G/3.5G range, now "
+              "sram pa 0x%lx, base pa 0x%lx",
+              buf->pa, base_pa);
+          return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
+        }
+        if (m_mem->write(pa, va + static_sections[i].src_offset - blk_offset,
+                         static_sections[i].size) != static_sections[i].size)
+          return AIPU_STATUS_ERROR_INVALID_SIZE;
+
+        DEV_PA_64 asid_base = static_sections[i].type == SECTION_TYPE_CONSTANT
+                                  ? weights[bss_id].wb_weight->asid_base
+                                  : weights[bss_id].wb_zerocpy_const->asid_base;
+        buf->asid_base = asid_base;
+        buf->align_asid_pa = buf->pa - buf->asid_base;
+      }
+
+      weights[bss_id].wb_weights.push_back(buf);
       if (bss_id != 0)
-        m_weight[0].wb_weights.push_back(buf);
+        weights[0].wb_weights.push_back(buf);
+
+      if (blk_table[1].count(i) != 0) {
+        madvise((void *)va, blk_table[1][i]->size, MADV_DONTNEED);
+        munmap((void *)va, blk_table[1][i]->size);
+        va = nullptr;
+      }
     }
 
-    m_weight[bss_id].wb_asid_base = m_weight[bss_id].wb_weight->asid_base;
-
-    /* munmap here is to release each bss to save host memory usage */
-    if (bss_id != 0 && m_bweight.weight.size() > 1)
-      munmap(const_cast<char *>(m_bweight.weight[bss_id].va),
-             m_bweight.weight[bss_id].size);
+    weights[bss_id].wb_asid_base = weights[bss_id].wb_weight->asid_base;
   }
 
   return AIPU_STATUS_SUCCESS;
 }
 
-aipu_status_t Graph::alloc_gathered_weight() {
-  aipu_status_t ret = AIPU_STATUS_SUCCESS;
-  uint32_t weight_asid = 0;
+/**
+ * @brief update zcy desc for each dynamic asid0 job
+ *        each dynamic asid0 job should maintain own 'WeightBufferInfo' for
+ * different zcy base
+ */
+aipu_status_t Graph::setup_zcy_buffer(std::vector<WeightBufferInfo> &weights) {
+  if (m_is_shared_weight)
+    return m_sw_mgr->setup_zcy_buffer(weights, m_id);
 
-  if (m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3 ||
-      m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3_1)
-    weight_asid = 1;
+  if (!has_weight())
+    return AIPU_STATUS_SUCCESS;
 
-  /* 1.alloc */
-  m_weight.resize(get_bss_cnt());
-  for (uint32_t bss_id = 0; bss_id < get_bss_cnt(); ++bss_id) {
-    if (!has_weight(bss_id))
+  for (uint32_t bss_id = 0; bss_id < get_bss_cnt(); bss_id++) {
+    if (get_zerocpy_const_size(bss_id) == 0)
       continue;
 
-    ret = m_mem->malloc(get_const_size(bss_id) + get_alloc_pad_size(), 1,
-                        &m_weight[bss_id].wb_weight, "weight",
-                        (weight_asid << 8) | AIPU_MEM_REGION_DEFAULT);
+    auto blk_table = slice_weight(bss_id);
+
+    uint32_t blk_offset = 0;
+    const char *va = nullptr;
+
+    if (bss_id < m_bweight.weight.size())
+      va = m_bweight.weight[bss_id].va;
+
+    BufferDesc *zcy_desc = weights[bss_id].wb_zerocpy_const;
+    std::vector<GraphSectionDesc> &static_sections =
+        get_static_section_ref(bss_id);
+    for (uint32_t i = 0; i < static_sections.size(); i++) {
+      if (blk_table[0].count(i) != 0) {
+        umd_mmap_file_helper(blk_table[0][i]->file.c_str(), (void **)&va,
+                             blk_table[0][i]->size,
+                             blk_table[0][i]->offset_to_file, true);
+        blk_offset = blk_table[0][i]->offset_to_weight;
+      }
+
+      if (static_sections[i].type == SECTION_TYPE_ZEROCPY_CONSTANT) {
+        BufferDesc *buf = new BufferDesc;
+        buf->reset();
+
+        DEV_PA_64 sec_pa = zcy_desc->pa + static_sections[i].dst_offset;
+        buf->init(zcy_desc->asid_base, sec_pa, static_sections[i].size,
+                  static_sections[i].size);
+
+        /* bss0 includes other bss */
+        uint32_t offset = i;
+        weights[bss_id].wb_weights[offset] = buf;
+        for (uint32_t bss = 0; bss < bss_id; ++bss)
+          offset += get_static_section_ref(bss).size();
+        weights[0].wb_weights[offset] = buf;
+
+        const char *sec_va = va + static_sections[i].src_offset - blk_offset;
+        int64_t size = m_mem->write(sec_pa, sec_va, static_sections[i].size);
+        if (size != static_cast<int64_t>(static_sections[i].size))
+          return AIPU_STATUS_ERROR_INVALID_SIZE;
+      }
+
+      if (blk_table[1].count(i) != 0) {
+        madvise((void *)va, blk_table[1][i]->size, MADV_DONTNEED);
+        munmap((void *)va, blk_table[1][i]->size);
+        va = nullptr;
+      }
+    }
+  }
+
+  return AIPU_STATUS_SUCCESS;
+}
+
+aipu_status_t Graph::alloc_weight_buffer() {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+  if (!has_weight() || (m_put_weight_gm && m_mem->is_gm_enable()))
+    return AIPU_STATUS_SUCCESS;
+
+  /* 1.alloc const buffer */
+  std::string buf_name;
+  uint32_t align_page = get_asid_align_page();
+  m_weight.resize(get_bss_cnt());
+  for (uint32_t bss_id = 0; bss_id < get_bss_cnt(); ++bss_id) {
+    buf_name = std::string("weight_") + std::to_string(bss_id);
+    ret =
+        m_mem->malloc(get_const_size(bss_id) + get_alloc_pad_size(), align_page,
+                      &m_weight[bss_id].wb_weight, buf_name.c_str(),
+                      (m_mem->get_asid1() << 8) | AIPU_MEM_REGION_DEFAULT);
     if (ret != AIPU_STATUS_SUCCESS) {
       LOG(LOG_ERR, "alloc weight buffer [fail]");
       return ret;
     }
 
-    if (get_zerocpy_const_size(bss_id) > 0) {
-      ret =
-          m_mem->malloc(get_zerocpy_const_size(bss_id) + get_alloc_pad_size(),
-                        1, &m_weight[bss_id].wb_zerocpy_const, "zerocpy_const",
-                        AIPU_ASID0 | AIPU_MEM_REGION_DEFAULT);
-      if (ret != AIPU_STATUS_SUCCESS) {
-        LOG(LOG_ERR, "alloc zerocpy_const buffer [fail]");
-        return ret;
-      }
-    }
-  }
-
-  /* 2.update data from va to pa */
-  return write_weight_buffer();
-}
-
-aipu_status_t Graph::alloc_scattered_weight() {
-  if (get_bss_cnt() > 1) {
-    LOG(LOG_ALERT,
-        "Not support to specify weight region on BSS count>0, now bss cnt: %u",
-        get_bss_cnt());
-    return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
-  }
-
-  m_weight.resize(1);
-  std::vector<struct GraphSectionDesc> &static_sections =
-      get_static_section_ref(0);
-  GraphSectionDesc *static_section = nullptr;
-  aipu_status_t ret = AIPU_STATUS_SUCCESS;
-
-  for (uint32_t i = 0; i < static_sections.size(); i++) {
-    if (m_weight[0].wb_weights.size() != static_sections.size()) {
-      BufferDesc *buf = nullptr;
-      std::string str = "static_" + std::to_string(i);
-      static_section = &static_sections[i];
-
-      if ((m_wt_idxes.count(i) == 1) &&
-          (static_section->type != SECTION_TYPE_ZEROCPY_CONSTANT)) {
-        ret = m_mem->malloc(static_section->size + get_alloc_pad_size(),
-                            static_section->align_in_page, &buf, str.c_str(),
-                            m_wt_mem_region);
-      } else {
-        if (static_section->type == SECTION_TYPE_ZEROCPY_CONSTANT)
-          ret = m_mem->malloc(static_section->size + get_alloc_pad_size(),
-                              static_section->align_in_page, &buf, str.c_str(),
-                              AIPU_ASID0 | AIPU_MEM_REGION_DEFAULT);
-        else {
-          ret = m_mem->malloc(static_section->size + get_alloc_pad_size(),
-                              static_section->align_in_page, &buf, str.c_str(),
-                              AIPU_ASID1 | AIPU_MEM_REGION_DEFAULT);
+    if (!m_dynamic_asid0) {
+      buf_name = std::string("zcy_const_") + std::to_string(bss_id);
+      if (get_zerocpy_const_size(bss_id) > 0) {
+        ret = m_mem->malloc(
+            get_zerocpy_const_size(bss_id) + get_alloc_pad_size(), 1,
+            &m_weight[bss_id].wb_zerocpy_const, buf_name.c_str(),
+            AIPU_ASID0 | AIPU_MEM_REGION_DEFAULT);
+        if (ret != AIPU_STATUS_SUCCESS) {
+          LOG(LOG_ERR, "alloc zerocpy_const buffer [fail]");
+          return ret;
         }
       }
-
-      if (ret != AIPU_STATUS_SUCCESS) {
-        LOG(LOG_ERR, "alloc weight buffer %d [fail]", i);
-        return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
-      }
-
-      const char *va = m_bweight.weight[0].va + static_section->src_offset;
-      m_mem->write(buf->pa, va, static_section->size);
-      m_weight[0].wb_weights.push_back(buf);
     }
   }
-  return AIPU_STATUS_SUCCESS;
-}
 
-/**
- * @brief each graph only needs to allocate one copy of weight
- *        for multiple jobs in order to reduce memory consumption.
- *
- * @note  if weight buffer is in DDR region, the whole weight data
- *        is put in one large buffer locating in ASID1.
- *        if intend to put weight buffer in SRAM or DTCM, the large
- *        weight buffer is split into more small buffers in order to
- *        put them more to specific region. the rest of buffer that
- *        can't be allocated from SRAM/DTCM is from ASID0 default.
- */
-aipu_status_t Graph::alloc_weight_buffer() {
-  aipu_status_t ret = AIPU_STATUS_SUCCESS;
-  if (has_weight()) {
-    if (m_wt_mem_region == AIPU_MEM_REGION_DEFAULT)
-      ret = alloc_gathered_weight();
-    else
-      ret = alloc_scattered_weight();
-  }
-  return ret;
+  /* 2.write data to aipu buffer */
+  return setup_weight_buffer(m_weight, !m_dynamic_asid0 /* setup_zcy */);
 }
 
 aipu_status_t Graph::unload() {
@@ -270,31 +414,30 @@ aipu_status_t Graph::unload() {
      * scattered */
     std::vector<BufferDesc *> &wb_weights = m_weight[0].wb_weights;
     for (uint32_t i = 0; i < wb_weights.size(); ++i) {
-      if (m_weight[0].wb_weight == nullptr) /* scattered */
-      {
-        m_mem->free(&wb_weights[i]);
-      } else {
-        wb_weights[i]->reset();
-        delete wb_weights[i];
-        wb_weights[i] = nullptr;
+      if (wb_weights[i] != nullptr) {
+        if (m_weight[0].wb_weight == nullptr ||
+            m_swt_idxes.count(i) != 0) /* scattered or specified */
+          m_mem->free(&wb_weights[i]);
+        else
+          m_mem->free_bufferdesc(&wb_weights[i]);
       }
     }
     wb_weights.clear();
 
     for (uint32_t bss_id = 0; bss_id < get_bss_cnt(); bss_id++) {
-      if (m_weight.size() <= bss_id)
+      if (bss_id > m_weight.size())
         break;
 
-      if (is_exclusive_weight()) {
-        WeightBufferInfo &weight_buf_info = m_weight[bss_id];
-        if (weight_buf_info.wb_zerocpy_const != nullptr &&
-            weight_buf_info.wb_zerocpy_const->size != 0)
-          m_mem->free(&weight_buf_info.wb_zerocpy_const);
+      if (m_is_shared_weight || (m_put_weight_gm && m_mem->is_gm_enable()))
+        break;
 
-        if (weight_buf_info.wb_weight != nullptr &&
-            weight_buf_info.wb_weight->size != 0)
-          m_mem->free(&weight_buf_info.wb_weight);
-      }
+      if (m_weight[bss_id].wb_zerocpy_const != nullptr &&
+          m_weight[bss_id].wb_zerocpy_const->size != 0)
+        m_mem->free(&m_weight[bss_id].wb_zerocpy_const);
+
+      if (m_weight[bss_id].wb_weight != nullptr &&
+          m_weight[bss_id].wb_weight->size != 0)
+        m_mem->free(&m_weight[bss_id].wb_weight);
     }
   }
 
@@ -302,22 +445,23 @@ aipu_status_t Graph::unload() {
   return ret;
 }
 
-int32_t Graph::get_dynamic_shape_dim_num(uint32_t idx, bool max_shape_dim) {
+int32_t Graph::get_dynamic_shape_dim_num(uint32_t idx,
+                                         bool max_shape_dim) const {
   if (!is_dynamic_shape())
     return 0;
 
   if (idx >= 0 && idx < m_input_shape_constraint.size()) {
-    if (!max_shape_dim)
-      return m_input_shape_constraint[idx][0].size();
+    if (max_shape_dim)
+      return m_input_shape_constraint.at(idx)[1].size();
     else
-      return m_input_shape_constraint[idx][1].size();
+      return m_input_shape_constraint.at(idx)[0].size();
   }
 
   return 0;
 }
 
 bool Graph::get_dynamic_shape_data(uint32_t idx, bool max_shape_dim,
-                                   uint32_t *data) {
+                                   uint32_t *data) const {
   if (!is_dynamic_shape())
     return false;
 
@@ -327,12 +471,12 @@ bool Graph::get_dynamic_shape_data(uint32_t idx, bool max_shape_dim,
   }
 
   if (idx >= 0 && idx < m_input_shape_constraint.size()) {
-    if (!max_shape_dim) {
-      for (uint32_t i = 0; i < m_input_shape_constraint[idx][0].size(); i++)
-        *(data + i) = m_input_shape_constraint[idx][0][i];
+    if (max_shape_dim) {
+      for (uint32_t i = 0; i < m_input_shape_constraint.at(idx)[1].size(); i++)
+        *(data + i) = m_input_shape_constraint.at(idx)[1][i];
     } else {
-      for (uint32_t i = 0; i < m_input_shape_constraint[idx][1].size(); i++)
-        *(data + i) = m_input_shape_constraint[idx][1][i];
+      for (uint32_t i = 0; i < m_input_shape_constraint.at(idx)[0].size(); i++)
+        *(data + i) = m_input_shape_constraint.at(idx)[0][i];
     }
   }
 
@@ -340,38 +484,33 @@ bool Graph::get_dynamic_shape_data(uint32_t idx, bool max_shape_dim,
 }
 
 aipu_status_t Graph::set_graph_extra_weight(const BinSection &extra_weight) {
-  aipu_status_t ret = AIPU_STATUS_SUCCESS;
   char *start = (char *)extra_weight.va;
   size_t extra_weight_bin_cnt = *(size_t *)start;
 
   start += sizeof(size_t);
   for (size_t i = 0; i < extra_weight_bin_cnt; i++) {
     WeightSection::ExtraWeightInfo extra_weight_info;
-    BinSection ew_binsection = {0};
     size_t bin_name_len = *(size_t *)start;
-    std::string path;
 
     start += sizeof(size_t);
     char *plus_mark = std::strstr(start, "+");
-    extra_weight_info.name = std::string(start, plus_mark - start);
+    std::string name = std::string(start, plus_mark - start);
     extra_weight_info.hash =
         std::string(plus_mark + 1, bin_name_len - (plus_mark + 1 - start));
     start += bin_name_len;
 
-    path = m_bweight.extra_weight_path + "/" + extra_weight_info.name;
-    ret = umd_mmap_file_helper(path.c_str(), (void **)&ew_binsection.va,
-                               &ew_binsection.size);
-    if (ret != AIPU_STATUS_SUCCESS) {
-      LOG(LOG_ERR, "Mmap extra weight: %s [fail]", path.c_str());
-      m_bweight.extra_weight_infos.clear();
-      return ret;
-    }
+    extra_weight_info.file = m_bweight.extra_weight_path + "/" + name;
 
-    set_graph_weight(ew_binsection);
+    struct stat info;
+    if (stat(extra_weight_info.file.c_str(), &info) != 0) {
+      LOG(LOG_ERR, "cannot find extra weight file: %s",
+          extra_weight_info.file.c_str());
+      return AIPU_STATUS_ERROR_READ_FILE_FAIL;
+    }
     m_bweight.extra_weight_infos.push_back(extra_weight_info);
   }
 
-  return ret;
+  return AIPU_STATUS_SUCCESS;
 }
 
 aipu_status_t Graph::set_constant_hashtable(const BinSection &table) {
@@ -402,30 +541,16 @@ aipu_status_t Graph::set_constant_hashtable(const BinSection &table) {
 
 aipu_status_t Graph::set_static_section_param(
     uint32_t bss_id, const BSSStaticSectionDesc &bss_sec,
-    GraphSectionDesc &section, uint32_t &cst_addr_orig,
-    uint32_t &zcy_cst_addr_orig, uint32_t &cst_addr, uint32_t &zcy_cst_addr) {
+    GraphSectionDesc &section, uint32_t &cst_addr, uint32_t &zcy_cst_addr) {
   if (section.type == SECTION_TYPE_ZEROCPY_CONSTANT) {
-    uint32_t offset = aligned(zcy_cst_addr_orig, bss_sec.align_bytes);
-    zcy_cst_addr_orig = offset + section.size;
+    section.dst_offset = aligned(zcy_cst_addr, bss_sec.align_bytes);
+    zcy_cst_addr = section.dst_offset + section.size;
   } else {
-    uint32_t offset = aligned(cst_addr_orig, bss_sec.align_bytes);
-    cst_addr_orig = offset + section.size;
+    section.dst_offset = aligned(cst_addr, bss_sec.align_bytes);
+    cst_addr = section.dst_offset + section.size;
   }
 
-  if (is_exclusive_weight()) {
-    if (section.type == SECTION_TYPE_ZEROCPY_CONSTANT) {
-      section.dst_offset = aligned(zcy_cst_addr, bss_sec.align_bytes);
-      zcy_cst_addr = section.dst_offset + section.size;
-    } else {
-      section.dst_offset = aligned(cst_addr, bss_sec.align_bytes);
-      cst_addr = section.dst_offset + section.size;
-    }
-  } else {
-    if (m_sw_mgr == nullptr) {
-      LOG(LOG_ERR, "shared weight manager is nullptr.");
-      return AIPU_STATUS_ERROR_NULL_PTR;
-    }
-
+  if (m_is_shared_weight) {
     if (bss_id >= m_hashtable.size()) {
       LOG(LOG_ERR, "bss number %u is not equal to hashtable %zu", bss_id,
           m_hashtable.size());
@@ -452,88 +577,7 @@ aipu_status_t Graph::set_static_section_param(
                   [&index](const std::vector<ConstantHashItem> &it) {
                     index += it.size();
                   });
-    section.src_offset_in_share_weight = m_bshared_weight.offsets[index];
     section.hashcode = iter->hashcode;
-
-    auto &table = m_sw_mgr->get_hashtable_desc();
-    if (bss_id == table.size())
-      table.resize(bss_id + 1);
-
-    if (table[bss_id].count(section.hashcode) == 0) {
-      if (section.type == SECTION_TYPE_ZEROCPY_CONSTANT) {
-        section.dst_offset = aligned(zcy_cst_addr, bss_sec.align_bytes);
-        zcy_cst_addr = section.dst_offset + section.size;
-      } else {
-        section.dst_offset = aligned(cst_addr, bss_sec.align_bytes);
-        cst_addr = section.dst_offset + section.size;
-      }
-      table[bss_id].insert({section.hashcode, nullptr});
-    }
-  }
-  return AIPU_STATUS_SUCCESS;
-}
-
-/**
- * Attention: if graphs' constant tenstor has same hashid, but different size,
- * it is dangerous and needs to rewrite again
- */
-aipu_status_t Graph::write_static_section(uint32_t bss_id,
-                                          const GraphSectionDesc *section,
-                                          BufferDesc *desc, uint32_t cst_base,
-                                          uint32_t zcy_cst_abse) {
-  DEV_PA_64 pa = 0;
-
-  if (is_exclusive_weight()) {
-    if (section->type == SECTION_TYPE_ZEROCPY_CONSTANT) {
-      pa = m_weight[bss_id].wb_zerocpy_const->pa + section->dst_offset;
-      desc->init(m_weight[bss_id].wb_zerocpy_const->asid_base, pa,
-                 section->size, section->size);
-    } else {
-      pa = m_weight[bss_id].wb_weight->pa + section->dst_offset;
-      desc->init(m_weight[bss_id].wb_weight->asid_base, pa, section->size,
-                 section->size, 0, AIPU_ASID1 | AIPU_MEM_REGION_DEFAULT);
-    }
-
-    if (m_mem->write(pa, m_bweight.weight[bss_id].va + section->src_offset,
-                     section->size) != section->size)
-      return AIPU_STATUS_ERROR_INVALID_SIZE;
-  } else {
-    if (m_sw_mgr == nullptr) {
-      LOG(LOG_ERR, "shared weight manager is nullptr.");
-      return AIPU_STATUS_ERROR_NULL_PTR;
-    }
-
-    auto &table = m_sw_mgr->get_hashtable_desc();
-    if (bss_id >= table.size() || table[bss_id].count(section->hashcode) == 0) {
-      LOG(LOG_ERR, "hashcode table is invalid");
-      return AIPU_STATUS_ERROR_INVALID_OP;
-    }
-
-    /* each graph has an object to simplify free */
-    if (table[bss_id][section->hashcode] != nullptr) {
-      *desc = *table[bss_id].at(section->hashcode);
-    } else {
-      DEV_PA_64 pa_base = m_weight[bss_id].wb_weight->pa + cst_base;
-      DEV_PA_64 asid_base = m_weight[bss_id].wb_weight->asid_base;
-      uint32_t asid_cfg = AIPU_ASID1 | AIPU_MEM_REGION_DEFAULT;
-      if (section->type == SECTION_TYPE_ZEROCPY_CONSTANT) {
-        pa_base = m_weight[bss_id].wb_zerocpy_const->pa + zcy_cst_abse;
-        asid_base = m_weight[bss_id].wb_zerocpy_const->asid_base;
-        asid_cfg = AIPU_ASID0 | AIPU_MEM_REGION_DEFAULT;
-      }
-
-      pa = pa_base + section->dst_offset;
-      desc->init(asid_base, pa, section->size, section->size, 0, asid_cfg);
-      table[bss_id].at(section->hashcode) = desc;
-
-      uint64_t abs_offset =
-          m_bshared_weight.weight.offset + section->src_offset_in_share_weight;
-      char *src = nullptr;
-      umd_mmap_file_helper(m_bshared_weight.weight.file.c_str(), (void **)&src,
-                           section->size, abs_offset);
-      m_mem->write(pa, src, section->size);
-      munmap(src, section->size);
-    }
   }
 
   return AIPU_STATUS_SUCCESS;

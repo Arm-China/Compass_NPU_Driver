@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -80,6 +80,8 @@ aipu_ll_status_t Aipu::init() {
   }
 
   m_dram = UKMemory::get_memory(m_fd);
+  m_dram->set_dev(this);
+  m_dram->set_isa_version(m_part_caps.at(0).version);
   for (uint32_t i = 0; i < cap.asid_cnt; ++i) {
     m_dram->set_asid_base(i, cap.asid_base[i]);
     LOG(LOG_DEBUG, "asid index: %u, asid base: 0x%llx", i, cap.asid_base[i]);
@@ -91,47 +93,17 @@ aipu_ll_status_t Aipu::init() {
   if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
     m_dram->set_dtcm_info(cap.dtcm_base, cap.dtcm_size);
 
-  if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3 ||
-      m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_1) {
-    uint32_t core_id = 0;
-    write_reg(core_id, TSM_PAGE_SELECTION_CONTROL,
-              EN_SELECT(1) | EN_CLUSTER(0) | EN_CORE(0));
+  if (m_part_caps.at(0).version <= AIPU_ISA_VERSION_ZHOUYI_V3)
+    m_dram->set_asid1(0); /* z1~x2 asid0/1 same base as default */
 
-    uint32_t size = 1;
-    ret = read_reg(core_id, TSM_LOCAL_MEMORY_FEATURE, &size);
-    if (ret != AIPU_LL_STATUS_SUCCESS) {
-      m_dram->set_lm_size(0);
-      LOG(LOG_WARN, "get invalid tec local memory size, set to 0!");
-    } else
-      m_dram->set_lm_size((1 << ((size & 0xF) - 1)) * 32768);
-
-    size = 3;
-    ret = read_reg(core_id, TSM_SHARE_MEMORY_FEATURE, &size);
-    if (ret != AIPU_LL_STATUS_SUCCESS) {
-      m_dram->set_sm_size(0);
-      LOG(LOG_WARN, "get invalid core share memory size!");
-    } else
-      m_dram->set_sm_size((1 << ((size & 0xF) - 1)) * 32768);
-
+  if (m_part_caps.at(0).version >= AIPU_ISA_VERSION_ZHOUYI_V3 &&
+      m_dram->is_gm_enable()) {
     if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3) {
-      if (cap.gm0_size == 0)
-        return AIPU_LL_STATUS_ERROR_IOCTL_QUERY_STATUS_FAIL;
-
-      if (m_dram->is_gm_enable()) {
-        m_dram->set_gm_size(0, cap.gm0_size);
-        m_dram->set_gm_size(1, cap.gm1_size);
-      }
-    } else if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_1) {
-      /* hardware doesn't provide gm size access register */
-      if (m_dram->is_gm_enable()) {
-        uint32_t gm_size = 4 * MB_SIZE;
-        if (m_core_cnt == 2 || m_core_cnt == 4)
-          gm_size = 8 * MB_SIZE;
-        m_dram->set_gm_size(0, gm_size);
-      }
+      m_dram->set_gm_size(0, cap.gm0_size);
+      m_dram->set_gm_size(1, cap.gm1_size);
+    } else if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_2) {
+      m_dram->set_gm_size(0, cap.gm0_size);
     }
-    write_reg(core_id, TSM_PAGE_SELECTION_CONTROL,
-              EN_SELECT(0) | EN_CLUSTER(0) | EN_CORE(0));
   }
 
   return ret;
@@ -154,10 +126,9 @@ void Aipu::deinit() {
 bool Aipu::has_target(uint32_t arch, uint32_t version, uint32_t config,
                       uint32_t rev) {
   for (uint32_t i = 0; i < m_part_caps.size(); i++) {
-    if ((arch == m_part_caps[i].arch) && (version == m_part_caps[i].version) &&
-        ((version == AIPU_ISA_VERSION_ZHOUYI_V3) ||
-         (version == AIPU_ISA_VERSION_ZHOUYI_V3_1) ||
-         (config == m_part_caps[i].config)))
+    if (arch == m_part_caps[i].arch && version == m_part_caps[i].version &&
+        (version >= AIPU_ISA_VERSION_ZHOUYI_V3 ||
+         config == m_part_caps[i].config))
       return true;
   }
 
@@ -165,7 +136,7 @@ bool Aipu::has_target(uint32_t arch, uint32_t version, uint32_t config,
 }
 
 aipu_ll_status_t Aipu::read_reg(uint32_t partition_id, uint32_t offset,
-                                uint32_t *value) {
+                                uint32_t *value, RegType type) {
   int kret = 0;
   aipu_io_req ioreq;
 
@@ -173,6 +144,7 @@ aipu_ll_status_t Aipu::read_reg(uint32_t partition_id, uint32_t offset,
     return AIPU_LL_STATUS_ERROR_NULL_PTR;
 
   ioreq.partition_id = partition_id;
+  ioreq.reg_type = static_cast<aipu_io_req::aipu_reg_group>(type);
   ioreq.rw = aipu_io_req::AIPU_IO_READ;
   ioreq.offset = offset;
   kret = ioctl(m_fd, AIPU_IOCTL_REQ_IO, &ioreq);
@@ -187,11 +159,12 @@ aipu_ll_status_t Aipu::read_reg(uint32_t partition_id, uint32_t offset,
 }
 
 aipu_ll_status_t Aipu::write_reg(uint32_t partition_id, uint32_t offset,
-                                 uint32_t value) {
+                                 uint32_t value, RegType type) {
   int kret = 0;
   aipu_io_req ioreq;
 
   ioreq.partition_id = partition_id;
+  ioreq.reg_type = static_cast<aipu_io_req::aipu_reg_group>(type);
   ioreq.rw = aipu_io_req::AIPU_IO_WRITE;
   ioreq.offset = offset;
   ioreq.value = value;
@@ -309,7 +282,7 @@ aipu_ll_status_t Aipu::poll_status(uint32_t max_cnt, int32_t time_out,
     if (kret < 0) {
       LOG(LOG_ERR, "poll /dev/aipu [fail]");
       return AIPU_LL_STATUS_ERROR_POLL_FAIL;
-    } else if (kret == 0) {
+    } else if (kret == 0 && time_out != 0) {
       return AIPU_LL_STATUS_ERROR_POLL_TIMEOUT;
     }
 
@@ -522,6 +495,7 @@ aipu_ll_status_t Aipu::ioctl_cmd(uint32_t cmd, void *arg) {
     }
     break;
   }
+
   case AIPU_IOCTL_GET_VERSION: {
     aipu_driver_version_t *drv_ver = (aipu_driver_version_t *)arg;
 
@@ -530,7 +504,20 @@ aipu_ll_status_t Aipu::ioctl_cmd(uint32_t cmd, void *arg) {
       LOG(LOG_ERR, "get kmd version [fail]");
       ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
     }
-  } break;
+    break;
+  }
+
+  /* command from kmd define */
+  case AIPU_IOCTL_REBIND_DMA_BUF: {
+    struct aipu_rebind_buf_desc *desc = (struct aipu_rebind_buf_desc *)arg;
+
+    kret = ioctl(m_fd, AIPU_IOCTL_REBIND_DMA_BUF, desc);
+    if (kret != AIPU_LL_STATUS_SUCCESS) {
+      LOG(LOG_ERR, "ioctl rebind dmabuf to specified iova [fail]");
+      ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+    }
+    break;
+  }
 
   default:
     LOG(LOG_ERR, "AIPU can't support cmd: %d", cmd);
@@ -556,15 +543,15 @@ out:
 }
 
 int Aipu::get_start_group_id(int group_cnt, uint16_t &start_group_id) {
-  struct aipu_group_id_desc id_desc = {0};
+  struct aipu_id_desc id_desc = {0};
 
   if (group_cnt == 0)
     return 0;
 
-  if (m_part_caps.at(0).version != AIPU_ISA_VERSION_ZHOUYI_V3_1)
+  if (m_part_caps.at(0).version < AIPU_ISA_VERSION_ZHOUYI_V3_2)
     return 0;
 
-  id_desc.group_size = group_cnt;
+  id_desc.size = group_cnt;
   if (ioctl(m_fd, AIPU_IOCTL_ALLOC_GROUP_ID, &id_desc) < 0) {
     LOG(LOG_ERR, "Alloc group id [fail]");
     return -1;
@@ -581,7 +568,7 @@ int Aipu::put_start_group_id(uint16_t start_group_id, int group_cnt) {
   if (group_cnt == 0)
     return 0;
 
-  if (m_part_caps.at(0).version != AIPU_ISA_VERSION_ZHOUYI_V3_1)
+  if (m_part_caps.at(0).version < AIPU_ISA_VERSION_ZHOUYI_V3_2)
     return 0;
 
   std::lock_guard<std::mutex> lock_(m_group_id_mtx);
@@ -591,10 +578,10 @@ int Aipu::put_start_group_id(uint16_t start_group_id, int group_cnt) {
   }
 
   auto &id_desc = m_group_id_table.at(start_group_id);
-  if (id_desc.group_size != group_cnt) {
+  if (id_desc.size != group_cnt) {
     LOG(LOG_ERR,
         "Group id information not match, table group size: %u, provided: %u",
-        (uint32_t)id_desc.group_size, (uint32_t)group_cnt);
+        (uint32_t)id_desc.size, (uint32_t)group_cnt);
     return -1;
   }
 
@@ -607,38 +594,49 @@ int Aipu::put_start_group_id(uint16_t start_group_id, int group_cnt) {
   return 0;
 }
 
+const char *Aipu::get_config_code() const {
+  static std::string code;
+  uint32_t config = m_part_caps.at(0).config;
+  if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+    code = std::string("X2_") + std::to_string(config) + "MP" +
+           std::to_string(m_core_cnt);
+  } else if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_2) {
+    uint32_t aiff_cnt = config / 100 == 13 ? 2 : (config / 100 == 12 ? 1 : 0);
+    uint32_t tec_cnt = tec_cnt_per_core(0);
+    code = std::string("X3P-K1C") + std::to_string(m_core_cnt) + "A" +
+           std::to_string(aiff_cnt) + "T" + std::to_string(tec_cnt);
+  }
+  return code.empty() ? nullptr : code.c_str();
+}
+
 aipu_ll_status_t Aipu::get_device_status(device_status_t *status) {
+  int kret = 0;
   aipu_ll_status_t ret = AIPU_LL_STATUS_SUCCESS;
   uint32_t value = 0;
 
   if (status == nullptr)
     return AIPU_LL_STATUS_ERROR_NULL_PTR;
 
-  if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3 ||
-      m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_1) {
-    /* check all cores status instead of command pool status */
-    for (uint32_t id = 0; id < m_core_cnt; ++id) {
-      ret = write_reg(0, TSM_PAGE_SELECTION_CONTROL,
-                      EN_SELECT(1) | EN_CLUSTER(0) | EN_CORE(id));
-      if (ret != AIPU_LL_STATUS_SUCCESS)
-        return ret;
-
-      ret = read_reg(0, TSM_CORE_STATUS, &value);
-      if (ret != AIPU_LL_STATUS_SUCCESS)
-        return ret;
-
-      if (!(value & CORE_IDLE))
-        break;
+  if (m_part_caps.at(0).version >= AIPU_ISA_VERSION_ZHOUYI_V3) {
+    struct aipu_cluster_status cluster_status;
+    memset(&cluster_status, 0, sizeof(aipu_cluster_status));
+    kret = ioctl(m_fd, AIPU_IOCTL_GET_CLUSTER_STATUS, &cluster_status);
+    if (kret < 0) {
+      LOG(LOG_ERR, "get cluster status [fail]");
+      return AIPU_LL_STATUS_ERROR_IOCTL_QUERY_STATUS_FAIL;
     }
-    ret = write_reg(0, TSM_PAGE_SELECTION_CONTROL,
-                    EN_SELECT(0) | EN_CLUSTER(0) | EN_CORE(0));
-    if (ret != AIPU_LL_STATUS_SUCCESS)
-      return ret;
 
-    if (value & CORE_IDLE)
+    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3 &&
+        cluster_status.cluster_status & X2_CLUSTER_IDLE &&
+        cluster_status.cluster_status & X2_BUS_IDLE) {
       *status = DEV_IDLE;
-    else if (!(value & CORE_IDLE))
+    } else if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_2 &&
+               cluster_status.cluster_status & X3_CLUSTER_IDLE &&
+               cluster_status.cluster_status & X3_BUS_IDLE) {
+      *status = DEV_IDLE;
+    } else {
       *status = DEV_BUSY;
+    }
 
     ret = read_reg(0, TSM_COMMAND_POOL_STATUS, &value);
     if (ret != AIPU_LL_STATUS_SUCCESS)
@@ -646,7 +644,7 @@ aipu_ll_status_t Aipu::get_device_status(device_status_t *status) {
 
     if ((m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3 &&
          value & X2_CMDPOOL_EXCEPTION) ||
-        (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_1 &&
+        (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_2 &&
          value & X3_CMDPOOL_EXCEPTION))
       *status = DEV_EXCEPTION;
   } else {

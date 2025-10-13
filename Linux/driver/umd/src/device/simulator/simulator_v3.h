@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -81,7 +81,7 @@ class SimulatorV3 : public DeviceBase {
 private:
   pthread_rwlock_t m_lock;
   std::mutex m_poll_mtex;
-  sim_aipu::config_t m_config;
+  config_t m_config;
   sim_aipu::Aipu *m_aipu = nullptr;
   uint32_t m_code = 0;
   uint32_t m_log_level;
@@ -97,7 +97,6 @@ private:
   uint32_t m_max_partition_cnt = 0;
   uint32_t m_max_cmdpool_cnt = 0;
   std::vector<BufferDesc *> m_reserve_mem;
-  static constexpr uint32_t HW_CONFIG = 1204;
 
   /**
    * @cmdpool_id: the next cmdpool index in one partition
@@ -142,6 +141,11 @@ private:
   std::set<void *> m_done_queue;
 
   volatile bool m_cmdpool_busy = false;
+
+  const std::map<std::string, arch_item_t> m_npu_arch_map = {
+      {"X2_1204", {1204, 4, 1, 1, X2_1204}},
+      {"X2_1204MP3", {1204, 4, 1, 1, X2_1204MP3}},
+  };
 
 private:
   bool cmd_pool_created(uint32_t cmdpool_id) {
@@ -351,16 +355,15 @@ public:
     return AIPU_STATUS_ERROR_INVALID_OP;
   }
 
-  const char *get_config_code() {
-    std::map<uint32_t, const char *> npu_sim_codetoname = {
-        {sim_aipu::config_t::X2_1204, "X2_1204"},
-        {sim_aipu::config_t::X2_1204MP3, "X2_1204MP3"}};
-
-    if (npu_sim_codetoname.count(m_config.code) == 1)
-      return npu_sim_codetoname[m_config.code];
-    else
-      return npu_sim_codetoname[sim_aipu::config_t::X2_1204];
+  const char *get_config_code() const override {
+    for (auto &it : m_npu_arch_map) {
+      if (it.second.sim_code == m_config.code)
+        return it.first.c_str();
+    }
+    return "X2_1204";
   }
+
+  bool get_profile_en() const { return m_en_eval; }
 
   /**
    * the below 3 APIs help to dump tcbchains
@@ -380,7 +383,10 @@ public:
   }
 
 public:
-  virtual void enable_profiling(bool en) { m_aipu->enable_profiling(en); }
+  virtual void enable_profiling(bool en) {
+    m_en_eval = en;
+    m_aipu->enable_profiling(en);
+  }
 
 public:
   static SimulatorV3 *
@@ -407,45 +413,47 @@ private:
   SimulatorV3();
 };
 
-inline sim_aipu::config_t sim_create_config(
-    int code, uint32_t log_level = 0, const std::string &log_path = "./sim.log",
-    bool verbose = false, bool enable_avx = false, bool en_eval = 0,
-    uint32_t gm_size = 4 * MB_SIZE, const std::string &plugin_filename = "",
-    const std::string &json_filename = "") {
-  sim_aipu::config_t config = {0};
+inline config_t sim_create_config(int code, uint32_t log_level = 0,
+                                  const std::string &log_path = "./sim.log",
+                                  bool verbose = false, bool enable_avx = false,
+                                  bool en_eval = 0,
+                                  uint32_t gm_size = 4 * MB_SIZE,
+                                  const std::string &plugin_filename = "",
+                                  const std::string &json_filename = "") {
+  config_t config = {0};
 
   config.code = code;
   config.enable_calloc = false;
   config.max_pkg_num = -1;
   config.enable_avx = enable_avx;
-  config.en_eval = en_eval;
-  config.log.filepath = log_path;
   config.log.level = log_level;
   config.log.verbose = verbose;
   config.gm_size = gm_size;
-  config.plugin_filename = plugin_filename;
-  config.json_filename = json_filename;
-  config.freq_mhz = 1000;
-  config.ddr_latency_rd = 0;
-  config.ddr_latency_wr = 0;
-  config.ddr_bw = 256;
+
+  strcpy(config.log.filepath, log_path.c_str());
+  strcpy(config.plugin_filename, plugin_filename.c_str());
+  strcpy(config.graph_filename, json_filename.c_str());
+
+  config.perf.mode = PERF_MODE_NONE;
+  if (en_eval)
+    config.perf.mode = PERF_MODE_EVAL;
 
   LOG(LOG_DEBUG,
       "\nconfig.code = %d\n"
       "config.enable_calloc = %d\n"
       "config.max_pkg_num = %ld\n"
       "config.enable_avx = %d\n"
-      "config.en_eval = %d\n"
       "config.log.filepath = %s\n"
+      "config.perf.mode = %d\n"
       "config.log.level = %d\n"
       "config.log.verbose = %d\n"
       "config.gm_size = 0x%x\n"
       "config.plugin_filename = %s\n"
       "config.json_filename = %s\n",
       config.code, config.enable_calloc, config.max_pkg_num, config.enable_avx,
-      config.en_eval, config.log.filepath.c_str(), config.log.level,
-      config.log.verbose, config.gm_size, config.plugin_filename.c_str(),
-      config.json_filename.c_str());
+      config.log.filepath, config.perf.mode, config.log.level,
+      config.log.verbose, config.gm_size, config.plugin_filename,
+      config.graph_filename);
 
   return config;
 }

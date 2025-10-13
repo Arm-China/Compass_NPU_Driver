@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #ifndef __AIPU_JOB_MANAGER_H__
 #define __AIPU_JOB_MANAGER_H__
@@ -13,6 +13,7 @@
 #include "aipu_partition.h"
 #include "aipu_mm.h"
 
+#define AIPU_EXEC_ID (0x208ULL)
 enum aipu_state_kern {
 	AIPU_JOB_STATE_IDLE,
 	AIPU_JOB_STATE_PENDING,
@@ -202,6 +203,9 @@ struct aipu_job_manager {
 	u16  grid_id;
 	unsigned long *group_id_bmap;
 	u16  group_id_num;
+	unsigned long *sflag_id_bmap;
+	u16  sflag_id_num;
+	u64 exec_id;
 	struct mutex id_lock; /* Protect grid & group IDs */
 };
 
@@ -222,6 +226,7 @@ int aipu_job_manager_get_job_status(struct aipu_job_manager *manager,
 bool aipu_job_manager_has_end_job(struct aipu_job_manager *manager, struct file *filp,
 				  struct poll_table_struct *wait, int uthread_id);
 int aipu_job_manager_get_hw_status(struct aipu_job_manager *manager, struct aipu_hw_status *hw);
+int aipu_job_manager_get_running_job_thread(struct aipu_job_manager *manager, struct aipu_running_job_query *query);
 int aipu_job_manager_abort_cmd_pool(struct aipu_job_manager *manager);
 int aipu_job_manager_disable_tick_counter(struct aipu_job_manager *manager);
 int aipu_job_manager_enable_tick_counter(struct aipu_job_manager *manager);
@@ -231,8 +236,14 @@ int aipu_job_manager_suspend(struct aipu_job_manager *manager);
 int aipu_job_manager_resume(struct aipu_job_manager *manager);
 int aipu_job_manager_alloc_grid_id(struct aipu_job_manager *manager);
 int aipu_job_manager_alloc_group_id(struct aipu_job_manager *manager,
-				    struct aipu_group_id_desc *desc);
+				    struct aipu_id_desc *desc);
 int aipu_job_manager_free_group_id(struct aipu_job_manager *manager,
-				   struct aipu_group_id_desc *desc);
+				   struct aipu_id_desc *desc);
+int aipu_job_manager_alloc_sflag_id(struct aipu_job_manager *manager,
+				    struct aipu_id_desc *desc);
+int aipu_job_manager_free_sflag_id(struct aipu_job_manager *manager,
+				   struct aipu_id_desc *desc);
 
+int aipu_job_manager_alloc_exec_id(struct aipu_job_manager *manager,
+				  u64 *job_id);
 #endif /* __AIPU_JOB_MANAGER_H__ */

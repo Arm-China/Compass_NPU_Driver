@@ -7,7 +7,7 @@ Compass_NPU 驱动包括两部分：内核态驱动(KMD)和用户态驱动(UMD)�
 |v1|z1|
 |v2|z2/z3/x1|
 |v3|x2|
-|v3_1|x3|
+|v3_2|x3p|
 
 ## 1. 目录
 ### driver
@@ -92,8 +92,8 @@ $ source env_setup.sh
 # for aipu v1/v2/v3
 $ ./build_all.sh -p juno -v v3 -a python_api [-d]
 
-# for aipu v3_1
-$ ./build_all.sh -p juno -v v3_1 -a python_api [-d]
+# for aipu v3_2
+$ ./build_all.sh -p juno -v v3_2 -a python_api [-d]
 ```
 
 - 如果以上命令成功执行，一个驱动加载模块aipu.ko和一个用户态动态链接库libaipudrv.so将产生，并且被存放在bin文件夹中。
@@ -111,6 +111,7 @@ $ ./build_all.sh -p juno -v v3_1 -a python_api [-d]
     |   |-- aipu_simulator_x1
     |   |-- aipu_simulator_x2
     |   |-- aipu_simulator_x3
+    |   |-- aipu_simulator_x3p
     |   |-- aipu_simulator_z1
     |   |-- aipu_simulator_z2
     |   |-- aipu_simulator_z3
@@ -119,6 +120,7 @@ $ ./build_all.sh -p juno -v v3_1 -a python_api [-d]
         |-- libaipu_simulator_x1.so
         |-- libaipu_simulator_x2.so
         |-- libaipu_simulator_x3.so
+        |-- libaipu_simulator_x3p.so
         |-- libaipu_simulator_z1.so
         |-- libaipu_simulator_z2.so
         |-- libaipu_simulator_z3.so
@@ -134,7 +136,7 @@ CONFIG_DRV_RTENVAR_SIM_BASE_PATH=${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU_SIMULATOR
 CONFIG_DRV_BRENVAR_X86_CLPATH=/arm/tools/gnu/gcc/7.3.0/rhe7-x86_64/lib64 (可选)
 COMPASS_DRV_BTENVAR_X86_CXX=g++
 
-- 针对aipu v1/v2/v3/v3_1模拟的时候，指定模拟器和库存放的路径
+- 针对aipu v1/v2/v3/v3_2模拟的时候，指定模拟器和库存放的路径
 CONFIG_DRV_RTENVAR_SIM_PATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/bin/
 COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/lib/
 
@@ -168,8 +170,8 @@ $ source env_setup.sh
 # for aipu v1/v2/v3
 $ ./build_all.sh -p sim -v v3 -a python_api [-d]
 
-# for aipu v3_1
-$ ./build_all.sh -p sim -v v3_1 -a python_api [-d]
+# for aipu v3_2
+$ ./build_all.sh -p sim -v v3_2 -a python_api [-d]
 ```
 
 - 如果以上命令成功执行，一个驱动加载模块aipu.ko和一个用户态动态链接库libaipudrv.so将产生，并且被存放在bin文件夹中。

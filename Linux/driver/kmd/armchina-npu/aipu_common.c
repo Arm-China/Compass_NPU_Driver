@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #include <linux/slab.h>
 #include <linux/string.h>
@@ -12,8 +12,8 @@
 
 #ifdef CONFIG_SYSFS
 ssize_t aipu_common_ext_register_sysfs_show(struct device *dev,
-											struct device_attribute *attr,
-											char *buf)
+					    struct device_attribute *attr,
+					    char *buf)
 {
 	int ret = 0;
 	char tmp[512];
@@ -23,18 +23,14 @@ ssize_t aipu_common_ext_register_sysfs_show(struct device *dev,
 	if (unlikely(!partition))
 		return 0;
 
-	if (get_soc_ops(partition) &&
-		get_soc_ops(partition)->soc_pm_runtime_get_sync)
-	{
+	if (get_soc_ops(partition) && get_soc_ops(partition)->soc_pm_runtime_get_sync)
 		get_soc_ops(partition)->soc_pm_runtime_get_sync(dev, get_soc(partition));
-	}
 
 	if (get_soc_ops(partition) &&
-		get_soc_ops(partition)->is_clk_enabled &&
-		!get_soc_ops(partition)->is_clk_enabled(dev, get_soc(partition)))
-	{
+	    get_soc_ops(partition)->is_clk_enabled &&
+	    !get_soc_ops(partition)->is_clk_enabled(dev, get_soc(partition))) {
 		return snprintf(buf, MAX_CHAR_SYSFS,
-						"AIPU is suspended and external registers cannot be read!\n");
+				"AIPU is suspended and external registers cannot be read!\n");
 	}
 
 	ret += snprintf(tmp, 512, "----------------------------------------------\n");
@@ -51,17 +47,14 @@ ssize_t aipu_common_ext_register_sysfs_show(struct device *dev,
 	ret += snprintf(tmp, 512, "----------------------------------------------\n");
 	strcat(buf, tmp);
 
-	if (get_soc_ops(partition) &&
-		get_soc_ops(partition)->soc_pm_runtime_put)
-	{
+	if (get_soc_ops(partition) && get_soc_ops(partition)->soc_pm_runtime_put)
 		get_soc_ops(partition)->soc_pm_runtime_put(dev, get_soc(partition));
-	}
 	return ret;
 }
 
 ssize_t aipu_common_ext_register_sysfs_store(struct device *dev,
-											 struct device_attribute *attr,
-											 const char *buf, size_t count)
+					     struct device_attribute *attr,
+					     const char *buf, size_t count)
 {
 	struct platform_device *p_dev = container_of(dev, struct platform_device, dev);
 	struct aipu_partition *partition = platform_get_drvdata(p_dev);
@@ -70,8 +63,8 @@ ssize_t aipu_common_ext_register_sysfs_store(struct device *dev,
 	struct aipu_io_req io_req;
 
 	if (get_soc_ops(partition) &&
-		get_soc_ops(partition)->is_clk_enabled &&
-		!get_soc_ops(partition)->is_clk_enabled(dev, get_soc(partition)))
+	    get_soc_ops(partition)->is_clk_enabled &&
+	    !get_soc_ops(partition)->is_clk_enabled(dev, get_soc(partition)))
 		return 0;
 
 	ret = sscanf(buf, "%x %x", &value[0], &value[1]);
@@ -92,32 +85,15 @@ ssize_t aipu_common_ext_register_sysfs_store(struct device *dev,
 	}
 
 	if (get_soc_ops(partition) &&
-		get_soc_ops(partition)->soc_pm_runtime_put)
-	{
+	    get_soc_ops(partition)->soc_pm_runtime_put)
 		get_soc_ops(partition)->soc_pm_runtime_put(dev, get_soc(partition));
-	}
 
 	return count;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }
 
 ssize_t aipu_common_clock_sysfs_show(struct device *dev,
-									 struct device_attribute *attr,
-									 char *buf)
+				     struct device_attribute *attr,
+				     char *buf)
 {
 	struct platform_device *p_dev = container_of(dev, struct platform_device, dev);
 	struct aipu_partition *partition = platform_get_drvdata(p_dev);
@@ -127,8 +103,8 @@ ssize_t aipu_common_clock_sysfs_show(struct device *dev,
 	 * the state of AIPU is by default treated as normal.
 	 */
 	if (get_soc_ops(partition) &&
-		get_soc_ops(partition)->is_clk_enabled &&
-		!get_soc_ops(partition)->is_clk_enabled(dev, get_soc(partition)))
+	    get_soc_ops(partition)->is_clk_enabled &&
+	    !get_soc_ops(partition)->is_clk_enabled(dev, get_soc(partition)))
 		return snprintf(buf, MAX_CHAR_SYSFS,
 						"AIPU is in clock gating state and suspended.\n");
 	else
@@ -136,8 +112,8 @@ ssize_t aipu_common_clock_sysfs_show(struct device *dev,
 }
 
 ssize_t aipu_common_clock_sysfs_store(struct device *dev,
-									  struct device_attribute *attr,
-									  const char *buf, size_t count)
+				      struct device_attribute *attr,
+				      const char *buf, size_t count)
 {
 	int do_suspend = 0;
 	int do_resume = 0;
@@ -148,8 +124,8 @@ ssize_t aipu_common_clock_sysfs_store(struct device *dev,
 		return count;
 
 	if (!get_soc_ops(partition) ||
-		!get_soc_ops(partition)->enable_clk ||
-		!get_soc_ops(partition)->disable_clk ||
+	    !get_soc_ops(partition)->enable_clk ||
+	    !get_soc_ops(partition)->disable_clk ||
 	    !get_soc_ops(partition)->is_clk_enabled) {
 		dev_info(dev, "operation is not supported.\n");
 		return count;
@@ -175,7 +151,7 @@ ssize_t aipu_common_clock_sysfs_store(struct device *dev,
 }
 
 ssize_t aipu_common_disable_sysfs_show(struct device *dev, struct device_attribute *attr,
-									   char *buf)
+				       char *buf)
 {
 	struct platform_device *p_dev = container_of(dev, struct platform_device, dev);
 	struct aipu_partition *partition = platform_get_drvdata(p_dev);
@@ -192,7 +168,7 @@ ssize_t aipu_common_disable_sysfs_show(struct device *dev, struct device_attribu
 }
 
 ssize_t aipu_common_disable_sysfs_store(struct device *dev, struct device_attribute *attr,
-										const char *buf, size_t count)
+					const char *buf, size_t count)
 {
 	int do_disable = 0;
 	struct platform_device *p_dev = container_of(dev, struct platform_device, dev);
@@ -217,9 +193,9 @@ ssize_t aipu_common_disable_sysfs_store(struct device *dev, struct device_attrib
 }
 
 struct device_attribute *aipu_common_create_attr(struct device *dev,
-												 struct device_attribute **attr,
-												 const char *name, int mode,
-												 sysfs_show_t show, sysfs_store_t store)
+						 struct device_attribute **attr,
+						 const char *name, int mode,
+						 sysfs_show_t show, sysfs_store_t store)
 {
 	if (!dev || !attr || !name)
 		return ERR_PTR(-EINVAL);
@@ -249,7 +225,7 @@ void aipu_common_destroy_attr(struct device *dev, struct device_attribute **attr
 #endif
 
 int aipu_common_init_reg_irq(struct platform_device *p_dev, struct aipu_partition *partition,
-							 struct io_region *reg, struct aipu_irq_object **irq_obj)
+			     struct io_region *reg, struct aipu_irq_object **irq_obj)
 {
 	int ret = 0;
 	struct resource *res = NULL;
@@ -272,7 +248,8 @@ int aipu_common_init_reg_irq(struct platform_device *p_dev, struct aipu_partitio
 	ret = init_aipu_ioregion(reg, base, size);
 	if (ret) {
 		dev_err(&p_dev->dev,
-				"create aipu IO region failed: base 0x%llx, size 0x%llx\n", base, size);
+			"create aipu IO region failed: base 0x%llx, size 0x%llx\n",
+			base, size);
 		return ret;
 	}
 	dev_dbg(&p_dev->dev, "init aipu IO region done: [0x%llx, 0x%llx]\n", base, res->end);

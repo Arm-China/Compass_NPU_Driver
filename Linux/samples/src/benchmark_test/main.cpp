@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -9,6 +9,8 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <fstream>
+#include <iostream>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -25,6 +27,75 @@
 #include "standard_api.h"
 
 using namespace std;
+
+#define X2_DYNAMIC_ASID1 0
+#define BIND_CORE 0
+
+namespace {
+
+int dump_perfdata(aipu_ctx_handle_t *m_ctx, uint64_t graph_id, uint64_t job_id,
+                  const std::string &dump_path = "") {
+  aipu_status_t sts = AIPU_STATUS_SUCCESS;
+  const char *msg = nullptr;
+  aipu_tensor_desc_t desc;
+  string perfdata_fname;
+  uint32_t cnt;
+  int ret = 0;
+
+  sts = aipu_get_tensor_count(m_ctx, graph_id, AIPU_TENSOR_TYPE_PROFILER, &cnt);
+  if (sts != AIPU_STATUS_SUCCESS) {
+    aipu_get_error_message(m_ctx, sts, &msg);
+    AIPU_ERR()
+    ("aipu_get_tensor_descriptor(%d): %s\n", AIPU_TENSOR_TYPE_PROFILER, msg);
+    ret = -1;
+    return ret;
+  } else if (cnt == 0) {
+    AIPU_CRIT()
+        << "No profiler tensor in aipu.bin, and will not dump profile binary\n";
+    ret = -1;
+    return ret;
+  }
+
+  sts = aipu_get_tensor_descriptor(m_ctx, graph_id, AIPU_TENSOR_TYPE_PROFILER,
+                                   0, &desc);
+  if (sts != AIPU_STATUS_SUCCESS) {
+    aipu_get_error_message(m_ctx, sts, &msg);
+    AIPU_ERR()
+    ("aipu_get_tensor_descriptor(%d): %s\n", AIPU_TENSOR_TYPE_PROFILER, msg);
+    ret = -1;
+    return ret;
+  }
+
+  perfdata_fname =
+      dump_path.empty() ? "./PerfData.bin" : (dump_path + "/PerfData.bin");
+  AIPU_INFO()("perfdata file: %s\n", perfdata_fname.c_str());
+
+  ofstream ofs(perfdata_fname, ios::binary);
+  if (!ofs.is_open()) {
+    AIPU_ERR()("open: %s [fail]\n", perfdata_fname.c_str());
+    ret = -1;
+    return ret;
+  }
+
+  unique_ptr<char[]> buffer(new char[desc.size]);
+  sts = aipu_get_tensor(m_ctx, job_id, AIPU_TENSOR_TYPE_PROFILER, 0,
+                        buffer.get());
+  if (sts != AIPU_STATUS_SUCCESS) {
+    aipu_get_error_message(m_ctx, sts, &msg);
+    AIPU_ERR()("get profiler tensor: %s [fail]\n", msg);
+    ret = -1;
+    goto finish;
+  }
+  AIPU_INFO()("get profiler tensor success");
+
+  ofs.write(buffer.get(), desc.size);
+
+finish:
+  ofs.close();
+  return ret;
+}
+
+}; // namespace
 
 int main(int argc, char *argv[]) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
@@ -47,6 +118,9 @@ int main(int argc, char *argv[]) {
   aipu_driver_version_t drv_ver = {0};
   aipu_bin_buildversion_t buildver = {0};
   aipu_load_graph_cfg_t load_graph_cfg = {0};
+#if X2_DYNAMIC_ASID1
+  bool dynamic_asid1 = true;
+#endif
 
   if (init_test_bench(argc, argv, &opt, "benchmark_test")) {
     AIPU_ERR()("invalid command line options/args\n");
@@ -55,7 +129,7 @@ int main(int argc, char *argv[]) {
 
   if (opt.loop_cnt != 0)
     AIPU_CRIT()
-    ("aipu_benchmark_test doesn't support to specify outer loop counter\n");
+  ("aipu_benchmark_test doesn't support to specify outer loop counter\n");
 
   if (opt.frame_cnt != 0)
     frame_cnt = opt.frame_cnt;
@@ -84,17 +158,40 @@ int main(int argc, char *argv[]) {
   AIPU_INFO()
   ("Driver UMD: %s, KMD: %s\n", drv_ver.umd_version, drv_ver.kmd_version);
 
+  if (opt.profile_en) {
+    ret = aipu_ioctl(ctx, AIPU_IOCTL_ENABLE_TICKCOUNTER, nullptr);
+    if (ret != AIPU_STATUS_SUCCESS) {
+      aipu_get_error_message(ctx, ret, &msg);
+      AIPU_ERR()("aipu_ioctl: %s\n", msg);
+      goto finish;
+    }
+    AIPU_INFO()("aipu_ioctl, enable tick counter success\n");
+  }
+
+#if X2_DYNAMIC_ASID1
+  /* only for x2, asid0/1 will use different base, especially for large model */
+  ret = aipu_ioctl(ctx, AIPU_IOCTL_SET_DYNAMIC_ASID1, &dynamic_asid1);
+  if (ret != AIPU_STATUS_SUCCESS) {
+    aipu_get_error_message(ctx, ret, &msg);
+    AIPU_ERR()("aipu_ioctl: %s\n", msg);
+    return -1;
+  }
+#endif
+
   if (opt.extra_weight_dir.length() > 0)
     load_graph_cfg.extra_weight_path = opt.extra_weight_dir.c_str();
+  /* only when the model is extremlly small */
+  // load_graph_cfg.put_weight_gm = true;
+  // load_graph_cfg.put_desc_gm = true;
+  // load_graph_cfg.put_ws_gm = true;
   ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id,
                         &load_graph_cfg);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
-    AIPU_ERR()
-    ("aipu_load_graph_helper: %s (%s)\n", msg, opt.bin_files[0].c_str());
+    AIPU_ERR()("aipu_load_graph: %s (%s)\n", msg, opt.bin_files[0].c_str());
     goto deinit_ctx;
   }
-  AIPU_INFO()("aipu_load_graph_helper success: %s\n", opt.bin_files[0].c_str());
+  AIPU_INFO()("aipu_load_graph success: %s\n", opt.bin_files[0].c_str());
 
   buildver.graph_id = graph_id;
   ret = aipu_ioctl(ctx, AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION, &buildver);
@@ -158,6 +255,10 @@ int main(int argc, char *argv[]) {
    */
   create_job_cfg.fm_mem_region =
       AIPU_MEM_REGION_DEFAULT; /* AIPU_MEM_REGION_SRAM */
+#if BIND_CORE
+  create_job_cfg.dbg_dispatch = 1;
+  create_job_cfg.dbg_core_id = 0; /* core id */
+#endif
   ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
@@ -234,6 +335,9 @@ int main(int argc, char *argv[]) {
     }
     AIPU_INFO()("aipu_finish_job success\n");
 
+    if (opt.profile_en)
+      dump_perfdata(ctx, graph_id, job_id, std::string(opt.dump_dir));
+
     for (uint32_t i = 0; i < output_cnt; i++) {
       ret = aipu_get_tensor(ctx, job_id, AIPU_TENSOR_TYPE_OUTPUT, i,
                             output_data[i]);
@@ -247,9 +351,14 @@ int main(int argc, char *argv[]) {
     }
 
     pass = check_result_helper(output_data, output_desc, opt.gts, opt.gts_size);
+    if (pass == -1)
+      break;
   }
 
 clean_job:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   ret = aipu_clean_job(ctx, job_id);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
@@ -259,6 +368,9 @@ clean_job:
   AIPU_INFO()("aipu_clean_job success\n");
 
 unload_graph:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   ret = aipu_unload_graph(ctx, graph_id);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
@@ -268,6 +380,19 @@ unload_graph:
   AIPU_INFO()("aipu_unload_graph success\n");
 
 deinit_ctx:
+  if (opt.profile_en) {
+    ret = aipu_ioctl(ctx, AIPU_IOCTL_DISABLE_TICKCOUNTER, nullptr);
+    if (ret != AIPU_STATUS_SUCCESS) {
+      aipu_get_error_message(ctx, ret, &msg);
+      AIPU_ERR()("aipu_ioctl: %s\n", msg);
+      goto finish;
+    }
+    AIPU_INFO()("aipu_ioctl, disable tick counter success\n");
+  }
+
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   ret = aipu_deinit_context(ctx);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
@@ -277,7 +402,7 @@ deinit_ctx:
   AIPU_INFO()("aipu_deinit_ctx success\n");
 
 finish:
-  if (AIPU_STATUS_SUCCESS != ret)
+  if (ret != AIPU_STATUS_SUCCESS)
     pass = -1;
 
   for (uint32_t i = 0; i < output_data.size(); i++) {

@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+# Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -35,7 +35,7 @@ ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
 RUNTIMR_SRCS_SECTION += $(foreach VAR, $(SRC_UNIT), $(wildcard $(RUNTIME_SRC_PATH)/zhouyi_v3x/$(VAR)/*.cpp))
 endif
 RUNTIMR_SRCS_SECTION := $(filter-out ../driver/umd/src/common/export_py_api.cpp, $(RUNTIMR_SRCS_SECTION))
-RUNTIMR_SRCS_SECTION := $(filter-out ../driver/umd/src/device/simulator/simulator_v3_1.cpp, $(RUNTIMR_SRCS_SECTION))
+RUNTIMR_SRCS_SECTION := $(filter-out ../driver/umd/src/device/simulator/simulator_v3_2.cpp, $(RUNTIMR_SRCS_SECTION))
 ifeq ($(BUILD_AIPU_VERSION), aipu_v1v2)
 	RUNTIMR_SRCS_SECTION := $(filter-out ../driver/umd/src/device/simulator/simulator_v3.cpp, $(RUNTIMR_SRCS_SECTION))
 endif

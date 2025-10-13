@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -15,11 +15,11 @@
 #include <algorithm>
 #include <array>
 #include <map>
+#include <memory>
 #include <vector>
 
 #include "graph_base.h"
 #include "parser_base.h"
-#include "share_weight_mgr.h"
 #include "standard_api.h"
 
 namespace aipudrv {
@@ -35,6 +35,7 @@ struct GraphSubSectionDesc {
 
 struct GraphSectionDesc {
   uint32_t size; /**< section data size */
+  uint32_t align_bytes;
   uint32_t
       align_in_page;   /**< section assress alignment requirement (in page) */
   uint32_t type;       /**< weight const or zerocpy_const(15) */
@@ -42,12 +43,11 @@ struct GraphSectionDesc {
   uint32_t
       src_offset; /*< compact and provided source data offset to each bss */
   uint64_t
-      src_offset_in_share_weight; /*< [shared weight].source offset to
-                                     merged_weight.bin instead of zip file */
+      src_offset_in_share_weight; /*< [only for shared weight].source offset to
+                                     merged_weight.bin beginning */
   uint32_t dst_offset;            /*< aligned dst data offset to each bss */
 
-  std::array<uint8_t, 32> hashcode{
-      0}; /**< [shared weight].shared data hashcode */
+  std::array<uint8_t, 32> hashcode{0}; /**< hashcode for each static section */
 
   std::vector<GraphSubSectionDesc>
       sub_sections; /**< sub-section(s) in this section */
@@ -55,6 +55,7 @@ struct GraphSectionDesc {
   void init() /**< section initializer */
   {
     size = 0;
+    align_bytes = 0;
     align_in_page = 1;
     type = 0;
     slot_index = 0;
@@ -103,8 +104,7 @@ struct WeightBufferInfo {
   BufferDesc *wb_weight = nullptr;
   BufferDesc *wb_zerocpy_const = nullptr;
 
-  /* wb_weights in gathered buffers only mark relative pa which is offset to
-   * whole buffer */
+  /* describe each static section, scattered has independent malloced buffer */
   std::vector<BufferDesc *> wb_weights;
 
   /* weight buffer ASID base address */
@@ -122,31 +122,39 @@ struct WeightSection {
   std::vector<struct BinSection>
       weight; /* size=0: no weight or shared weight */
   struct ExtraWeightInfo {
-    std::string name;
+    std::string file;
     std::string hash;
   };
   std::vector<ExtraWeightInfo> extra_weight_infos;
-  std::string extra_weight_path;
+  std::string extra_weight_path = "./";
 };
 
-struct SharedWeightSection {
-  FileSectionDesc weight; /* offset: offset of merged_weight.bin to zip file,
-                             size: merged_weight size */
-  std::vector<uint64_t> offsets; /* offset to merged_weight.bin */
-  uint32_t offsets_start; /* bellow `vector<offsets>` is whole offset.bin at
-                             beggining, then clip by `offsets_start` and
-                             `hashtable.size` */
+struct Block {
+  std::string file;
+  uint32_t
+      offset_to_file; /* offset to beggining of aipu.bin or extra_weight.bin */
+  uint32_t offset_to_weight; /* offset to beggining of weight.bin */
+  uint32_t size;
 };
+
+using HASH_SECTION_TABLE =
+    std::map<uint32_t, std::map<std::array<uint8_t, 32>, GraphSectionDesc>>;
+using BLOCKS_TABLE = std::array<std::map<uint32_t, std::shared_ptr<Block>>,
+                                2>; /* [start, end] section id */
 
 class ParserBase;
-
+class SharedWeightMgr;
 class Graph : public GraphBase {
 private:
   uint32_t m_zerocpy_const_size = 0;
   uint32_t m_const_size = 0;
+  static constexpr uint32_t MAX_BLOCK_SIZE = 0x4000000; /* 64M */
+  // BLOCKS_TABLE m_blk_table;
 
 protected:
   ParserBase *m_parser = nullptr;
+  SharedWeightMgr *m_sw_mgr = nullptr;
+
   /* section descriptions in the graph binary */
   struct BinSection m_btext;
   struct BinSection m_bcrodata;
@@ -157,7 +165,6 @@ protected:
   /* dynamic shape */
   struct BinSection m_bglobalparam;
   struct WeightSection m_bweight;
-  struct SharedWeightSection m_bshared_weight;
 
 protected:
   /* Buffers in memory for AIPU's access */
@@ -166,12 +173,12 @@ protected:
   std::vector<struct WeightBufferInfo> m_weight;
 
   std::vector<std::vector<ConstantHashItem>> m_hashtable;
-  std::vector<std::uint32_t>
+  std::vector<uint64_t> m_offsets;
+  std::map<uint32_t, uint32_t>
       m_const_base_offset; /* for each bss const base offset */
-  std::vector<std::uint32_t>
+  std::map<uint32_t, uint32_t>
       m_zcy_const_base_offset; /* for each bss zcy const base offset  */
-  ShareWeightMgr *m_sw_mgr = nullptr;
-
+  bool m_is_shared_weight = false;
   bool m_do_vcheck = true;
 
   /* DTCM size, KB unit */
@@ -179,21 +186,46 @@ protected:
 
 public:
   /* entry: <min shape (N, H, W, C), max shape (N, H, W, C)> etc */
-  std::map<int, std::vector<std::vector<uint32_t>>> m_input_shape_constraint;
+  std::map<int, std::array<std::vector<uint32_t>, 2>> m_input_shape_constraint;
 
   /* entry: <min size, max size>, size = N*H*W*C */
-  std::map<int, std::vector<uint64_t>> m_input_shape_threshhold;
+  std::map<int, std::array<uint64_t, 2>> m_input_shape_threshhold;
 
   bool m_dynamic_shape = false;
+  bool m_dynamic_asid0 = false;
+
+  bool m_put_weight_gm = false;
+  bool m_put_desc_gm = false;
+  bool m_put_ws_gm = false;
 
 private:
-  aipu_status_t alloc_gathered_weight();
-  aipu_status_t alloc_scattered_weight();
+  aipu_status_t load_config(aipu_load_graph_cfg_t *config);
+  aipu_status_t load_common(bool ver_check);
+  /* <isa, rev> */
+  std::string get_arch_name(uint32_t hw_version, uint32_t hw_revison) {
+    const std::map<std::pair<uint32_t, uint32_t>, std::string> m_isa_table = {
+        {{AIPU_ISA_VERSION_ZHOUYI_V1, 0}, "zyv1"},
+        {{AIPU_ISA_VERSION_ZHOUYI_V1, 1}, "zyv1"}, /* z1_0701_P */
+        {{AIPU_ISA_VERSION_ZHOUYI_V2_0, 0}, "z2"},
+        {{AIPU_ISA_VERSION_ZHOUYI_V2_1, 0}, "z3"},
+        {{AIPU_ISA_VERSION_ZHOUYI_V2_2, 0}, "x1"},
+        {{AIPU_ISA_VERSION_ZHOUYI_V3, 0}, "x2"},
+        {{AIPU_ISA_VERSION_ZHOUYI_V3_2, 0}, "x3p"},
+    };
+
+    std::pair<uint32_t, uint32_t> p = std::make_pair(hw_version, hw_revison);
+    if (m_isa_table.count(p) > 0)
+      return m_isa_table.at(p);
+    return "null";
+  }
+
+  BLOCKS_TABLE slice_weight(uint32_t bss_id);
 
 public:
-  virtual int32_t get_dynamic_shape_dim_num(uint32_t idx, bool max_shape_dim);
-  virtual bool get_dynamic_shape_data(uint32_t idx, bool max_shape_dim,
-                                      uint32_t *data);
+  int32_t get_dynamic_shape_dim_num(uint32_t idx,
+                                    bool max_shape_dim) const override;
+  bool get_dynamic_shape_data(uint32_t idx, bool max_shape_dim,
+                              uint32_t *data) const override;
   virtual aipu_status_t update_dynamic_io_tensor_size(aipu_tensor_type_t type) {
     return AIPU_STATUS_SUCCESS;
   }
@@ -211,34 +243,39 @@ public:
   virtual void add_reuse_section(uint32_t bss_id,
                                  struct GraphSectionDesc section) = 0;
   virtual void set_io_tensors(uint32_t bss_id, struct GraphIOTensors io) = 0;
+  virtual void set_graph_comment(const char *data, uint64_t size){};
   virtual void set_gmconfig(BinSection &gm_section) {}
   virtual void set_segmmu(BinSection &segmmu_section) {}
-  virtual aipu_status_t extract_gm_info(int bss_id) {
+  virtual aipu_status_t parse_gmconfig(int bss_id) {
     return AIPU_STATUS_SUCCESS;
   }
   virtual uint32_t get_alloc_pad_size() const { return 0; }
+  virtual uint32_t get_asid_align_page() const { return 0; }
   virtual std::vector<struct GraphSectionDesc> &
   get_static_section_ref(uint32_t bss_id) = 0;
+  virtual HASH_SECTION_TABLE &get_shared_section_ref(uint32_t) {
+    static HASH_SECTION_TABLE table = {};
+    return table;
+  };
   virtual GraphIOTensors &get_bss_io_ref(uint32_t bss_id) = 0;
   aipu_status_t set_constant_hashtable(const BinSection &table);
 
-  aipu_status_t
-  set_static_section_param(uint32_t bss_id, const BSSStaticSectionDesc &bss_sec,
-                           GraphSectionDesc &section, uint32_t &const_addr_orig,
-                           uint32_t &zcy_addr_orig, uint32_t &const_addr,
-                           uint32_t &zcy_addr);
-
-  aipu_status_t write_static_section(uint32_t bss_id,
-                                     const GraphSectionDesc *section,
-                                     BufferDesc *desc, uint32_t cst_base = 0,
-                                     uint32_t zcy_cst_abse = 0);
+  aipu_status_t set_static_section_param(uint32_t bss_id,
+                                         const BSSStaticSectionDesc &bss_sec,
+                                         GraphSectionDesc &section,
+                                         uint32_t &const_addr,
+                                         uint32_t &zcy_addr);
 
 public:
   aipu_status_t load(std::istream &gbin, uint32_t size, bool ver_check = true,
                      aipu_load_graph_cfg_t *config = nullptr) override;
+  aipu_status_t load(const char *file, bool ver_check = true,
+                     aipu_load_graph_cfg_t *config = nullptr) override;
   aipu_status_t unload() override;
   aipu_status_t alloc_weight_buffer() override;
-  aipu_status_t write_weight_buffer() override;
+  aipu_status_t setup_weight_buffer(std::vector<WeightBufferInfo> &weights,
+                                    bool setup_zcy = true);
+  aipu_status_t setup_zcy_buffer(std::vector<WeightBufferInfo> &weights);
 
   virtual void print_parse_info() = 0;
   virtual aipu_status_t create_job(JOB_ID *id,
@@ -246,14 +283,19 @@ public:
                                    aipu_global_config_hw_t *hw_cfg,
                                    aipu_create_job_cfg_t *config = nullptr) = 0;
   virtual aipu_status_t get_tensor_count(aipu_tensor_type_t type,
-                                         uint32_t *cnt) = 0;
-  virtual aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type,
-                                              uint32_t tensor,
-                                              aipu_tensor_desc_t *desc) = 0;
+                                         uint32_t *cnt) const = 0;
+  virtual aipu_status_t
+  get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor,
+                        aipu_tensor_desc_t *desc) const = 0;
 
 public:
   /* Set functions */
+  void set_shared_weight_mgr(SharedWeightMgr *mgr) {
+    m_sw_mgr = mgr;
+    m_is_shared_weight = true;
+  }
   void set_parser(ParserBase *parser) { m_parser = parser; }
+  void set_mapped_gfile(const std::string &file) { m_mapped_gfile = file; }
   void set_graph_text(const char *data, uint64_t size) {
     m_btext.va = data;
     m_btext.size = size;
@@ -268,6 +310,7 @@ public:
   }
   void set_graph_rodata(const BinSection &rodata) { m_brodata = rodata; }
   void set_graph_desc(const BinSection &desc) { m_bdesc = desc; }
+  const BinSection &get_graph_desc() { return m_bdesc; }
   void set_graph_weight(const BinSection &weight) {
     m_bweight.weight.push_back(weight);
   }
@@ -284,21 +327,15 @@ public:
 
   std::vector<WeightBufferInfo> &get_weight_buffer_info() { return m_weight; }
 
-  virtual uint32_t get_bss_cnt() { return 1; }
+  virtual uint32_t get_bss_cnt() const { return 1; }
 
-  bool is_exclusive_weight() const { return m_bweight.weight.size() > 0; }
-
-  bool has_weight(uint32_t bss_id = 0) {
+  bool has_weight(uint32_t bss_id = 0) const {
     bool exclusive =
         m_bweight.weight.size() > bss_id && m_bweight.weight[bss_id].size != 0;
-    bool shared = m_bshared_weight.weight.size != 0 &&
-                  get_static_section_ref(bss_id).size() != 0;
-    return exclusive || shared;
+    /* bool shared = m_weight[bss_id].is_shared_weight &&
+     * m_weight[bss_id].wb_weight != nullptr; */
+    return exclusive;
   }
-
-  void set_sw_mgr(ShareWeightMgr *sw_mgr) { m_sw_mgr = sw_mgr; }
-
-  ShareWeightMgr *get_sw_mgr() { return m_sw_mgr; }
 
   virtual void set_const_size(uint32_t bss_id, uint32_t const_size,
                               uint32_t zerocpy_const_size) {
@@ -316,80 +353,20 @@ public:
     m_zerocpy_const_size = zerocpy_const_size;
   }
 
-  virtual uint32_t get_zerocpy_const_size(uint32_t bss_id) {
+  virtual uint32_t get_zerocpy_const_size(uint32_t bss_id = 0) const {
     if (bss_id == 0)
       return m_zerocpy_const_size;
     return 0;
   }
 
-  virtual uint32_t get_const_size(uint32_t bss_id) {
+  virtual uint32_t get_const_size(uint32_t bss_id = 0) const {
     if (bss_id == 0)
       return m_const_size;
     return 0;
   }
 
-  uint32_t get_hashtable_items_cnt() {
-    uint32_t eles = 0;
-    std::for_each(m_hashtable.begin(), m_hashtable.end(),
-                  [&](const std::vector<ConstantHashItem> &items) {
-                    eles += items.size();
-                  });
-    return eles;
-  }
-
-  aipu_status_t set_shared_weight(const FileSectionDesc &desc) {
-    m_bshared_weight.weight = desc;
-    return AIPU_STATUS_SUCCESS;
-  }
-
-  aipu_status_t set_shared_offset(const FileSectionDesc &desc,
-                                  uint32_t offsets_start) {
-    char *offset = nullptr;
-    aipu_status_t ret = umd_mmap_file_helper(
-        desc.file.c_str(), (void **)&offset, desc.size, desc.offset);
-    if (ret != AIPU_STATUS_SUCCESS)
-      return ret;
-
-    m_bshared_weight.offsets_start = offsets_start;
-    for (uint32_t i = 0; i < desc.size; i += sizeof(uint64_t)) {
-      m_bshared_weight.offsets.push_back(*(uint64_t *)offset);
-      offset += sizeof(uint64_t);
-    }
-    munmap(offset, desc.size);
-
-    return ret;
-  }
-
-  void clip_shared_offset() {
-    auto &offsets = m_bshared_weight.offsets;
-    if (m_hashtable.size() == 0 || offsets.size() == 0)
-      return;
-
-    offsets.erase(offsets.begin(),
-                  offsets.begin() +
-                      m_bshared_weight.offsets_start / sizeof(uint64_t));
-    offsets.erase(offsets.begin() + get_hashtable_items_cnt(), offsets.end());
-  }
-
-  /* shared weight: each bss has an base destination offset */
-  void set_bss_base_offset(uint32_t base_offset) {
-    m_const_base_offset.push_back(base_offset);
-  }
-
-  uint32_t get_bss_base_offset(uint32_t bss_id) const {
-    if (bss_id >= m_const_base_offset.size())
-      return 0;
-    return m_const_base_offset[bss_id];
-  }
-
-  void set_bss_zcy_base_offset(uint32_t base_offset) {
-    m_zcy_const_base_offset.push_back(base_offset);
-  }
-
-  uint32_t get_bss_zcy_base_offset(uint32_t bss_id) const {
-    if (bss_id >= m_zcy_const_base_offset.size())
-      return 0;
-    return m_zcy_const_base_offset[bss_id];
+  std::vector<std::vector<ConstantHashItem>> &get_hashtable() {
+    return m_hashtable;
   }
 
   void set_modle_global_param(BinSection mgp_section) {
@@ -409,37 +386,39 @@ public:
 
   bool set_input_shape_constrait(BinSection &isc_section) {
     uint32_t *start = (uint32_t *)isc_section.va;
-    uint32_t num_inputs = GET_U32_FROM_PTR_ADV(start);
+    uint32_t constraint_num = GET_U32_FROM_PTR_ADV(start);
 
-    for (uint32_t i = 0; i < num_inputs; i++) {
-      uint32_t dim = GET_U32_FROM_PTR_ADV(start);
+    LOG(LOG_DEBUG, "dynamic inputs number: %u", constraint_num / 2);
+    for (uint32_t i = 0; i < constraint_num; i++) {
+      uint32_t rank = GET_U32_FROM_PTR_ADV(start);
       std::vector<uint32_t> shape_vec;
+      uint32_t input_idx = i / 2;
 
-      for (uint32_t j = 0; j < dim; j++)
+      LOG(LOG_DEBUG, "input idx: %u, rank: %u", input_idx, rank);
+      for (uint32_t j = 0; j < rank; j++) {
         shape_vec.push_back(GET_U32_FROM_PTR_ADV(start));
+        LOG(LOG_DEBUG, " - %s[%u]: %u", (i % 2 == 0 ? "min" : "max"), j,
+            shape_vec[j]);
+      }
 
       if (shape_vec.size() > 0) {
         uint64_t size = 1;
 
-        m_input_shape_constraint[i / 2].push_back(shape_vec);
-        for (uint32_t k = 0; k < shape_vec.size(); k++) {
+        for (uint32_t k = 0; k < shape_vec.size(); k++)
           size *= shape_vec[k];
-
-          if (shape_vec[k] == 0)
-            LOG(LOG_INFO, "graph id: 0x%lx, input idx %d, %s dim %d is 0", m_id,
-                i / 2, (i % 2 == 0 ? "min" : "max"), k);
-        }
-
-        m_input_shape_threshhold[i / 2].push_back(size);
+        m_input_shape_constraint[input_idx][i % 2] = std::move(shape_vec);
+        m_input_shape_threshhold[input_idx][i % 2] = size;
       }
     }
 
     return true;
   }
 
-  bool is_dynamic_shape() { return m_dynamic_shape; }
+  bool is_dynamic_shape() const { return m_dynamic_shape; }
 
-  uint32_t get_dynamic_shape_num() {
+  bool is_dynamic_asid0() const { return m_dynamic_asid0; }
+
+  uint32_t get_dynamic_shape_num() const {
     if (!is_dynamic_shape())
       return 0;
     else
@@ -447,8 +426,6 @@ public:
   }
 
   virtual void set_enrty(uint32_t offset){};
-
-  virtual DEV_PA_64 debugger_get_instr_base() { return m_text->pa; }
 
 public:
   Graph(void *ctx, GRAPH_ID id, DeviceBase *dev);

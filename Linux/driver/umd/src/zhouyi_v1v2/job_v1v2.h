@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -22,18 +22,19 @@ private:
   DEV_PA_64 m_spc = 0;
   DEV_PA_64 m_intr_pc = 0;
   BufferDesc *m_stack = nullptr;
-  std::vector<BufferDesc *> m_reuses;
-  std::vector<BufferDesc *> *m_weights =
+  std::vector<BufferDesc *> m_reuses_desc;
+  std::vector<BufferDesc *> *m_weights_desc =
       nullptr; /* Do NOT free me in this class */
   std::string m_sim;
   uint32_t m_log_level = 0;
   bool m_en_eval = false;
+  std::string m_json_filename;
   std::string m_data_dir;
   std::string m_log_path;
   bool m_is_defer_run = false;
   bool m_do_trigger = false;
   uint32_t m_bind_core_id = 0;
-  uint32_t m_fm_mem_region = AIPU_BUF_REGION_DEFAULT;
+  uint32_t m_sfm_mem_region = AIPU_BUF_REGION_DEFAULT;
   BufferDesc *m_top_reuse_buf = nullptr;
   std::set<uint32_t> m_top_reuse_idx;
 
@@ -45,12 +46,12 @@ public:
   std::set<uint32_t> m_dma_buf_idx;
 
 private:
-  GraphV12 &get_graph() { return static_cast<GraphV12 &>(m_graph); }
+  GraphV12 &graph() { return static_cast<GraphV12 &>(m_graph); }
 
   uint32_t get_subgraph_cnt() override { return 1; }
 
   const std::vector<BufferDesc *> &get_reuse() override {
-    return static_cast<std::vector<BufferDesc *> &>(m_reuses);
+    return static_cast<std::vector<BufferDesc *> &>(m_reuses_desc);
   }
   aipu_status_t setup_rodata_v12(std::set<uint32_t> *dma_buf_idx = nullptr);
   aipu_status_t get_runtime_err_code() const override;

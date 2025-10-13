@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #ifndef __AIPU_IRQ_H__
 #define __AIPU_IRQ_H__
@@ -16,6 +16,7 @@ enum irq_event_type {
 	AIPU_IRQ_EVENT_NONE,
 	AIPU_IRQ_EVENT_PRINT,
 	AIPU_IRQ_EVENT_RESET,
+	AIPU_IRQ_EVENT_ABORT,
 };
 
 /**

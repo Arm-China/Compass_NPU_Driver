@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+# Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -27,8 +27,8 @@ ifeq ($(BUILD_TARGET_PLATFORM), sim)
         LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X2_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X2_SIM_LNAME)
     endif
 
-    ifeq ($(BUILD_AIPU_VERSION), aipu_v3_1)
-        LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X3_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X3_SIM_LNAME)
+    ifeq ($(BUILD_AIPU_VERSION), aipu_v3_2)
+        LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X3P_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X3P_SIM_LNAME)
     endif
 endif
 
@@ -51,9 +51,9 @@ ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
     CXXFLAGS += -DZHOUYI_V3
 endif
 
-ifeq ($(BUILD_AIPU_VERSION), aipu_v3_1)
+ifeq ($(BUILD_AIPU_VERSION), aipu_v3_2)
     CXXFLAGS += -DZHOUYI_V12
-    CXXFLAGS += -DZHOUYI_V3_1
+    CXXFLAGS += -DZHOUYI_V3_2
 endif
 
 ifneq ($(BUILD_ANDROID_NDK), )

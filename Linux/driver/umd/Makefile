@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+# Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 # SPDX-License-Identifier: Apache-2.0
 
 MD  := mkdir -p
@@ -12,7 +12,7 @@ SRC_ZHOUYI_V1V2 = $(SRC_ROOT)/zhouyi_v1v2/
 SRC_ZHOUYI_V3X = $(SRC_ROOT)/zhouyi_v3x/
 SRC_ZHOUYI_V3X_COMMON = $(SRC_ZHOUYI_V3X)/common
 SRC_ZHOUYI_V3 = $(SRC_ZHOUYI_V3X)/zhouyi_v3/
-SRC_ZHOUYI_V3_1 = $(SRC_ZHOUYI_V3X)/zhouyi_v3_1/
+SRC_ZHOUYI_V3_2 = $(SRC_ZHOUYI_V3X)/zhouyi_v3_2/
 SRC_MISC = $(SRC_ROOT)/misc/
 SRC_UTIL = $(SRC_ROOT)/utils/
 SRC_DEVICE = $(SRC_ROOT)/device/
@@ -51,9 +51,9 @@ ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
     CXXFLAGS += -DZHOUYI_V3
 endif
 
-ifeq ($(BUILD_AIPU_VERSION), aipu_v3_1)
+ifeq ($(BUILD_AIPU_VERSION), aipu_v3_2)
     CXXFLAGS += -DZHOUYI_V12
-    CXXFLAGS += -DZHOUYI_V3_1
+    CXXFLAGS += -DZHOUYI_V3_2
 endif
 
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
@@ -61,7 +61,7 @@ ifeq ($(BUILD_TARGET_PLATFORM), sim)
 endif
 
 SRC_DIRS = $(SRC_MISC) $(SRC_COMMON) $(SRC_UTIL) $(SRC_DEVICE) $(SRC_ZHOUYI_V1V2) \
-           $(SRC_ZHOUYI_V3X_COMMON) $(SRC_ZHOUYI_V3) $(SRC_ZHOUYI_V3_1)
+           $(SRC_ZHOUYI_V3X_COMMON) $(SRC_ZHOUYI_V3) $(SRC_ZHOUYI_V3_2)
 SRCS = $(SRC_COMMON)/context.cpp           \
        $(SRC_COMMON)/ctx_ref_map.cpp       \
        $(SRC_COMMON)/graph_base.cpp        \
@@ -94,13 +94,16 @@ endif
 
 SRCS += $(V1V2_SRCS)
 
-# V3 deps
-V3_INCD += -I./3rdparty
-V3_SRCS += $(SRC_ZHOUYI_V3X_COMMON)/graph_v3x.cpp  \
+# V3X deps
+V3X_INCD += -I./3rdparty
+V3X_SRCS += $(SRC_ZHOUYI_V3X_COMMON)/graph_v3x.cpp  \
         $(SRC_ZHOUYI_V3X_COMMON)/job_v3x.cpp  \
         $(SRC_ZHOUYI_V3X_COMMON)/parser_elf.cpp \
         $(SRC_ZHOUYI_V3X_COMMON)/dynamic_shape.cpp \
         $(SRC_ZHOUYI_V3X_COMMON)/coredump.cpp \
+
+# V3 deps
+V3_SRCS += $(V3X_SRCS) \
         $(SRC_ZHOUYI_V3)/job_v3.cpp \
         $(SRC_ZHOUYI_V3)/gm_v3.cpp
 
@@ -111,29 +114,24 @@ endif
 
 ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
     LDFLAGS += $(V3_LDFLAGS)
-    INCD += $(V3_INCD)
+    INCD += $(V3X_INCD)
     SRCS += $(V3_SRCS)
 endif
 
-# V3_1 deps
-V3_1_INCD += -I./3rdparty
-V3_1_SRCS += $(SRC_ZHOUYI_V3X_COMMON)/graph_v3x.cpp  \
-        $(SRC_ZHOUYI_V3X_COMMON)/job_v3x.cpp \
-        $(SRC_ZHOUYI_V3X_COMMON)/parser_elf.cpp \
-        $(SRC_ZHOUYI_V3X_COMMON)/dynamic_shape.cpp \
-        $(SRC_ZHOUYI_V3X_COMMON)/coredump.cpp \
-        $(SRC_ZHOUYI_V3_1)/job_v3_1.cpp \
-        $(SRC_ZHOUYI_V3_1)/gm_v3_1.cpp
+# V3_2 deps
+V3_2_SRCS += $(V3X_SRCS) \
+        $(SRC_ZHOUYI_V3_2)/job_v3_2.cpp \
+        $(SRC_ZHOUYI_V3_2)/gm_v3_2.cpp
 
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
-    V3_1_LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X3_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X3_SIM_LNAME)
-    V3_1_SRCS += $(SRC_DEVICE)/simulator/simulator_v3_1.cpp
+    V3_2_LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X3P_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X3P_SIM_LNAME)
+    V3_2_SRCS += $(SRC_DEVICE)/simulator/simulator_v3_2.cpp
 endif
 
-ifeq ($(BUILD_AIPU_VERSION), aipu_v3_1)
-    LDFLAGS += $(V3_1_LDFLAGS)
-    INCD += $(V3_1_INCD)
-    SRCS += $(V3_1_SRCS)
+ifeq ($(BUILD_AIPU_VERSION), aipu_v3_2)
+    LDFLAGS += $(V3_2_LDFLAGS)
+    INCD += $(V3X_INCD)
+    SRCS += $(V3_2_SRCS)
 endif
 
 ifeq ($(BUILD_UMD_API_TYPE), python_api)

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #include "aipu_tcb.h"
 #include "aipu_mm.h"
@@ -53,7 +53,7 @@ int print_core_id(struct aipu_memory_manager *mm, u64 head, u64 tail)
 
 	while (tcb <= tail_tcb && IS_TASK_TCB(tcb->flag)) {
 		dev_info(mm->dev, "group %u execution core ID: %u",
-			 tcb->groupid, tcb->_coreid);
+			 tcb->task.group_id, tcb->task.core_id);
 		tcb = get_next_group_tcb(tcb, tail_tcb);
 		if (tcb == tail_tcb)
 			break;

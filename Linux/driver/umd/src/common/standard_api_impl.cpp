@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -205,8 +205,9 @@ finish:
 
 aipu_status_t aipu_load_share_weight_graph(const aipu_ctx_handle_t *ctx,
                                            const char *graph_file,
-                                           uint64_t **ids, uint32_t *id_cnt) {
-#if (!defined ZHOUYI_V3) && (!defined ZHOUYI_V3_1)
+                                           uint64_t **ids, uint32_t *id_cnt,
+                                           aipu_load_graph_cfg_t *config) {
+#if (!defined ZHOUYI_V3) && (!defined ZHOUYI_V3_2)
   LOG(LOG_ERR, "v1&v2 donot support share weight graph");
   return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
 #endif
@@ -220,7 +221,7 @@ aipu_status_t aipu_load_share_weight_graph(const aipu_ctx_handle_t *ctx,
   if (p_ctx == nullptr)
     return AIPU_STATUS_ERROR_INVALID_CTX;
 
-  return p_ctx->load_share_weight_graph(graph_file, ids, id_cnt);
+  return p_ctx->load_share_weight_graph(graph_file, ids, id_cnt, config);
 }
 
 aipu_status_t aipu_unload_graph(const aipu_ctx_handle_t *ctx, uint64_t graph) {
@@ -791,6 +792,8 @@ aipu_status_t aipu_config_job(const aipu_ctx_handle_t *ctx, uint64_t job_id,
     ret = job->config_mem_dump(types, (aipu_job_config_dump_t *)config);
   else if (types == AIPU_CONFIG_TYPE_SIMULATION)
     ret = job->config_simulation(types, (aipu_job_config_simulation_t *)config);
+  else if (types == AIPU_JOB_CONFIG_TYPE_DYNAMIC_PARAMS)
+    ret = job->config_dynamic_params((aipu_dynshape_param_t *)config);
   else
     ret = AIPU_STATUS_ERROR_INVALID_CONFIG;
 

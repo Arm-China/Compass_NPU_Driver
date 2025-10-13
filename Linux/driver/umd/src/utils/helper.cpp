@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -104,9 +104,18 @@ finish:
   return ret;
 }
 
-/* Attention: it will occupy virtual address space of process */
+/**
+ * @brief mmap whole file with rw flag
+ *
+ * @param[in] fname file name
+ * @param[out] data virtual pointer to access file
+ * @param[out] size size of mmap file
+ * @param[in] readonly readonly or not
+ *
+ * @return value of 'aipu_status_t'
+ */
 aipu_status_t umd_mmap_file_helper(const char *fname, void **data,
-                                   uint64_t *size) {
+                                   uint64_t *size, bool readonly) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   int fd = 0;
   void *p_file = nullptr;
@@ -123,7 +132,7 @@ aipu_status_t umd_mmap_file_helper(const char *fname, void **data,
     goto finish;
   }
 
-  fd = open(fname, O_RDWR);
+  fd = open(fname, readonly ? O_RDONLY : O_RDWR);
   if (fd <= 0) {
     LOG(LOG_ERR, "open file failed: %s! (errno = %d)", fname, errno);
     ret = AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
@@ -131,7 +140,8 @@ aipu_status_t umd_mmap_file_helper(const char *fname, void **data,
   }
 
   p_file =
-      mmap(nullptr, finfo.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+      mmap(nullptr, finfo.st_size,
+           readonly ? PROT_READ : (PROT_READ | PROT_WRITE), MAP_SHARED, fd, 0);
   if (p_file == MAP_FAILED) {
     ret = AIPU_STATUS_ERROR_MAP_FILE_FAIL;
     LOG(LOG_ERR, "RT failed in mapping graph file: %s! (errno = %d)", fname,
@@ -150,8 +160,20 @@ finish:
   return ret;
 }
 
+/**
+ * @brief mmap part of file
+ *
+ * @param[in] fname file name
+ * @param[out] data virtual pointer to access file
+ * @param[in] size mmap size
+ * @param[in] offset mmap offset to file
+ * @param[in] readonly readonly or not
+ *
+ * @return value of 'aipu_status_t'
+ */
 aipu_status_t umd_mmap_file_helper(const char *fname, void **data,
-                                   uint64_t size, uint64_t offset) {
+                                   uint64_t size, uint64_t offset,
+                                   bool readonly) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   int fd = 0;
   uint64_t pa_offset = 0;
@@ -176,7 +198,7 @@ aipu_status_t umd_mmap_file_helper(const char *fname, void **data,
     goto finish;
   }
 
-  fd = open(fname, O_RDWR);
+  fd = open(fname, readonly ? O_RDONLY : O_RDWR);
   if (fd <= 0) {
     LOG(LOG_ERR, "open file failed: %s! (errno = %d)", fname, errno);
     ret = AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
@@ -185,8 +207,9 @@ aipu_status_t umd_mmap_file_helper(const char *fname, void **data,
 
   pa_offset = offset & ~(sysconf(_SC_PAGE_SIZE) - 1);
 
-  p_file = mmap(nullptr, size + offset - pa_offset, PROT_READ | PROT_WRITE,
-                MAP_SHARED, fd, pa_offset);
+  p_file = mmap(nullptr, size + offset - pa_offset,
+                readonly ? PROT_READ : (PROT_READ | PROT_WRITE), MAP_SHARED, fd,
+                pa_offset);
   if (p_file == MAP_FAILED) {
     ret = AIPU_STATUS_ERROR_MAP_FILE_FAIL;
     LOG(LOG_ERR, "RT failed in mapping graph file: %s! (errno = %d)", fname,
@@ -388,4 +411,21 @@ std::vector<std::string> split_string(const std::string &s,
     ret.push_back(s.substr(begin_pos, size - begin_pos));
   }
   return ret;
+}
+
+std::string &replace(std::string &s, char old_c, char new_c) {
+  for (unsigned int i = 0; i < s.size(); ++i) {
+    if (s[i] == old_c)
+      s[i] = new_c;
+  }
+  return s;
+}
+std::string &replace(std::string &s, const std::string &old_s,
+                     const std::string &new_s) {
+  size_t pos = 0;
+  while ((pos = s.find(old_s, pos)) != std::string::npos) {
+    s.replace(pos, old_s.length(), new_s);
+    pos += new_s.length();
+  }
+  return s;
 }

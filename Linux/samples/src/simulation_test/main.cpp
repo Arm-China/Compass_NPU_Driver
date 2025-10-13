@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -18,6 +18,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <vector>
 
 #include "common/cmd_line_parsing.h"
@@ -43,7 +44,7 @@ int main(int argc, char *argv[]) {
   vector<char *> gt;
   cmd_opt_t opt;
   uint32_t part_cnt = 0, part_idx = 0;
-  int pass = 0, loop = 0, total_loop = 2;
+  int pass = -1, loop = 0, total_loop = 2;
   uint32_t frame_cnt = 1;
   aipu_create_job_cfg create_job_cfg = {0};
   aipu_driver_version_t drv_ver = {0};
@@ -54,14 +55,15 @@ int main(int argc, char *argv[]) {
 #if CALL_LOAD_GRAPH_HELPER
   std::ifstream gbin;
   uint32_t fsize = 0;
-  char *gbin_buf = nullptr;
+  std::unique_ptr<char[]> gbin_buf;
 #endif
 
-  AIPU_CRIT() << "usage for aipu version >= v3: ./aipu_simulation_test -a "
-                 "<target> -b aipu.bin -i input0.bin -c output.bin [-d ./]\n"
-              << "usage for aipu version < v3: ./aipu_simulation_test -s "
-                 "</v1v2/full/path/simulator> -b aipu.bin -i input0.bin -c "
-                 "output.bin [-d ./]\n";
+  AIPU_CRIT()
+      << "usage for aipu version >= v3: ./aipu_simulation_test -a <target> -b "
+         "aipu.bin -i input0.bin -c output.bin [-d ./] [-p]\n"
+      << "usage for aipu version < v3: ./aipu_simulation_test -s "
+         "</v1v2/full/path/simulator> -b aipu.bin -i input0.bin -c output.bin "
+         "[-d ./]\n";
 
   /**
    * For compatibility and avoiding segfault issues in the future,
@@ -77,19 +79,22 @@ int main(int argc, char *argv[]) {
 
   if (init_test_bench(argc, argv, &opt, "simulation_test")) {
     AIPU_ERR()("invalid command line options/args\n");
-    goto finish;
+    goto deinit_bench;
   }
 
   mem_dump_config.dump_dir = opt.dump_dir;
-  sim_glb_config.log_level = 0;
+  sim_glb_config.log_level = opt.log_level;
   sim_glb_config.verbose = opt.verbose;
   sim_glb_config.en_eval = true;
   sim_glb_config.simulator = opt.simulator;
+  sim_glb_config.gm_size = 0x800000;
   if (!opt.npu_arch_desc.empty()) {
     sim_glb_config.npu_arch_desc = opt.npu_arch_desc.c_str();
     if (opt.npu_arch_desc.find("x3") != std::string::npos ||
         opt.npu_arch_desc.find("X3") != std::string::npos) {
-      log_path_perf = std::string(opt.dump_dir) + "/perf.csv";
+      log_path_perf = std::string(opt.dump_dir).empty()
+                          ? std::string("./perf.csv")
+                          : (std::string(opt.dump_dir) + "/perf.csv");
       sim_glb_config.en_fast_perf = true;
       sim_glb_config.freq_mhz = 1000;
       sim_glb_config.ddr_latency_rd = 0;
@@ -136,6 +141,11 @@ int main(int argc, char *argv[]) {
 
     if (opt.extra_weight_dir.length() > 0)
       load_graph_cfg.extra_weight_path = opt.extra_weight_dir.c_str();
+
+      /* only when the model is extremlly small */
+      // load_graph_cfg.put_weight_gm = true;
+      // load_graph_cfg.put_desc_gm = true;
+      // load_graph_cfg.put_ws_gm = true;
 #if CALL_LOAD_GRAPH_HELPER
     gbin.open(opt.bin_files[0].c_str(),
               std::ifstream::in | std::ifstream::binary);
@@ -147,24 +157,24 @@ int main(int argc, char *argv[]) {
     fsize = gbin.tellg();
     gbin.seekg(0, gbin.beg);
 
-    gbin_buf = new char[fsize];
-    gbin.read(gbin_buf, fsize);
+    gbin_buf = std::unique_ptr<char[]>(new char[fsize]);
+    gbin.read(gbin_buf.get(), fsize);
     gbin.seekg(0, gbin.beg);
 
-    ret = aipu_load_graph_helper(ctx, gbin_buf, fsize, &graph_id,
+    ret = aipu_load_graph_helper(ctx, gbin_buf.get(), fsize, &graph_id,
                                  &load_graph_cfg);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
       AIPU_ERR()
       ("aipu_load_graph_helper: %s (%s)\n", msg, opt.bin_files[0].c_str());
+      gbin.close();
       goto deinit_ctx;
     }
     AIPU_INFO()
     ("aipu_load_graph_helper success: %s\n", opt.bin_files[0].c_str());
 
     // free gbin buffer in advance to reduce memory consumption
-    delete[] gbin_buf;
-    gbin_buf = nullptr;
+    gbin.close();
 
 #else  /* CALL_LOAD_GRAPH_HELPER */
 
@@ -172,12 +182,10 @@ int main(int argc, char *argv[]) {
                           &load_graph_cfg);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
-      AIPU_ERR()
-      ("aipu_load_graph_helper: %s (%s)\n", msg, opt.bin_files[0].c_str());
+      AIPU_ERR()("aipu_load_graph: %s (%s)\n", msg, opt.bin_files[0].c_str());
       goto deinit_ctx;
     }
-    AIPU_INFO()
-    ("aipu_load_graph_helper success: %s\n", opt.bin_files[0].c_str());
+    AIPU_INFO()("aipu_load_graph success: %s\n", opt.bin_files[0].c_str());
 #endif /* CALL_LOAD_GRAPH_HELPER */
 
     /**
@@ -245,13 +253,25 @@ int main(int argc, char *argv[]) {
       goto unload_graph;
     }
 
-    if (profile_cnt == 0) {
+    if (!opt.profile_en) {
       int enable = 0;
       aipu_ioctl(ctx, AIPU_IOCTL_SET_PROFILE, &enable);
       AIPU_INFO()("disable profiling on simulation\n");
     }
 
-    AIPU_ERR()("enable profiler: %s\n", profile_cnt == 0 ? "false" : "true");
+    if (opt.profile_en) {
+      if (opt.npu_arch_desc.empty())
+        AIPU_CRIT()
+      ("profiler is enable, and you'd better to specify '-a <target>' when "
+       "arch >=v3\n");
+      if (profile_cnt == 0)
+        AIPU_CRIT()
+      ("profiler is enable, but profiler tensor in aipu.bin is 0\n");
+    }
+
+    AIPU_INFO()
+    ("enable profiler: %s, profiler cnt: %u\n",
+     opt.profile_en ? "true" : "false", profile_cnt);
 
     ret = aipu_get_cluster_count(ctx, 0, &cluster_cnt);
     if (ret != AIPU_STATUS_SUCCESS) {
@@ -316,7 +336,7 @@ int main(int argc, char *argv[]) {
     }
     // AIPU_INFO()("aipu_get_tensor_descriptor done\n");
 
-    create_job_cfg.partition_id = part_idx++;
+    create_job_cfg.partition_id = 0;
     create_job_cfg.qos_level = AIPU_JOB_QOS_SLOW;
     ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
     if (ret != AIPU_STATUS_SUCCESS) {
@@ -400,7 +420,6 @@ int main(int argc, char *argv[]) {
       if (ret != AIPU_STATUS_SUCCESS) {
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_finish_job: %s\n", msg);
-        pass = -1;
         goto clean_job;
       }
       AIPU_INFO()("aipu_finish_job success\n");
@@ -419,12 +438,17 @@ int main(int argc, char *argv[]) {
 
       pass =
           check_result_helper(output_data, output_desc, opt.gts, opt.gts_size);
+      if (pass == -1)
+        break;
     }
 
     input_desc.clear();
     output_desc.clear();
 
   clean_job:
+    if (ret != AIPU_STATUS_SUCCESS)
+      pass = -1;
+
     ret = aipu_clean_job(ctx, job_id);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
@@ -434,6 +458,9 @@ int main(int argc, char *argv[]) {
     AIPU_INFO()("aipu_clean_job success\n");
 
   unload_graph:
+    if (ret != AIPU_STATUS_SUCCESS)
+      pass = -1;
+
     ret = aipu_unload_graph(ctx, graph_id);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
@@ -443,6 +470,9 @@ int main(int argc, char *argv[]) {
     AIPU_INFO()("aipu_unload_graph success\n");
 
   deinit_ctx:
+    if (ret != AIPU_STATUS_SUCCESS)
+      pass = -1;
+
     ret = aipu_deinit_context(ctx);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
@@ -452,9 +482,9 @@ int main(int argc, char *argv[]) {
     AIPU_INFO()("aipu_deinit_ctx success\n");
 
   finish:
-    if (AIPU_STATUS_SUCCESS != ret) {
+    if (ret != AIPU_STATUS_SUCCESS)
       pass = -1;
-    }
+
     for (uint32_t i = 0; i < output_data.size(); i++) {
       delete[] output_data[i];
       output_data[i] = nullptr;
@@ -462,6 +492,8 @@ int main(int argc, char *argv[]) {
 
     output_data.clear();
   }
+
+deinit_bench:
   deinit_test_bench(&opt);
   return pass;
 }

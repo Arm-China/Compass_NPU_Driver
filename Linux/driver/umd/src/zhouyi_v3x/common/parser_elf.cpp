@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -40,6 +40,8 @@ BinSection ParserELF::get_bin_note(const std::string &note_name) {
         if (name == note_name) {
           ro.va = (char *)desc;
           ro.size = size;
+          if (m_elf.get_base_ptr() != nullptr)
+            ro.offset = (char *)desc - (char *)m_elf.get_base_ptr();
           break;
         }
       }
@@ -270,21 +272,48 @@ finish:
 
 aipu_status_t ParserELF::parse_graph(std::istream &gbin, uint32_t size,
                                      Graph &gobj) {
+  aipu_status_t ret = parse_graph_header_check(gbin, size);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  /* real ELF parsing */
+  if (!m_elf.load(gbin))
+    return AIPU_STATUS_ERROR_INVALID_GBIN;
+
+  return parse_graph_common(gobj);
+}
+
+aipu_status_t ParserELF::parse_graph(const char *file, Graph &gobj) {
+  std::ifstream gbin;
+  gbin.open(file, std::ifstream::in | std::ifstream::binary);
+  if (!gbin.is_open())
+    return AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
+
+  gbin.seekg(0, gbin.end);
+  uint32_t size = gbin.tellg();
+  gbin.seekg(0, gbin.beg);
+
+  aipu_status_t ret = parse_graph_header_check(gbin, size);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  gbin.close();
+
+  /* real ELF parsing */
+  if (!m_elf.load(file))
+    return AIPU_STATUS_ERROR_INVALID_GBIN;
+
+  gobj.set_mapped_gfile(file);
+
+  return parse_graph_common(gobj);
+}
+
+aipu_status_t ParserELF::parse_graph_common(Graph &gobj) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   struct ElfSubGraphList sg_desc_header = {0};
   FeatureMapList fm_list = {0};
   char *start = nullptr;
   char *next = nullptr;
-
-  ret = parse_graph_header_check(gbin, size);
-  if (ret != AIPU_STATUS_SUCCESS)
-    goto finish;
-
-  /* real ELF parsing */
-  if (!m_elf.load(gbin)) {
-    ret = AIPU_STATUS_ERROR_INVALID_GBIN;
-    goto finish;
-  }
 
   /* .text section parse */
   m_text = get_elf_section(".text");
@@ -296,13 +325,17 @@ aipu_status_t ParserELF::parse_graph(std::istream &gbin, uint32_t size,
 
   /* .rodata section parse */
   m_crodata = get_elf_section(".rodata");
-  if (nullptr != m_crodata)
+  if (m_crodata != nullptr)
     gobj.set_graph_crodata(m_crodata->get_data(), m_crodata->get_size());
 
   /* .data section parse */
   m_data = get_elf_section(".data");
-  if (nullptr != m_data)
+  if (m_data != nullptr)
     gobj.set_graph_dp(m_data->get_data(), m_data->get_size());
+
+  m_comment = get_elf_section(".comment");
+  if (m_comment != nullptr)
+    gobj.set_graph_comment(m_comment->get_data(), m_comment->get_size());
 
   /* .note section parse */
   m_note = get_elf_section(".note.aipu");
@@ -333,12 +366,12 @@ aipu_status_t ParserELF::parse_graph(std::istream &gbin, uint32_t size,
     ret = gobj.set_constant_hashtable(sections[ELFSectionConstantHashTable]);
     if (ret != AIPU_STATUS_SUCCESS)
       goto finish;
-    gobj.clip_shared_offset();
   }
 
   if (sections[ELFSectionGmconfig].size != 0)
     gobj.set_gmconfig(sections[ELFSectionGmconfig]);
 
+  /* [[deprecated]]: aipu.bin will set segmmu num=0 */
   if (sections[ELFSectionSegmmu].size != 0)
     gobj.set_segmmu(sections[ELFSectionSegmmu]);
 
@@ -347,13 +380,17 @@ aipu_status_t ParserELF::parse_graph(std::istream &gbin, uint32_t size,
            sections[ELFSectionCompilerMsg].size);
     gobj.set_buildversion(m_aipu_compile_msg.build_version);
     gobj.set_arch(AIPU_ARCH(m_aipu_compile_msg.device));
-    gobj.set_hw_version(AIPU_VERSION(m_aipu_compile_msg.device));
     gobj.set_hw_config(AIPU_CONFIG(m_aipu_compile_msg.device));
     gobj.set_hw_revision(AIPU_REVISION(m_aipu_compile_msg.device));
     gobj.set_disable_input_reuse(
         AIPU_DISABLE_INPUT_REUSE(m_aipu_compile_msg.reserve0[0]));
     gobj.set_disable_output_reuse(
         AIPU_DISABLE_OUTPUT_REUSE(m_aipu_compile_msg.reserve0[0]));
+    gobj.set_hw_version(AIPU_VERSION(m_aipu_compile_msg.device));
+    if (AIPU_VERSION(m_aipu_compile_msg.device) ==
+            AIPU_ISA_VERSION_ZHOUYI_V3_1 &&
+        AIPU_REVISION(m_aipu_compile_msg.device) == 1)
+      gobj.set_hw_version(AIPU_VERSION(m_aipu_compile_msg.device) + 1);
   }
 
   if (m_aipu_compile_msg.flag & (1 << 6)) {
@@ -371,6 +408,7 @@ aipu_status_t ParserELF::parse_graph(std::istream &gbin, uint32_t size,
   start = (char *)sections[ELFSectionSubGraphs].va;
   memcpy(&sg_desc_header, start, sizeof(sg_desc_header));
 
+  LOG(LOG_DEBUG, "sg cnt: %d", sg_desc_header.subgraphs_cnt);
   start += sizeof(sg_desc_header);
   if (sg_desc_header.subgraphs_cnt > 0) {
     for (uint32_t i = 0; i < sg_desc_header.subgraphs_cnt; i++) {
@@ -404,7 +442,7 @@ aipu_status_t ParserELF::parse_graph(std::istream &gbin, uint32_t size,
     ret = parse_remap_section(start, gobj);
 
     if (sg_desc_header.subgraphs_cnt != 0)
-      ret = gobj.extract_gm_info(0);
+      ret = gobj.parse_gmconfig(0);
   } else if (sg_desc_header.subgraphs_cnt == 0) {
     /**
      * although there is no subgraph, to reuse the rest logic,

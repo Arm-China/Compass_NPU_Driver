@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -8,7 +8,7 @@
 #include "zhouyi_v3x/common/gm_v3x.h"
 
 namespace aipudrv {
-enum gm_buf_type { EM_GM_BUF_INPUT = 0, EM_GM_BUF_OUTPUT, EM_GM_BUF_MAX };
+enum { EM_GM_BUF_INPUT = 0, EM_GM_BUF_OUTPUT, EM_GM_BUF_MAX };
 
 struct ValidSyncBuffer {
   struct SyncBuffer {
@@ -32,13 +32,14 @@ public:
 public:
   aipu_status_t gm_malloc(uint32_t bss_id, uint32_t idx, uint32_t buf_type,
                           std::string &buf_name, BufferDesc *buf) override;
-  bool gm_is_gm_buffer(uint32_t idx, uint32_t buf_type) override;
+  bool is_gm_buffer(uint32_t idx, uint32_t buf_type) override;
   bool gm_need_remap() override;
   void gm_dynamic_switch(uint32_t core_cnt) override;
   void set_valid_sync_region(uint32_t bss_id, uint32_t idx, uint32_t buf_type,
                              BufferDesc &buf, ValidSyncBuffer &region);
   bool gm_need_sync_out() override;
   void set_valid_map_base(BufferDesc &buf) override;
+  void setup_gm_sync_from_ddr(tcb_t &tcb) override;
 
 public:
   GM_V3(JobV3 &job);

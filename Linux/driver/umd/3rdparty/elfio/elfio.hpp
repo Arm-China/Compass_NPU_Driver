@@ -38,6 +38,10 @@ THE SOFTWARE.
 #include <vector>
 #include <deque>
 #include <iterator>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <elfio/elf_types.hpp>
 #include <elfio/elfio_version.hpp>
@@ -97,6 +101,9 @@ class elfio
     }
 
     //------------------------------------------------------------------------------
+    void* get_base_ptr() { return ptr_; }
+
+    //------------------------------------------------------------------------------
     bool load( const std::string& file_name )
     {
         std::ifstream stream;
@@ -146,6 +153,65 @@ class elfio
         load_sections( stream );
         bool is_still_good = load_segments( stream );
         return is_still_good;
+    }
+
+    //------------------------------------------------------------------------------
+    bool load( const char* file_name )
+    {
+        clean();
+
+        fd_ = open(file_name, O_RDONLY);
+        if ( fd_ <= 0 ) {
+            return false;
+        }
+
+        struct stat finfo;
+        if ( stat(file_name, &finfo) != 0 ) {
+            return false;
+        }
+        size_ = finfo.st_size;
+
+        // occupy whole file virtual address
+        ptr_ = mmap(nullptr, size_, PROT_READ, MAP_SHARED, fd_, 0);
+
+        unsigned char e_ident[EI_NIDENT] = {0};
+        if ( size_ < sizeof( e_ident ) ) {
+            return false;
+        }
+
+        // Read ELF file signature
+        memcpy(reinterpret_cast<char*>( &e_ident ), ptr_, sizeof( e_ident ) );
+
+        // Is it ELF file?
+        if ( e_ident[EI_MAG0] != ELFMAG0 || e_ident[EI_MAG1] != ELFMAG1 ||
+             e_ident[EI_MAG2] != ELFMAG2 || e_ident[EI_MAG3] != ELFMAG3 ) {
+            return false;
+        }
+
+        if ( ( e_ident[EI_CLASS] != ELFCLASS64 ) &&
+             ( e_ident[EI_CLASS] != ELFCLASS32 ) ) {
+            return false;
+        }
+
+        if ( ( e_ident[EI_DATA] != ELFDATA2LSB ) &&
+             ( e_ident[EI_DATA] != ELFDATA2MSB ) ) {
+            return false;
+        }
+
+        convertor.setup( e_ident[EI_DATA] );
+        header = create_header( e_ident[EI_CLASS], e_ident[EI_DATA] );
+        if ( 0 == header ) {
+            return false;
+        }
+
+        if ( !header->load( ptr_, size_ ) ) {
+            return false;
+        }
+
+        load_sections( ptr_, size_ );
+        bool is_still_good = load_segments( ptr_, size_ );
+        return is_still_good;
+        return true;
     }
 
     //------------------------------------------------------------------------------
@@ -359,6 +425,15 @@ class elfio
             delete *it1;
         }
         segments_.clear();
+
+        if ( fd_ != 0 )
+        {
+            munmap( ptr_, size_ );
+            close( fd_ );
+            fd_ = 0;
+            ptr_ = nullptr;
+            size_ = 0;
+        }
     }
 
     //------------------------------------------------------------------------------
@@ -476,6 +551,40 @@ class elfio
     }
 
     //------------------------------------------------------------------------------
+    Elf_Half load_sections( const void* ptr, size_t size )
+    {
+        Elf_Half  entry_size = header->get_section_entry_size();
+        Elf_Half  num        = header->get_sections_num();
+        Elf64_Off offset     = header->get_sections_offset();
+
+        for ( Elf_Half i = 0; i < num; ++i ) {
+            section* sec = create_section();
+            sec->load( ptr, size, (std::streamoff)offset +
+                                   (std::streampos)i * entry_size );
+            sec->set_index( i );
+            sec->set_fd( fd_ );
+            // To mark that the section is not permitted to reassign address
+            // during layout calculation
+            sec->set_address( sec->get_address() );
+        }
+
+        Elf_Half shstrndx = get_section_name_str_index();
+
+        if ( SHN_UNDEF != shstrndx ) {
+            string_section_accessor str_reader( sections[shstrndx] );
+            for ( Elf_Half i = 0; i < num; ++i ) {
+                Elf_Word section_offset = sections[i]->get_name_string_offset();
+                const char* p = str_reader.get_string( section_offset );
+                if ( p != 0 ) {
+                    sections[i]->set_name( p );
+                }
+            }
+        }
+
+        return num;
+    }
+
+    //------------------------------------------------------------------------------
     //! Checks whether the addresses of the section entirely fall within the given segment.
     //! It doesn't matter if the addresses are memory addresses, or file offsets,
     //!  they just need to be in the same address space
@@ -516,6 +625,62 @@ class elfio
             seg->load( stream, (std::streamoff)offset +
                                    (std::streampos)i * entry_size );
             seg->set_index( i );
+
+            // Add sections to the segments (similar to readelfs algorithm)
+            Elf64_Off segBaseOffset = seg->get_offset();
+            Elf64_Off segEndOffset  = segBaseOffset + seg->get_file_size();
+            Elf64_Off segVBaseAddr  = seg->get_virtual_address();
+            Elf64_Off segVEndAddr   = segVBaseAddr + seg->get_memory_size();
+            for ( Elf_Half j = 0; j < sections.size(); ++j ) {
+                const section* psec = sections[j];
+
+                // SHF_ALLOC sections are matched based on the virtual address
+                // otherwise the file offset is matched
+                if ( ( psec->get_flags() & SHF_ALLOC )
+                         ? is_sect_in_seg( psec->get_address(),
+                                           psec->get_size(), segVBaseAddr,
+                                           segVEndAddr )
+                         : is_sect_in_seg( psec->get_offset(), psec->get_size(),
+                                           segBaseOffset, segEndOffset ) ) {
+                    // Alignment of segment shall not be updated, to preserve original value
+                    // It will be re-calculated on saving.
+                    seg->add_section_index( psec->get_index(), 0 );
+                }
+            }
+
+            // Add section into the segments' container
+            segments_.push_back( seg );
+        }
+
+        return true;
+    }
+
+    //------------------------------------------------------------------------------
+    bool load_segments( const void* ptr, size_t size )
+    {
+        Elf_Half  entry_size = header->get_segment_entry_size();
+        Elf_Half  num        = header->get_segments_num();
+        Elf64_Off offset     = header->get_segments_offset();
+
+        for ( Elf_Half i = 0; i < num; ++i ) {
+            segment*      seg;
+            unsigned char file_class = header->get_class();
+
+            if ( file_class == ELFCLASS64 ) {
+                seg = new segment_impl<Elf64_Phdr>( &convertor );
+            }
+            else if ( file_class == ELFCLASS32 ) {
+                seg = new segment_impl<Elf32_Phdr>( &convertor );
+            }
+            else {
+                return false;
+            }
+
+            seg->load( ptr, size, (std::streamoff)offset +
+                                   (std::streampos)i * entry_size );
+            seg->set_index( i );
+
+            seg->set_fd(fd_);
 
             // Add sections to the segments (similar to readelfs algorithm)
             Elf64_Off segBaseOffset = seg->get_offset();
@@ -994,6 +1159,9 @@ class elfio
     endianess_convertor   convertor;
 
     Elf_Xword current_file_pos;
+    int32_t fd_ = 0;
+    void* ptr_ = nullptr;
+    size_t size_ = 0;
 };
 
 } // namespace ELFIO

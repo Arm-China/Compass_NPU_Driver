@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -67,8 +67,7 @@ aipu_status_t JobBase::get_status_blocking(aipu_job_status_t *status,
       m_dev->dump_profiling();
     }
   } else if (m_status == AIPU_JOB_COREDUMP &&
-             (m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3 ||
-              m_dev->get_npu_version() == AIPU_ISA_VERSION_ZHOUYI_V3_1)) {
+             m_dev->get_npu_version() >= AIPU_ISA_VERSION_ZHOUYI_V3) {
     *status = (aipu_job_status_t)m_status;
     do_coredump();
   } else {
@@ -331,21 +330,21 @@ DEV_PA_64 JobBase::get_base_pa(int sec_type, BufferDesc &rodata,
     pa = descriptor->pa;
     align_asid_pa = pa - descriptor->asid_base;
   } else if (sec_type == SECTION_TYPE_TEXT) {
-    pa = get_graph().m_text->pa;
-    align_asid_pa = pa - get_graph().m_text->asid_base;
+    pa = m_text->pa;
+    align_asid_pa = pa - m_text->asid_base;
   }
 
   return (align_asid == false) ? pa : align_asid_pa;
 }
 
 void JobBase::setup_remap(BufferDesc &rodata, BufferDesc *descriptor) {
-  for (uint32_t i = 0; i < get_graph().m_remap.size(); i++) {
+  for (uint32_t i = 0; i < graph().m_remap.size(); i++) {
     DEV_PA_64 dest =
-        get_base_pa(get_graph().m_remap[i].type, rodata, descriptor, false) +
-        get_graph().m_remap[i].next_addr_entry_offset;
-    DEV_PA_32 pa = get_base_pa(get_graph().m_remap[i].next_type, rodata,
-                               descriptor, true) +
-                   get_graph().m_remap[i].next_offset;
+        get_base_pa(graph().m_remap[i].type, rodata, descriptor, false) +
+        graph().m_remap[i].next_addr_entry_offset;
+    DEV_PA_32 pa =
+        get_base_pa(graph().m_remap[i].next_type, rodata, descriptor, true) +
+        graph().m_remap[i].next_offset;
     m_mem->write32(dest, pa);
   }
 }
@@ -404,13 +403,13 @@ void JobBase::dump_buffer(DEV_PA_64 pa, const char *bin_va, uint32_t size,
   if (bin_va != nullptr) {
     snprintf(file_name, 4096,
              "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_Binary_Size_0x%x.bin",
-             m_dump_dir.c_str(), get_graph().m_id, m_id, name, size);
+             m_dump_dir.c_str(), graph().m_id, m_id, name, size);
     umd_dump_file_helper(file_name, bin_va, size);
   }
 
   snprintf(file_name, 4096,
            "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_DRAM_PA_0x%lx_Size_0x%x.bin",
-           m_dump_dir.c_str(), get_graph().m_id, m_id, name, pa, size);
+           m_dump_dir.c_str(), graph().m_id, m_id, name, pa, size);
   m_mem->dump_file(pa, file_name, size);
 }
 
@@ -420,7 +419,7 @@ void JobBase::dump_single_buffer(DEV_PA_64 pa, uint32_t size,
 
   snprintf(file_name, 2048,
            "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_DRAM_PA_0x%lx_Size_0x%x.bin",
-           m_dump_dir.c_str(), get_graph().m_id, m_id, name, pa, size);
+           m_dump_dir.c_str(), graph().m_id, m_id, name, pa, size);
   m_mem->dump_file(pa, file_name, size);
 }
 
@@ -432,7 +431,7 @@ void JobBase::dump_share_buffer(JobIOBuffer &iobuf, const char *name,
   if (!keep_name)
     snprintf(file_name, 2048,
              "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_DRAM_PA_0x%lx_Size_0x%x.bin",
-             m_dump_dir.c_str(), get_graph().m_id, m_id, name, iobuf.pa,
+             m_dump_dir.c_str(), graph().m_id, m_id, name, iobuf.pa,
              iobuf.size);
   else
     snprintf(file_name, 2048, "%s", name);
@@ -512,32 +511,30 @@ void JobBase::dump_job_shared_buffers() {
   const char *bin_va = nullptr;
 
   if (m_dump_text) {
-    dump_pa = get_graph().m_text->pa;
-    bin_va = get_graph().m_btext.va;
-    dump_size = get_graph().m_btext.size;
+    dump_pa = m_text->pa;
+    bin_va = graph().m_btext.va;
+    dump_size = graph().m_btext.size;
     dump_buffer(dump_pa, bin_va, dump_size, "Text_BeforeRun");
   }
 
-  if (m_dump_weight && (get_graph().has_weight() > 0)) {
-    for (uint32_t bss_id = 0;
-         bss_id < get_graph().get_weight_buffer_info().size(); bss_id++) {
-      if (get_graph().get_weight_buffer_info()[bss_id].wb_weight != nullptr &&
-          get_graph().get_weight_buffer_info()[bss_id].wb_weight->size > 0) {
-        dump_pa = get_graph().get_weight_buffer_info()[bss_id].wb_weight->pa;
+  if (m_dump_weight && (graph().has_weight() > 0)) {
+    for (uint32_t bss_id = 0; bss_id < graph().get_weight_buffer_info().size();
+         bss_id++) {
+      if (graph().get_weight_buffer_info()[bss_id].wb_weight != nullptr &&
+          graph().get_weight_buffer_info()[bss_id].wb_weight->size > 0) {
+        dump_pa = graph().get_weight_buffer_info()[bss_id].wb_weight->pa;
         dump_size =
-            get_graph().get_weight_buffer_info()[bss_id].wb_weight->size;
+            graph().get_weight_buffer_info()[bss_id].wb_weight->req_size;
         if (dump_size != 0)
           dump_buffer(dump_pa, nullptr, dump_size, "Weight_BeforeRun");
       }
 
-      if (get_graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const !=
+      if (graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const !=
               nullptr &&
-          get_graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->size >
-              0) {
-        dump_pa =
-            get_graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->pa;
+          graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->size > 0) {
+        dump_pa = graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->pa;
         dump_size =
-            get_graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->size;
+            graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->req_size;
         if (dump_size != 0)
           dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_BeforeRun");
       }
@@ -553,16 +550,16 @@ void JobBase::dump_job_private_buffers(BufferDesc &rodata,
 
   if (m_dump_rodata) {
     dump_pa = rodata.pa;
-    bin_va = get_graph().m_brodata.va;
-    dump_size = get_graph().m_brodata.size;
+    bin_va = graph().m_brodata.va;
+    dump_size = graph().m_brodata.size;
     if (dump_size != 0)
       dump_buffer(dump_pa, bin_va, dump_size, "Rodata_BeforeRun");
   }
 
   if (m_dump_dcr && descriptor != nullptr) {
     dump_pa = descriptor->pa;
-    bin_va = get_graph().m_bdesc.va;
-    dump_size = get_graph().m_bdesc.size;
+    bin_va = graph().m_bdesc.va;
+    dump_size = graph().m_bdesc.size;
     if (dump_size != 0)
       dump_buffer(dump_pa, bin_va, dump_size, "Descriptor_BeforeRun");
   }
@@ -591,31 +588,29 @@ void JobBase::dump_job_shared_buffers_after_run() {
   uint32_t dump_size = 0;
 
   if (m_dump_text) {
-    dump_pa = get_graph().m_text->pa;
-    dump_size = get_graph().m_btext.size;
+    dump_pa = m_text->pa;
+    dump_size = graph().m_btext.size;
     dump_single_buffer(dump_pa, dump_size, "Text_AfterRun");
   }
 
-  if (m_dump_weight && (get_graph().has_weight() > 0)) {
-    for (uint32_t bss_id = 0;
-         bss_id < get_graph().get_weight_buffer_info().size(); bss_id++) {
-      if (get_graph().get_weight_buffer_info()[bss_id].wb_weight != nullptr &&
-          get_graph().get_weight_buffer_info()[bss_id].wb_weight->size > 0) {
-        dump_pa = get_graph().get_weight_buffer_info()[bss_id].wb_weight->pa;
+  if (m_dump_weight && (graph().has_weight() > 0)) {
+    for (uint32_t bss_id = 0; bss_id < graph().get_weight_buffer_info().size();
+         bss_id++) {
+      if (graph().get_weight_buffer_info()[bss_id].wb_weight != nullptr &&
+          graph().get_weight_buffer_info()[bss_id].wb_weight->size > 0) {
+        dump_pa = graph().get_weight_buffer_info()[bss_id].wb_weight->pa;
         dump_size =
-            get_graph().get_weight_buffer_info()[bss_id].wb_weight->size;
+            graph().get_weight_buffer_info()[bss_id].wb_weight->req_size;
         if (dump_size != 0)
           dump_single_buffer(dump_pa, dump_size, "Weight_AfterRun");
       }
 
-      if (get_graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const !=
+      if (graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const !=
               nullptr &&
-          get_graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->size >
-              0) {
-        dump_pa =
-            get_graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->pa;
+          graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->size > 0) {
+        dump_pa = graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->pa;
         dump_size =
-            get_graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->size;
+            graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->req_size;
         if (dump_size != 0)
           dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_AfterRun");
       }
@@ -668,7 +663,7 @@ void JobBase::dump_job_private_buffers_after_run(BufferDesc &rodata,
   if (m_dump_reuse) {
     if ((m_dev->get_dev_type() == DEV_TYPE_AIPU) ||
         (m_dev->get_dev_type() == DEV_TYPE_SIMULATOR_V3) ||
-        (m_dev->get_dev_type() == DEV_TYPE_SIMULATOR_V3_1)) {
+        (m_dev->get_dev_type() == DEV_TYPE_SIMULATOR_V3_2)) {
       std::vector<BufferDesc *> m_job_reuses = get_reuse();
       for (uint32_t i = 0; i < m_job_reuses.size(); i++) {
         char name[32];
@@ -683,14 +678,14 @@ void JobBase::dump_job_private_buffers_after_run(BufferDesc &rodata,
 
   if (m_dump_rodata) {
     dump_pa = rodata.pa;
-    dump_size = get_graph().m_brodata.size;
+    dump_size = graph().m_brodata.size;
     if (dump_size != 0)
       dump_buffer(dump_pa, nullptr, dump_size, "Rodata_AfterRun");
   }
 
   if (m_dump_dcr && descriptor != nullptr) {
     dump_pa = descriptor->pa;
-    dump_size = get_graph().m_bdesc.size;
+    dump_size = graph().m_bdesc.size;
     if (dump_size != 0)
       dump_buffer(dump_pa, nullptr, dump_size, "Descriptor_AfterRun");
   }

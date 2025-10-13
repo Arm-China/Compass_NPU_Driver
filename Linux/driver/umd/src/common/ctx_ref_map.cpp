@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -33,7 +33,7 @@ uint32_t CtxRefMap::create_ctx_ref() {
   uint32_t handle = 0xFFFFFFFF;
 
   pthread_mutex_lock(&m_lock);
-  while (nullptr != get_ctx_ref_inner(handle)) {
+  while (get_ctx_ref_inner(handle) != nullptr) {
     handle--;
   }
   m_data[handle] = new MainContext;

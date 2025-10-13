@@ -45,6 +45,7 @@ class segment
     ELFIO_GET_SET_ACCESS_DECL( Elf_Xword, file_size );
     ELFIO_GET_SET_ACCESS_DECL( Elf_Xword, memory_size );
     ELFIO_GET_ACCESS_DECL( Elf64_Off, offset );
+    ELFIO_SET_ACCESS_DECL( int32_t, fd );
 
     virtual const char* get_data() const = 0;
 
@@ -61,6 +62,7 @@ class segment
 
     virtual const std::vector<Elf_Half>& get_sections() const               = 0;
     virtual void load( std::istream& stream, std::streampos header_offset ) = 0;
+    virtual void load( const void* ptr, size_t size, std::streampos header_offset ) = 0;
     virtual void save( std::ostream&  stream,
                        std::streampos header_offset,
                        std::streampos data_offset )                         = 0;
@@ -79,7 +81,7 @@ template <class T> class segment_impl : public segment
     }
 
     //------------------------------------------------------------------------------
-    virtual ~segment_impl() { delete[] data; }
+    virtual ~segment_impl() { if ( fd == 0 ) { delete[] data; } }
 
     //------------------------------------------------------------------------------
     // Section info functions
@@ -104,6 +106,9 @@ template <class T> class segment_impl : public segment
 
     //------------------------------------------------------------------------------
     const char* get_data() const { return data; }
+
+    //------------------------------------------------------------------------------
+    void set_fd( int32_t fd ) { this->fd = fd; }
 
     //------------------------------------------------------------------------------
     Elf_Half add_section_index( Elf_Half sec_index, Elf_Xword addr_align )
@@ -186,6 +191,30 @@ template <class T> class segment_impl : public segment
     }
 
     //------------------------------------------------------------------------------
+    void load( const void* ptr, size_t size, std::streampos header_offset )
+    {
+
+        set_stream_size( size );
+
+        memcpy(reinterpret_cast<char*>( &ph ), reinterpret_cast<const char*>( ptr ) + header_offset, sizeof( ph ) );
+        is_offset_set = true;
+
+        if ( PT_NULL != get_type() && 0 != get_file_size() ) {
+            Elf_Xword size = get_file_size();
+
+            if ( size > get_stream_size() ) {
+                data = 0;
+            }
+            else {
+                if ( 0 != data ) {
+                    data = ( char* )ptr + ph.p_offset;
+                }
+            }
+        }
+    }
+
+
+    //------------------------------------------------------------------------------
     void save( std::ostream&  stream,
                std::streampos header_offset,
                std::streampos data_offset )
@@ -204,6 +233,7 @@ template <class T> class segment_impl : public segment
     std::vector<Elf_Half> sections;
     endianess_convertor*  convertor;
     bool                  is_offset_set;
+    int32_t               fd;
 };
 
 } // namespace ELFIO

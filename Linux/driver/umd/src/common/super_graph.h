@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -31,12 +31,12 @@ public:
   };
   virtual aipu_status_t destroy_job(JOB_ID id) { return AIPU_STATUS_SUCCESS; };
   virtual aipu_status_t get_tensor_count(aipu_tensor_type_t type,
-                                         uint32_t *cnt) {
+                                         uint32_t *cnt) const {
     return AIPU_STATUS_SUCCESS;
   };
   virtual aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type,
                                               uint32_t tensor,
-                                              aipu_tensor_desc_t *desc) {
+                                              aipu_tensor_desc_t *desc) const {
     return AIPU_STATUS_SUCCESS;
   };
   virtual JobBase *get_job_object(JOB_ID id) { return nullptr; };

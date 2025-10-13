@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -13,6 +13,23 @@
 #include "memory_base.h"
 #include "simulator/mem_engine_base.h"
 
+#define TSM_CMD_SCHED_CTRL 0x0
+#define TSM_CMD_SCHED_ADDR_HI 0x8
+#define TSM_CMD_SCHED_ADDR_LO 0xC
+#define TSM_CMD_TCB_NUMBER 0x1C
+
+#define TSM_STATUS 0x18
+#define TSM_STATUS_CMDPOOL_FULL_QOSL(val) (val & 0xff)
+#define TSM_STATUS_CMDPOOL_FULL_QOSH(val) ((val >> 8) & 0xff)
+
+#define CREATE_CMD_POOL 0x1
+#define DESTROY_CMD_POOL 0x2
+#define DISPATCH_CMD_POOL 0x4
+#define CMD_POOL0_STATUS 0x804
+#define CLUSTER0_CONFIG 0xC00
+#define CLUSTER0_CTRL 0xC04
+#define CMD_POOL0_IDLE (1 << 6)
+
 namespace aipudrv {
 #define TOTAL_SIM_MEM_SZ (14UL << 28)
 #define SIM_SRAM_SZ (0)
@@ -20,8 +37,9 @@ namespace aipudrv {
 
 enum {
   MEM_REGION_DDR = 0,
-  MEM_REGION_SRAM = 1,
-  MEM_REGION_DTCM = 2,
+  MEM_REGION_RSV = 1,
+  MEM_REGION_SRAM = 2,
+  MEM_REGION_DTCM = 3,
   MEM_REGION_MAX = 4
 };
 
@@ -61,17 +79,23 @@ struct MemBlock {
 
 class UMemory : public MemoryBase, public sim_aipu::IMemEngine {
 private:
-  /* only asid0 has sram/dtcm */
   MemBlock m_memblock[ASID_MAX][MEM_REGION_MAX] = {
-      {{.base = 0, .size = (TOTAL_SIM_MEM_SZ - SIM_SRAM_SZ)},
+      /* only asid0 has sram/dtcm */
+      {
+          {.base = 0, .size = (TOTAL_SIM_MEM_SZ - SIM_SRAM_SZ)},
 
-       /* SRAM memory region, this base is higher than DDR base default */
-       {.base = (TOTAL_SIM_MEM_SZ - SIM_SRAM_SZ), .size = SIM_SRAM_SZ},
+          /* reserved for layer counter debug, absolute address */
+          {.base = 0xC1000000, .size = AIPU_PAGE_SIZE},
 
-       /* the base address for DTCM is fixed, currently only for aipu v2(X1) */
-       {.base = 0xD0000000, .size = SIM_DTCM_SZ},
+          /* SRAM memory region, this base is higher than DDR base default */
+          {.base = (TOTAL_SIM_MEM_SZ - SIM_SRAM_SZ), .size = SIM_SRAM_SZ},
 
-       {0, 0}}};
+          /* the base address for DTCM is fixed, currently only for aipu v2(X1)
+           */
+          {.base = 0xD0000000, .size = SIM_DTCM_SZ},
+
+          /* {0, 0} */
+      }};
 
   bool m_gm_mean = false;
   int m_asid_max = ASID_MAX;
@@ -79,6 +103,10 @@ private:
 private:
   uint32_t get_next_alinged_page_no(uint32_t start, uint32_t align,
                                     int mem_region = 0);
+  aipu_status_t malloc_internal(uint32_t size, uint32_t align, BufferDesc *desc,
+                                const char *str, uint32_t asid_mem_cfg = 0);
+  aipu_status_t free_all(void);
+  bool get_info(uint64_t addr, uint64_t &base, uint32_t &size) const;
 
 public:
   uint64_t get_memregion_base(int32_t asid, int32_t region) {
@@ -100,29 +128,26 @@ public:
 
 public:
   void gm_init(uint32_t gm_size_idx);
-  aipu_status_t malloc_internal(uint32_t size, uint32_t align, BufferDesc *desc,
-                                const char *str, uint32_t asid_mem_cfg = 0);
-  virtual aipu_status_t malloc(uint32_t size, uint32_t align, BufferDesc **desc,
-                               const char *str = nullptr,
-                               uint32_t asid_mem_cfg = 0);
-  virtual aipu_status_t free(BufferDesc **desc, const char *str = nullptr);
-  virtual aipu_status_t free_phybuffer(BufferDesc *desc,
-                                       const char *str = nullptr);
+  aipu_status_t malloc(uint32_t size, uint32_t align, BufferDesc **desc,
+                       const char *str = nullptr, uint32_t asid_mem_cfg = 0,
+                       uint32_t rsv_iova_size = 0) override;
+  aipu_status_t free(BufferDesc **desc, const char *str = nullptr) override;
+  aipu_status_t free_phybuffer(BufferDesc *desc,
+                               const char *str = nullptr) override;
   aipu_status_t reserve_mem(DEV_PA_32 addr, uint32_t size, BufferDesc **desc,
-                            const char *str = nullptr);
-  aipu_status_t free_all(void);
-  virtual bool invalid(uint64_t addr) const;
-  virtual bool get_info(uint64_t addr, uint64_t &base, uint32_t &size) const;
-  virtual int64_t read(uint64_t addr, void *dest, size_t size) const {
+                            const char *str = nullptr,
+                            uint32_t region = 0) override;
+  bool invalid(uint64_t addr) const override;
+  int64_t read(uint64_t addr, void *dest, size_t size) const override {
     return mem_read(addr, dest, size);
   };
-  virtual int64_t write(uint64_t addr, const void *src, size_t size) {
+  int64_t write(uint64_t addr, const void *src, size_t size) override {
     return mem_write(addr, src, size);
   };
-  virtual int64_t zeroize(uint64_t addr, size_t size) {
+  int64_t zeroize(uint64_t addr, size_t size) override {
     return mem_bzero(addr, size);
   };
-  virtual size_t size() const {
+  size_t size() const override {
     return m_memblock[ASID_REGION_0][MEM_REGION_DDR].size;
   };
 

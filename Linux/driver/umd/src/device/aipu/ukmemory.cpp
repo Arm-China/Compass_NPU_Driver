@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -18,7 +18,9 @@
 #include <unistd.h>
 
 #include <cstring>
+#include <mutex>
 
+#include "device_base.h"
 #include "kmd/armchina_aipu.h"
 #include "utils/helper.h"
 #include "utils/log.h"
@@ -29,7 +31,8 @@ UKMemory::UKMemory(int fd) : MemoryBase() { m_fd = fd; }
 UKMemory::~UKMemory() { free_all(); }
 
 aipu_status_t UKMemory::malloc(uint32_t size, uint32_t align, BufferDesc **desc,
-                               const char *str, uint32_t asid_mem_cfg) {
+                               const char *str, uint32_t asid_mem_cfg,
+                               uint32_t rsv_iova_size) {
   int kret = 0;
   Buffer buf;
   char *ptr = nullptr;
@@ -37,12 +40,20 @@ aipu_status_t UKMemory::malloc(uint32_t size, uint32_t align, BufferDesc **desc,
   aipu_buf_request buf_req = {0};
   DEV_PA_64 base = 0;
 
-  buf_req.bytes = size;
   buf_req.align_in_page = (align == 0) ? 1 : align;
+  buf_req.bytes = AIPU_ALIGN_BYTES(
+      size, buf_req.align_in_page *
+                AIPU_PAGE_SIZE); /* assume driver size as alignment */
 
   /* asid_mem_cfg, bit[15:8]: asid idx, bit[7:0] buf region */
   buf_req.asid = (asid_mem_cfg & 0xff00) >> 8;
   buf_req.region = asid_mem_cfg & 0xff;
+  buf_req.reserve_iova_size = 0;
+  buf_req.alloc_mode = AIPU_DMA_BUF_MALLOC_DEFAULT;
+  if (m_isa_version > AIPU_ISA_VERSION_ZHOUYI_V3) {
+    buf_req.reserve_iova_size = rsv_iova_size;
+    buf_req.alloc_mode = AIPU_DMA_BUF_MALLOC_IOVA_PHY;
+  }
 
   if (*desc == nullptr) {
     *desc = new BufferDesc;
@@ -58,7 +69,7 @@ aipu_status_t UKMemory::malloc(uint32_t size, uint32_t align, BufferDesc **desc,
 
   kret = ioctl(m_fd, cmd, &buf_req);
   if (kret != 0) {
-    LOG(LOG_ALERT, "alloc buffer: size 0x%x [fail]", size);
+    LOG(LOG_ALERT, "ioctl alloc buffer: size 0x%x [fail]", size);
     return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
   }
 
@@ -77,11 +88,15 @@ aipu_status_t UKMemory::malloc(uint32_t size, uint32_t align, BufferDesc **desc,
    */
   if (buf_req.desc.region == AIPU_BUF_REGION_DTCM)
     base = get_dtcm_base() - 0xD0000000;
+  else if (buf_req.desc.asid == 0 &&
+           m_isa_version <= AIPU_ISA_VERSION_ZHOUYI_V3)
+    base = get_asid_base(0);
   else
-    base = get_asid_base(buf_req.desc.asid);
+    base = buf_req.desc.pa;
 
   (*desc)->init(base, buf_req.desc.pa, buf_req.desc.bytes, size,
-                buf_req.desc.dev_offset, buf_req.desc.region);
+                buf_req.desc.dev_offset, buf_req.desc.region,
+                buf_req.desc.exec_id, rsv_iova_size);
 
   buf.init(ptr, *desc);
   pthread_rwlock_wrlock(&m_lock);
@@ -115,10 +130,11 @@ aipu_status_t UKMemory::free(BufferDesc **desc, const char *str) {
   if (iter->second.get_Buffer_refcnt() == 0) {
     kdesc.pa = (*desc)->pa;
     kdesc.bytes = (*desc)->size;
+    kdesc.exec_id = (*desc)->exec_id;
     munmap(iter->second.va, kdesc.bytes);
     kret = ioctl(m_fd, free_cmd, &kdesc);
     if (kret != 0) {
-      LOG(LOG_ERR, "free buffer 0x%lx [fail]", (*desc)->pa);
+      LOG(LOG_ERR, "ioctl free buffer 0x%lx [fail], ret %d", (*desc)->pa, kret);
       ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
       goto unlock;
     }
@@ -163,10 +179,11 @@ aipu_status_t UKMemory::free_phybuffer(BufferDesc *desc, const char *str) {
   if (iter->second.get_Buffer_refcnt() == 0) {
     kdesc.pa = desc->pa;
     kdesc.bytes = desc->size;
+    kdesc.exec_id = desc->exec_id;
     munmap(iter->second.va, kdesc.bytes);
     kret = ioctl(m_fd, free_cmd, &kdesc);
     if (kret != 0) {
-      LOG(LOG_ERR, "free buffer 0x%lx [fail]", desc->pa);
+      LOG(LOG_ERR, "ioctl free buffer 0x%lx [fail]", desc->pa);
       ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
       goto unlock;
     }
@@ -186,11 +203,6 @@ unlock:
   return ret;
 }
 
-aipu_status_t UKMemory::reserve_mem(DEV_PA_32 addr, uint32_t size,
-                                    BufferDesc **desc, const char *str) {
-  return AIPU_STATUS_SUCCESS;
-}
-
 aipu_status_t UKMemory::free_all(void) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   BufferDesc *desc = nullptr;
@@ -205,11 +217,12 @@ aipu_status_t UKMemory::free_all(void) {
     kdesc.pa = desc->pa;
     pa = desc->pa;
     kdesc.bytes = desc->size;
+    kdesc.exec_id = desc->exec_id;
     size = desc->size;
     munmap(iter->second.va, kdesc.bytes);
     kret = ioctl(m_fd, AIPU_IOCTL_FREE_BUF, &kdesc);
     if (kret != 0) {
-      LOG(LOG_ERR, "free buffer 0x%lx [fail]", desc->pa);
+      LOG(LOG_ERR, "ioctl free buffer 0x%lx [fail]", desc->pa);
       ret = AIPU_STATUS_ERROR_BUF_FREE_FAIL;
     }
     desc->reset();
@@ -224,4 +237,65 @@ aipu_status_t UKMemory::free_all(void) {
   pthread_rwlock_unlock(&m_lock);
   return ret;
 }
+
+uint32_t UKMemory::get_lm_size() {
+  uint32_t lm_size = 0;
+  static std::mutex mtx; /* only protect thread, instead of process */
+
+  std::lock_guard<std::mutex> lg(mtx);
+  m_dev->write_reg(0, TSM_PAGE_SELECTION_CONTROL,
+                   EN_SELECT(1) | EN_CLUSTER(0) | EN_CORE(0));
+
+  int32_t kret = m_dev->read_reg(0, TSM_LOCAL_MEMORY_FEATURE, &lm_size);
+  if (kret != AIPU_LL_STATUS_SUCCESS) {
+    lm_size = 0;
+    LOG(LOG_ERR, "get invalid tec local memory size, set to 0!");
+  } else {
+    lm_size = (1 << ((lm_size & 0xF) - 1)) * 32768;
+  }
+  m_dev->write_reg(0, TSM_PAGE_SELECTION_CONTROL,
+                   EN_SELECT(0) | EN_CLUSTER(0) | EN_CORE(0));
+  return lm_size;
+}
+
+uint32_t UKMemory::get_sm_size() {
+  uint32_t sm_size = 0;
+  static std::mutex mtx; /* only protect thread, instead of process */
+
+  std::lock_guard<std::mutex> lg(mtx);
+  m_dev->write_reg(0, TSM_PAGE_SELECTION_CONTROL,
+                   EN_SELECT(1) | EN_CLUSTER(0) | EN_CORE(0));
+
+  int32_t kret = m_dev->read_reg(0, TSM_SHARE_MEMORY_FEATURE, &sm_size);
+  if (kret != AIPU_LL_STATUS_SUCCESS) {
+    sm_size = 0;
+    LOG(LOG_ERR, "get invalid core share memory size!");
+  } else {
+    sm_size = (1 << ((sm_size & 0xF) - 1)) * 32768;
+  }
+
+  m_dev->write_reg(0, TSM_PAGE_SELECTION_CONTROL,
+                   EN_SELECT(0) | EN_CLUSTER(0) | EN_CORE(0));
+  return sm_size;
+}
+
+aipu_status_t UKMemory::refresh_binded_iova(BufferDesc &desc, DEV_PA_64 pa,
+                                            uint64_t size) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+  pthread_rwlock_unlock(&m_lock);
+  auto iter = m_allocated.find(desc.pa);
+  if (iter == m_allocated.end()) {
+    pthread_rwlock_wrlock(&m_lock);
+    LOG(LOG_ERR, "cannot find jobuf 0x%lx", desc.pa);
+    return AIPU_STATUS_ERROR_INVALID_OP;
+  }
+
+  uint64_t new_range = pa - iter->second.desc->pa + size;
+  if (iter->second.desc->binded_iova_range < new_range)
+    iter->second.desc->binded_iova_range = new_range;
+  pthread_rwlock_wrlock(&m_lock);
+  return ret;
+}
+
 } // namespace aipudrv

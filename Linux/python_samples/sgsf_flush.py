@@ -9,7 +9,7 @@ from common.log import *
 
 #
 # sgsf_flush.py:
-# 	this script is for running in simulation environment via flush job async mode.
+# 	this script runs job on hardware with async mode
 #
 # usage:
 #   python3 sgsf_flush.py  -s /home/benchmark/resnet50 -l bin/sim/debug/ -e ./aipu_simulator_x1 -d ./output
@@ -46,7 +46,7 @@ def sgsf_flush():
 
         if is_hw is False:
             global_cfg = aipu_global_config_simulation_t()
-            global_cfg.simulator = parseCmdline_obj.m_simulator_path
+            global_cfg.simulator = parseCmdline_obj.m_simulator
             global_cfg.log_file_path = parseCmdline_obj.m_dump_path
             ret = npu.aipu_config_global(AIPU_CONFIG_TYPE_SIMULATION, global_cfg)
             if ret != AIPU_STATUS_SUCCESS:
@@ -117,13 +117,15 @@ def sgsf_flush():
                     log.info('aipu_config_job [ok]')
 
                 # config v1v2 simulator
-                if is_hw is False and os.path.isfile(parseCmdline_obj.m_simulator):
+                if is_hw is False:
+                    # v1&v2 temp.* directory
                     cfg = aipu_job_config_simulation_t()
-                    cfg.data_dir = parseCmdline_obj.m_simulator
+                    cfg.data_dir = "./" if len(parseCmdline_obj.m_dump_path) == 0 else parseCmdline_obj.m_dump_path
                     ret = npu.aipu_config_job(job_id, AIPU_CONFIG_TYPE_SIMULATION, cfg)
                     if ret != AIPU_STATUS_SUCCESS:
-                        raise RuntimeError(f'aipu_config_job [fail], err: {npu.aipu_get_error_message(ret)}')
-                    log.info(f'aipu_config_job [ok]')
+                        raise RuntimeError(
+                            f'aipu_config_job v1v2 simulator [fail], err: {npu.aipu_get_error_message(ret)}')
+                    log.info('aipu_config_job v1v2 simulator [ok]')
 
                 if LOAD_FROM_FILE_FLAG:  # load 2-1
                     for i in range(len(input_bins)):

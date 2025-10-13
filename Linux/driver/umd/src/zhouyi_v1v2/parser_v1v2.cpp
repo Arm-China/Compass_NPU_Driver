@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -180,4 +180,18 @@ aipu_status_t ParserV12::parse_graph(std::istream &gbin, uint32_t size,
 finish:
   return ret;
 }
+
+aipu_status_t ParserV12::parse_graph(const char *file, Graph &gobj) {
+  std::ifstream gbin;
+  gbin.open(file, std::ifstream::in | std::ifstream::binary);
+  if (!gbin.is_open())
+    return AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
+
+  gbin.seekg(0, gbin.end);
+  uint32_t size = gbin.tellg();
+  gbin.seekg(0, gbin.beg);
+
+  return parse_graph(gbin, size, gobj);
+}
+
 } // namespace aipudrv

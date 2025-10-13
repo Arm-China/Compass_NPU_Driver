@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -107,14 +107,20 @@ struct JobDesc {
   std::string log_path;
   uint32_t log_level;
   bool en_eval;
+  std::string json_filename;
 };
 
 enum DeviceType {
   DEV_TYPE_NONE = 0,
-  DEV_TYPE_SIMULATOR_V1V2 = 1,
-  DEV_TYPE_SIMULATOR_V3 = 2,
-  DEV_TYPE_SIMULATOR_V3_1 = 3,
-  DEV_TYPE_AIPU = 4,
+  DEV_TYPE_SIMULATOR_V1V2,
+  DEV_TYPE_SIMULATOR_V3,
+  DEV_TYPE_SIMULATOR_V3_2,
+  DEV_TYPE_AIPU,
+};
+
+enum class RegType {
+  AIPU_HOST_REG = aipu_io_req::AIPU_HOST_REG,
+  AIPU_DBG_REG = aipu_io_req::AIPU_DBG_REG,
 };
 
 class DeviceBase {
@@ -126,10 +132,20 @@ protected:
   uint32_t m_cluster_cnt = 0;
   uint32_t m_core_cnt = 1;
   std::atomic_int m_ref_cnt{0};
+  uint32_t m_hw_config;
+
+  typedef struct {
+    uint32_t config;
+    uint32_t tec_num;
+    uint32_t aiff_num;
+    uint32_t cluster_num;
+    int32_t sim_code;
+  } arch_item_t;
 
 public:
   virtual bool has_target(uint32_t arch, uint32_t version, uint32_t config,
                           uint32_t rev) = 0;
+  virtual const char *get_config_code() const { return nullptr; };
   virtual aipu_ll_status_t ioctl_cmd(uint32_t cmd, void *arg) {
     return AIPU_LL_STATUS_SUCCESS;
   };
@@ -137,7 +153,7 @@ public:
                                        std::vector<uint32_t> &) {
     return AIPU_STATUS_ERROR_INVALID_PARTITION_ID;
   }
-  virtual uint32_t tec_cnt_per_core(uint32_t partition_idx) {
+  virtual uint32_t tec_cnt_per_core(uint32_t partition_idx) const {
     if ((partition_idx >= 0) && (partition_idx < m_partition_cnt))
       return m_part_caps.at(partition_idx).clusters[0].tec_cnt;
     else
@@ -150,13 +166,16 @@ public:
     *memory = nullptr;
     return AIPU_STATUS_SUCCESS;
   }
+
   MemoryBase *get_mem() { return m_dram; }
   virtual aipu_ll_status_t read_reg(uint32_t core_id, uint32_t offset,
-                                    uint32_t *value) {
+                                    uint32_t *value,
+                                    RegType type = RegType::AIPU_HOST_REG) {
     return AIPU_LL_STATUS_ERROR_OPERATION_UNSUPPORTED;
   }
   virtual aipu_ll_status_t write_reg(uint32_t core_id, uint32_t offset,
-                                     uint32_t value) {
+                                     uint32_t value,
+                                     RegType type = RegType::AIPU_HOST_REG) {
     return AIPU_LL_STATUS_ERROR_OPERATION_UNSUPPORTED;
   }
   /* blocking with timeout */
@@ -167,11 +186,13 @@ public:
   }
   int dec_ref_cnt() { return --m_ref_cnt; }
   int inc_ref_cnt() { return ++m_ref_cnt; }
-  virtual const char *get_config_code() { return nullptr; }
+  virtual bool get_profile_en() const { return false; }
 
   virtual aipu_ll_status_t get_device_status(device_status_t *status) {
     return AIPU_LL_STATUS_SUCCESS;
   }
+
+  void set_hw_config(uint32_t hw_config) { m_hw_config = hw_config; }
 
 public:
   aipu_status_t get_partition_count(uint32_t *cnt) {
@@ -284,6 +305,13 @@ public:
       return m_part_caps[0].clusters[0].core_cnt;
     else
       return 1;
+  }
+
+  uint32_t get_npu_tec_cnt() {
+    if (m_part_caps[0].cluster_cnt > 0)
+      return m_part_caps[0].clusters[0].tec_cnt;
+    else
+      return 4;
   }
 
   /**

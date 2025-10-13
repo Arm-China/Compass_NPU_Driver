@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+# Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -36,7 +36,7 @@ build_help() {
     echo "                    - v1"
     echo "                    - v2"
     echo "                    - v3"
-    echo "                    - v3_1"
+    echo "                    - v3_2"
     echo "-a, --api         Build UMD API type (optional, by default standard api):"
     echo "                    - standard_api"
     echo "                    - python_api"
@@ -153,14 +153,14 @@ if [ "$BUILD_AIPU_VERSION"x == "v1"x ]  ||
     BUILD_AIPU_VERSION=aipu_v1v2
 elif [ "$BUILD_AIPU_VERSION"x == "v3"x ] || [ "$BUILD_AIPU_VERSION"x == "all"x ]; then
     BUILD_AIPU_VERSION=aipu_v3
-elif [ "$BUILD_AIPU_VERSION"x == "v3_1"x ]; then
-    BUILD_AIPU_VERSION=aipu_v3_1
+elif [ "$BUILD_AIPU_VERSION"x == "v3_2"x ]; then
+    BUILD_AIPU_VERSION=aipu_v3_2
 elif [ "$BUILD_AIPU_VERSION"x != "v1"x ] &&
      [ "$BUILD_AIPU_VERSION"x != "v2"x ] &&
      [ "$BUILD_AIPU_VERSION"x != "v3"x ] &&
-     [ "$BUILD_AIPU_VERSION"x != "v3_1"x ]; then
+     [ "$BUILD_AIPU_VERSION"x != "v3_2"x ]; then
     echo -e "$COMPASS_DRV_BRENVAR_ERROR Invalid AIPU version $BUILD_AIPU_VERSION," \
-        "specify target: -v [v1|v2|v3|v3_1]"
+        "specify target: -v [v1|v2|v3|v3_2]"
     exit 2
 fi
 

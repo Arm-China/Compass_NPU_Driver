@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -33,7 +33,7 @@ enum LogLevel {
   LOG_INFO,    /**< normal informational messages */
   LOG_DEBUG,   /**< debug messages, should be closed after debug done */
   LOG_DEFAULT, /**< default logging messages */
-  LOG_CLOSE    /**< close logging messages printing */
+  LOG_CLOSE /**< close logging messages printing, only for env configuration */
 };
 
 extern volatile int32_t UMD_LOG_LEVEL;
@@ -77,8 +77,9 @@ extern volatile int32_t UMD_LOG_LEVEL;
 #else
 #define LOG(LogLevel, FMT, ARGS...)                                            \
   do {                                                                         \
-    if (LogLevel > UMD_LOG_LEVEL)                                              \
+    if (LogLevel > UMD_LOG_LEVEL || UMD_LOG_LEVEL == LOG_CLOSE)                \
       break;                                                                   \
+                                                                               \
     if (LogLevel == LOG_ERR)                                                   \
       LOG_DETAILED("[UMD ERR] ", FMT, ##ARGS)                                  \
     else if (LogLevel == LOG_WARN)                                             \

@@ -17,7 +17,7 @@ To build & run this demo application, please follow these steps:
 
 1. Compile and execute the applicateion with provided benchmark resnet_50 by:
 ```bash
-    $ ./out-of-box-test.sh -a X3_1304MP2 -c resnet_50_x3 # for X3
+    $ ./out-of-box-test.sh -a X3P_1304 -c resnet_50_x3p # for X3P
     $ ./out-of-box-test.sh -a X2_1204MP3 -c resnet_50_x2 # for X2
     $ ./out-of-box-test.sh -s X1 -c resnet_50_x1         # for X1
 ```
@@ -36,7 +36,8 @@ $ ./run.sh -c resnet_50_x1 -s X1
 ```bash
 $ ./run.sh -a X2_1204MP3 -c resnet_50_x2
 ```
-- for aipu v3.1(3 cores)  
+
+- for aipu v3.2(1 cores)  
 ```bash
-$ ./run.sh -a X3_1304MP2 -c resnet_50_x3
+$ ./run.sh -a X3P_1304 -c resnet_50_x3p
 ```

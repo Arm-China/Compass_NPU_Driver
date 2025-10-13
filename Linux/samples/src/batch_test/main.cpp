@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -41,7 +41,7 @@ int main(int argc, char *argv[]) {
   vector<char *> output_data[MAX_BATCH];
   vector<char *> gt;
   cmd_opt_t opt;
-  int pass = 0, loop = 0, total_loop = 2;
+  int pass = -1, loop = 0, total_loop = 2;
   uint32_t batch_loop_cnt = 2;
   aipu_create_job_cfg create_job_cfg = {0};
   char **input_buf = nullptr, **output_buf[MAX_BATCH];
@@ -74,10 +74,7 @@ int main(int argc, char *argv[]) {
     batch_loop_cnt = opt.frame_cnt;
 
   mem_dump_config.dump_dir = opt.dump_dir;
-  if (opt.log_level_set)
-    sim_glb_config.log_level = opt.log_level;
-  else
-    sim_glb_config.log_level = 0;
+  sim_glb_config.log_level = opt.log_level;
 
   sim_glb_config.verbose = opt.verbose;
   sim_glb_config.en_eval = true;
@@ -109,12 +106,10 @@ int main(int argc, char *argv[]) {
     ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
-      AIPU_ERR()
-      ("aipu_load_graph_helper: %s (%s)\n", msg, opt.bin_files[0].c_str());
+      AIPU_ERR()("aipu_load_graph: %s (%s)\n", msg, opt.bin_files[0].c_str());
       goto deinit_ctx;
     }
-    AIPU_INFO()
-    ("aipu_load_graph_helper success: %s\n", opt.bin_files[0].c_str());
+    AIPU_INFO()("aipu_load_graph success: %s\n", opt.bin_files[0].c_str());
 
     ret = aipu_get_cluster_count(ctx, 0, &cluster_cnt);
     if (ret != AIPU_STATUS_SUCCESS) {
@@ -208,12 +203,22 @@ int main(int argc, char *argv[]) {
         goto clean_batch_queue;
       }
 
-      for (uint32_t i = 0; i < MAX_BATCH; i++)
+      for (uint32_t i = 0; i < MAX_BATCH; i++) {
         pass = check_result_helper(output_data[i], output_desc, opt.gts,
                                    opt.gts_size);
+        /* loop out */
+        if (pass == -1)
+          break;
+      }
+      /* loop out */
+      if (pass == -1)
+        break;
     }
 
   clean_batch_queue:
+    if (ret != AIPU_STATUS_SUCCESS)
+      pass = -1;
+
     ret = aipu_clean_batch_queue(ctx, graph_id, queue_id);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
@@ -222,6 +227,9 @@ int main(int argc, char *argv[]) {
     }
 
   unload_graph:
+    if (ret != AIPU_STATUS_SUCCESS)
+      pass = -1;
+
     ret = aipu_unload_graph(ctx, graph_id);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
@@ -231,6 +239,9 @@ int main(int argc, char *argv[]) {
     AIPU_INFO()("aipu_unload_graph success\n");
 
   deinit_ctx:
+    if (ret != AIPU_STATUS_SUCCESS)
+      pass = -1;
+
     ret = aipu_deinit_context(ctx);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
@@ -240,7 +251,7 @@ int main(int argc, char *argv[]) {
     AIPU_INFO()("aipu_deinit_ctx success\n");
 
   finish:
-    if (AIPU_STATUS_SUCCESS != ret)
+    if (ret != AIPU_STATUS_SUCCESS)
       pass = -1;
 
     if (input_buf != nullptr) {
@@ -260,6 +271,10 @@ int main(int argc, char *argv[]) {
         output_buf[k] = nullptr;
       }
     }
+
+    /* loop out */
+    if (pass == -1)
+      break;
   }
 
   deinit_test_bench(&opt);

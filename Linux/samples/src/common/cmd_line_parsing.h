@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -27,14 +27,15 @@ typedef struct cmd_opt {
   std::vector<char *> gts;
   std::string npu_arch_desc;
   uint32_t gt_size;
-  bool log_level_set = false;
-  uint32_t log_level;
-  bool verbose = false;
+  uint32_t log_level = 1;
+  bool verbose = true;
   bool flush_time = false;
   std::string extra_weight_dir;
   uint32_t loop_cnt = 0;
   uint32_t frame_cnt = 0;
   int32_t graph_idx = -1;
+  bool profile_en = false;
+  uint32_t thread_num;
 } cmd_opt_t;
 
 int init_test_bench(int argc, char *argv[], cmd_opt_t *opt,

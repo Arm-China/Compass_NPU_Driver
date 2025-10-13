@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -88,9 +88,12 @@ protected:
 
 protected:
   /* shared buffers */
+  BufferDesc *m_text = nullptr;
+  BufferDesc *m_crodata = nullptr;
   BufferDesc *m_rodata = nullptr;
   BufferDesc *m_descriptor = nullptr;
   BufferDesc *m_pprint = nullptr;
+
   std::vector<struct JobIOBuffer> m_inputs;
   std::vector<struct JobIOBuffer> m_outputs;
   std::vector<struct JobIOBuffer> m_inter_dumps;
@@ -149,7 +152,7 @@ private:
                          const std::vector<BufferDesc *> &reuses);
 
 protected:
-  virtual Graph &get_graph() = 0;
+  virtual Graph &graph() = 0;
   virtual uint32_t get_subgraph_cnt() = 0;
   virtual const std::vector<BufferDesc *> &get_reuse() = 0;
   virtual aipu_status_t alloc_load_job_buffers() = 0;
@@ -204,6 +207,7 @@ public:
   aipu_status_t rewrite_rodata(uint32_t offset, uint32_t value);
   aipu_status_t config_mem_dump(uint64_t types,
                                 const aipu_job_config_dump_t *config);
+  virtual DEV_PA_64 get_asid0_base() { return m_mem->get_asid_base(0); }
   virtual aipu_status_t
   specify_io_buffer(aipu_shared_tensor_info_t &tensor_info) {
     return AIPU_STATUS_SUCCESS;
@@ -220,6 +224,10 @@ public:
   };
   virtual aipu_status_t bind_core(uint32_t core_id) = 0;
   virtual aipu_status_t debugger_run() {
+    return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
+  }
+  virtual aipu_status_t
+  config_dynamic_params(const aipu_dynshape_param_t *params) {
     return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
   }
 
@@ -246,6 +254,8 @@ public:
   std::vector<struct JobIOBuffer> &get_inputs_ref() { return m_inputs; }
 
   std::vector<struct JobIOBuffer> &get_outputs_ref() { return m_outputs; }
+
+  DEV_PA_64 debugger_get_instr_base() const { return m_text->pa; }
 
 public:
   JobBase(MainContext *ctx, GraphBase &graph, DeviceBase *dev);

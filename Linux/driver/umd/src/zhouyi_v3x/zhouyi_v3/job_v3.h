@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -18,8 +18,7 @@
 namespace aipudrv {
 class JobV3 : public JobV3X {
 private:
-  bool m_same_asid = true;
-  uint32_t m_segmmu_tcb_skip = 0;
+  uint32_t m_segmmu_tcb_num = 0;
 
 private:
   void set_job_params(uint32_t sg_cnt, uint32_t task_per_sg, uint32_t remap,
@@ -32,9 +31,10 @@ private:
   aipu_status_t setup_tcb_chain() override;
   void get_tcb_head_cnt(uint32_t sg_idx, uint32_t &head_cnt) override;
   aipu_status_t config_tcb_smmu(DEV_PA_64 init_tcb_pa);
-  void setup_gm_sync_from_ddr(tcb_t &tcb) override;
   void setup_gm_sync_to_ddr(tcb_t &tcb) override;
-
+  DEV_PA_64 get_first_task_tcb_pa() override {
+    return m_init_tcb.pa + (1 + m_segmmu_tcb_num) * sizeof(tcb_t);
+  }
   aipu_status_t setup_segmmu(SubGraphTask &sg_task) override;
   aipu_status_t dump_for_emulation() override;
 

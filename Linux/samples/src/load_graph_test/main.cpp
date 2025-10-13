@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
   vector<char *> gt;
   cmd_opt_t opt;
   uint32_t frame_cnt = 5;
-  int pass = 0;
+  int pass = -1;
   std::ifstream gbin;
   uint32_t fsize = 0;
   char *gbin_buf = nullptr;
@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
 
   if (opt.loop_cnt != 0)
     AIPU_CRIT()
-    ("aipu_load_graph_test doesn't support to specify outer loop counter\n");
+  ("aipu_load_graph_test doesn't support to specify outer loop counter\n");
 
   if (opt.frame_cnt != 0)
     frame_cnt = opt.frame_cnt;
@@ -205,7 +205,6 @@ int main(int argc, char *argv[]) {
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
       AIPU_ERR()("aipu_finish_job: %s\n", msg);
-      pass = -1;
       goto clean_job;
     }
     AIPU_INFO()("aipu_finish_job success\n");
@@ -223,9 +222,14 @@ int main(int argc, char *argv[]) {
     }
 
     pass = check_result_helper(output_data, output_desc, opt.gts, opt.gts_size);
+    if (pass == -1)
+      break;
   }
 
 clean_job:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   ret = aipu_clean_job(ctx, job_id);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
@@ -235,6 +239,9 @@ clean_job:
   AIPU_INFO()("aipu_clean_job success\n");
 
 unload_graph:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   ret = aipu_unload_graph(ctx, graph_id);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
@@ -244,6 +251,9 @@ unload_graph:
   AIPU_INFO()("aipu_unload_graph success\n");
 
 deinit_ctx:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   ret = aipu_deinit_context(ctx);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
@@ -253,9 +263,9 @@ deinit_ctx:
   AIPU_INFO()("aipu_deinit_ctx success\n");
 
 finish:
-  if (AIPU_STATUS_SUCCESS != ret) {
+  if (ret != AIPU_STATUS_SUCCESS)
     pass = -1;
-  }
+
   for (uint32_t i = 0; i < output_data.size(); i++) {
     delete[] output_data[i];
     output_data[i] = nullptr;

@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -23,6 +23,7 @@ namespace aipudrv {
 Simulator::Simulator() {
   m_dev_type = DEV_TYPE_SIMULATOR_V1V2;
   m_dram = UMemory::get_memory();
+  m_dram->set_dev(this);
 }
 
 Simulator::~Simulator() { m_dram = nullptr; }
@@ -43,7 +44,7 @@ bool Simulator::has_target(uint32_t arch, uint32_t version, uint32_t config,
     m_dram->set_dtcm_info(
         get_umemory()->get_memregion_base(ASID_REGION_0, MEM_REGION_DTCM),
         get_umemory()->get_memregion_size(ASID_REGION_0, MEM_REGION_DTCM));
-
+  m_dram->set_asid1(0);
   return true;
 }
 
@@ -212,6 +213,9 @@ aipu_status_t Simulator::update_simulation_rtcfg(const JobDesc &job,
   else
     ofs << "EN_EVAL=0\n";
 
+  if (!job.json_filename.empty())
+    ofs << "JSON_FILE=" << job.json_filename << "\n";
+
   /* Only aipu v2(X1) support DTCM */
   if (job.kdesc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
     ofs << "DTCM_SIZE=0x" << std::hex << m_dram->get_dtcm_size() << "\n";
@@ -360,6 +364,13 @@ aipu_status_t Simulator::update_simulation_rtcfg(const JobDesc &job,
 
   ofs << "RUN_DESCRIPTOR=BIN[0]"
       << "\n";
+
+  if (access(job.simulator.c_str(), F_OK) != 0 ||
+      access(job.simulator.c_str(), X_OK) != 0) {
+    LOG(LOG_ERR, "cannot find proper simulator executable file, current is %s",
+        job.simulator.c_str());
+    return AIPU_STATUS_ERROR_DEV_ABNORMAL;
+  }
 
   snprintf(ctx.simulation_cmd, sizeof(ctx.simulation_cmd), "%s %s",
            job.simulator.c_str(), cfg_fname.c_str());

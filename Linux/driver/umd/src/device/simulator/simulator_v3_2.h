@@ -1,14 +1,14 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * @file  simulator_v3_1.h
- * @brief AIPU User Mode Driver (UMD) zhouyi aipu v3_1 simulator module header
+ * @file  simulator_v2.h
+ * @brief AIPU User Mode Driver (UMD) zhouyi aipu v3_2 simulator module header
  */
 
-#ifndef _SIMULATOR_V3_1_H_
-#define _SIMULATOR_V3_1_H_
+#ifndef _SIMULATOR_V3_2_H_
+#define _SIMULATOR_V3_2_H_
 
 #include <string.h>
 
@@ -46,19 +46,17 @@ enum {
 
 /* DONOT use simulator in multiple thread, because many objects are lack of
  * protection */
-class SimulatorV3_1 : public DeviceBase {
+class SimulatorV3_2 : public DeviceBase {
 private:
   pthread_rwlock_t m_lock;
   std::mutex m_poll_mtex;
-  sim_aipu::config_t m_config;
+  config_t m_config;
   sim_aipu::Aipu *m_aipu = nullptr;
   uint32_t m_code = 0;
   uint32_t m_log_level = RTDEBUG_SIMULATOR_LOG_LEVEL;
   std::string m_log_filepath;
   bool m_verbose = false;
   bool m_enable_avx = false;
-  bool m_en_eval = false;
-  bool m_en_l2d = false;
   uint32_t m_gm_size = 8 * MB_SIZE;
   std::string m_plugin_filename;
   std::string m_json_filename;
@@ -68,10 +66,8 @@ private:
   uint32_t m_freq_mhz = 1000;
   uint32_t m_ddr_latency_rd = 0;
   uint32_t m_ddr_latency_wr = 0;
-  uint32_t m_ddr_bw = 512;
-  float m_ddr_bw_ratio = 1.0;
+  uint32_t m_ddr_bw = 256;
   std::string m_perf_report = "./perf.csv";
-  static constexpr uint32_t HW_CONFIG = 1304;
 
   std::vector<uint32_t> m_cluster_in_part[MAX_PART_CNT];
   uint32_t m_max_cmdpool_cnt = 0;
@@ -107,7 +103,7 @@ private:
 
   volatile bool m_cant_add_job_flag = false;
 
-  std::atomic<uint16_t> m_grid_id = {0};
+  std::atomic<uint16_t> m_grid_id = {1};
 
   bool m_group_id_bitmap[MAX_GROUP_ID] = {false};
   std::mutex m_group_id_mtx;
@@ -130,6 +126,14 @@ private:
            {2, 6},
            {3, 7},
        }},
+  };
+
+  /* {config,tec_num,aiff_num,core_num,sim_code} */
+  const std::map<std::string, arch_item_t> m_npu_arch_map = {
+      {"X3P_1304", {1304, 4, 2, 1, -1}},
+      {"X3P_1302", {1302, 2, 2, 1, -1}},
+      {"X3P_1202", {1202, 2, 1, 1, -1}},
+      {"X3P_1204", {1204, 4, 1, 1, -1}},
   };
 
 private:
@@ -165,7 +169,7 @@ private:
 
       part_cap.id = part_cap.cluster_cnt;
       part_cap.arch = AIPU_ARCH_ZHOUYI;
-      part_cap.version = AIPU_ISA_VERSION_ZHOUYI_V3_1;
+      part_cap.version = AIPU_ISA_VERSION_ZHOUYI_V3_2;
       part_cap.config = 1304;
       part_cap.clusters[part_cap.cluster_cnt].core_cnt = (reg_val >> 8) & 0xF;
       part_cap.clusters[part_cap.cluster_cnt].tec_cnt = reg_val & 0xF;
@@ -181,28 +185,26 @@ private:
     }
   }
 
-  void sim_create_config(int code, sim_aipu::config_t &config) {
+  void sim_create_config(int code, config_t &config) {
     config.code = code;
     config.enable_calloc = false;
     config.max_pkg_num = -1;
     config.enable_avx = m_enable_avx;
-    config.en_eval = m_en_eval;
-    config.en_l2d = m_en_l2d;
-    config.log.filepath = m_log_filepath;
     config.log.level = m_log_level;
     config.log.verbose = m_verbose;
     config.gm_size = m_gm_size;
-    config.plugin_filename = "";
-    config.json_filename = m_json_filename;
+    strcpy(config.log.filepath, m_log_filepath.c_str());
+    strcpy(config.plugin_filename, m_plugin_filename.c_str());
+    strcpy(config.graph_filename, m_json_filename.c_str());
 
-    config.en_fast_perf = m_en_fast_perf;
+    config.perf.mode = PERF_MODE_NONE;
     if (m_en_fast_perf) {
-      config.freq_mhz = m_freq_mhz;
-      config.ddr_latency_rd = m_ddr_latency_rd;
-      config.ddr_latency_wr = m_ddr_latency_wr;
-      config.ddr_bw = m_ddr_bw;
-      config.ddr_bw_ratio = m_ddr_bw_ratio;
-      config.perf_report = m_perf_report;
+      config.perf.mode = PERF_MODE_FAST;
+      config.perf.sys_freq = m_freq_mhz;
+      config.perf.ddr.rd_latency = m_ddr_latency_rd;
+      config.perf.ddr.wr_latency = m_ddr_latency_wr;
+      config.perf.ddr.bandwidth = m_ddr_bw;
+      strcpy(config.perf.report_filename, m_perf_report.c_str());
     }
 
     LOG(LOG_DEBUG,
@@ -210,28 +212,24 @@ private:
         "config.enable_calloc = %d\n"
         "config.max_pkg_num = %ld\n"
         "config.enable_avx = %d\n"
-        "config.en_eval = %d\n"
-        "config.en_l2d = %d\n"
         "config.log.filepath = %s\n"
         "config.log.level = %d\n"
         "config.log.verbose = %d\n"
         "config.gm_size = 0x%x\n"
         "config.plugin_filename = %s\n"
         "config.json_filename = %s\n"
-        "config.en_fast_perf = %d\n"
-        "config.freq_mhz = %d\n"
-        "config.ddr_latency_rd = %d\n"
-        "config.ddr_latency_wr = %d\n"
-        "config.ddr_bw = %d\n"
-        "config.ddr_bw_ratio = %f\n"
-        "config.perf_report = %s\n",
+        "config.perf.mode = %d\n"
+        "config.perf.sys_freq = %d\n"
+        "config.perf.ddr.rd_latency = %d\n"
+        "config.perf.ddr.wr_latency = %d\n"
+        "config.perf.ddr.bandwidth = %d\n"
+        "config.perf.report_filename = %s\n",
         config.code, config.enable_calloc, config.max_pkg_num,
-        config.enable_avx, config.en_eval, config.en_l2d,
-        config.log.filepath.c_str(), config.log.level, config.log.verbose,
-        config.gm_size, config.plugin_filename.c_str(),
-        config.json_filename.c_str(), config.en_fast_perf, config.freq_mhz,
-        config.ddr_latency_rd, config.ddr_latency_wr, config.ddr_bw,
-        config.ddr_bw_ratio, config.perf_report.c_str());
+        config.enable_avx, config.log.filepath, config.log.level,
+        config.log.verbose, config.gm_size, config.plugin_filename,
+        config.graph_filename, config.perf.mode, config.perf.sys_freq,
+        config.perf.ddr.rd_latency, config.perf.ddr.wr_latency,
+        config.perf.ddr.bandwidth, config.perf.report_filename);
   }
 
 public:
@@ -272,27 +270,29 @@ public:
     return AIPU_STATUS_ERROR_INVALID_OP;
   }
 
-  const char *get_config_code() {
-    std::map<uint32_t, const char *> npu_sim_codetoname = {
-        {sim_aipu::config_t::X3_1304, "X3_1304"},
-        {sim_aipu::config_t::X3_1304MP2, "X3_1304MP2"},
-        {sim_aipu::config_t::X3_1304MP4, "X3_1304MP4"}};
-
-    if (npu_sim_codetoname.count(m_config.code) == 1)
-      return npu_sim_codetoname[m_config.code];
-    else
-      return npu_sim_codetoname[sim_aipu::config_t::X3_1304];
+  const char *get_config_code() const override {
+    static std::string target;
+    target = std::string("X3P-K") + std::to_string((m_code >> 12) & 0xF) + "C" +
+             std::to_string((m_code >> 8) & 0xF) + "A" +
+             std::to_string((m_code >> 4) & 0xF) + "T" +
+             std::to_string(m_code & 0xF);
+    return target.c_str();
   }
 
+  bool get_profile_en() const { return m_en_fast_perf; }
+
 public:
-  virtual void enable_profiling(bool en) { m_aipu->enable_profiling(en); }
+  virtual void enable_profiling(bool en) {
+    m_en_fast_perf = en;
+    m_aipu->enable_profiling(en);
+  }
 
   virtual void dump_profiling() { m_aipu->dump_profiling(); }
 
 public:
-  static SimulatorV3_1 *
-  get_v3_1_simulator(const aipu_global_config_simulation_t *cfg) {
-    static SimulatorV3_1 sim_instance;
+  static SimulatorV3_2 *
+  get_v3_2_simulator(const aipu_global_config_simulation_t *cfg) {
+    static SimulatorV3_2 sim_instance;
     sim_instance.set_cfg(cfg);
     return &sim_instance;
   }
@@ -306,13 +306,13 @@ public:
     return AIPU_STATUS_SUCCESS;
   }
 
-  virtual ~SimulatorV3_1();
-  SimulatorV3_1(const SimulatorV3_1 &sim) = delete;
-  SimulatorV3_1 &operator=(const SimulatorV3_1 &sim) = delete;
+  virtual ~SimulatorV3_2();
+  SimulatorV3_2(const SimulatorV3_2 &sim) = delete;
+  SimulatorV3_2 &operator=(const SimulatorV3_2 &sim) = delete;
 
 private:
-  SimulatorV3_1();
+  SimulatorV3_2();
 };
 } // namespace aipudrv
 
-#endif /* _SIMULATOR_V3_1_H_ */
+#endif /* _SIMULATOR_V3_2_H_ */

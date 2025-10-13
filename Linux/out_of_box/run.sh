@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+# Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 #
 # SPDX-License-Identifier: Apache-2.0
 LOCAL_PATH=$(cd "$(dirname "$0")";pwd)
@@ -19,12 +19,12 @@ test_run_help() {
     echo "-h, --help        help"
     echo "-c, --case        benchmark case(s) to run (under out_of_box/benchmarks)"
     echo "-s, --simulator   Z1/Z2/Z3/X1 simulator version (optional, only when you try to run Z1/Z2/Z3/X1 benchmark):"
-    echo "-a, --target      X2_1204MP3/X3_1304MP2 (ignore for aipu v1/v2)"
+    echo "-a, --target      X2_1204MP3/X3P_1304MP2... (ignore for aipu v1/v2)"
     echo "========================================================================="
     echo "usage: put case into 'bechmarks' folder, Attention: '-s' and '-a' can only specify one of them"
     echo "  - Z1~X1: ./run.sh -s <Z1/Z2/Z3/X1> -c <case>"
     echo "  - X2: ./run.sh -a <X2_1204/X2_1204MP3> -c <case>"
-    echo "  - X3: ./run.sh -a <X3_1304/X32_1304MP2> -c <case>"
+    echo "  - X3P: ./run.sh -a <X3P_1304> -c <case>"
     exit 0
 }
 
@@ -32,7 +32,7 @@ if [ $# = 0 ]; then
     test_run_help
 fi
 
-ARGS=`getopt -o hs:c:a: --long help,case,target: -n 'run.sh' -- "$@"`
+ARGS=`getopt -o hs:c:a: --long help,simulator,case,target: -n 'run.sh' -- "$@"`
 eval set -- "${ARGS}"
 
 while [ -n "$1" ]
@@ -69,7 +69,7 @@ if [[ "$CASE"x == x ]]; then
 fi
 
 EXECUTABLE_SIMULATOR=$COMPASS_DRV_RTENVAR_X1_SIMULATOR
-if [[ "$SIMULATOR"x != x ]]; then
+if [[ -n "$SIMULATOR" ]]; then
     SIMULATOR=`echo "$SIMULATOR" | tr '[A-Z]' '[a-z]'`
     if [[ "$SIMULATOR"x == "z1"x ]]; then
         EXECUTABLE_SIMULATOR=$COMPASS_DRV_RTENVAR_Z1_SIMULATOR
@@ -100,11 +100,15 @@ mkdir -p ./${OUTPUT_DIR}
 ARGS="--bin=${BENCHMARK_CASE_DIR}/${CASE}/aipu.bin \
     --idata=${BENCHMARK_CASE_DIR}/${CASE}/input0.bin \
     --check=${BENCHMARK_CASE_DIR}/${CASE}/output.bin \
-    --dump_dir=${OUTPUT_DIR}"
-SIM_ARGS="--sim=${EXECUTABLE_SIMULATOR} --cfg_dir=./"
+    --dump_dir=${OUTPUT_DIR} \
+    --cfg_dir=./"
 
-if [[ "$TARGET"x != x && "$SIMULATOR" == x ]]; then
+SIM_ARGS=""
+
+if [[ -n "$TARGET" && -z "$SIMULATOR" ]]; then
     ARGS="-a $TARGET $ARGS"
+else
+    SIM_ARGS="--sim=${EXECUTABLE_SIMULATOR}"
 fi
 
 echo $ARGS

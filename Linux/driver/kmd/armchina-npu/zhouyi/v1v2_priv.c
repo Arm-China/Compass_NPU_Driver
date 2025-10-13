@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #include <linux/platform_device.h>
 #include <linux/of.h>
@@ -224,6 +224,7 @@ static struct aipu_priv_operations v1v2_priv_ops = {
 	.create_partitions = v1v2_create_partitions,
 	.destroy_partitions = v1v2_destroy_partitions,
 	.global_soft_reset = NULL,
+	.get_partition_status = NULL,
 };
 
 struct aipu_priv_operations *get_v1v2_priv_ops(void)

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
-# Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+# Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 
 MODULE_NAME := aipu
 SRC_DIR := .
@@ -30,23 +30,23 @@ else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_V3)
     AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v3.o \
                 $(SRC_DIR)/armchina-npu/zhouyi/v3_priv.o
     EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V3
-else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_V3_1)
-    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v3_1.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/v3_1_priv.o
-    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V3_1
+else ifeq ($(BUILD_AIPU_VERSION_KMD), BUILD_ZHOUYI_V3_2)
+    AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v3_2.o \
+                $(SRC_DIR)/armchina-npu/zhouyi/v3_2_priv.o
+    EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V3_2
 else
     #build all
     AIPU_OBJ := $(SRC_DIR)/armchina-npu/zhouyi/v1.o \
                 $(SRC_DIR)/armchina-npu/zhouyi/v2.o \
                 $(SRC_DIR)/armchina-npu/zhouyi/v3.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/v3_1.o \
+                $(SRC_DIR)/armchina-npu/zhouyi/v3_2.o \
                 $(SRC_DIR)/armchina-npu/zhouyi/v1v2_priv.o \
                 $(SRC_DIR)/armchina-npu/zhouyi/v3_priv.o \
-                $(SRC_DIR)/armchina-npu/zhouyi/v3_1_priv.o
+                $(SRC_DIR)/armchina-npu/zhouyi/v3_2_priv.o
     EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V1 \
                     -DCONFIG_ARMCHINA_NPU_ARCH_V2 \
                     -DCONFIG_ARMCHINA_NPU_ARCH_V3 \
-                    -DCONFIG_ARMCHINA_NPU_ARCH_V3_1
+                    -DCONFIG_ARMCHINA_NPU_ARCH_v3_2
 endif
 
 ifeq ($(BUILD_TARGET_PLATFORM_KMD), BUILD_PLATFORM_R329)

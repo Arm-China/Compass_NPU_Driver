@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -15,18 +15,11 @@
 #endif
 
 namespace aipudrv {
-GM_V3::GM_V3(JobV3 &job) : GM_V3X(job, job.get_graph()) {
-  for (uint32_t type = GM_BUF_TYPE_REUSE; type < GM_BUF_TYPE_MAX; type++) {
-    if (m_graph.m_gm_info[GM_BUF_TYPE_REUSE].size() > 0) {
-      m_job.m_gm_info[type].insert(m_graph.m_gm_info[type].begin(),
-                                   m_graph.m_gm_info[type].end());
-    }
-  }
-}
+GM_V3::GM_V3(JobV3 &job) : GM_V3X(job, job.graph()) { m_mem = job.m_mem; }
 
 GM_V3::~GM_V3() {
   for (auto buf : m_gm_free_buffer)
-    m_job.m_mem->free(&buf);
+    m_mem->free(&buf);
 }
 
 void GM_V3::gm_dynamic_switch(uint32_t core_cnt) {
@@ -57,8 +50,8 @@ aipu_status_t GM_V3::gm_malloc(uint32_t bss_id, uint32_t idx, uint32_t buf_type,
       (buf_type == GM_BUF_TYPE_REUSE) ? m_graph.get_bss(bss_id).reuse_sections
                                       : m_graph.get_bss(bss_id).static_sections;
   uint32_t gm_region_sz = (m_job.m_qos == AIPU_JOB_QOS_SLOW)
-                              ? m_job.m_mem->get_gm_size(AIPU_JOB_QOS_SLOW)
-                              : m_job.m_mem->get_gm_size(AIPU_JOB_QOS_HIGH);
+                              ? m_mem->get_gm_size(AIPU_JOB_QOS_SLOW)
+                              : m_mem->get_gm_size(AIPU_JOB_QOS_HIGH);
   uint32_t buf_size = section_desc[idx].size, gm_size = 0;
   int pad_sz = m_graph.get_alloc_pad_size();
   uint32_t gm_id = 0;
@@ -76,13 +69,13 @@ aipu_status_t GM_V3::gm_malloc(uint32_t bss_id, uint32_t idx, uint32_t buf_type,
 
   if (m_job.m_qos == AIPU_JOB_QOS_HIGH)
     gm_id = 1;
-  gm_size = m_job.m_mem->get_gm_size(gm_id);
+  gm_size = m_mem->get_gm_size(gm_id);
 
   if (buf_size < gm_size)
     buf_size = gm_size;
 
-  ret = m_job.m_mem->malloc(buf_size + pad_sz, section_desc[idx].align_in_page,
-                            &buf, buf_name.c_str(), AIPU_ASID0 | mem_region);
+  ret = m_mem->malloc(buf_size + pad_sz, section_desc[idx].align_in_page, &buf,
+                      buf_name.c_str(), AIPU_ASID0 | mem_region);
   if (ret != AIPU_STATUS_SUCCESS)
     goto out;
 
@@ -92,7 +85,8 @@ aipu_status_t GM_V3::gm_malloc(uint32_t bss_id, uint32_t idx, uint32_t buf_type,
 
   /* ignore reuse temp buffer (non input/output) TODO: need this? */
   if (buf_type == GM_BUF_TYPE_REUSE &&
-      m_job.m_gm_info[buf_type][idx].gm_buf_type == GM_SUB_BUF_TYPE_IGNORE)
+      m_graph.m_gm_config_desc[buf_type][idx].sub_buf_type ==
+          GM_SUB_BUF_TYPE_IGNORE)
     goto out;
 
   if (m_job.get_coredump() != nullptr) {
@@ -104,7 +98,8 @@ aipu_status_t GM_V3::gm_malloc(uint32_t bss_id, uint32_t idx, uint32_t buf_type,
   }
 
   set_valid_map_base(*buf);
-  if (m_job.m_gm_info[buf_type][idx].gm_buf_type == GM_SUB_BUF_TYPE_TEMP)
+  if (m_graph.m_gm_config_desc[buf_type][idx].sub_buf_type ==
+      GM_SUB_BUF_TYPE_TEMP)
     goto out;
 
   set_valid_sync_region(bss_id, idx, buf_type, *buf, io_region);
@@ -143,21 +138,20 @@ out:
   return ret;
 }
 
-bool GM_V3::gm_is_gm_buffer(uint32_t idx, uint32_t buf_type) {
+bool GM_V3::is_gm_buffer(uint32_t idx, uint32_t buf_type) {
   bool ret = false;
 
-  if (!m_job.m_mem->is_gm_enable())
+  if (!m_mem->is_gm_enable())
     goto out;
 
-  if (m_job.m_qos == AIPU_JOB_QOS_HIGH &&
-      !m_job.m_mem->is_both_gm_region_enable())
+  if (m_job.m_qos == AIPU_JOB_QOS_HIGH && !m_mem->is_both_gm_region_enable())
     goto out;
 
-  if (m_job.m_gm_info[buf_type].count(idx) != 1)
+  if (m_graph.m_gm_config_desc[buf_type].count(idx) != 1)
     goto out;
 
   if (!m_gm_asm && m_job.m_sg_cnt == 1) {
-    m_job.m_gm_info[buf_type].erase(idx);
+    m_graph.m_gm_config_desc[buf_type].erase(idx);
     goto out;
   }
 
@@ -264,4 +258,46 @@ void GM_V3::set_valid_sync_region(uint32_t bss_id, uint32_t idx,
     region.valid_sync_buf[EM_GM_BUF_OUTPUT].sync_size = 0;
   }
 }
+
+void GM_V3::setup_gm_sync_from_ddr(tcb_t &tcb) {
+  uint32_t gm_region_idx = 0;
+
+  if (!m_mem->is_gm_enable())
+    return;
+
+  if (!gm_need_remap())
+    return;
+
+  if (!m_mem->is_both_gm_region_enable() && m_job.m_qos == AIPU_JOB_QOS_HIGH)
+    return;
+
+  if (m_job.m_qos == AIPU_JOB_QOS_SLOW)
+    gm_region_idx = 0;
+  else if (m_job.m_qos == AIPU_JOB_QOS_HIGH)
+    gm_region_idx = 1;
+
+  if (m_mem->is_both_gm_region_enable())
+    tcb.grid.gm_ctrl = GM_CTRL_REMAP_BOTH_REGION_EN;
+  else
+    tcb.grid.gm_ctrl = GM_CTRL_REMAP_REGION0_EN;
+
+  tcb.grid.gm_rgnx_addr[0].v64 = 0;
+  tcb.grid.gm_rgnx_addr[1].v64 = 0;
+  tcb.grid.gm_rgnx_addr[gm_region_idx].v64 = m_gm_map_base;
+
+  tcb.grid.gm_rgnx_ctrl[0] = GM_REGION_CTRL_IGNORE_CFG;
+  tcb.grid.gm_rgnx_ctrl[1] = GM_REGION_CTRL_IGNORE_CFG;
+  if (m_gm_map_base != 0)
+    tcb.grid.gm_rgnx_ctrl[gm_region_idx] = 0;
+
+  if (m_gm_sync_buf_size[EM_GM_BUF_INPUT] != 0) {
+    tcb.grid.gm_rgnx_ctrl[gm_region_idx] = GM_REGION_CTRL_SYNC_TO_GM;
+    DEV_PA_64 offset = m_gm_sync_buf_base[EM_GM_BUF_INPUT] - m_gm_map_base;
+    tcb.grid.gm_rgnx_ctrl[gm_region_idx] |=
+        get_low_32(offset >> 12) & 0xffff000;
+    tcb.grid.gm_rgnx_ctrl[gm_region_idx] |=
+        (m_gm_sync_buf_size[EM_GM_BUF_INPUT] >> 12) & 0xfff;
+  }
+}
+
 } // namespace aipudrv

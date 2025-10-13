@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -18,7 +18,55 @@
 #include "graph.h"
 
 namespace aipudrv {
-enum { GM_BUF_TYPE_REUSE = 0, GM_BUF_TYPE_WEIGHT, GM_BUF_TYPE_MAX };
+enum GMBufType {
+  GM_BUF_TYPE_REUSE = 0,
+  GM_BUF_TYPE_WEIGHT,
+  GM_BUF_TYPE_DESCRIPTOR, /* for runtime, instead of compile */
+  GM_BUF_TYPE_WORKSPACE,  /* for runtime, instead of compile */
+  GM_BUF_TYPE_MAX,
+};
+
+enum GMSubBufType {
+  GM_SUB_BUF_TYPE_IGNORE = 0,
+  GM_SUB_BUF_TYPE_INPUT,
+  GM_SUB_BUF_TYPE_OUTPUT,
+  GM_SUB_BUF_TYPE_INOUT,
+  GM_SUB_BUF_TYPE_TEMP,
+  GM_SUB_BUF_TYPE_MAX
+};
+
+enum SGDependency {
+  SUBG_DEPEND_NONE = 0,
+  SUBG_DEPEND_IMMEDIATE = 1,
+  SUBG_DEPEND_PREGROUPS = 1,
+  SUBG_DEPEND_PREALL = -1,
+};
+
+enum class FMSection {
+  Text,
+  Crodata,
+  ZcyConst,
+  ModelParam,
+  Rodata,
+  Dcr,
+  TcbChain,
+  TotalPriv,
+  TotalReuse,
+  GM,
+  Stack,
+  Dpdata,
+  Printf,
+  Profile,
+  Coredump,
+  ReservedIOVA, /* always last section */
+};
+
+/* section: .note.aipu.globalparam */
+struct DSModelGlobalParam {
+  uint32_t input_shape_offset;
+  uint32_t num_params;
+  /* std::vector<uint32_t> params; */
+};
 
 /* buffer index desc for GM */
 struct BssBufferIndex {
@@ -28,31 +76,8 @@ struct BssBufferIndex {
   uint32_t resver0;
 };
 
-enum {
-  GM_SUB_BUF_TYPE_IGNORE = 0,
-  GM_SUB_BUF_TYPE_INPUT,
-  GM_SUB_BUF_TYPE_OUTPUT,
-  GM_SUB_BUF_TYPE_INOUT,
-  GM_SUB_BUF_TYPE_TEMP,
-  GM_SUB_BUF_TYPE_MAX
-};
-
-enum {
-  SUBG_DEPEND_NONE = 0,
-  SUBG_DEPEND_IMMEDIATE = 1,
-  SUBG_DEPEND_PREGROUPS = 1,
-  SUBG_DEPEND_PREALL = -1,
-};
-
-/* section: .note.aipu.globalparam */
-struct DS_ModelGlobalParam {
-  uint32_t input_shape_offset;
-  uint32_t num_params;
-  /* std::vector<uint32_t> params; */
-};
-
-struct GM_info_desc {
-  uint32_t gm_buf_type; // 0: ignore, 1: input, 2: output
+struct GMConfigDesc {
+  GMSubBufType sub_buf_type = GM_SUB_BUF_TYPE_IGNORE;
   BssBufferIndex gm_buf_idx;
 };
 
@@ -127,41 +152,90 @@ struct BSS {
   std::vector<struct GraphParamMapLoadDesc> param_map;
   std::vector<struct GraphSectionDesc> static_sections;
   std::vector<struct GraphSectionDesc> reuse_sections;
+  /* std::map<sec.type, std::map<hash, GraphSectionDesc>> */
+  std::map<uint32_t, std::map<std::array<uint8_t, 32>, GraphSectionDesc>>
+      shared_static_sections;
   struct GraphIOTensors io;
+};
+
+struct FMSectionInfo {
+  struct BufInfo {
+    uint64_t offset;
+    uint64_t size;
+  };
+  uint32_t size;
+  std::map<FMSection, BufInfo> info;
+
+  void reset() {
+    size = 0;
+    info.clear();
+  }
+};
+
+struct GMSectionInfo {
+  struct BufInfo {
+    std::string name;
+    uint32_t size;
+    uint32_t offset;
+  };
+
+  uint32_t remap_size;
+  uint32_t sync_size;
+  std::map<GMBufType, BufInfo> info;
+
+  void reset() {
+    remap_size = 0;
+    sync_size = 0;
+    info.clear();
+  }
 };
 
 class GraphV3X : public Graph {
 private:
+  /* m_bss_vec[0].reuse_sections includes all bss reuse sections,
+   * static_sections not exactly */
   std::vector<struct BSS> m_bss_vec;
   std::vector<struct Subgraph> m_subgraphs;
   std::vector<struct GMConfig> m_gmconfig;
+  std::string m_comment;
   BinSection m_bsegmmu;
   bool m_fake_subgraph = false;
+  bool m_coredump_en = false;
+  uint32_t m_max_ws_size = 0;
+  FMSectionInfo m_fmsec_info; /* all asid0 buffers */
+  GMSectionInfo m_gmsec_info; /* attention: different job may have different gm
+                                 resource */
+  static constexpr uint32_t k_tcb_reserved = 0x400000; /* 1K*4K=4M */
 
 public:
-  std::map<uint32_t, GM_info_desc> m_gm_info[2];
+  /* 2: REUSE/STATIC, key: index */
+  std::map<uint32_t, GMConfigDesc> m_gm_config_desc[2];
   uint32_t m_segmmu_num = 0;
 
 public:
-  void print_parse_info() override;
-  aipu_status_t extract_gm_info(int bss_id);
-  aipu_status_t create_job(JOB_ID *id,
-                           const aipu_global_config_simulation_t *cfg,
-                           aipu_global_config_hw_t *hw_cfg,
-                           aipu_create_job_cfg_t *config = nullptr) override;
-  aipu_status_t get_tensor_count(aipu_tensor_type_t type,
-                                 uint32_t *cnt) override;
-  aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor,
-                                      aipu_tensor_desc_t *desc) override;
+  aipu_status_t parse_gmconfig(int bss_id);
+  aipu_status_t collect_gm_info();
+  aipu_status_t collect_fm_sections() override;
 
-public:
-  aipu_data_type_t get_io_tensor_type(int idx) const override {
-    return m_bss_vec[0].io.inputs[idx].data_type;
-  }
   aipu_status_t get_elf_note_size(const std::string &note_name,
                                   uint64_t &size) override;
   aipu_status_t get_elf_note(const std::string &note_name, char *data,
                              uint64_t size) override;
+
+  aipu_status_t get_tensor_count(aipu_tensor_type_t type,
+                                 uint32_t *cnt) const override;
+  aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor,
+                                      aipu_tensor_desc_t *desc) const override;
+  aipu_status_t create_job(JOB_ID *id,
+                           const aipu_global_config_simulation_t *cfg,
+                           aipu_global_config_hw_t *hw_cfg,
+                           aipu_create_job_cfg_t *config = nullptr) override;
+
+  void print_parse_info() override;
+
+  bool is_gm_buffer(uint32_t idx, uint32_t type) {
+    return m_mem->is_gm_enable() && m_gm_config_desc[type].count(idx) == 1;
+  }
 
 public:
   void set_subgraph(struct Subgraph sg) { m_subgraphs.push_back(sg); }
@@ -169,10 +243,7 @@ public:
   void set_fake_subgraph() { m_fake_subgraph = true; }
 
   uint32_t get_subgraph_cnt() {
-    if (m_fake_subgraph)
-      return 0;
-    else
-      return m_subgraphs.size();
+    return m_fake_subgraph ? 0 : m_subgraphs.size();
   }
 
   const Subgraph &get_subgraph(uint32_t sg_id) const {
@@ -183,10 +254,19 @@ public:
 
   BSS &get_bss(uint32_t bss_id) { return m_bss_vec[bss_id]; }
 
-  uint32_t get_bss_cnt() override { return m_bss_vec.size(); }
+  uint32_t get_bss_cnt() const override { return m_bss_vec.size(); }
 
   GraphIOTensors &get_bss_io_ref(uint32_t bss_id) override {
     return m_bss_vec[bss_id].io;
+  }
+
+  void set_graph_comment(const char *data, uint64_t size) override {
+    if (size != 0) {
+      m_comment.assign(data, size);
+      m_comment = replace(m_comment, 0, '\n');
+      m_comment = replace(m_comment, "\n\n", "\n");
+      LOG(LOG_INFO, "aipu.bin comment:\n%s", m_comment.c_str());
+    }
   }
 
   void set_gmconfig(BinSection &gm_section) {
@@ -200,7 +280,8 @@ public:
     m_segmmu_num = *(uint32_t *)segmmu_section.va;
 
     /* extract the head 4 bytes segmmu num information */
-    m_bsegmmu.init(segmmu_section.va + 4, segmmu_section.size - 4);
+    if (m_segmmu_num != 0)
+      m_bsegmmu.init(segmmu_section.va + 4, segmmu_section.size - 4);
   }
 
   void set_stack(uint32_t bss_id, uint32_t size, uint32_t align) {
@@ -216,8 +297,31 @@ public:
   }
 
   void add_static_section(uint32_t bss_id, struct GraphSectionDesc section) {
-    if (bss_id < (uint32_t)m_bss_vec.size())
+    if (bss_id < (uint32_t)m_bss_vec.size()) {
       m_bss_vec[bss_id].static_sections.push_back(section);
+
+      /* cache each section with hashcode to quick search */
+      if (m_is_shared_weight) {
+        if (m_bss_vec[bss_id].shared_static_sections[section.type].count(
+                section.hashcode) != 0) {
+          auto &old_section =
+              m_bss_vec[bss_id]
+                  .shared_static_sections[section.type][section.hashcode];
+          if (old_section.align_bytes < section.align_bytes) {
+            LOG(LOG_WARN,
+                "graph id: 0x%lx bss id: %u section type: %s exist same "
+                "hashcode, and (old align < new align) : (0x%x <  0x%x)",
+                m_id, bss_id,
+                (section.type == SECTION_TYPE_ZEROCPY_CONSTANT ? "zerocopy"
+                                                               : "weight"),
+                old_section.align_bytes, section.align_bytes);
+            return;
+          }
+        }
+        m_bss_vec[bss_id]
+            .shared_static_sections[section.type][section.hashcode] = section;
+      }
+    }
   }
 
   void add_reuse_section(uint32_t bss_id, struct GraphSectionDesc section) {
@@ -247,16 +351,15 @@ public:
     }
   }
 
-  uint32_t get_const_size(uint32_t bss_id) override {
-    if (bss_id < (uint32_t)m_bss_vec.size())
-      return m_bss_vec[bss_id].const_size;
-    return 0;
+  uint32_t get_const_size(uint32_t bss_id = 0) const override {
+    return bss_id < (uint32_t)m_bss_vec.size() ? m_bss_vec[bss_id].const_size
+                                               : 0;
   }
 
-  uint32_t get_zerocpy_const_size(uint32_t bss_id) override {
-    if (bss_id < (uint32_t)m_bss_vec.size())
-      return m_bss_vec[bss_id].zerocpy_const_size;
-    return 0;
+  uint32_t get_zerocpy_const_size(uint32_t bss_id = 0) const override {
+    return bss_id < (uint32_t)m_bss_vec.size()
+               ? m_bss_vec[bss_id].zerocpy_const_size
+               : 0;
   }
 
   std::vector<struct GraphSectionDesc> &
@@ -264,13 +367,48 @@ public:
     return m_bss_vec[bss_id].static_sections;
   }
 
+  HASH_SECTION_TABLE &get_shared_section_ref(uint32_t bss_id) override {
+    return m_bss_vec[bss_id].shared_static_sections;
+  };
+
   uint32_t get_alloc_pad_size() const override {
-#ifndef SIMULATION
-    if (m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3)
-      return 0x800;
-#endif
-    return 0;
+    return m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3 ? 0x800 : 0;
   }
+
+  uint32_t get_asid_align_page() const override {
+    return m_hw_version >= AIPU_ISA_VERSION_ZHOUYI_V3_2 ? 256 : 1;
+  }
+
+  aipu_data_type_t get_io_tensor_type(int idx) const override {
+    return m_bss_vec[0].io.inputs[idx].data_type;
+  }
+
+  const std::string &get_section_name(FMSection sec) {
+    const static std::string ret = "unknown";
+    const static std::map<FMSection, std::string> table = {
+        {FMSection::Text, "text"},
+        {FMSection::Crodata, "crodata"},
+        {FMSection::ZcyConst, "zcy_const"},
+        {FMSection::ModelParam, "model_param"},
+        {FMSection::Rodata, "rodata"},
+        {FMSection::Dcr, "dcr"},
+        {FMSection::TcbChain, "tcb_chain"},
+        {FMSection::TotalPriv, "total_priv"},
+        {FMSection::TotalReuse, "total_reuse"},
+        {FMSection::GM, "gm"},
+        {FMSection::Stack, "Stack"},
+        {FMSection::Dpdata, "Dpdata"},
+        {FMSection::Printf, "printf"},
+        {FMSection::Profile, "profile"},
+        {FMSection::Coredump, "coredump"},
+        {FMSection::ReservedIOVA, "reserved_iova"},
+    };
+    return table.count(sec) != 0 ? table.at(sec) : ret;
+  }
+
+  const FMSectionInfo &get_fmsec_info() { return m_fmsec_info; }
+
+  const GMSectionInfo &get_gmsec_info() { return m_gmsec_info; }
 
 public:
   GraphV3X(void *ctx, GRAPH_ID id, DeviceBase *dev);
@@ -280,7 +418,7 @@ public:
 
   friend class JobV3X;
   friend class JobV3;
-  friend class JobV3_1;
+  friend class JobV3_2;
 };
 } // namespace aipudrv
 

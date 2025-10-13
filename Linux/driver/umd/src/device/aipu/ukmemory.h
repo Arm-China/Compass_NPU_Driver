@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -31,6 +31,11 @@
 #define X3_CMDPOOL_EXCEPTION (1 << 4 | 1 << 5)
 #define V3X_CMDPOOL_IDLE (1 << 6)
 
+#define X2_CLUSTER_IDLE (1 << 5)
+#define X2_BUS_IDLE (1 << 6)
+#define X3_CLUSTER_IDLE (1 << 4)
+#define X3_BUS_IDLE (1 << 5)
+
 #define X1_DEV_EXCEPTION (1 << 2)
 #define X1_DEV_IDLE (1 << 17)
 
@@ -39,24 +44,27 @@ class UKMemory : public MemoryBase {
 private:
   int m_fd = 0;
 
-public:
-  virtual aipu_status_t malloc(uint32_t size, uint32_t align, BufferDesc **desc,
-                               const char *str = nullptr,
-                               uint32_t asid_mem_cfg = 0);
-  virtual aipu_status_t free(BufferDesc **desc, const char *str = nullptr);
-  virtual aipu_status_t free_phybuffer(BufferDesc *desc,
-                                       const char *str = nullptr);
-  virtual aipu_status_t reserve_mem(DEV_PA_32 addr, uint32_t size,
-                                    BufferDesc **desc,
-                                    const char *str = nullptr);
+private:
   aipu_status_t free_all(void);
-  virtual int64_t read(uint64_t addr, void *dest, size_t size) const {
+
+public:
+  aipu_status_t malloc(uint32_t size, uint32_t align, BufferDesc **desc,
+                       const char *str = nullptr, uint32_t asid_mem_cfg = 0,
+                       uint32_t rsv_ivoa_size = 0) override;
+  aipu_status_t free(BufferDesc **desc, const char *str = nullptr) override;
+  aipu_status_t free_phybuffer(BufferDesc *desc,
+                               const char *str = nullptr) override;
+  uint32_t get_lm_size() override; /* not thread-safe */
+  uint32_t get_sm_size() override; /* not thread-safe */
+  aipu_status_t refresh_binded_iova(BufferDesc &desc, DEV_PA_64 pa,
+                                    uint64_t size) override;
+  int64_t read(uint64_t addr, void *dest, size_t size) const override {
     return mem_read(addr, dest, size);
   };
-  virtual int64_t write(uint64_t addr, const void *src, size_t size) {
+  int64_t write(uint64_t addr, const void *src, size_t size) override {
     return mem_write(addr, src, size);
   };
-  virtual int64_t zeroize(uint64_t addr, size_t size) {
+  int64_t zeroize(uint64_t addr, size_t size) override {
     return mem_bzero(addr, size);
   };
 

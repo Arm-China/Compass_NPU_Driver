@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -19,7 +19,10 @@
 namespace aipudrv {
 SimulatorV3::SimulatorV3() {
   m_dev_type = DEV_TYPE_SIMULATOR_V3;
+  m_hw_config = 1204;
   m_dram = UMemory::get_memory();
+  m_dram->set_dev(this);
+  m_dram->set_isa_version(AIPU_ISA_VERSION_ZHOUYI_V3);
 
   m_log_level = RTDEBUG_SIMULATOR_LOG_LEVEL;
   m_verbose = false;
@@ -63,43 +66,31 @@ void SimulatorV3::set_cfg(const aipu_global_config_simulation_t *cfg) {
 }
 
 aipu_status_t SimulatorV3::parse_config(uint32_t config, uint32_t &sim_code) {
-  std::string key = "null";
-  typedef struct {
-    uint32_t config;
-    uint32_t core;
-    uint32_t cluster;
-    uint32_t sim_code;
-  } arch_item_t;
-  std::map<std::string, arch_item_t> npu_arch_map = {
-      {"X2_1204", {1204, 1, 1, sim_aipu::config_t::X2_1204}},
-      {"X2_1204MP3", {1204, 3, 1, sim_aipu::config_t::X2_1204MP3}}};
+  std::string key;
+  if (m_arch_desc.empty()) {
+    for (auto &it : m_npu_arch_map) {
+      if (it.second.config == config) {
+        key = it.first;
+        break;
+      }
+    }
 
-  if (!m_arch_desc.empty() && npu_arch_map.count(m_arch_desc) > 0) {
-    sim_code = npu_arch_map[m_arch_desc].sim_code;
+    if (!key.empty()) {
+      LOG(LOG_ALERT, "Not provide npu arch, and config set to %u", config);
+    } else {
+      LOG(LOG_ERR,
+          "Not provide npu arch, and config: %u does not support in v3",
+          config);
+      return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
+    }
+  } else if (m_npu_arch_map.count(m_arch_desc) > 0) {
     key = m_arch_desc;
   } else {
-    if (config == 1204) {
-      key = "X2_1204";
-      LOG(LOG_ALERT, "Not support requested sim target: %s, switch to : %s",
-          m_arch_desc.c_str(), key.c_str());
-    } else {
-      LOG(LOG_ERR, "Only support: X2_1204/X2_1204MP3");
-      return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
-    }
-
-    if (npu_arch_map.count(key) > 0) {
-      sim_code = npu_arch_map[key].sim_code;
-    } else {
-      LOG(LOG_ERR, "No KUN target: %d", config);
-      return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
-    }
-  }
-
-  if (npu_arch_map[key].config != 1204) {
-    LOG(LOG_ERR, "Only support: X2_1204/X2_1204MP3");
+    LOG(LOG_ERR, "%s does not support in v3", m_arch_desc.c_str());
     return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
   }
 
+  sim_code = m_npu_arch_map.at(key).sim_code;
   return AIPU_STATUS_SUCCESS;
 }
 
@@ -114,51 +105,29 @@ aipu_status_t SimulatorV3::init() {
   uint32_t reg_val = 0, sim_code = 0;
   BufferDesc *rev_buf = nullptr;
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
-  char *umd_asid_base =
-      getenv("UMD_ASID_BASE"); /* provide address is hex format, NA now*/
-  uint64_t umd_asid_base_pa = 0;
-  char *ptr = nullptr;
 
   pthread_rwlock_wrlock(&m_lock);
   if (m_aipu != nullptr)
     goto unlock;
 
-  ret = parse_config(HW_CONFIG, sim_code);
+  ret = parse_config(m_hw_config, sim_code);
   if (ret != AIPU_STATUS_SUCCESS)
     goto unlock;
 
   m_config = sim_create_config(sim_code, m_log_level, m_log_filepath, m_verbose,
-                               m_enable_avx, m_en_eval, m_gm_size);
+                               m_enable_avx, m_en_eval, m_gm_size,
+                               m_plugin_filename, m_json_filename);
   m_aipu = new sim_aipu::Aipu(m_config, static_cast<UMemory &>(*m_dram));
   if (m_aipu == nullptr) {
     ret = AIPU_STATUS_ERROR_DEV_ABNORMAL;
     goto unlock;
   }
 
-  if (sim_code == sim_aipu::config_t::X2_1204 ||
-      sim_code == sim_aipu::config_t::X2_1204MP3)
-    m_dram->gm_init(m_config.gm_size);
-
-  if (umd_asid_base != nullptr) {
-    /* provide address is hex format */
-    umd_asid_base_pa = strtoul(umd_asid_base, &ptr, 16);
-    uint64_t max_asid_address =
-        get_umemory()->get_memregion_base(ASID_MAX - 1, MEM_REGION_DDR) +
-        get_umemory()->get_memregion_size(ASID_MAX - 1, MEM_REGION_DDR);
-    if (umd_asid_base_pa < max_asid_address) {
-      LOG(LOG_WARN,
-          "req provide asid0 address: 0x%lx < max asid address: 0x%lx, be "
-          "careful with conflict",
-          umd_asid_base_pa, max_asid_address);
-    }
-  }
-
-  if (umd_asid_base_pa !=
-      get_umemory()->get_memregion_base(ASID_REGION_0, MEM_REGION_DDR))
-    m_dram->reset_asid_base(0, umd_asid_base_pa);
+  m_dram->gm_init(m_config.gm_size);
 
   /* reserve 4KB for debug */
-  m_dram->reserve_mem(0xC1000000, AIPU_PAGE_SIZE, &rev_buf, "rsv");
+  m_dram->reserve_mem(0xC1000000, AIPU_PAGE_SIZE, &rev_buf, "rsv",
+                      MEM_REGION_RSV);
   m_reserve_mem.push_back(rev_buf);
 
   m_code = sim_code;
@@ -186,7 +155,7 @@ aipu_status_t SimulatorV3::init() {
 
   aipu_cap.arch = AIPU_ARCH_ZHOUYI;
   aipu_cap.version = AIPU_ISA_VERSION_ZHOUYI_V3;
-  aipu_cap.config = HW_CONFIG;
+  aipu_cap.config = m_hw_config;
   m_part_caps.push_back(aipu_cap);
 
 unlock:

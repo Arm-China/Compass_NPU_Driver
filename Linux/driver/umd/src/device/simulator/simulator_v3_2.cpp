@@ -1,14 +1,14 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * @file  simulator_v3_1.cpp
- * @brief AIPU User Mode Driver (UMD) zhouyi aipu v3_1 simulator module
+ * @file  simulator_v3_2.cpp
+ * @brief AIPU User Mode Driver (UMD) zhouyi aipu v3_2 simulator module
  * implementation
  */
 
-#include "simulator_v3_1.h"
+#include "simulator_v3_2.h"
 
 #include <unistd.h>
 
@@ -18,7 +18,7 @@
 #include <thread>
 
 #include "utils/helper.h"
-#include "zhouyi_v3x/zhouyi_v3_1/job_v3_1.h"
+#include "zhouyi_v3x/zhouyi_v3_2/job_v3_2.h"
 
 namespace aipudrv {
 /**
@@ -26,22 +26,25 @@ namespace aipudrv {
  * when some grid job is done. Simulator will directly call
  * one callback to notify UMD and convey the done grid's ID to UMD.
  */
-std::set<uint16_t> SimulatorV3_1::m_sim_done_grid_set = {};
-std::mutex SimulatorV3_1::m_sim_done_grid_mtx;
-std::mutex simv3_1_mtx;
-std::condition_variable simv3_1_cv;
-bool simv3_1_has_grid_done = false;
+std::set<uint16_t> SimulatorV3_2::m_sim_done_grid_set = {};
+std::mutex SimulatorV3_2::m_sim_done_grid_mtx;
+std::mutex simv3_2_mtx;
+std::condition_variable simv3_2_cv;
+bool simv3_2_has_grid_done = false;
 
-bool has_some_grid_done() { return simv3_1_has_grid_done; }
+bool has_some_grid_done() { return simv3_2_has_grid_done; }
 
-SimulatorV3_1::SimulatorV3_1() {
-  m_dev_type = DEV_TYPE_SIMULATOR_V3_1;
+SimulatorV3_2::SimulatorV3_2() {
+  m_dev_type = DEV_TYPE_SIMULATOR_V3_2;
+  m_hw_config = 1304;
   m_dram = UMemory::get_memory();
+  m_dram->set_dev(this);
+  m_dram->set_isa_version(AIPU_ISA_VERSION_ZHOUYI_V3_2);
 
   pthread_rwlock_init(&m_lock, NULL);
 }
 
-SimulatorV3_1::~SimulatorV3_1() {
+SimulatorV3_2::~SimulatorV3_2() {
   if (m_aipu != nullptr) {
     delete m_aipu;
     m_aipu = nullptr;
@@ -51,15 +54,13 @@ SimulatorV3_1::~SimulatorV3_1() {
   m_dram = nullptr;
 }
 
-void SimulatorV3_1::set_cfg(const aipu_global_config_simulation_t *cfg) {
+void SimulatorV3_2::set_cfg(const aipu_global_config_simulation_t *cfg) {
   if (cfg == nullptr)
     return;
 
   m_log_level = cfg->log_level;
   m_verbose = cfg->verbose;
   m_enable_avx = cfg->enable_avx;
-  m_en_eval = cfg->en_eval;
-  m_en_l2d = cfg->en_l2d;
   m_gm_size = cfg->gm_size;
 
   if (cfg->plugin_name != nullptr)
@@ -76,18 +77,17 @@ void SimulatorV3_1::set_cfg(const aipu_global_config_simulation_t *cfg) {
   m_ddr_latency_rd = cfg->ddr_latency_rd;
   m_ddr_latency_wr = cfg->ddr_latency_wr;
   m_ddr_bw = cfg->ddr_bw;
-  m_ddr_bw_ratio = cfg->ddr_bw_ratio;
 
   if (cfg->perf_report != nullptr)
     m_perf_report = cfg->perf_report;
 }
 
-int SimulatorV3_1::get_grid_id(uint16_t &grid_id) {
+int SimulatorV3_2::get_grid_id(uint16_t &grid_id) {
   grid_id = m_grid_id++;
   return 0;
 }
 
-int SimulatorV3_1::get_start_group_id(int group_cnt, uint16_t &start_group_id) {
+int SimulatorV3_2::get_start_group_id(int group_cnt, uint16_t &start_group_id) {
   int ret = 0;
 
   if (group_cnt == 0)
@@ -125,69 +125,68 @@ out:
   return ret;
 }
 
-aipu_status_t SimulatorV3_1::parse_config(uint32_t config, uint32_t &sim_code) {
-  std::string key = "null";
-  typedef struct {
-    uint32_t config;
-    uint32_t core;
-    uint32_t cluster;
-    uint32_t sim_code;
-  } arch_item_t;
-  std::map<std::string, arch_item_t> npu_arch_map = {
-      {"X3_1304", {1304, 1, 1, sim_aipu::config_t::X3_1304}},
-      {"X3_1304MP2", {1304, 2, 1, sim_aipu::config_t::X3_1304MP2}},
-      {"X3_1304MP4", {1304, 4, 1, sim_aipu::config_t::X3_1304MP4}}};
-
-  if (!m_arch_desc.empty() && npu_arch_map.count(m_arch_desc) > 0) {
-    sim_code = npu_arch_map[m_arch_desc].sim_code;
-    key = m_arch_desc;
-  } else {
-    if (config == 1304) {
-      key = "X3_1304";
-      LOG(LOG_ALERT, "Not support requested sim target: %s, switch to : %s",
-          m_arch_desc.c_str(), key.c_str());
-    } else {
-      LOG(LOG_ERR, "Only support: X3_1304/X3_1304MP2/X3_1304MP4");
-      return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
+/* if dev->init() is behind graph parser, we can use config to check some
+ * parameters */
+aipu_status_t SimulatorV3_2::parse_config(uint32_t config, uint32_t &sim_code) {
+  std::string target = m_arch_desc;
+  if (target.empty()) {
+    for (auto &it : m_npu_arch_map) {
+      if (it.second.config == config) {
+        target = it.first;
+        break;
+      }
     }
 
-    if (npu_arch_map.count(key) > 0) {
-      sim_code = npu_arch_map[key].sim_code;
-    } else {
-      LOG(LOG_ERR, "No LIN target: %d", config);
+    if (target.empty()) {
+      LOG(LOG_ERR,
+          "Not provide npu arch, and config: %u does not support in v2",
+          config);
       return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
     }
   }
 
-  if (npu_arch_map[key].config != 1304) {
-    LOG(LOG_ERR, "Only support: X3_1304/X3_1304MP2/X3_1304MP4");
+  uint32_t core_num = 1;
+  size_t pos = 0;
+  std::string bare_target = target;
+  if ((pos = target.find("MP", pos)) != std::string::npos) {
+    auto mp = target.substr(pos + 2, target.size() - pos - 2);
+    core_num = std::stoi(mp);
+    if (core_num == 0)
+      core_num = 1;
+    if (pos > 0 && target[pos - 1] == '_')
+      pos = pos - 1;
+    bare_target = target.substr(0, pos);
+  }
+
+  if (m_npu_arch_map.count(bare_target) != 0) {
+    auto &item = m_npu_arch_map.at(bare_target);
+    sim_code = (item.tec_num & 0xF) + ((item.aiff_num & 0xF) << 4) +
+               ((core_num & 0xF) << 8) + ((item.cluster_num & 0xF) << 12) +
+               (1 << 31);
+  } else {
+    LOG(LOG_ERR, "%s does not support in v3_2", m_arch_desc.c_str());
     return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
   }
 
   return AIPU_STATUS_SUCCESS;
 }
 
-bool SimulatorV3_1::has_target(uint32_t arch, uint32_t version, uint32_t config,
+bool SimulatorV3_2::has_target(uint32_t arch, uint32_t version, uint32_t config,
                                uint32_t rev) {
-  return arch == AIPU_ARCH_ZHOUYI && version == AIPU_ISA_VERSION_ZHOUYI_V3_1 &&
-         rev == 0;
+  return arch == AIPU_ARCH_ZHOUYI && version == AIPU_ISA_VERSION_ZHOUYI_V3_2;
 }
 
-aipu_status_t SimulatorV3_1::init() {
+aipu_status_t SimulatorV3_2::init() {
   uint32_t reg_val = 0, sim_code = 0;
   BufferDesc *rev_buf = nullptr;
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
-  char *umd_asid_base =
-      getenv("UMD_ASID_BASE"); /* provide address is hex format, NA now*/
-  uint64_t umd_asid_base_pa = 0;
-  char *ptr = nullptr;
 
   pthread_rwlock_wrlock(&m_lock);
   if (m_aipu != nullptr) {
     goto unlock;
   }
 
-  ret = parse_config(HW_CONFIG, sim_code);
+  ret = parse_config(m_hw_config, sim_code);
   if (ret != AIPU_STATUS_SUCCESS)
     goto unlock;
 
@@ -198,39 +197,19 @@ aipu_status_t SimulatorV3_1::init() {
     goto unlock;
   }
 
-  if (sim_code == sim_aipu::config_t::X3_1304 ||
-      sim_code == sim_aipu::config_t::X3_1304MP2 ||
-      sim_code == sim_aipu::config_t::X3_1304MP4)
-    m_dram->gm_init(m_config.gm_size);
-
-  if (umd_asid_base != nullptr) {
-    /* provide address is hex format */
-    umd_asid_base_pa = strtoul(umd_asid_base, &ptr, 16);
-    uint64_t max_asid_address =
-        get_umemory()->get_memregion_base(ASID_MAX - 1, MEM_REGION_DDR) +
-        get_umemory()->get_memregion_size(ASID_MAX - 1, MEM_REGION_DDR);
-    if (umd_asid_base_pa < max_asid_address) {
-      LOG(LOG_WARN,
-          "req provide asid0 address: 0x%lx < max asid address: 0x%lx, be "
-          "careful with conflict",
-          umd_asid_base_pa, max_asid_address);
-    }
-  }
-
-  if (umd_asid_base_pa !=
-      get_umemory()->get_memregion_base(ASID_REGION_0, MEM_REGION_DDR))
-    m_dram->reset_asid_base(0, umd_asid_base_pa);
+  m_dram->gm_init(m_config.gm_size);
 
   /* reserve 4KB for debug */
-  m_dram->reserve_mem(0xC1000000, AIPU_PAGE_SIZE, &rev_buf, "rsv");
+  m_dram->reserve_mem(0xC1000000, AIPU_PAGE_SIZE, &rev_buf, "rsv",
+                      MEM_REGION_RSV);
   m_reserve_mem.push_back(rev_buf);
 
   m_code = sim_code;
   m_aipu->read_register(TSM_BUILD_INFO, reg_val);
   m_max_cmdpool_cnt = ((reg_val >> 16) & 0xf) + 1;
 
-  m_aipu->set_event_handler(
-      (sim_aipu::event_handler_t)(SimulatorV3_1::sim_cb_handler), nullptr);
+  m_aipu->set_event_handler((event_handler_t)(SimulatorV3_2::sim_cb_handler),
+                            nullptr);
   parse_cluster_info();
 
 unlock:
@@ -238,7 +217,7 @@ unlock:
   return ret;
 }
 
-bool SimulatorV3_1::is_cmdpool_full(int qos, int part_id, int partition_mode,
+bool SimulatorV3_2::is_cmdpool_full(int qos, int part_id, int partition_mode,
                                     int cluster_idx, uint32_t reg_val) {
   uint32_t cmdpool_full_flag = 0;
 
@@ -251,9 +230,9 @@ bool SimulatorV3_1::is_cmdpool_full(int qos, int part_id, int partition_mode,
   return !!cmdpool_full_flag;
 }
 
-aipu_status_t SimulatorV3_1::schedule(const JobDesc &jobdesc) {
+aipu_status_t SimulatorV3_2::schedule(const JobDesc &jobdesc) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
-  JobV3_1 *job = static_cast<JobV3_1 *>(jobdesc.jobbase);
+  JobV3_2 *job = static_cast<JobV3_2 *>(jobdesc.jobbase);
   uint16_t grid_id = job->get_grid_id();
   uint32_t part_id = job->get_part_id();
   uint32_t cmd_pool_id = 0, value = 0, cluster_idx = 0;
@@ -284,7 +263,7 @@ aipu_status_t SimulatorV3_1::schedule(const JobDesc &jobdesc) {
       m_cant_add_job_flag = true;
       job_queue_item = m_buffer_queue.front();
       m_buffer_queue.pop();
-      job = (JobV3_1 *)job_queue_item.job;
+      job = (JobV3_2 *)job_queue_item.job;
       job_desc = job_queue_item.jobdesc;
       m_commit_map[grid_id] = job_desc.jobbase;
 
@@ -309,7 +288,7 @@ aipu_status_t SimulatorV3_1::schedule(const JobDesc &jobdesc) {
   return ret;
 }
 
-aipu_status_t SimulatorV3_1::fill_commit_queue() {
+aipu_status_t SimulatorV3_2::fill_commit_queue() {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   uint32_t max_limit = 1, max = 0;
   job_queue_elem_t job_queue_item{0};
@@ -328,7 +307,7 @@ aipu_status_t SimulatorV3_1::fill_commit_queue() {
     job_queue_item = m_buffer_queue.front();
     JobBase *jobbase = (JobBase *)job_queue_item.job;
     JobDesc jobdesc = job_queue_item.jobdesc;
-    JobV3_1 *job = static_cast<JobV3_1 *>(jobbase);
+    JobV3_2 *job = static_cast<JobV3_2 *>(jobbase);
     uint16_t grid_id = job->get_grid_id();
     uint32_t part_id = job->get_part_id();
     uint32_t cmd_pool_id = 0, value = 0;
@@ -375,10 +354,10 @@ aipu_status_t SimulatorV3_1::fill_commit_queue() {
   return ret;
 }
 
-aipu_ll_status_t SimulatorV3_1::poll_status(uint32_t max_cnt, int32_t time_out,
+aipu_ll_status_t SimulatorV3_2::poll_status(uint32_t max_cnt, int32_t time_out,
                                             bool of_this_thread,
                                             void *jobbase) {
-  JobV3_1 *job = static_cast<JobV3_1 *>(jobbase);
+  JobV3_2 *job = static_cast<JobV3_2 *>(jobbase);
   uint16_t grid_id = job->get_grid_id();
 
   LOG(LOG_INFO, "Enter %s...", __FUNCTION__);
@@ -402,9 +381,9 @@ aipu_ll_status_t SimulatorV3_1::poll_status(uint32_t max_cnt, int32_t time_out,
     if (m_commit_map.count(grid_id)) {
       if (m_sim_done_grid_set.count(grid_id) == 0) {
         LOG(LOG_INFO, "wait, sim doing...");
-        std::unique_lock<std::mutex> lck(simv3_1_mtx);
-        simv3_1_cv.wait(lck, has_some_grid_done);
-        simv3_1_has_grid_done = false;
+        std::unique_lock<std::mutex> lck(simv3_2_mtx);
+        simv3_2_cv.wait(lck, has_some_grid_done);
+        simv3_2_has_grid_done = false;
         LOG(LOG_INFO, "wakeup, sim done...");
       }
 
@@ -444,16 +423,16 @@ aipu_ll_status_t SimulatorV3_1::poll_status(uint32_t max_cnt, int32_t time_out,
   return AIPU_LL_STATUS_SUCCESS;
 }
 
-void SimulatorV3_1::sim_cb_handler(uint32_t event, uint64_t value,
+void SimulatorV3_2::sim_cb_handler(uint32_t event, uint64_t value,
                                    void *context) {
   LOG(LOG_INFO, "Enter sim_cb_handler...");
 
-  if (event == sim_aipu::AIPU_EV_GRID_END) {
+  if (event == AIPU_EV_GRID_END) {
     m_sim_done_grid_mtx.lock();
     m_sim_done_grid_set.insert(value);
-    std::unique_lock<std::mutex> lck(simv3_1_mtx);
-    simv3_1_has_grid_done = true;
-    simv3_1_cv.notify_one();
+    std::unique_lock<std::mutex> lck(simv3_2_mtx);
+    simv3_2_has_grid_done = true;
+    simv3_2_cv.notify_one();
     m_sim_done_grid_mtx.unlock();
   } else {
     LOG(LOG_ALERT, "sim_cn_handler has no event: %d", event);

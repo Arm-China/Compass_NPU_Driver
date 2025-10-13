@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -33,9 +33,9 @@ public:
                            aipu_global_config_hw_t *hw_cfg,
                            aipu_create_job_cfg_t *config = nullptr);
   aipu_status_t get_tensor_count(aipu_tensor_type_t type,
-                                 uint32_t *cnt) override;
+                                 uint32_t *cnt) const override;
   aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor,
-                                      aipu_tensor_desc_t *desc) override;
+                                      aipu_tensor_desc_t *desc) const override;
 
   std::vector<struct GraphSectionDesc> &
   get_static_section_ref(uint32_t bss_id) override {

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
@@ -14,5 +14,6 @@
 #define AIPU_CONFIG_DEFAULT_RESET_DELAY_US  50
 #define AIPU_CONFIG_CORE_RESET_DELAY_US     140
 #define AIPU_CONFIG_ENABLE_INTR_PROFILING   0
+#define AIPU_USE_STANDARD_DMA_API_FOR_V3_2  0
 
 #endif /* __CONFIG_H__ */

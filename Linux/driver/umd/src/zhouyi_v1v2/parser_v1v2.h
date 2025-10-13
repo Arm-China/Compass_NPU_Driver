@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -54,7 +54,9 @@ private:
   aipu_status_t parse_graph_header_check(std::istream &gbin, uint32_t size);
 
 public:
-  aipu_status_t parse_graph(std::istream &gbin, uint32_t size, Graph &gobj);
+  aipu_status_t parse_graph(std::istream &gbin, uint32_t size,
+                            Graph &gobj) override;
+  aipu_status_t parse_graph(const char *file, Graph &gobj) override;
   BinSection get_bin_section(SectionType type);
 
 public:

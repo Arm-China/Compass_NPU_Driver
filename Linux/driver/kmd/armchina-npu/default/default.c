@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 /**
  * SoC: ArmChina internal Juno platform
@@ -24,6 +24,7 @@ static struct aipu_soc_operations default_ops = {
 	.is_aipu_irq = NULL,
 	.soc_pm_runtime_get_sync = NULL,
 	.soc_pm_runtime_put = NULL,
+	.hw_reset = NULL,
 };
 
 static int default_probe(struct platform_device *p_dev)
@@ -58,7 +59,7 @@ static const struct of_device_id aipu_of_match[] = {
 		.compatible = "armchina,zhouyi-v3",
 	},
 	{
-		.compatible = "armchina,zhouyi-v3_1",
+		.compatible = "armchina,zhouyi-v3_2",
 	},
 	{
 		.compatible = "armchina,zhouyi",

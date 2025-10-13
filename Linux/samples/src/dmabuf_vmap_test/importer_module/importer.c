@@ -58,6 +58,7 @@ static struct miscdevice mdev = {
 	.minor = MISC_DYNAMIC_MINOR,
 	.name = "importer",
 	.fops = &importer_fops,
+	.mode = 0666,
 };
 
 static int __init importer_init(void)

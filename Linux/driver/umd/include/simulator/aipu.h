@@ -1,69 +1,80 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
-//
-// SPDX-License-Identifier: Apache-2.0
-
 #ifndef __AIPU_H__
 #define __AIPU_H__
 
 #include <stdint.h>
-
 #include <memory>
 
-#define TSM_CMD_SCHED_CTRL 0x0
-#define TSM_CMD_SCHED_ADDR_HI 0x8
-#define TSM_CMD_SCHED_ADDR_LO 0xC
-#define TSM_CMD_TCB_NUMBER 0x1C
+#include "config.h"
 
-#define TSM_STATUS 0x18
-#define TSM_STATUS_CMDPOOL_FULL_QOSL(val) (val & 0xff)
-#define TSM_STATUS_CMDPOOL_FULL_QOSH(val) ((val >> 8) & 0xff)
+namespace sim_aipu
+{
+    class IMemEngine;
+    class IDbgLite;
 
-#define CREATE_CMD_POOL 0x1
-#define DESTROY_CMD_POOL 0x2
-#define DISPATCH_CMD_POOL 0x4
-#define CMD_POOL0_STATUS 0x804
-#define CLUSTER0_CONFIG 0xC00
-#define CLUSTER0_CTRL 0xC04
-#define CMD_POOL0_IDLE (1 << 6)
+    class Aipu
+    {
+    public:
+        /** @brief Consturcts the aipu.
 
-namespace sim_aipu {
-class IMemEngine;
-class IDbgLite;
+        @param config_t Specifying construction parameters(e.g. config_t{.code} for config single core or multi core).
+        @param IMemEngine Is external DDR.
+        */
+        Aipu(const config_t &, IMemEngine &);
+        ~Aipu();
 
-class Aipu {
-public:
-  Aipu(const struct config_t &, IMemEngine &);
-  ~Aipu();
+        Aipu(const Aipu &) = delete;
+        Aipu &operator=(const Aipu &) = delete;
 
-  Aipu(const Aipu &) = delete;
-  Aipu &operator=(const Aipu &) = delete;
+        /** @brief Reads the specified register value.
 
-  int read_register(uint32_t addr, uint32_t &v) const;
+        @param addr Given a addr for a register that is a host register address @ref host register definition.
+        @param v Is reads the specified register value.
 
-  int write_register(uint32_t addr, uint32_t v);
+        @return On success, the number of bytes read is returned.
+        On error, negative is returned, and strerror(errnum) gets error appropriately.
+        */
+        int read_register(uint32_t addr, uint32_t &v) const;
 
-  static int version();
+        /** @brief Writes the specified register value.
 
-  void set_dbg_lite(const std::shared_ptr<IDbgLite> &);
+        @param addr Given a addr for a register that is a host register address @ref host register definition.
+        @param v Is the value to be written to the specified register.
 
-  void enable_profiling(bool en);
+        @return On success, the number of bytes written is returned.
+        On error, negative is returned, and strerror(errnum) gets error appropriately.
+        */
+        int write_register(uint32_t addr, uint32_t v);
 
-  void dump_profiling();
+        /** @brief Setup debug module.
 
-  void set_event_handler(void (*)(uint32_t event, uint64_t value,
-                                  void *context),
-                         void *context);
+        @param IDbgLite @ref IDbgLite definition.
+        */
+        void set_dbg_lite(const std::shared_ptr<IDbgLite> &);
 
-private:
-  std::unique_ptr<class AipuImpl> impl_;
-};
-} // namespace sim_aipu
+        /** @brief Gets the aipu version.
 
-#ifdef __cplusplus
-extern "C" {
-typedef sim_aipu::Aipu *(*sim_convert_t)(void *);
-sim_aipu::Aipu *sim_convert(void *);
-}
-#endif //!__cplusplus
+        @return Version bumber (e.g. 0x040200 that is version 4.2.0).
+        */
+        static int version();
+
+        /** @brief The switch for profiling.
+
+        @param en True to enable profiling statistics, otherwise no.
+        */
+        void enable_profiling(bool en);
+
+        /** @brief Dump profiling report
+
+        @param none
+        */
+        void dump_profiling();
+
+        void set_event_handler(event_handler_t, void *context);
+
+    private:
+        std::unique_ptr<class AipuImpl> impl_;
+    };
+
+} //!sim_aipu
 
 #endif //!__AIPU_H__

@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -163,7 +163,8 @@ MemoryBase::get_allocated_buffer(std::map<DEV_PA_64, Buffer> *buffer_pool,
 
   for (iter = buffer_pool->begin(); iter != buffer_pool->end(); iter++) {
     if ((addr >= iter->second.desc->pa) &&
-        (addr < (iter->second.desc->pa + iter->second.desc->size)))
+        (addr < (iter->second.desc->pa + iter->second.desc->size +
+                 iter->second.desc->binded_iova_range)))
       return iter;
   }
   return buffer_pool->end();
@@ -218,7 +219,8 @@ int MemoryBase::pa_to_va(uint64_t addr, uint64_t size, char **va) const {
   }
 
   /* found the buffer in m_allocated/m_reserved */
-  if ((addr + size) > (iter->second.desc->pa + iter->second.desc->size)) {
+  if ((addr + size) > (iter->second.desc->pa + iter->second.desc->size +
+                       iter->second.desc->binded_iova_range)) {
     ret = -2;
     LOG(LOG_ERR, "invalid pa addr 0x%lx/size 0x%lx is used: out of range\n",
         addr, size);

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+# Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 #
 # SPDX-License-Identifier: Apache-2.0
 LOCAL_PATH=$(cd "$(dirname "$0")";pwd)

@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
   vector<char *> gt;
   cmd_opt_t opt;
   aipu_create_job_cfg_t create_job_cfg = {0};
-  int pass = 0;
+  int pass = -1;
 
   std::vector<uint64_t> jobs_id;
   std::vector<aipu_job_status_t> jobs_status;
@@ -71,15 +71,7 @@ int main(int argc, char *argv[]) {
   if (opt.dump_dir[0] != '\0')
     AIPU_CRIT()("aipu_flush_test doesn't support to dump files\n");
 
-  if (opt.log_level_set) {
-    sim_glb_config.log_level = opt.log_level;
-  } else {
-#if ((defined RTDEBUG) && (RTDEBUG == 1))
-    sim_glb_config.log_level = 3;
-#else
-    sim_glb_config.log_level = 0;
-#endif
-  }
+  sim_glb_config.log_level = opt.log_level;
   sim_glb_config.verbose = opt.verbose;
   sim_glb_config.simulator = opt.simulator;
 
@@ -102,11 +94,10 @@ int main(int argc, char *argv[]) {
   ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
-    AIPU_ERR()
-    ("aipu_load_graph_helper: %s (%s)\n", msg, opt.bin_files[0].c_str());
+    AIPU_ERR()("aipu_load_graph: %s (%s)\n", msg, opt.bin_files[0].c_str());
     goto deinit_ctx;
   }
-  AIPU_INFO()("aipu_load_graph_helper success: %s\n", opt.bin_files[0].c_str());
+  AIPU_INFO()("aipu_load_graph success: %s\n", opt.bin_files[0].c_str());
 
   ret =
       aipu_get_tensor_count(ctx, graph_id, AIPU_TENSOR_TYPE_INPUT, &input_cnt);
@@ -207,7 +198,6 @@ int main(int argc, char *argv[]) {
       if (ret != AIPU_STATUS_SUCCESS) {
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_flush_job: %s\n", msg);
-        pass = -1;
         goto clean_job;
       }
       AIPU_INFO()("flush job %lx success\n", jobs_id[job]);
@@ -223,7 +213,6 @@ int main(int argc, char *argv[]) {
         } else if (ret != AIPU_STATUS_SUCCESS) {
           aipu_get_error_message(ctx, ret, &msg);
           AIPU_ERR()("aipu_get_job_status: %s\n", msg);
-          pass = -1;
           goto clean_job;
         }
         AIPU_INFO()("job %lx still running...\n", jobs_id[job]);
@@ -251,10 +240,15 @@ int main(int argc, char *argv[]) {
 
       pass = check_result(job_outputs[job], output_desc, opt.gts, opt.gts_size);
       jobs_status[job] = AIPU_JOB_STATUS_NO_STATUS;
+      if (pass == -1)
+        break;
     }
   }
 
 clean_job:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   for (uint32_t job = 0; job < pipeline_job_cnt; job++) {
     ret = aipu_clean_job(ctx, jobs_id[job]);
     if (ret != AIPU_STATUS_SUCCESS) {
@@ -266,6 +260,9 @@ clean_job:
   }
 
 unload_graph:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   ret = aipu_unload_graph(ctx, graph_id);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
@@ -275,6 +272,9 @@ unload_graph:
   AIPU_INFO()("aipu_unload_graph success\n");
 
 deinit_ctx:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   ret = aipu_deinit_context(ctx);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
@@ -284,7 +284,7 @@ deinit_ctx:
   AIPU_INFO()("aipu_deinit_ctx success\n");
 
 finish:
-  if (AIPU_STATUS_SUCCESS != ret)
+  if (ret != AIPU_STATUS_SUCCESS)
     pass = -1;
 
   deinit_test_bench(&opt);

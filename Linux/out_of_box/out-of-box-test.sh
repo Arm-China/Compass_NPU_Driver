@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+# Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -11,9 +11,9 @@ function test_run_help() {
     echo "=====================Driver Test Run Help================================"
     echo "Test Run Options:"
     echo "-h, --help        help"
-    echo "-a, --target      AIPU target (optional, by default build X2_1204MP3, both X2/X3 are compatible with Z1/Z2/Z3/X1):"
+    echo "-a, --target      AIPU target (optional, by default build X2_1204MP3, both X2/X3P are compatible with Z1/Z2/Z3/X1):"
     echo "                    - X2_1204/X2_1204MP3"
-    echo "                    - X3_1304/X3_1304MP2"
+    echo "                    - X3P_1304"
     echo "-s, --simulator     Z1~X1 simulator version (optional, only when you try to run Z1/Z2/Z3/X1 benchmark):"
     echo "                    - Z1"
     echo "                    - Z2"
@@ -25,14 +25,14 @@ function test_run_help() {
     echo "  example: Attention: '-s' and '-a' can only specify one of them, also ensure case is corresponding AIPU target"
     echo "   - Z1~X1: ./out-of-box-test.sh -s <Z1/Z2/Z3/X1> -c <case>"
     echo "   - X2: ./out-of-box-test.sh -a <X2_1204/X2_1204MP3> -c <case>"
-    echo "   - X3: ./out-of-box-test.sh -a <X3_1304/X3_1304MP2> -c <case>"
+    echo "   - X3P: ./out-of-box-test.sh -a <X3P_1304> -c <case>"
     exit 0
 }
 
 VERSION=v3
-TARGET=X2_1204MP3
-SIMULATOR=x1
-CASE=
+TARGET=""
+SIMULATOR=""
+CASE=""
 
 ARGS=`getopt -o ha:s:c: --long help,target,simulator,case: -n 'out-of-box-test.sh' -- "$@"`
 eval set -- "${ARGS}"
@@ -70,8 +70,8 @@ if [[ "$CASE"x == x ]]; then
     exit -1
 fi
 
-if [[ "$TARGET"x == "X3_1304"x || "$TARGET"x == "X3_1304MP2"x ]]; then
-    VERSION=v3_1
+if [[ "$TARGET" =~ "X3P" ]]; then
+    VERSION=v3_2
 fi
 
 pushd $LOCAL_PATH/../../AI610-SDK-1012*/Linux-driver/
@@ -86,7 +86,7 @@ popd
 bash $LOCAL_PATH/build_umd.sh $VERSION
 
 # run test
-bash $LOCAL_PATH/run.sh -a $TARGET -c $CASE -s $SIMULATOR
+bash $LOCAL_PATH/run.sh -a "$TARGET" -c "$CASE" -s "$SIMULATOR"
 
 pushd $LOCAL_PATH/../../AI610-SDK-1012*/Linux-driver/
 # recover the Linux Driver env

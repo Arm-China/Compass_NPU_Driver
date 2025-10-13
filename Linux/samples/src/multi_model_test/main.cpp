@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -73,7 +73,8 @@ void pipeline() {
   aipu_status_t aipu_sts = AIPU_STATUS_SUCCESS;
   aipu_job_status_t aipu_job_sts = AIPU_JOB_STATUS_NO_STATUS;
   aipu_create_job_cfg_t create_job_cfg = {0};
-  int pass = 0;
+  int result = 0;
+  int pass = -1;
 
   AIPU_DBG() << "pipeline()";
 
@@ -96,7 +97,7 @@ void pipeline() {
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
       AIPU_ERR()
-      ("aipu_load_graph_helper: %s (%s)\n", msg, infer_info[i].aipubin.c_str());
+      ("aipu_load_graph: %s (%s)\n", msg, infer_info[i].aipubin.c_str());
       goto finish;
     }
     infer_info[i].graph_id = graph_id;
@@ -219,7 +220,6 @@ void pipeline() {
 
     if (aipu_sts == AIPU_STATUS_SUCCESS) {
       if (aipu_job_sts == AIPU_JOB_STATUS_DONE) {
-        int result = 0;
         for (uint32_t j = 0; j < infer_info[i].out_tensor_cnt; j++) {
           ret = aipu_get_tensor(ctx, infer_info[i].job_id,
                                 AIPU_TENSOR_TYPE_OUTPUT, j,
@@ -237,8 +237,7 @@ void pipeline() {
         result = check_result(infer_info[i].output_data_vec,
                               infer_info[i].out_tensor_desc,
                               infer_info[i].gt_data, infer_info[i].gt_size);
-        if (result != 0)
-          pass = result;
+        result += result;
       } else if (aipu_job_sts == AIPU_JOB_STATUS_EXCEPTION) {
         AIPU_ERR()
         ("get_job_status (%lx): status=%x [exception]\n", infer_info[i].job_id,
@@ -254,6 +253,11 @@ void pipeline() {
       goto clean_job;
     }
   }
+
+  if (result == 0)
+    pass = 0;
+  else
+    pass = -1;
 
 clean_job:
   for (uint32_t i = 0; i < GRAPH_NUM; i++) {
@@ -304,11 +308,11 @@ int main(int argc, char *argv[]) {
 
   if (opt.loop_cnt != 0)
     AIPU_CRIT()
-    ("aipu_multi_model_test doesn't support to specify outer loop counter\n");
+  ("aipu_multi_model_test doesn't support to specify outer loop counter\n");
 
   if (opt.frame_cnt != 0)
     AIPU_CRIT()
-    ("aipu_multi_model_test doesn't support to specify inner loop counter\n");
+  ("aipu_multi_model_test doesn't support to specify inner loop counter\n");
 
   if (opt.dump_dir[0] != '\0')
     AIPU_CRIT()("aipu_multi_model_test doesn't support to dump files\n");

@@ -9,21 +9,11 @@ class Parse_Cmdline:
     m_group_benchmark_path = ""
     m_dump_path = ""
     m_so_lib_path = ""
-    m_simulator_path = "./"
     m_extra_weight_path = ""
     m_simulator = ""
+    m_target = ""
+    m_profile_en = False
     m_input_shape = []
-
-    # [
-    #    {
-    #        "model" = ""
-    #        "check_bin" = ""
-    #        "check_bin_size" = 0
-    #        "input_bins" = []
-    #    },
-    #    {},
-    #    {}
-    # ]
     m_benchmarks_list = []
 
     logger = None
@@ -39,14 +29,17 @@ class Parse_Cmdline:
                             help='-d: specify dump path')
         parser.add_argument('-l', '--so_lib_path', type=str,
                             help='-l: specify aipu driver so library path')
-        parser.add_argument('-e', '--simulator_path', type=str,
-                            help='-e: specify emulator path, just for simulation')
+        parser.add_argument('-e', '--simulator', type=str,
+                            help='-e: specify full simulator path, such as `path/of/aipu_simulator_x1`, just for v1&v2 simulation')
         parser.add_argument('-r', '--input_shape', type=str,
                             help='-r: specify new input shape for all input tensors')
         parser.add_argument('-w', '--extra_weight_path', type=str,
                             help='-w: specify extra weight path')
-        parser.add_argument('-sim', '--simulator', type=str,
-                            help='--simulator: full path of v1&v2 executable simulator file')
+        parser.add_argument('-a', '--target', type=str,
+                            help='-a: specify aipu target, only for >= v3')
+        parser.add_argument('-p', '--profile', action='store_true',
+                            help='-p: enable profile, only for >= v3 and sgsf_finish.py')
+
         args = parser.parse_args()
 
         if args.single_benchmark_path != None:
@@ -69,11 +62,9 @@ class Parse_Cmdline:
 
         if args.dump_path != None:
             self.logger.debug(f"-d arg: {args.dump_path}")
-            if os.path.isdir(args.dump_path):
-                self.m_dump_path = args.dump_path
-            else:
-                self.logger.error(f'-d arg: {args.dump_path} [not exist]')
-                exit(-1)
+            if os.path.isdir(args.dump_path) is False:
+                os.makedirs(args.dump_path)
+            self.m_dump_path = args.dump_path
 
         if args.so_lib_path != None:
             if os.path.isdir(args.so_lib_path):
@@ -83,8 +74,16 @@ class Parse_Cmdline:
                 self.logger.error(f'-l arg: {args.so_lib_path} [not exist]')
                 exit(-1)
 
-        if args.simulator_path != None:
-            self.m_simulator_path = args.simulator_path
+        if args.target != None:
+            self.m_target = args.target
+
+        if args.simulator != None:
+            self.logger.debug(f"--simulator arg: {args.simulator}")
+            if os.path.isfile(args.simulator):
+                self.m_simulator = args.simulator
+            else:
+                self.logger.error(f'--simulator arg: {args.simulator} [not exist]')
+                exit(-1)
 
         if args.input_shape != None:
             self.m_input_shape = [[int(dim_val) for dim_val in shape_str.split(",")]
@@ -98,13 +97,7 @@ class Parse_Cmdline:
                 self.logger.error(f'-w arg: {args.extra_weight_path} [not exist]')
                 exit(-1)
 
-        if args.simulator != None:
-            self.logger.debug(f"--simulator arg: {args.simulator}")
-            if os.path.isfile(args.simulator):
-                self.m_simulator = args.simulator
-            else:
-                self.logger.error(f'--simulator arg: {args.simulator} [not exist]')
-                exit(-1)
+        self.m_profile_en = True if args.profile == 1 else False
 
     def parse_single_benchmark(self, bench_dir):
         self.logger.debug(f'benchdir: {bench_dir}')

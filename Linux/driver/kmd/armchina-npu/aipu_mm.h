@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #ifndef __AIPU_MM_H__
 #define __AIPU_MM_H__
@@ -8,11 +8,17 @@
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
+#include <linux/scatterlist.h>
+#include <linux/iova.h>
+#include <linux/mm.h>
+#include <linux/highmem.h>
+#include <asm/cacheflush.h>
 #include <armchina_aipu.h>
 #include "aipu_tcb.h"
 #include "zhouyi.h"
 
 #define DEFERRED_FREE  1
+#define DMA_BUF_EXEC_ID 1
 
 enum aipu_gm_policy {
 	AIPU_GM_POLICY_NONE         = 0,
@@ -54,6 +60,42 @@ struct aipu_hold_tcb_buf {
 	int index;
 	int hold_index;
 	struct aipu_tcb_buf *prev_tbuf;
+};
+
+struct __cache_ops {
+    void (*flush_range)(void *vaddr, size_t size);
+    void (*clean_range)(void *vaddr, size_t size);
+    void (*invalidate_range)(void *vaddr, size_t size);
+    size_t cache_line_size;
+};
+
+struct aipu_phy_block {
+	struct list_head list;
+	struct page **pages;
+	struct sg_table sgt;
+	dma_addr_t dma_addr;
+	u64 iova_start;
+	u64 size;
+	u32 page_count;
+	void* va;
+	struct dma_buf *dmabuf;
+	bool bind_memory;
+};
+
+struct aipu_iova_buffer {
+	u64 iova_start;
+	u64 iova_size;
+	u64 allocated_size;
+	struct list_head phy_blocks;
+	struct mutex phy_mutex;
+	u32 ref_count;
+	u8 region;
+	u8 asid;
+	struct file *filp;
+	int tgid;
+	int pid;
+	struct list_head node;
+	u64 exec_id;
 };
 
 /**
@@ -226,8 +268,16 @@ struct aipu_memory_manager {
 	struct kmem_cache *hold_tbuf_cache;
 	struct aipu_dma_buf_importer *importer_bufs;
 	struct aipu_hold_tcb_buf *hold_tcb_head;
-	struct iommu_domain *iommu_domain;
 	u64 dma_mask;
+	struct iommu_domain *iommu_domain;
+	struct iova_domain iova_domain;
+	struct mutex buffer_mutex;
+	struct list_head buffer_list;
+	u64 iova_base;
+	u64 iova_size;
+	u32 buffer_count;
+	u64 host_aipu_offset;
+	struct __cache_ops cache_ops;
 };
 
 int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, int version);
@@ -262,4 +312,14 @@ void aipu_mm_pin_tcb(struct aipu_memory_manager *mm, u64 tail);
 int aipu_mm_hold_tcb_buf_alloc(struct aipu_memory_manager *mm, struct aipu_job *kjob);
 struct aipu_hold_tcb_buf *aipu_mm_get_hold_htbuf(struct aipu_memory_manager *mm, u64 hold_tcb_pa);
 void aipu_mm_set_final_htbuf_index(struct aipu_memory_manager *mm, int index);
+int aipu_alloc_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_req,
+		  struct file *filp);
+int aipu_free_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_buf_desc *buf, struct file *filp);
+void aipu_cache_flush(struct aipu_memory_manager *mm, void *vaddr, size_t size);
+void aipu_cache_clean(struct aipu_memory_manager *mm, void *vaddr, size_t size);
+void aipu_cache_invalidate(struct aipu_memory_manager *mm, void *vaddr, size_t size);
+struct aipu_phy_block *aipu_get_block_buffer(struct aipu_memory_manager *mm, u64 iova, char* str);
+struct aipu_iova_buffer *aipu_get_iova_buffer_by_job_id(struct aipu_memory_manager *mm, u64 exec_id, char* str);
+int aipu_rebind_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_rebind_buf_desc *desc, struct file *filp);
+int aipu_bind_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_bind_buf_desc *desc, struct file *filp);
 #endif /* __AIPU_MM_H__ */

@@ -8,10 +8,12 @@ from common.log import *
 
 #
 # multi_batch.py:
-# 	this script is for running in simulation environment via finish job sync mode.
+# 	this script runs job sync mode
 #
 # usage:
-#   python3 multi_batch.py -s /home/benchmark/resnet50 -l bin/sim/debug/ -e ./aipu_simulator_x1 -d ./output
+#   python3 multi_batch.py -s /home/benchmark/resnet50 -l bin/sim/debug/ -e ./aipu_simulator_x1 -d ./output -a X3P_1304
+#    -e: only for v1v2
+#    -a: only for >=v3
 #
 # note:
 #   resnet50 {aipu.bin, input0.bin, output.bin}
@@ -47,7 +49,7 @@ def multi_batch():
 
         if is_hw is False:
             global_cfg = aipu_global_config_simulation_t()
-            global_cfg.simulator = parseCmdline_obj.m_simulator_path
+            global_cfg.simulator = parseCmdline_obj.m_simulator
             global_cfg.log_file_path = parseCmdline_obj.m_dump_path
             ret = npu.aipu_config_global(AIPU_CONFIG_TYPE_SIMULATION, global_cfg)
             if ret != AIPU_STATUS_SUCCESS:

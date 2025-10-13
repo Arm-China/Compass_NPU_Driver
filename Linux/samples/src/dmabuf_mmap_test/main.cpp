@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -18,6 +18,8 @@
  *        Or add 'disable_input_buffer_reuse=True' and
  * 'disable_output_buffer_reuse=True' in command aipubuild. please reference the
  * detailed command in sample/README.md.
+ *
+ * @attention this sample only demonstrates single input of graph
  *
  */
 
@@ -54,16 +56,11 @@ using namespace std;
 #define DMABUF_OP_WITH_WRAPPER 1
 
 /**
- * the fd&pa of requested dma_buf.
- */
-int dmabuf_fd = 0;
-uint64_t dmabuf_pa = 0;
-
-/**
  * request one dma_buf from dma_buf exporter(NUP driver module),
  * record its fd to 'dmabuf_fd'.
  */
-int dmabuf_malloc(aipu_ctx_handle_t *ctx, uint64_t size) {
+int dmabuf_malloc(aipu_ctx_handle_t *ctx, uint64_t size, int &fd,
+                  uint64_t &pa) {
   int ret = 0;
   aipu_dma_buf_req_t dma_buf_req = {0};
   aipu_dma_buf_desc_t dma_buf = {0};
@@ -75,7 +72,8 @@ int dmabuf_malloc(aipu_ctx_handle_t *ctx, uint64_t size) {
     return ret;
   }
 
-  dmabuf_fd = dma_buf_req.fd;
+  fd = dma_buf_req.fd;
+  AIPU_ERR()("get dmabuf fd %d success", fd);
 
   dma_buf.fd = dma_buf_req.fd;
   ret = aipu_ioctl(ctx, AIPU_IOCTL_GET_DMABUF_INFO, &dma_buf);
@@ -84,7 +82,7 @@ int dmabuf_malloc(aipu_ctx_handle_t *ctx, uint64_t size) {
     return ret;
   }
 
-  dmabuf_pa = dma_buf.pa;
+  pa = dma_buf.pa;
 
   return ret;
 }
@@ -116,8 +114,7 @@ int dmabuf_fill(int fd, char *data, uint32_t size) {
   int ret = 0;
   char *va = nullptr;
 
-  va = (char *)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, dmabuf_fd,
-                    0);
+  va = (char *)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   if (va == MAP_FAILED) {
     ret = -1;
     AIPU_ERR() << "mmap dmabuf [fail]\n";
@@ -144,14 +141,17 @@ int main(int argc, char *argv[]) {
   vector<char *> output_data;
   vector<char *> gt;
   cmd_opt_t opt;
-  int pass = 0, loop = 0, total_loop = 1;
+  int pass = -1, loop = 0, total_loop = 1;
   uint32_t frame_cnt = 1;
   aipu_create_job_cfg create_job_cfg = {0};
   aipu_shared_tensor_info_t share_tensor;
 
-#if !DMABUF_OP_WITH_WRAPPER
-  aipu_dma_buf_req_t dmabuf_req = {0};
-  aipu_dmabuf_op_t dmabuf_op = {0};
+#if DMABUF_OP_WITH_WRAPPER
+  std::vector<int> fds;
+  std::vector<uint64_t> pas;
+#else
+  std::vector<aipu_dma_buf_req_t> dmabuf_reqs;
+  std::vector<aipu_dmabuf_op_t> dmabuf_ops;
 #endif
 
   AIPU_CRIT() << "usage: ./aipu_dmabuf_mmap_test -b aipu.bin -i input0.bin -c "
@@ -184,12 +184,10 @@ int main(int argc, char *argv[]) {
     ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
-      AIPU_ERR()
-      ("aipu_load_graph_helper: %s (%s)\n", msg, opt.bin_files[0].c_str());
+      AIPU_ERR()("aipu_load_graph: %s (%s)\n", msg, opt.bin_files[0].c_str());
       goto deinit_ctx;
     }
-    AIPU_INFO()
-    ("aipu_load_graph_helper success: %s\n", opt.bin_files[0].c_str());
+    AIPU_INFO()("aipu_load_graph success: %s\n", opt.bin_files[0].c_str());
 
     ret = aipu_get_cluster_count(ctx, 0, &cluster_cnt);
     if (ret != AIPU_STATUS_SUCCESS) {
@@ -216,8 +214,13 @@ int main(int argc, char *argv[]) {
       AIPU_ERR()("aipu_get_tensor_count: %s\n", msg);
       goto unload_graph;
     }
-    // AIPU_INFO()("aipu_get_tensor_count success: input cnt = %d\n",
-    // input_cnt);
+    AIPU_INFO()("aipu_get_tensor_count success: input cnt = %d\n", input_cnt);
+
+    if (opt.inputs.size() != input_cnt) {
+      fprintf(stdout,
+              "[TEST WARN] input file count (%u) != input tensor count (%u)\n",
+              (uint32_t)opt.inputs.size(), input_cnt);
+    }
 
     for (uint32_t i = 0; i < input_cnt; i++) {
       aipu_tensor_desc_t desc;
@@ -238,8 +241,7 @@ int main(int argc, char *argv[]) {
       AIPU_ERR()("aipu_get_tensor_count: %s\n", msg);
       goto unload_graph;
     }
-    // AIPU_INFO()("aipu_get_tensor_count success: output cnt = %d\n",
-    // output_cnt);
+    AIPU_INFO()("aipu_get_tensor_count success: output cnt = %d\n", output_cnt);
 
     for (uint32_t i = 0; i < output_cnt; i++) {
       aipu_tensor_desc_t desc;
@@ -259,94 +261,6 @@ int main(int argc, char *argv[]) {
      * and fill it with initial input data.
      */
 
-    /**
-     * method 1:
-     *
-     * alloca/free/read/write dma_buf totally with own wrapper functions
-     */
-#if DMABUF_OP_WITH_WRAPPER
-    if (dmabuf_malloc(ctx, input_desc[0].size) < 0) {
-      AIPU_ERR() << "dmabuf_malloc [fail]\n";
-      goto unload_graph;
-    }
-
-    /* fill input data */
-    if (dmabuf_fill(dmabuf_fd, opt.inputs[0], input_desc[0].size) != 0) {
-      AIPU_ERR() << "dmabuf_fill [fail]\n";
-      goto unload_graph;
-    }
-
-    /**
-     * @NOTE:
-     * construct share dma_buf's descriptor
-     *
-     * @dmabuf_fd: the fd of dma_buf
-     * @offset_in_dmabuf: the start offset of valid data in dma_buf
-     * @tensor_idx: the tensor index which the dma_buf will replace
-     * @type: the replaced tensor type(input or output)
-     */
-
-    share_tensor.tensor_idx = 0;
-    share_tensor.type = AIPU_TENSOR_TYPE_INPUT;
-
-#if CUSTOMIZE_DMABUF
-    /**
-     * specify customized buffer as share buffer
-     */
-    share_tensor.pa = dmabuf_pa;
-    share_tensor.shared_case_type = AIPU_SHARE_BUF_CUSTOMED;
-#else
-    /**
-     * specify standard dma-buf as share buffer
-     */
-    share_tensor.dmabuf_fd = dmabuf_fd;
-    share_tensor.offset_in_dmabuf = 0;
-    share_tensor.shared_case_type = AIPU_SHARE_BUF_DMABUF;
-#endif
-
-#else
-    /**
-     * method 2:
-     *
-     * alloca/free/read/write dma_buf totally UMD's aipu_ioctl interface,
-     * the bellow is a reference example.
-     */
-    dmabuf_req.bytes = input_desc[0].size;
-    ret = aipu_ioctl(ctx, AIPU_IOCTL_ALLOC_DMABUF, &dmabuf_req);
-    if (ret != AIPU_STATUS_SUCCESS) {
-      aipu_get_error_message(ctx, ret, &msg);
-      AIPU_ERR()("aipu_ioctl(AIPU_IOCTL_ALLOC_DMABUF): %s\n", msg);
-      goto unload_graph;
-    }
-
-    /* fill input data */
-    dmabuf_op.dmabuf_fd = dmabuf_req.fd;
-    dmabuf_op.offset_in_dmabuf = 0;
-    dmabuf_op.size = input_desc[0].size;
-    dmabuf_op.data = opt.inputs[0];
-    ret = aipu_ioctl(ctx, AIPU_IOCTL_WRITE_DMABUF, &dmabuf_op);
-    if (ret != AIPU_STATUS_SUCCESS) {
-      aipu_get_error_message(ctx, ret, &msg);
-      AIPU_ERR()("aipu_ioctl(AIPU_IOCTL_WRITE_DMABUF): %s\n", msg);
-      goto unload_graph;
-    }
-
-    /**
-     * @NOTE:
-     * construct share dma_buf's descriptor
-     *
-     * @dmabuf_fd: the fd of dma_buf
-     * @offset_in_dmabuf: the start offset of valid data in dma_buf
-     * @tensor_idx: the tensor index which the dma_buf will replace
-     * @type: the replaced tensor type(input or output)
-     */
-    share_tensor.dmabuf_fd = dmabuf_req.fd;
-    share_tensor.offset_in_dmabuf = 0;
-    share_tensor.tensor_idx = 0;
-    share_tensor.type = AIPU_TENSOR_TYPE_INPUT;
-    share_tensor.shared_case_type = AIPU_SHARE_BUF_DMABUF;
-#endif
-
     ret = aipu_create_job(ctx, graph_id, &job_id, &create_job_cfg);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
@@ -355,16 +269,114 @@ int main(int argc, char *argv[]) {
     }
     AIPU_INFO()("aipu_create_job success\n");
 
-    /**
-     * bind dma_buf to IO buffer after the job is created.
-     */
-    ret = aipu_specify_iobuf(ctx, job_id, &share_tensor);
-    if (ret != AIPU_STATUS_SUCCESS) {
-      aipu_get_error_message(ctx, ret, &msg);
-      AIPU_ERR()("aipu_specify_iobuf: %s\n", msg);
-      goto unload_graph;
+    for (uint32_t i = 0; i < input_cnt; ++i) {
+#if DMABUF_OP_WITH_WRAPPER
+      int fd = 0;
+      uint64_t pa = 0;
+      /**
+       * method 1:
+       *
+       * alloca/free/read/write dma_buf totally with own wrapper functions
+       */
+      if (dmabuf_malloc(ctx, input_desc[i].size, fd, pa) < 0) {
+        AIPU_ERR() << "dmabuf_malloc [fail]\n";
+        goto unload_graph;
+      }
+
+      /* fill input data */
+      if (dmabuf_fill(fd, opt.inputs[i], input_desc[i].size) != 0) {
+        AIPU_ERR() << "dmabuf_fill [fail]\n";
+        goto unload_graph;
+      }
+
+      /**
+       * @NOTE:
+       * construct share dma_buf's descriptor
+       *
+       * @dmabuf_fd: the fd of dma_buf
+       * @offset_in_dmabuf: the start offset of valid data in dma_buf
+       * @tensor_idx: the tensor index which the dma_buf will replace
+       * @type: the replaced tensor type(input or output)
+       */
+
+      share_tensor.tensor_idx = i;
+      share_tensor.type = AIPU_TENSOR_TYPE_INPUT;
+
+#if CUSTOMIZE_DMABUF
+      /**
+       * specify customized buffer as share buffer
+       */
+      share_tensor.pa = pa;
+      share_tensor.shared_case_type = AIPU_SHARE_BUF_CUSTOMED;
+#else
+      /**
+       * specify standard dma-buf as share buffer
+       */
+      share_tensor.dmabuf_fd = fd;
+      share_tensor.offset_in_dmabuf = 0;
+      share_tensor.shared_case_type = AIPU_SHARE_BUF_DMABUF;
+#endif
+
+      fds.push_back(fd);
+      pas.push_back(pa);
+#else
+      /**
+       * method 2:
+       *
+       * alloca/free/read/write dma_buf totally UMD's aipu_ioctl interface,
+       * the bellow is a reference example.
+       */
+      aipu_dma_buf_req_t dmabuf_req;
+      aipu_dmabuf_op_t dmabuf_op;
+      dmabuf_req.bytes = input_desc[i].size;
+      ret = aipu_ioctl(ctx, AIPU_IOCTL_ALLOC_DMABUF, &dmabuf_req);
+      if (ret != AIPU_STATUS_SUCCESS) {
+        aipu_get_error_message(ctx, ret, &msg);
+        AIPU_ERR()("aipu_ioctl(AIPU_IOCTL_ALLOC_DMABUF): %s\n", msg);
+        goto unload_graph;
+      }
+
+      /* fill input data */
+      dmabuf_op.dmabuf_fd = dmabuf_req.fd;
+      dmabuf_op.offset_in_dmabuf = 0;
+      dmabuf_op.size = input_desc[i].size;
+      dmabuf_op.data = opt.inputs[i];
+      ret = aipu_ioctl(ctx, AIPU_IOCTL_WRITE_DMABUF, &dmabuf_op);
+      if (ret != AIPU_STATUS_SUCCESS) {
+        aipu_get_error_message(ctx, ret, &msg);
+        AIPU_ERR()("aipu_ioctl(AIPU_IOCTL_WRITE_DMABUF): %s\n", msg);
+        goto unload_graph;
+      }
+
+      /**
+       * @NOTE:
+       * construct share dma_buf's descriptor
+       *
+       * @dmabuf_fd: the fd of dma_buf
+       * @offset_in_dmabuf: the start offset of valid data in dma_buf
+       * @tensor_idx: the tensor index which the dma_buf will replace
+       * @type: the replaced tensor type(input or output)
+       */
+      share_tensor.dmabuf_fd = dmabuf_req.fd;
+      share_tensor.offset_in_dmabuf = 0;
+      share_tensor.tensor_idx = i;
+      share_tensor.type = AIPU_TENSOR_TYPE_INPUT;
+      share_tensor.shared_case_type = AIPU_SHARE_BUF_DMABUF;
+      dmabuf_reqs.push_back(dmabuf_req);
+      dmabuf_ops.push_back(dmabuf_op);
+#endif
+
+      /**
+       * bind dma_buf to IO buffer after the job is created.
+       */
+      ret = aipu_specify_iobuf(ctx, job_id, &share_tensor);
+      if (ret != AIPU_STATUS_SUCCESS) {
+        aipu_get_error_message(ctx, ret, &msg);
+        AIPU_ERR()("aipu_specify_iobuf: %s\n", msg);
+        goto unload_graph;
+      }
+      AIPU_INFO()("aipu_specify_iobuf input tensor %u success\n", i);
     }
-    AIPU_INFO()("aipu_specify_iobuf success\n");
 
     if (mem_dump_config.dump_dir[0] != '\0') {
       uint64_t cfg_types =
@@ -381,12 +393,6 @@ int main(int argc, char *argv[]) {
         goto clean_job;
       }
       AIPU_INFO()("set dump config success\n");
-    }
-
-    if (opt.inputs.size() != input_cnt) {
-      fprintf(stdout,
-              "[TEST WARN] input file count (%u) != input tensor count (%u)\n",
-              (uint32_t)opt.inputs.size(), input_cnt);
     }
 
     for (uint32_t i = 0; i < output_cnt; i++) {
@@ -422,7 +428,6 @@ int main(int argc, char *argv[]) {
       if (ret != AIPU_STATUS_SUCCESS) {
         aipu_get_error_message(ctx, ret, &msg);
         AIPU_ERR()("aipu_finish_job: %s\n", msg);
-        pass = -1;
         goto clean_job;
       }
       AIPU_INFO()("aipu_finish_job success\n");
@@ -441,12 +446,19 @@ int main(int argc, char *argv[]) {
 
       pass =
           check_result_helper(output_data, output_desc, opt.gts, opt.gts_size);
+
+      /* loop out */
+      if (pass == -1)
+        break;
     }
 
     input_desc.clear();
     output_desc.clear();
 
   clean_job:
+    if (ret != AIPU_STATUS_SUCCESS)
+      pass = -1;
+
     ret = aipu_clean_job(ctx, job_id);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
@@ -456,6 +468,9 @@ int main(int argc, char *argv[]) {
     AIPU_INFO()("aipu_clean_job success\n");
 
   unload_graph:
+    if (ret != AIPU_STATUS_SUCCESS)
+      pass = -1;
+
     ret = aipu_unload_graph(ctx, graph_id);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
@@ -464,13 +479,18 @@ int main(int argc, char *argv[]) {
     }
     AIPU_INFO()("aipu_unload_graph success\n");
 
+    for (uint32_t i = 0; i < input_cnt; ++i) {
 #if DMABUF_OP_WITH_WRAPPER
-    dmabuf_free(ctx, dmabuf_fd);
+      dmabuf_free(ctx, fds[i]);
 #else
-    aipu_ioctl(ctx, AIPU_IOCTL_FREE_DMABUF, &dmabuf_req.fd);
+      aipu_ioctl(ctx, AIPU_IOCTL_FREE_DMABUF, &dmabuf_reqs[i].fd);
 #endif
+    }
 
   deinit_ctx:
+    if (ret != AIPU_STATUS_SUCCESS)
+      pass = -1;
+
     ret = aipu_deinit_context(ctx);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
@@ -480,14 +500,17 @@ int main(int argc, char *argv[]) {
     AIPU_INFO()("aipu_deinit_ctx success\n");
 
   finish:
-    if (AIPU_STATUS_SUCCESS != ret) {
+    if (ret != AIPU_STATUS_SUCCESS)
       pass = -1;
-    }
-    for (uint32_t i = 0; i < output_data.size(); i++) {
+
+    for (uint32_t i = 0; i < output_data.size(); i++)
       delete[] output_data[i];
-    }
 
     output_data.clear();
+
+    /* loop out */
+    if (pass == -1)
+      break;
   }
   deinit_test_bench(&opt);
   return pass;

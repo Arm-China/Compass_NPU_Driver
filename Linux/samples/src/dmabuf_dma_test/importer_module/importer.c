@@ -22,20 +22,24 @@ static int importer_test(struct dma_buf *dmabuf)
 	void *vaddr = NULL;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(5, 11, 0) && \
     LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
-	struct dma_buf_map map;
+	struct dma_buf_map map = DMA_BUF_MAP_INIT_VADDR(0);
 #endif
+	long err = 0;
+	struct device *dev = &importer_dev->dev;
 
-	printk(KERN_INFO "enter %s\n", __func__);
-	dev_set_name(&importer_dev->dev, "importer");
+	dma_set_mask_and_coherent(dev, DMA_BIT_MASK(35));
+	dev_set_name(dev, "importer");
 
 	attachment = dma_buf_attach(dmabuf, &importer_dev->dev);
-	printk(KERN_INFO "after dma_buf_attach\n");
 	table = dma_buf_map_attachment(attachment, DMA_BIDIRECTIONAL);
-	printk(KERN_INFO "after dma_buf_map_attachment\n");
+	if (IS_ERR(table)) {
+		err = PTR_ERR(table);
+		pr_err("Failed to map attachment: %ld\n", err);
+		goto DETACH;
+	}
 
 	reg_addr = sg_dma_address(table->sgl);
 	reg_size = sg_dma_len(table->sgl);
-	pr_info("reg_addr = 0x%08x, reg_size = 0x%08x\n", reg_addr, reg_size);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
 	vaddr = dma_buf_vmap(dmabuf);
@@ -51,6 +55,7 @@ static int importer_test(struct dma_buf *dmabuf)
 	dma_buf_vunmap(dmabuf, &map);
 #endif
 	dma_buf_unmap_attachment(attachment, table, DMA_BIDIRECTIONAL);
+DETACH:
 	dma_buf_detach(dmabuf, attachment);
 	return 0;
 }

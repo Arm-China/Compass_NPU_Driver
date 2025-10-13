@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -20,17 +20,17 @@ JobV12::JobV12(MainContext *ctx, GraphBase &graph, DeviceBase *dev,
                aipu_create_job_cfg_t *config)
     : JobBase(ctx, graph, dev) {
   if (config != nullptr)
-    m_fm_mem_region = config->fm_mem_region;
+    m_sfm_mem_region = config->fm_mem_region;
 }
 
 JobV12::~JobV12() {}
 
 aipu_status_t JobV12::setup_rodata_v12(std::set<uint32_t> *dma_buf_idx) {
   const std::vector<struct GraphParamMapLoadDesc> &param_map =
-      get_graph().m_param_map;
+      graph().m_param_map;
 
-  return setup_rodata(param_map, m_reuses, *m_weights, *m_rodata, m_descriptor,
-                      dma_buf_idx);
+  return setup_rodata(param_map, m_reuses_desc, *m_weights_desc, *m_rodata,
+                      m_descriptor, dma_buf_idx);
 }
 
 int JobV12::alloc_reuse_buffer_optimized() {
@@ -40,12 +40,12 @@ int JobV12::alloc_reuse_buffer_optimized() {
   uint32_t max_align_in_page = 0;
   int retval = 0;
 
-  for (uint32_t i = 0; i < get_graph().m_reuse_sections.size(); i++) {
-    uint32_t align_in_page = get_graph().m_reuse_sections[i].align_in_page;
+  for (uint32_t i = 0; i < graph().m_reuse_sections.size(); i++) {
+    uint32_t align_in_page = graph().m_reuse_sections[i].align_in_page;
     max_align_in_page =
         (align_in_page > max_align_in_page) ? align_in_page : max_align_in_page;
 
-    const GraphSectionDesc &section_desc = get_graph().m_reuse_sections[i];
+    const GraphSectionDesc &section_desc = graph().m_reuse_sections[i];
     reuse_buf_total_size =
         (reuse_buf_total_size + ((align_in_page << 12) - 1)) &
         ~((align_in_page << 12) - 1);
@@ -58,7 +58,7 @@ int JobV12::alloc_reuse_buffer_optimized() {
   }
 
   ret = m_mem->malloc(reuse_buf_total_size, max_align_in_page, &m_top_reuse_buf,
-                      "tot_reuse", m_fm_mem_region);
+                      "tot_reuse", m_sfm_mem_region);
   if (ret != AIPU_STATUS_SUCCESS) {
     retval = -1;
     LOG(LOG_DEBUG,
@@ -67,9 +67,9 @@ int JobV12::alloc_reuse_buffer_optimized() {
     goto opt_alloc_fail;
   }
 
-  for (uint32_t i = 0; i < get_graph().m_reuse_sections.size(); i++) {
-    uint32_t size = get_graph().m_reuse_sections[i].size;
-    uint32_t align_in_page = get_graph().m_reuse_sections[i].align_in_page;
+  for (uint32_t i = 0; i < graph().m_reuse_sections.size(); i++) {
+    uint32_t size = graph().m_reuse_sections[i].size;
+    uint32_t align_in_page = graph().m_reuse_sections[i].align_in_page;
     BufferDesc *bufferDesc = new BufferDesc;
 
     bufferDesc->reset();
@@ -86,7 +86,7 @@ int JobV12::alloc_reuse_buffer_optimized() {
     if (m_dump_reuse)
       m_mem->mem_bzero(bufferDesc->pa, bufferDesc->size);
 
-    m_reuses.push_back(bufferDesc);
+    m_reuses_desc.push_back(bufferDesc);
   }
 
   m_optimized_reuse_alloc = true;
@@ -104,15 +104,15 @@ opt_alloc_fail:
 aipu_status_t JobV12::alloc_reuse_buffer() {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-  for (uint32_t i = 0; i < get_graph().m_reuse_sections.size(); i++) {
-    uint32_t size = get_graph().m_reuse_sections[i].size;
-    uint32_t align_in_page = get_graph().m_reuse_sections[i].align_in_page;
+  for (uint32_t i = 0; i < graph().m_reuse_sections.size(); i++) {
+    uint32_t size = graph().m_reuse_sections[i].size;
+    uint32_t align_in_page = graph().m_reuse_sections[i].align_in_page;
     BufferDesc *bufferDesc = nullptr;
 
     if (size != 0) {
       std::string str = "reuse_" + std::to_string(i);
       ret = m_mem->malloc(size, align_in_page, &bufferDesc, str.c_str(),
-                          m_fm_mem_region);
+                          m_sfm_mem_region);
       if (ret != AIPU_STATUS_SUCCESS)
         goto finish;
       LOG(LOG_DEBUG, "buf %d: align_in_page: %d, sz: %lx, req_sz: %lx, pa: %lx",
@@ -123,7 +123,7 @@ aipu_status_t JobV12::alloc_reuse_buffer() {
     if (m_dump_reuse)
       m_mem->mem_bzero(bufferDesc->pa, bufferDesc->size);
 
-    m_reuses.push_back(bufferDesc);
+    m_reuses_desc.push_back(bufferDesc);
   }
 
 finish:
@@ -139,16 +139,17 @@ aipu_status_t JobV12::init(const aipu_global_config_simulation_t *cfg,
 
 #if (defined SIMULATION)
   if (cfg == nullptr)
-    return AIPU_STATUS_ERROR_INVALID_CONFIG;
+    return AIPU_STATUS_ERROR_NULL_PTR;
 
-  if (((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V1) &&
+  if (((graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V1) &&
        (cfg->simulator == nullptr)) ||
-      ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_0) &&
+      ((graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_0) &&
        (cfg->simulator == nullptr)) ||
-      ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_1) &&
+      ((graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_1) &&
        (cfg->simulator == nullptr)) ||
-      ((get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_2) &&
+      ((graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_2) &&
        (cfg->simulator == nullptr))) {
+    LOG(LOG_ERR, "please provide executable simulator file path");
     return AIPU_STATUS_ERROR_INVALID_CONFIG;
   }
 
@@ -160,6 +161,8 @@ aipu_status_t JobV12::init(const aipu_global_config_simulation_t *cfg,
 
   if (cfg->log_file_path != nullptr)
     m_log_path = cfg->log_file_path;
+  if (cfg->json_filename != nullptr)
+    m_json_filename = cfg->json_filename;
 #endif
 
   ret = alloc_load_job_buffers();
@@ -218,21 +221,21 @@ JobV12::specify_io_buffer(aipu_shared_tensor_info_t &tensor_info) {
    */
   reuse_index = (*iobuffer_vec)[index].ref_section_iter;
   if (type == AIPU_TENSOR_TYPE_INPUT) {
-    for (uint32_t i = 0; i < get_graph().m_io.outputs.size(); i++) {
-      auto &idtensor_desc = get_graph().m_io.outputs[i];
+    for (uint32_t i = 0; i < graph().m_io.outputs.size(); i++) {
+      auto &idtensor_desc = graph().m_io.outputs[i];
       if (idtensor_desc.ref_section_iter == reuse_index)
         return AIPU_STATUS_ERROR_DMABUF_SHARED_IO;
     }
   } else {
-    for (uint32_t i = 0; i < get_graph().m_io.inputs.size(); i++) {
-      auto &idtensor_desc = get_graph().m_io.inputs[i];
+    for (uint32_t i = 0; i < graph().m_io.inputs.size(); i++) {
+      auto &idtensor_desc = graph().m_io.inputs[i];
       if (idtensor_desc.ref_section_iter == reuse_index)
         return AIPU_STATUS_ERROR_DMABUF_SHARED_IO;
     }
   }
 
   /* free io buffer allocated internally,replace it with new buffer */
-  bufferDesc = m_reuses[reuse_index];
+  bufferDesc = m_reuses_desc[reuse_index];
   m_dma_buf_idx.insert(reuse_index);
 
   if (!m_optimized_reuse_alloc) {
@@ -245,7 +248,7 @@ JobV12::specify_io_buffer(aipu_shared_tensor_info_t &tensor_info) {
   case AIPU_SHARE_BUF_IN_ONE_PROCESS:
     bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size,
                      bufferDesc->req_size);
-    update_io_buffers(get_graph().m_io, m_reuses);
+    update_io_buffers(graph().m_io, m_reuses_desc);
     break;
 
   case AIPU_SHARE_BUF_CUSTOMED:
@@ -300,32 +303,33 @@ aipu_status_t JobV12::alloc_load_job_buffers() {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   int retval = -1;
 
+  m_text = graph().m_text;
+  m_crodata = graph().m_crodata;
+
   /* 1. allocate and load job rodata */
-  ret = m_mem->malloc(get_graph().m_brodata.size, 0, &m_rodata, "rodata");
+  ret = m_mem->malloc(graph().m_brodata.size, 0, &m_rodata, "rodata");
   if (ret != AIPU_STATUS_SUCCESS)
     goto finish;
 
-  m_mem->write(m_rodata->pa, get_graph().m_brodata.va,
-               get_graph().m_brodata.size);
+  m_mem->write(m_rodata->pa, graph().m_brodata.va, graph().m_brodata.size);
 
   /* 2. allocate and load job descriptor */
-  if (get_graph().m_bdesc.size != 0) {
-    ret = m_mem->malloc(get_graph().m_bdesc.size, 0, &m_descriptor, "dcr");
+  if (graph().m_bdesc.size != 0) {
+    ret = m_mem->malloc(graph().m_bdesc.size, 0, &m_descriptor, "dcr");
     if (ret != AIPU_STATUS_SUCCESS)
       goto finish;
 
-    m_mem->write(m_descriptor->pa, get_graph().m_bdesc.va,
-                 get_graph().m_bdesc.size);
+    m_mem->write(m_descriptor->pa, graph().m_bdesc.va, graph().m_bdesc.size);
   }
 
   /* 3. allocate task stack */
-  ret = m_mem->malloc(get_graph().m_stack_size,
-                      get_graph().m_stack_align_in_page, &m_stack, "stack");
+  ret = m_mem->malloc(graph().m_stack_size, graph().m_stack_align_in_page,
+                      &m_stack, "stack");
   if (ret != AIPU_STATUS_SUCCESS)
     goto finish;
 
   /* 4. allocate reuse buffers */
-  if (get_graph().m_hw_version != AIPU_ISA_VERSION_ZHOUYI_V1)
+  if (graph().m_hw_version != AIPU_ISA_VERSION_ZHOUYI_V1)
     retval = alloc_reuse_buffer_optimized();
 
   if (retval == -1) {
@@ -338,9 +342,9 @@ aipu_status_t JobV12::alloc_load_job_buffers() {
   }
 
   /* 5. init weights address, share a common copy */
-  if (get_graph().m_weight.size() > 0)
-    m_weights = const_cast<std::vector<BufferDesc *> *>(
-        &get_graph().get_weight_buffer_info()[0].wb_weights);
+  if (graph().m_weight.size() > 0)
+    m_weights_desc = const_cast<std::vector<BufferDesc *> *>(
+        &graph().get_weight_buffer_info()[0].wb_weights);
 
   /* 6. update rodata & dcr */
   ret = setup_rodata_v12();
@@ -351,7 +355,7 @@ aipu_status_t JobV12::alloc_load_job_buffers() {
   setup_remap(*m_rodata, m_descriptor);
 
   /* 8. get IO buffer address */
-  create_io_buffers(get_graph().m_io, m_reuses);
+  create_io_buffers(graph().m_io, m_reuses_desc);
 
   /* 9. initialize printf header */
   for (uint32_t i = 0; i < m_printf.size(); i++) {
@@ -360,8 +364,8 @@ aipu_status_t JobV12::alloc_load_job_buffers() {
   }
 
   /* 10. others */
-  m_spc = get_graph().m_text->pa + get_graph().m_entry;
-  m_intr_pc = get_graph().m_text->pa + 0x10;
+  m_spc = m_text->pa + graph().m_entry;
+  m_intr_pc = m_text->pa + 0x10;
 
 finish:
   if (ret)
@@ -385,18 +389,18 @@ aipu_status_t JobV12::free_job_buffers() {
   if (m_top_reuse_buf && m_top_reuse_buf->size > 0)
     m_mem->free(&m_top_reuse_buf);
 
-  for (uint32_t i = 0; i < m_reuses.size(); i++) {
+  for (uint32_t i = 0; i < m_reuses_desc.size(); i++) {
     if (m_top_reuse_idx.count(i) == 1) {
-      m_mem->free_bufferdesc(&m_reuses[i]);
+      m_mem->free_bufferdesc(&m_reuses_desc[i]);
       continue;
     }
 
-    m_mem->free(&m_reuses[i]);
+    m_mem->free(&m_reuses_desc[i]);
   }
   m_top_reuse_idx.clear();
 
-  m_weights = nullptr;
-  m_reuses.clear();
+  m_weights_desc = nullptr;
+  m_reuses_desc.clear();
   m_inputs.clear();
   m_outputs.clear();
   m_inter_dumps.clear();
@@ -426,47 +430,47 @@ aipu_status_t JobV12::schedule() {
   desc.kdesc.is_defer_run = m_is_defer_run;
   desc.kdesc.do_trigger = m_do_trigger;
   desc.kdesc.core_id = m_bind_core_id;
-  desc.kdesc.version_compatible = !get_graph().m_do_vcheck;
-  desc.kdesc.aipu_arch = get_graph().m_arch;
-  desc.kdesc.aipu_version = get_graph().m_hw_version;
-  desc.kdesc.aipu_config = get_graph().m_hw_config;
-  desc.aipu_revision = get_graph().m_hw_revision;
-  desc.instruction_base_pa = get_graph().m_text->pa;
+  desc.kdesc.version_compatible = !graph().m_do_vcheck;
+  desc.kdesc.aipu_arch = graph().m_arch;
+  desc.kdesc.aipu_version = graph().m_hw_version;
+  desc.kdesc.aipu_config = graph().m_hw_config;
+  desc.aipu_revision = graph().m_hw_revision;
+  desc.instruction_base_pa = m_text->pa;
 
   /**
    * note: on simulation, it's true align_asid_pa == pa.
    */
-  if (get_graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V1) {
+  if (graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V1) {
     desc.kdesc.start_pc_addr = m_spc;
     desc.kdesc.intr_handler_addr = m_intr_pc;
     desc.kdesc.data_0_addr = m_rodata->pa;
     desc.kdesc.data_1_addr = m_stack->pa;
   } else {
-    desc.kdesc.start_pc_addr = m_spc - get_graph().m_text->asid_base;
-    desc.kdesc.intr_handler_addr = m_intr_pc - get_graph().m_text->asid_base;
+    desc.kdesc.start_pc_addr = m_spc - m_text->asid_base;
+    desc.kdesc.intr_handler_addr = m_intr_pc - m_text->asid_base;
     desc.kdesc.data_0_addr = m_rodata->align_asid_pa;
     desc.kdesc.data_1_addr = m_stack->align_asid_pa;
   }
 
   desc.kdesc.enable_prof = 0;
   desc.kdesc.exec_flag = AIPU_JOB_EXEC_FLAG_NONE;
-  desc.kdesc.dtcm_size_kb = get_graph().m_dtcm_size;
+  desc.kdesc.dtcm_size_kb = graph().m_dtcm_size;
   desc.kdesc.enable_poll_opt = !m_hw_cfg->poll_in_commit_thread;
-  desc.text_size = get_graph().m_btext.size;
+  desc.text_size = graph().m_btext.size;
 
-  if (get_graph().m_weight.size() > 0) {
-    if (get_graph().get_weight_buffer_info()[0].wb_weight &&
-        get_graph().get_weight_buffer_info()[0].wb_weight->req_size > 0) {
-      desc.weight_pa = get_graph().get_weight_buffer_info()[0].wb_weight->pa;
+  if (graph().m_weight.size() > 0) {
+    if (graph().get_weight_buffer_info()[0].wb_weight &&
+        graph().get_weight_buffer_info()[0].wb_weight->req_size > 0) {
+      desc.weight_pa = graph().get_weight_buffer_info()[0].wb_weight->pa;
       desc.weight_size =
-          get_graph().get_weight_buffer_info()[0].wb_weight->req_size;
+          graph().get_weight_buffer_info()[0].wb_weight->req_size;
     }
 
-    if (get_graph().get_weight_buffer_info()[0].wb_zerocpy_const != nullptr) {
+    if (graph().get_weight_buffer_info()[0].wb_zerocpy_const != nullptr) {
       desc.zerocpy_const_pa =
-          get_graph().get_weight_buffer_info()[0].wb_zerocpy_const->pa;
+          graph().get_weight_buffer_info()[0].wb_zerocpy_const->pa;
       desc.zerocpy_const_size =
-          get_graph().get_weight_buffer_info()[0].wb_zerocpy_const->req_size;
+          graph().get_weight_buffer_info()[0].wb_zerocpy_const->req_size;
     }
   }
 
@@ -477,8 +481,8 @@ aipu_status_t JobV12::schedule() {
   }
 
   desc.stack_size = m_stack->req_size;
-  desc.reuses = m_reuses;
-  desc.weights = m_weights;
+  desc.reuses = m_reuses_desc;
+  desc.weights = m_weights_desc;
   desc.dump_reuse = !!m_dump_reuse;
   desc.output_dir = m_data_dir;
 
@@ -515,8 +519,9 @@ aipu_status_t JobV12::schedule() {
 
   desc.log_level = m_log_level;
   desc.en_eval = m_en_eval;
+  desc.json_filename = m_json_filename;
 
-  if (get_graph().m_sram_flag)
+  if (graph().m_sram_flag)
     desc.kdesc.exec_flag |= AIPU_JOB_EXEC_FLAG_SRAM_MUTEX;
 
   ret = m_dev->schedule(desc);

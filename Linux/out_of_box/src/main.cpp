@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Arm Technology (China) Co. Ltd.
+// Copyright (C) 2023-2025 Arm Technology (China) Co. Ltd.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -43,13 +43,13 @@ static void help() {
       "-i: benchmark input.bin path\n"
       "-c: benchmark output.bin path\n"
       "-d: the result output dir\n"
-      "-a: ARCH args for aipu v3, eg: X2_1204/X2_1204MP3\n"
+      "-a: ARCH args for aipu v3 or above, eg: X2_1204/X2_1204MP3\n"
       "usage1 for aipu v1/v2:\n"
       "   test -s /demo/sim/aipu_simulator_z1 -b /demo/benchmark/aipu.bin "
       "-i /demo/benchmark/input0.bin,/demo/benchmark/input1.bin -c "
       "/demo/benchmark/output.bin "
       "-d /demo/output(create folder firstly)\n"
-      "usage2 for aipu v3:\n"
+      "usage2 for aipu v3 or above:\n"
       "   test -a [X2_1204 | X2_1204MP3] -b /demo/benchmark/aipu.bin "
       "-i /demo/benchmark/input0.bin,/demo/benchmark/input1.bin -c "
       "/demo/benchmark/output.bin "
@@ -236,6 +236,8 @@ int main(int argc, char *argv[]) {
     goto finish;
   }
 
+  sim_glb_config.verbose = true;
+  sim_glb_config.log_level = 1;
   sim_glb_config.simulator = simulator;
   sim_job_config.data_dir = dump_dir;
   if (!arch.empty())
@@ -251,7 +253,7 @@ int main(int argc, char *argv[]) {
   ret = aipu_load_graph(ctx, bin_file_name, &graph_id);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
-    fprintf(stderr, "[TEST ERROR] AIPU_load_graph_helper: %s\n", msg);
+    fprintf(stderr, "[TEST ERROR] aipu_load_graph: %s\n", msg);
     goto deinit_ctx;
   }
   fprintf(stdout, "[TEST INFO] AIPU load graph successfully.\n");
@@ -360,7 +362,6 @@ int main(int argc, char *argv[]) {
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
     fprintf(stderr, "[TEST ERROR] aipu_finish_job: %s\n", msg);
-    pass = -1;
     goto clean_job;
   }
   fprintf(stdout, "[TEST INFO] aipu_finish_job success\n");
@@ -404,6 +405,9 @@ int main(int argc, char *argv[]) {
    * clean job, unload graph, deinit context
    */
 clean_job:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   ret = aipu_clean_job(ctx, job_id);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
@@ -412,6 +416,9 @@ clean_job:
   }
 
 unload_graph:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   ret = aipu_unload_graph(ctx, graph_id);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
@@ -420,6 +427,9 @@ unload_graph:
   }
 
 deinit_ctx:
+  if (ret != AIPU_STATUS_SUCCESS)
+    pass = -1;
+
   ret = aipu_deinit_context(ctx);
   if (ret != AIPU_STATUS_SUCCESS) {
     aipu_get_error_message(ctx, ret, &msg);
@@ -428,15 +438,14 @@ deinit_ctx:
   }
 
 finish:
-  if (AIPU_STATUS_SUCCESS != ret) {
+  if (ret != AIPU_STATUS_SUCCESS)
     pass = -1;
-  }
+
   for (auto in_data_pair : input_data) {
     munmap(in_data_pair.first, in_data_pair.second);
     input_data.clear();
   }
-  if (check_data) {
+  if (check_data)
     munmap(check_data, check_fsize);
-  }
   return pass;
 }

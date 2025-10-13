@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2023-2024 Arm Technology (China) Co. Ltd. */
+/* Copyright (c) 2023-2025 Arm Technology (China) Co. Ltd. */
 
 #ifndef __AIPU_PARTITION_H__
 #define __AIPU_PARTITION_H__
@@ -105,8 +105,8 @@ struct cluster_info {
  * @dtcm_size:       DTCM size in bytes
  * @cluster_cnt:     cluster count
  * @clusters:        cluster information array
- * @partition_mode:  partition mode in a cluster (for zhouyi v3_1 only)
- * @event_type:      interrupt's event type (for zhouyi v3_1 only)
+ * @partition_mode:  partition mode in a cluster (for zhouyi v3_2 only)
+ * @event_type:      interrupt's event type (for zhouyi v3_2 only)
  */
 struct aipu_partition {
 	u32 id;
@@ -133,6 +133,8 @@ struct aipu_partition {
 	struct cluster_info clusters[8];
 	int partition_mode;
 	int event_type;
+	struct mutex page_lock; /* protect page selection process */
+	struct io_region *dbg_reg;
 };
 
 /**
