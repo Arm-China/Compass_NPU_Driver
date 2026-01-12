@@ -132,7 +132,6 @@ int main(int argc, char *argv[]) {
   std::vector<std::vector<char *>> output_data;
   cmd_opt_t opt;
   int pass = -1;
-  bool is_dynamic = false;
   bool is_zip_file = false;
   uint32_t graph_loop = 0;
   std::vector<uint32_t> input_cnt;
@@ -140,6 +139,8 @@ int main(int argc, char *argv[]) {
   constexpr int RUN_ALL = -1;
   int32_t graph_idx = RUN_ALL;
   uint32_t inputs_shape_cnt = 0;
+  aipu_is_ds_t is_ds = {0};
+  bool ds_provided = false;
 
   if (init_test_bench(argc, argv, &opt, "dynamic_shape_test")) {
     AIPU_ERR()("invalid command line options/args\n");
@@ -155,14 +156,14 @@ int main(int argc, char *argv[]) {
   ("aipu_dynamic_shape_test doesn't support to specify inner loop counter\n");
 
   if (opt.input_shape[0] != '\0')
-    is_dynamic = true;
+    ds_provided = true;
 
   if (opt.bin_files[0].find("zip") != std::string::npos)
     is_zip_file = true;
 
   graph_idx = opt.graph_idx;
 
-  if (is_dynamic)
+  if (ds_provided)
     inputs_shape = get_inputs_shape(opt.input_shape);
 
   ret = aipu_init_context(&ctx);
@@ -239,7 +240,27 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  if (is_dynamic) {
+  is_ds.graph_id = graph_ids_vec[0];
+  ret = aipu_ioctl(ctx, AIPU_IOCTL_IS_DS, &is_ds);
+  if (ret != AIPU_STATUS_SUCCESS) {
+    aipu_get_error_message(ctx, ret, &msg);
+    AIPU_ERR()("aipu_ioctl: %s\n", msg);
+    goto unload_graph;
+  }
+
+  if (is_ds.dynamic_shape) {
+    if (ds_provided) {
+      AIPU_INFO()("model is dynamic shape\n");
+    } else {
+      AIPU_ERR()("model is dynamic shape, but shape is not provided\n");
+      goto unload_graph;
+    }
+  } else {
+    AIPU_ERR()("model is not dynamic shape\n");
+    goto unload_graph;
+  }
+
+  if (is_ds.dynamic_shape) {
     dynshape_params.resize(graph_ids_vec.size());
     for (graph_loop = 0; graph_loop < graph_ids_vec.size(); ++graph_loop) {
       if (graph_idx != RUN_ALL && graph_idx != (int)graph_loop)
@@ -303,7 +324,7 @@ int main(int argc, char *argv[]) {
     if (graph_idx != RUN_ALL && graph_idx != (int)graph_loop)
       continue;
 
-    if (is_dynamic)
+    if (is_ds.dynamic_shape)
       create_job_cfg.dynshape_params = dynshape_params[graph_loop];
 
     ret = aipu_create_job(ctx, graph_ids_vec[graph_loop], &job_ids[graph_loop],
@@ -530,7 +551,7 @@ finish:
     }
   }
 
-  if (is_dynamic) {
+  if (is_ds.dynamic_shape) {
     for (uint32_t i = 0; i < dynshape_params.size(); ++i) {
       for (uint32_t j = 0; j < dynshape_params[i].input_shape_cnt; ++j) {
         if (dynshape_params[i].shape_items[j].ds_data != nullptr) {

@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * @file  graph_v3.cpp
- * @brief AIPU User Mode Driver (UMD) aipu v3 graph module implementation
+ * @file  graph_v3x.cpp
+ * @brief AIPU User Mode Driver (UMD) aipu v3x graph module implementation
  */
 
 #include "graph_v3x.h"
@@ -15,7 +15,8 @@
 #include "job_base.h"
 #if (defined ZHOUYI_V3)
 #include "zhouyi_v3x/zhouyi_v3/job_v3.h"
-#elif (defined ZHOUYI_V3_2)
+#endif
+#if (defined ZHOUYI_V3_2)
 #include "zhouyi_v3x/zhouyi_v3_2/job_v3_2.h"
 #endif
 #include "kmd/tcb.h"
@@ -49,7 +50,7 @@ GraphV3X::~GraphV3X() {
 void GraphV3X::print_parse_info() {
   LOG(LOG_DEFAULT,
       "=====================Graph Parse Results====================");
-  LOG(LOG_DEFAULT, "Target device: z%u-%u", m_hw_version, m_hw_config);
+  LOG(LOG_DEFAULT, "Target device: z%u-%u", m_isa, m_hw_config);
   LOG(LOG_DEFAULT, "--Text:      size 0x%lx", m_btext.size);
   LOG(LOG_DEFAULT, "--Rodata:    size 0x%lx", m_brodata.size);
   LOG(LOG_DEFAULT, "--DCR:       size 0x%lx", m_bdesc.size);
@@ -204,32 +205,37 @@ aipu_status_t GraphV3X::collect_fm_sections() {
       FMSectionInfo::BufInfo{offset, m_btext.size + 16};
   offset += ALIGN_PAGE(m_btext.size + 16);
 
-  m_fmsec_info.info[FMSection::Crodata] =
-      FMSectionInfo::BufInfo{offset, m_bcrodata.size};
-  offset += ALIGN_PAGE(m_bcrodata.size);
+  if (m_bcrodata.size != 0) {
+    m_fmsec_info.info[FMSection::Crodata] =
+        FMSectionInfo::BufInfo{offset, m_bcrodata.size};
+    offset += ALIGN_PAGE(m_bcrodata.size);
+  }
 
   if (!m_put_weight_gm) {
     uint64_t zcy_size = 0;
     for (uint32_t bss_id = 0; bss_id < get_bss_cnt(); ++bss_id)
       zcy_size += ALIGN_PAGE(get_zerocpy_const_size(bss_id));
-    m_fmsec_info.info[FMSection::ZcyConst] =
-        FMSectionInfo::BufInfo{offset, zcy_size};
-    offset += ALIGN_PAGE(zcy_size);
+
+    if (zcy_size != 0) {
+      m_fmsec_info.info[FMSection::ZcyConst] =
+          FMSectionInfo::BufInfo{offset, zcy_size};
+      offset += ALIGN_PAGE(zcy_size);
+    }
   }
 
   if (m_dynamic_shape) {
     m_fmsec_info.info[FMSection::ModelParam] =
         FMSectionInfo::BufInfo{offset, m_bglobalparam.size};
     offset += ALIGN_PAGE(m_bglobalparam.size);
-  } else {
-    m_fmsec_info.info[FMSection::ModelParam] = FMSectionInfo::BufInfo{0, 0};
   }
 
-  m_fmsec_info.info[FMSection::Rodata] =
-      FMSectionInfo::BufInfo{offset, m_brodata.size};
-  offset += ALIGN_PAGE(m_brodata.size);
+  if (m_brodata.size != 0) {
+    m_fmsec_info.info[FMSection::Rodata] =
+        FMSectionInfo::BufInfo{offset, m_brodata.size};
+    offset += ALIGN_PAGE(m_brodata.size);
+  }
 
-  if (!m_put_desc_gm) {
+  if (m_bdesc.size != 0 && !m_put_desc_gm) {
     m_fmsec_info.info[FMSection::Dcr] =
         FMSectionInfo::BufInfo{offset, m_bdesc.size};
     offset += ALIGN_PAGE(m_bdesc.size);
@@ -238,8 +244,8 @@ aipu_status_t GraphV3X::collect_fm_sections() {
   uint32_t tec_cnt = m_dev->tec_cnt_per_core(0);
   uint32_t tcb_cnt = 1 + get_subgraph_cnt() * (tec_cnt + 1);
   m_fmsec_info.info[FMSection::TcbChain] =
-      FMSectionInfo::BufInfo{offset, tcb_cnt * sizeof(tcb_t)};
-  offset += ALIGN_PAGE(tcb_cnt * sizeof(tcb_t));
+      FMSectionInfo::BufInfo{offset, tcb_cnt * tcb_ctl::TCB_LEN};
+  offset += ALIGN_PAGE(tcb_cnt * tcb_ctl::TCB_LEN);
 
   offset += k_tcb_reserved;
 
@@ -258,7 +264,7 @@ aipu_status_t GraphV3X::collect_fm_sections() {
     m_max_ws_size = std::max(m_max_ws_size, private_size);
   }
 
-  if (!m_put_ws_gm) {
+  if (m_max_ws_size != 0 && !m_put_ws_gm) {
     m_fmsec_info.info[FMSection::TotalPriv] =
         FMSectionInfo::BufInfo{offset, m_max_ws_size};
     offset += ALIGN_PAGE(m_max_ws_size);
@@ -276,9 +282,11 @@ aipu_status_t GraphV3X::collect_fm_sections() {
     total_reuse_size += AIPU_ALIGN_BYTES(
         section_desc.size, section_desc.align_in_page * AIPU_PAGE_SIZE);
   }
-  m_fmsec_info.info[FMSection::TotalReuse] =
-      FMSectionInfo::BufInfo{offset, total_reuse_size};
-  offset += ALIGN_PAGE(total_reuse_size);
+  if (total_reuse_size != 0) {
+    m_fmsec_info.info[FMSection::TotalReuse] =
+        FMSectionInfo::BufInfo{offset, total_reuse_size};
+    offset += ALIGN_PAGE(total_reuse_size);
+  }
 
   aipu_status_t ret = collect_gm_info();
   if (ret != AIPU_STATUS_SUCCESS)
@@ -288,13 +296,13 @@ aipu_status_t GraphV3X::collect_fm_sections() {
     m_fmsec_info.info[FMSection::GM] =
         FMSectionInfo::BufInfo{offset, m_gmsec_info.remap_size};
     offset += ALIGN_PAGE(m_gmsec_info.remap_size);
-  } else {
-    m_fmsec_info.info[FMSection::GM] = FMSectionInfo::BufInfo{0, 0};
   }
 
-  m_fmsec_info.info[FMSection::Printf] =
-      FMSectionInfo::BufInfo{offset, get_subgraph_cnt() * AIPU_PAGE_SIZE};
-  offset += ALIGN_PAGE(get_subgraph_cnt() * AIPU_PAGE_SIZE);
+  if (get_subgraph_cnt() != 0) {
+    m_fmsec_info.info[FMSection::Printf] =
+        FMSectionInfo::BufInfo{offset, get_subgraph_cnt() * AIPU_PAGE_SIZE};
+    offset += ALIGN_PAGE(get_subgraph_cnt() * AIPU_PAGE_SIZE);
+  }
 
   if (m_coredump_en) {
     CoredumpAttr attr;
@@ -308,8 +316,6 @@ aipu_status_t GraphV3X::collect_fm_sections() {
     m_fmsec_info.info[FMSection::Coredump] =
         FMSectionInfo::BufInfo{offset, size};
     offset += ALIGN_PAGE(size);
-  } else {
-    m_fmsec_info.info[FMSection::Coredump] = FMSectionInfo::BufInfo{0, 0};
   }
 
   uint32_t reuse_sg_id = 0;
@@ -340,13 +346,18 @@ aipu_status_t GraphV3X::collect_fm_sections() {
     total_dp_size += tec_cnt * ALIGN_PAGE(m_subgraphs[sg_id].private_data_size);
     marked_sg.push_back(sg_id);
   }
-  m_fmsec_info.info[FMSection::Stack] =
-      FMSectionInfo::BufInfo{offset, total_task_size};
-  offset += ALIGN_PAGE(total_task_size);
 
-  m_fmsec_info.info[FMSection::Dpdata] =
-      FMSectionInfo::BufInfo{offset, total_dp_size};
-  offset += ALIGN_PAGE(total_dp_size);
+  if (total_task_size != 0) {
+    m_fmsec_info.info[FMSection::Stack] =
+        FMSectionInfo::BufInfo{offset, total_task_size};
+    offset += ALIGN_PAGE(total_task_size);
+  }
+
+  if (total_dp_size != 0) {
+    m_fmsec_info.info[FMSection::Dpdata] =
+        FMSectionInfo::BufInfo{offset, total_dp_size};
+    offset += ALIGN_PAGE(total_dp_size);
+  }
 
   uint32_t io_size = 0;
   for (uint32_t i = 0; i < m_bss_vec[0].io.inputs.size(); ++i) {
@@ -455,25 +466,29 @@ aipu_status_t GraphV3X::create_job(
       return AIPU_STATUS_ERROR_INVALID_QOS;
     }
 
-#if (defined ZHOUYI_V3_2)
-    if (job_config->dbg_dispatch &&
-        (job_config->qos_level == AIPU_JOB_QOS_HIGH)) {
-      LOG(LOG_ERR, "Can't dispatch one high QoS job and bind to a core\n");
-      return AIPU_STATUS_ERROR_INVALID_QOS;
-    }
+    if (m_isa < ISAv6 || (m_isa == ISAv6 && m_hw_revision < 2)) {
+      if (job_config->dbg_dispatch &&
+          (job_config->qos_level == AIPU_JOB_QOS_HIGH)) {
+        LOG(LOG_ERR, "Can't dispatch one high QoS job and bind to a core\n");
+        return AIPU_STATUS_ERROR_INVALID_QOS;
+      }
 
-    if (job_config->bind_enable && job_config->qos_level == AIPU_JOB_QOS_HIGH) {
-      LOG(LOG_ERR, "Can't dispatch one high QoS job and bind to a core\n");
-      return AIPU_STATUS_ERROR_INVALID_QOS;
+      if (job_config->bind_enable &&
+          job_config->qos_level == AIPU_JOB_QOS_HIGH) {
+        LOG(LOG_ERR, "Can't dispatch one high QoS job and bind to a core\n");
+        return AIPU_STATUS_ERROR_INVALID_QOS;
+      }
     }
-#endif
   }
 
   JobBase *job = nullptr;
 #if (defined ZHOUYI_V3)
-  job = new JobV3((MainContext *)m_ctx, *this, m_dev, job_config);
-#elif (defined ZHOUYI_V3_2)
-  job = new JobV3_2((MainContext *)m_ctx, *this, m_dev, job_config);
+  if (m_isa == ISAv5)
+    job = new JobV3((MainContext *)m_ctx, *this, m_dev, job_config);
+#endif
+#if (defined ZHOUYI_V3_2)
+  if (m_isa == ISAv6)
+    job = new JobV3_2((MainContext *)m_ctx, *this, m_dev, job_config);
 #endif
   *id = add_job(job);
   ret = job->init(glb_sim_cfg, hw_cfg);

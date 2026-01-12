@@ -27,6 +27,8 @@
 #endif
 
 namespace aipudrv {
+using namespace tcb_v3;
+
 JobV3::JobV3(MainContext *ctx, GraphBase &graph, DeviceBase *dev,
              aipu_create_job_cfg_t *config)
     : JobV3X(ctx, graph, dev, config) {
@@ -83,57 +85,195 @@ void JobV3::set_job_params(uint32_t sg_cnt, uint32_t task_per_sg,
   m_gm->gm_dynamic_switch(core_cnt);
 }
 
-void JobV3::setup_gm_sync_to_ddr(tcb_t &tcb) {
-  uint32_t gm_region_idx = 0;
-  tcb_t pre_tcb = {0};
-  GM_V3 *gm_v3 = reinterpret_cast<GM_V3 *>(m_gm);
+/**
+ * 1.<v3_2 reuse gm buffer mallocs independently, and >=v3_2 reuse gm buffer is
+ * piece of gm buffer 2.other reuse sections mallocs independently
+ */
+aipu_status_t JobV3::alloc_reuse_buffer() {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  uint32_t pad_size = graph().get_alloc_pad_size();
 
-  if (!m_mem->is_gm_enable())
-    return;
+  /* allocate reuse buffers, all subgraphs share one copy of reuse buffers */
+  for (uint32_t k = 0; k < graph().get_bss(0).reuse_sections.size(); k++) {
+    const GraphSectionDesc &section_desc = graph().get_bss(0).reuse_sections[k];
+    BufferDesc *bufferDesc = nullptr;
 
-  if (!gm_v3->gm_need_sync_out())
-    return;
+    if (section_desc.size != 0) {
+      std::string buf_name = "reuse_" + std::to_string(k);
 
-  if (m_qos == AIPU_JOB_QOS_SLOW)
-    gm_region_idx = 0;
-  else if (m_qos == AIPU_JOB_QOS_HIGH) {
-    if (m_mem->is_both_gm_region_enable())
-      gm_region_idx = 1;
-    else
-      return;
+      if (m_gm->is_gm_buffer(k, GM_BUF_TYPE_REUSE)) {
+        bufferDesc = new BufferDesc;
+        if (graph().get_isa() == ISAv5) {
+          buf_name = "gm_" + buf_name;
+          ret = m_gm->gm_malloc(0, k, GM_BUF_TYPE_REUSE, buf_name, bufferDesc);
+        }
+      } else {
+        if ((m_sfm_idxes.count(k) == 1) ||
+            (m_sfm_mem_region != AIPU_MEM_REGION_DEFAULT))
+          ret = m_mem->malloc(section_desc.size + pad_size,
+                              section_desc.align_in_page, &bufferDesc,
+                              buf_name.c_str(), m_sfm_mem_region);
+        else
+          ret = m_mem->malloc(section_desc.size + pad_size,
+                              section_desc.align_in_page, &bufferDesc,
+                              buf_name.c_str(), AIPU_MEM_REGION_DEFAULT);
+      }
+
+      if (ret != AIPU_STATUS_SUCCESS) {
+        LOG(LOG_ERR, "alloc reuse buffer %d [fail]", k);
+        goto out;
+      }
+
+      if (m_dump_reuse)
+        m_mem->mem_bzero(bufferDesc->pa, bufferDesc->size);
+
+      m_reuses_desc.push_back(bufferDesc);
+    } else {
+      LOG(LOG_WARN, "reuse %d: size == 0", k);
+    }
   }
 
-  /* modify the last task tcb and link to GM sync tcb */
-  m_mem->read(m_init_tcb.pa + sizeof(tcb_t) * (m_tot_tcb_cnt - 2), &pre_tcb,
-              sizeof(tcb_t));
-  pre_tcb.next =
-      get_low_32(m_init_tcb.pa + sizeof(tcb_t) * (m_tot_tcb_cnt - 1));
-  pre_tcb.flag &= ~(TCB_FLAG_END_TYPE_GROUP_END | TCB_FLAG_END_TYPE_GRID_END |
-                    TCB_FLAG_END_TYPE_END_WITH_DESTROY);
-  m_mem->write(m_init_tcb.pa + sizeof(tcb_t) * (m_tot_tcb_cnt - 2),
-               (const char *)&pre_tcb, sizeof(tcb_t));
+  if (get_subgraph_cnt() > 0 && graph().get_subgraph(0).printfifo_size > 0) {
+    std::string buf_name = "printf";
+    ret = m_mem->malloc(get_subgraph_cnt() * AIPU_PAGE_SIZE, 0, &m_pprint,
+                        buf_name.c_str());
+    if (ret != AIPU_STATUS_SUCCESS)
+      goto out;
+  }
 
-  /* config GM sync tcb: GM->DDR */
-  tcb.next = 0;
-  tcb.flag = TCB_FLAG_DEP_TYPE_PRE_ALL | TCB_FLAG_END_TYPE_GROUP_END |
-             TCB_FLAG_END_TYPE_GRID_END;
-  tcb.grid.grid_id = pre_tcb.task.grid_id;
-  tcb.grid.gm_rgnx_addr[0].v64 = 0;
-  tcb.grid.gm_rgnx_addr[1].v64 = 0;
-  tcb.grid.gm_rgnx_addr[gm_region_idx].v64 = gm_v3->m_gm_map_base;
-  tcb.grid.gm_rgnx_ctrl[0] = GM_REGION_CTRL_IGNORE_CFG;
-  tcb.grid.gm_rgnx_ctrl[1] = GM_REGION_CTRL_IGNORE_CFG;
-  tcb.grid.gm_rgnx_ctrl[gm_region_idx] = GM_REGION_CTRL_SYNC_TO_DDR;
-  tcb.grid.gm_rgnx_ctrl[gm_region_idx] |=
-      get_low_32(gm_v3->m_gm_sync_buf_base[EM_GM_BUF_OUTPUT] -
-                 gm_v3->m_gm_map_base) &
-      0xffff000;
-  tcb.grid.gm_rgnx_ctrl[gm_region_idx] |=
-      (gm_v3->m_gm_sync_buf_size[EM_GM_BUF_OUTPUT] >> 12) & 0xfff;
-  tcb.grid.gm_ctrl = GM_CTRL_TSM_IGNORE_CFG;
+out:
+  return ret;
+}
 
-  m_mem->write(m_init_tcb.pa + sizeof(tcb_t) * (m_tot_tcb_cnt - 1),
-               (const char *)&tcb, sizeof(tcb_t));
+/**
+ * destructor will release buffers
+ */
+aipu_status_t JobV3::alloc_job_buffers() {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+  m_secbuf_desc[FMSection::Text] = graph().m_text;
+  m_secbuf_desc[FMSection::Crodata] = graph().m_crodata;
+
+  const auto &fm_info = graph().get_fmsec_info();
+  for (const auto &info : fm_info.info) {
+    if (info.second.size == 0)
+      continue;
+
+    /* v3 jobs share text/crodata/zerocopy sections */
+    if (info.first == FMSection::Text || info.first == FMSection::Crodata ||
+        info.first == FMSection::ZcyConst ||
+        info.first == FMSection::ReservedIOVA)
+      continue;
+
+    std::string name = graph().get_section_name(info.first);
+    uint32_t size = info.first == FMSection::TotalReuse
+                        ? info.second.size + 0x800
+                        : info.second.size;
+    ret = m_mem->malloc(size, 0, &m_secbuf_desc[info.first], name.c_str());
+    if (ret != AIPU_STATUS_SUCCESS)
+      return ret;
+
+    /* free the orginal buffer starting from addr 0x0 */
+    if (info.first == FMSection::TcbChain) {
+      if (m_secbuf_desc.at(FMSection::TcbChain)->align_asid_pa == 0 ||
+          m_secbuf_desc.at(FMSection::TcbChain)->pa == 0) {
+        m_mem->free(&m_secbuf_desc.at(FMSection::TcbChain));
+
+        BufferDesc *tcb_rsv = nullptr;
+        ret = m_mem->malloc(0x1000, 0, &tcb_rsv, "tcb_rsv");
+        if (ret != AIPU_STATUS_SUCCESS)
+          return ret;
+
+        ret = m_mem->malloc(size, 0, &m_secbuf_desc[FMSection::TcbChain],
+                            name.c_str());
+        if (ret != AIPU_STATUS_SUCCESS) {
+          m_mem->free(&tcb_rsv);
+          return ret;
+        }
+
+        m_mem->free(&tcb_rsv);
+      }
+    }
+  }
+  return AIPU_STATUS_SUCCESS;
+}
+
+aipu_status_t JobV3::free_job_buffers() {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+
+  for (auto &desc : m_secbuf_desc) {
+    if (desc.first == FMSection::Text || desc.first == FMSection::Crodata ||
+        desc.first == FMSection::ZcyConst ||
+        desc.first == FMSection::ReservedIOVA)
+      continue;
+
+    if (desc.first == FMSection::Dcr && graph().m_put_desc_gm &&
+        m_mem->is_gm_enable()) {
+      m_mem->free_bufferdesc(&m_descriptor);
+      continue;
+    } else if (desc.first == FMSection::TotalPriv && graph().m_put_ws_gm &&
+               m_mem->is_gm_enable()) {
+      m_mem->free_bufferdesc(&m_top_priv_buf);
+      continue;
+    }
+
+    if (desc.second && desc.second->size != 0)
+      m_mem->free(&desc.second, graph().get_section_name(desc.first).c_str());
+  }
+
+  for (uint32_t i = 0; i < m_sg_job.size(); i++) {
+    free_sg_buffers(m_sg_job[i]);
+    m_sg_job[i].reset(i, -1);
+  }
+
+  if (m_top_reuse) /* default */
+  {
+    for (uint32_t i = 0; i < m_reuses_desc.size(); i++) {
+      if (m_sfm_idxes.count(i) == 0 ||
+          graph().is_gm_buffer(i, GM_BUF_TYPE_REUSE))
+        m_mem->free_bufferdesc(&m_reuses_desc[i]);
+      else
+        m_mem->free(&m_reuses_desc[i]);
+    }
+  } else /* scattered reuse buffer */
+  {
+    for (uint32_t i = 0; i < m_reuses_desc.size(); i++) {
+      if (m_dmabuf_idxs.count(i) == 1) {
+        m_mem->free_bufferdesc(&m_reuses_desc[i]);
+        continue;
+      }
+
+      m_mem->free(&m_reuses_desc[i]);
+    }
+  }
+
+  for (uint32_t i = 0; i < m_weight.size(); ++i) {
+    if (graph().m_put_weight_gm) {
+      if (m_weight[i].wb_weight && m_weight[i].wb_weight->size != 0)
+        m_mem->free_bufferdesc(&m_weight[i].wb_weight);
+
+      if (m_weight[i].wb_zerocpy_const &&
+          m_weight[i].wb_zerocpy_const->size != 0)
+        m_mem->free_bufferdesc(&m_weight[i].wb_zerocpy_const);
+    }
+  }
+
+  if (m_coredump)
+    m_coredump->free_coredump();
+
+  m_init_tcb.init(0);
+
+  m_reuses_desc.clear();
+
+  m_sg_job.clear();
+
+  m_inputs.clear();
+  m_outputs.clear();
+  m_inter_dumps.clear();
+  m_profiler.clear();
+  m_printf.clear();
+  m_layer_counter.clear();
+  return ret;
 }
 
 #define SEGMMU_MEM_CTRL_EN (1 << 0)
@@ -221,19 +361,9 @@ out:
   return ret;
 }
 
-void JobV3::get_tcb_head_cnt(uint32_t sg_idx, uint32_t &head_cnt) {
-  static uint32_t cur_bss_idx = graph().get_subgraph(0).bss_idx;
-
-  if ((sg_idx == 0) || (cur_bss_idx != graph().get_subgraph(sg_idx).bss_idx)) {
-    cur_bss_idx = graph().get_subgraph(sg_idx).bss_idx;
-    head_cnt += 1;
-    head_cnt += m_segmmu_tcb_num;
-  }
-}
-
 aipu_status_t JobV3::setup_task_tcb(uint32_t sg_id, uint32_t grid_id,
                                     uint32_t core_id, uint32_t task_id,
-                                    bool is_new_grid) {
+                                    bool new_grid) {
   Task &task = m_sg_job[sg_id].tasks[task_id];
   tcb_t tcb;
   TCB *next_tcb = nullptr;
@@ -246,17 +376,17 @@ aipu_status_t JobV3::setup_task_tcb(uint32_t sg_id, uint32_t grid_id,
     next_tcb = nullptr;
 
   memset(&tcb, 0, sizeof(tcb_t));
-  tcb.flag = TCB_FLAG_TASK_TYPE_TASK;
-  tcb.task.interrupt_en = EN_INTERRUPT_ALL_TYPE;
+  tcb.flag = tcb_ctl::FLAG_TASK_TYPE_TASK_V3;
+  tcb.task.interrupt_en = tcb_ctl::EN_INTERRUPT_ALL_TYPE_V3;
 
   if (task_id == (m_task_per_sg - 1)) {
-    tcb.flag |= TCB_FLAG_END_TYPE_GROUP_END;
+    tcb.flag |= tcb_ctl::FLAG_END_TYPE_GROUP_END;
     if (!next_tcb && m_sg_cnt == 1)
-      tcb.task.interrupt_en |= EN_INTERRUPT_CORE;
+      tcb.task.interrupt_en |= tcb_ctl::EN_INTERRUPT_CORE;
   }
 
   if (next_tcb != nullptr) {
-    if ((graph().get_bss_cnt() > 1) && is_new_grid &&
+    if ((graph().get_bss_cnt() > 1) && new_grid &&
         (task_id == (m_task_per_sg - 1)))
       tcb.next =
           get_low_32(next_tcb->pa - (1 + m_segmmu_tcb_num) * sizeof(tcb_t));
@@ -264,12 +394,12 @@ aipu_status_t JobV3::setup_task_tcb(uint32_t sg_id, uint32_t grid_id,
       tcb.next = get_low_32(next_tcb->pa);
   } else {
     tcb.next = 0;
-    tcb.flag |= TCB_FLAG_END_TYPE_GRID_END;
-    tcb.task.interrupt_en |= EN_INTERRUPT_CLUSTER;
+    tcb.flag |= tcb_ctl::FLAG_END_TYPE_GRID_END;
+    tcb.task.interrupt_en |= tcb_ctl::EN_INTERRUPT_CLUSTER;
 
 #ifndef SIMULATION
     if (m_sg_cnt == 1)
-      tcb.flag &= ~TCB_FLAG_END_TYPE_GRID_END;
+      tcb.flag &= ~tcb_ctl::FLAG_END_TYPE_GRID_END;
 #endif
   }
 
@@ -277,13 +407,13 @@ aipu_status_t JobV3::setup_task_tcb(uint32_t sg_id, uint32_t grid_id,
   if (task_id == 0) {
     switch (graph().get_subgraph(sg_id).precursor_cnt) {
     case SUBG_DEPEND_NONE:
-      tcb.flag |= TCB_FLAG_DEP_TYPE_NONE;
+      tcb.flag |= tcb_ctl::FLAG_DEP_TYPE_NONE;
       break;
     case SUBG_DEPEND_IMMEDIATE:
-      tcb.flag |= TCB_FLAG_DEP_TYPE_IMMEDIATE;
+      tcb.flag |= tcb_ctl::FLAG_DEP_TYPE_IMMEDIATE;
       break;
     case SUBG_DEPEND_PREALL:
-      tcb.flag |= TCB_FLAG_DEP_TYPE_PRE_ALL;
+      tcb.flag |= tcb_ctl::FLAG_DEP_TYPE_PRE_ALL;
       break;
     default:
       LOG(LOG_ERR, "subgraph %u, precursor_cnt=%d\n", sg_id,
@@ -295,10 +425,10 @@ aipu_status_t JobV3::setup_task_tcb(uint32_t sg_id, uint32_t grid_id,
     /* to parallel model which runs only on single core, unset depend-all flag
      */
     if (m_sg_cnt == 1)
-      tcb.flag &= ~TCB_FLAG_DEP_TYPE_PRE_ALL;
+      tcb.flag &= ~tcb_ctl::FLAG_DEP_TYPE_PRE_ALL;
   }
 
-  tcb.task.spc = get_low_32(m_text->align_asid_pa +
+  tcb.task.spc = get_low_32(graph().m_text->align_asid_pa +
                             graph().get_subgraph(sg_id).text.offset);
   tcb.task.grid_id = (uint16_t)grid_id;
   tcb.task.group_id = (uint16_t)core_id;
@@ -322,8 +452,8 @@ aipu_status_t JobV3::setup_task_tcb(uint32_t sg_id, uint32_t grid_id,
   tcb.task.dp = get_low_32(task.private_data->align_asid_pa);
 
   /* const rodata */
-  if (m_crodata != nullptr && m_crodata->size > 0)
-    tcb.task.cp = get_low_32(m_crodata->align_asid_pa);
+  if (graph().m_crodata != nullptr && graph().m_crodata->size > 0)
+    tcb.task.cp = get_low_32(graph().m_crodata->align_asid_pa);
 
   /* update profile buffer offset according to subgraph index */
   if (m_profiler.size() > 0) {
@@ -345,11 +475,11 @@ aipu_status_t JobV3::setup_task_tcb(uint32_t sg_id, uint32_t grid_id,
         m_pprint->align_asid_pa + AIPU_PAGE_SIZE * sg_id + 1024 * task_id;
     tcb.task.pprint = get_low_32(pa);
     if (m_hw_cfg->enable_tec_done_irq)
-      tcb.task.interrupt_en |= EN_INTERRUPT_TEC;
+      tcb.task.interrupt_en |= tcb_ctl::EN_INTERRUPT_TEC;
   }
 
   if (graph().is_dynamic_shape())
-    tcb.task.global_param = get_low_32(m_model_global_param->align_asid_pa);
+    tcb.task.global_param = get_low_32(m_global_param->align_asid_pa);
 
   /* flush TCB to AIPU mem */
   m_mem->write(task.tcb.pa, (const char *)&tcb, sizeof(tcb_t));
@@ -358,12 +488,12 @@ aipu_status_t JobV3::setup_task_tcb(uint32_t sg_id, uint32_t grid_id,
 }
 
 aipu_status_t JobV3::setup_tcb_group(uint32_t sg_id, uint32_t grid_id,
-                                     uint32_t core_id, bool is_new_grid) {
+                                     uint32_t core_id, bool new_grid) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
   /* setup task TCBs */
   for (uint32_t t = 0; t < m_task_per_sg; t++) {
-    ret = setup_task_tcb(sg_id, grid_id, core_id, t, is_new_grid);
+    ret = setup_task_tcb(sg_id, grid_id, core_id, t, new_grid);
     if (ret != AIPU_STATUS_SUCCESS)
       return ret;
   }
@@ -439,7 +569,7 @@ aipu_status_t JobV3::setup_tcb_chain() {
   uint32_t cur_bss_idx = graph().get_subgraph(0).bss_idx;
   DEV_PA_64 next_init_tcb_pa = m_init_tcb.pa;
   uint32_t init_tcb_cnt = 0;
-  bool is_new_grid = false;
+  bool new_grid = false;
   uint32_t segmmu_tcb_nums = 0;
   uint16_t cur_grid_id = m_grid_id;
 
@@ -451,22 +581,26 @@ aipu_status_t JobV3::setup_tcb_chain() {
      * a grid or a sub-tcb chain with its own init tcb.
      *
      */
+    new_grid = false;
+    if ((i + 1 < graph().get_subgraph_cnt()) &&
+        graph().get_subgraph(i).bss_idx != graph().get_subgraph(i + 1).bss_idx)
+      new_grid = true;
+
     if ((i == 0) || (cur_bss_idx != graph().get_subgraph(i).bss_idx)) {
       cur_bss_idx = graph().get_subgraph(i).bss_idx;
       init_tcb_cnt += 1;
       segmmu_tcb_nums += m_segmmu_tcb_num;
-      is_new_grid = true;
       cur_grid_id = m_grid_id;
 
       /* 1. setup init TCB */
       memset(&tcb, 0, sizeof(tcb_t));
 
       if (m_segmmu_tcb_num == 1)
-        tcb.flag = (1 << 16) | TCB_FLAG_TASK_TYPE_INIT;
+        tcb.flag = (1 << 16) | tcb_ctl::FLAG_TASK_TYPE_INIT;
       else if (m_segmmu_tcb_num == 2)
-        tcb.flag = (3 << 16) | TCB_FLAG_TASK_TYPE_INIT;
+        tcb.flag = (3 << 16) | tcb_ctl::FLAG_TASK_TYPE_INIT;
       else
-        tcb.flag = TCB_FLAG_TASK_TYPE_INIT;
+        tcb.flag = tcb_ctl::FLAG_TASK_TYPE_INIT;
 
       tcb.next = get_low_32(m_sg_job[i].tasks[0].tcb.pa);
       tcb.grid.grid_id = (cur_grid_id << 16);
@@ -477,7 +611,7 @@ aipu_status_t JobV3::setup_tcb_chain() {
 
       /* 1.1 config GM if need */
       if (i == 0)
-        m_gm->setup_gm_sync_from_ddr(tcb);
+        reinterpret_cast<GM_V3 *>(m_gm)->setup_gm_sync_from_ddr(tcb);
 
       /**
        * 1.2 config ASID for each GRID
@@ -489,8 +623,8 @@ aipu_status_t JobV3::setup_tcb_chain() {
        * ASID0: feature map buffer region
        * the whole graph share one copy of reuse buffer for feature map.
        */
-      tcb.grid.asids[0].v32.lo =
-          get_low_32(m_mem->get_asid_base(0) | ZY_ASID_RD | ZY_ASID_WR);
+      tcb.grid.asids[0].v32.lo = get_low_32(
+          m_mem->get_asid_base(0) | tcb_ctl::ASID_RD | tcb_ctl::ASID_WR);
       tcb.grid.asids[0].v32.hi = get_high_32(m_mem->get_asid_base(0));
 
       /**
@@ -500,10 +634,10 @@ aipu_status_t JobV3::setup_tcb_chain() {
        * asid_base(pa).
        */
       DEV_PA_64 asid1_base = 0;
-      if (graph().get_weight_buffer_info().size() > cur_bss_idx)
-        asid1_base = graph().get_weight_buffer_info()[cur_bss_idx].wb_asid_base;
+      if (m_weight.size() > cur_bss_idx)
+        asid1_base = m_weight[cur_bss_idx].wb_asid_base;
       tcb.grid.asids[1].v32.lo =
-          get_low_32(asid1_base | ZY_ASID_RD | ZY_ASID_WR);
+          get_low_32(asid1_base | tcb_ctl::ASID_RD | tcb_ctl::ASID_WR);
       tcb.grid.asids[1].v32.hi = get_high_32(asid1_base);
 
       /**
@@ -521,14 +655,13 @@ aipu_status_t JobV3::setup_tcb_chain() {
 
     /* 2. setup TCB group */
     ret = setup_tcb_group(graph().get_subgraph(i).id, cur_grid_id, core_id,
-                          is_new_grid);
+                          new_grid);
     if (ret != AIPU_STATUS_SUCCESS)
       return ret;
 
     if (++core_id >= m_core_cnt)
       core_id = 0;
 
-    is_new_grid = false;
     next_init_tcb_pa = m_init_tcb.pa + (init_tcb_cnt + segmmu_tcb_nums +
                                         (i + 1) * m_task_per_sg) *
                                            sizeof(tcb_t);
@@ -541,315 +674,70 @@ aipu_status_t JobV3::setup_tcb_chain() {
   m_mem->write(m_text->pa + graph().m_btext.size + 4, &m_rodata->align_asid_pa,
                4);
 
-  // setup_gm_sync_to_ddr(tcb);
   m_status = AIPU_JOB_STATUS_INIT;
 
   return AIPU_STATUS_SUCCESS;
 }
 
-aipu_status_t JobV3::dump_for_emulation() {
-  if (m_dump_emu == false)
-    return AIPU_STATUS_SUCCESS;
+aipu_status_t JobV3::specify_io(aipu_shared_tensor_info_t &tensor_info,
+                                const std::vector<JobIOBuffer> *iobuffer_vec) {
+  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  uint64_t buffer_pa = tensor_info.pa;
+  int fd = tensor_info.dmabuf_fd;
+  uint32_t index = tensor_info.tensor_idx;
+  uint64_t offset = tensor_info.offset_in_dmabuf;
 
-  constexpr uint32_t INIT_NUM = 3;
-  DEV_PA_64 dump_pa = 0;
-  uint32_t dump_size = 0;
-  char dump_name[4096] = {0};
-  int emu_input_cnt =
-      INIT_NUM + m_inputs.size() + (m_descriptor != nullptr ? 1 : 0);
-  int emu_output_cnt = m_outputs.size();
-  int file_id = -1;
-  tcb_t tcb = {0};
-  bool default_output_prefix = true;
-  std::string runtime_cfg = m_dump_dir + "/runtime.cfg";
-  std::string metadata_txt = m_dump_dir + "/metadata.txt";
-  std::map<uint32_t, std::string> gm_info = {
-      {512 << 10, "512K"}, {1 << 20, "1M"},   {2 << 20, "2M"},
-      {4 << 20, "4M"},     {8 << 20, "8M"},   {16 << 20, "16M"},
-      {32 << 20, "32M"},   {64 << 20, "64M"},
-  };
+  aipu_dma_buf dma_buf{fd, 0, 0};
+  uint32_t reuse_index = (*iobuffer_vec)[index].ref_section_iter;
+  BufferDesc *bufferDesc = m_reuses_desc[reuse_index];
 
-  FileWrapper ofs(runtime_cfg, std::ios_base::in | std::ios_base::out |
-                                   std::ios_base::trunc);
-  FileWrapper ofsmt(metadata_txt, std::ios_base::in | std::ios_base::out |
-                                      std::ios_base::trunc);
-  if (!ofs.is_open() || !ofsmt.is_open())
+  switch (tensor_info.shared_case_type) {
+  case AIPU_SHARE_BUF_IN_ONE_PROCESS:
+    bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size,
+                     bufferDesc->req_size);
+    update_io_buffers(graph().get_bss(0).io, m_reuses_desc);
+    break;
+  case AIPU_SHARE_BUF_CUSTOMED:
+    bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size,
+                     bufferDesc->req_size);
+    (*iobuffer_vec)[index].set_dump_ignore_flag(true);
+    break;
+  case AIPU_SHARE_BUF_DMABUF:
+    ret = convert_ll_status(
+        m_dev->ioctl_cmd(AIPU_IOCTL_GET_DMABUF_INFO, &dma_buf));
+    if (ret != AIPU_STATUS_SUCCESS)
+      return ret;
+
+    buffer_pa = dma_buf.pa + offset;
+    bufferDesc->init(m_mem->get_asid_base(0), buffer_pa, bufferDesc->size,
+                     bufferDesc->req_size);
+    (*iobuffer_vec)[index].set_dmabuf_info(fd, dma_buf.bytes, offset);
+    break;
+  case AIPU_SHARE_BUF_ATTACH_DMABUF:
+    LOG(LOG_ERR, "v3 doesn't support dmabuf attach");
+    return AIPU_STATUS_ERROR_INVALID_CONFIG;
+  default:
+    return AIPU_STATUS_ERROR_INVALID_OP;
+  }
+
+  LOG(LOG_DEBUG, "specify_io_buffer: pa=%lx, size=%lx, share_case_type=%d",
+      buffer_pa, bufferDesc->size, tensor_info.shared_case_type);
+
+  return AIPU_STATUS_SUCCESS;
+}
+
+aipu_status_t JobV3::dump_emu_metadata(const std::string &metafile) {
+  FileWrapper ofsmt(metafile, std::ios_base::in | std::ios_base::out |
+                                  std::ios_base::trunc);
+  if (!ofsmt.is_open())
     return AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
 
-  ofs << "[COMMON]\n";
-
-  /* runtime.cfg: config */
-  ofs << "#configuration 1:X2_1204 2:X2_1204MP3\n";
-  if (m_dev->get_config_code() != nullptr)
-    ofs << "CONFIG=" << m_dev->get_config_code() << "\n";
-
-  /* runtime.cfg: enable_avx */
-  ofs << "#if ENABLE_AVX is true then using the intel SIMD instructions to "
-         "speedup.\n";
-  if (m_cfg->enable_avx)
-    ofs << "ENABLE_AVX=true\n";
-  else
-    ofs << "ENABLE_AVX=false\n";
-
-  /* runtime.cfg: log file path */
-  ofs << "#Where log output to store is.\n";
-  ofs << "LOG_FILEPATH=" << m_cfg->log_file_path << "\n";
-
-  /* runtime.cfg: log_level */
-  ofs << "#which level is your selected: 0:ERROR, 1: WARN, 2: INFO, 3: DEBUG\n";
-  ofs << "LOG_LEVEL=" << m_cfg->log_level << "\n";
-
-  /* runtime.cfg: verbose */
-  ofs << "#if LOG_VERBOSE is true then print log to console. otherwise no\n";
-  if (m_cfg->verbose)
-    ofs << "LOG_VERBOSE=true\n";
-  else
-    ofs << "LOG_VERBOSE=false\n";
-
-  /* runtime.cfg: enable_calloc */
-  ofs << "#if ENABLE_CALLOC is true the allocation memory is set to zero.\n";
-  if (m_cfg->enable_calloc)
-    ofs << "ENABLE_CALLOC=true\n";
-  else
-    ofs << "ENABLE_CALLOC=false\n";
-
-  /* runtime.cfg: gm_size */
-  ofs << "#GM support: 512KiB,1MiB,2MiB,4MiB,8MiB,16MiB,32MiB,64MiB.\n";
-  if (gm_info.count(m_cfg->gm_size) == 1)
-    ofs << "GM_SIZE=" << gm_info[m_cfg->gm_size] << "\n";
-
-  if (m_cfg->plugin_name != nullptr) {
-    ofs << "#PLUGIN_FILENAME\n";
-    ofs << "PLUGIN_FILENAME=" << m_cfg->plugin_name << "\n";
-  }
-
-  if (m_cfg->json_filename != nullptr) {
-    ofs << "#GRPAH_FILENAME\n";
-    ofs << "GRPAH_FILENAME=" << m_cfg->json_filename << "\n";
-  }
-
-  /* runtime.cfg: en_eval */
-  ofs << "\n[PROFILE]\n";
-  if (m_dev->get_profile_en())
-    ofs << "EN_EVAL=1\n";
-  else
-    ofs << "EN_EVAL=0\n";
-
-  if (m_profiler.size() == 1) {
-    ofs << "PROFILE_BUF_ADDR=0x" << std::hex << m_profiler[0].pa << "\n";
-    ofs << "PROFILE_BUF_SIZE=0x" << std::hex << m_profiler[0].size << "\n";
-  }
-  ofs << "\n";
-
-  ofs.dump_to_string(m_dumpcfg_header);
-
-  /* runtime.cfg: [INPUT] */
-  for (uint32_t bss_id = 0; bss_id < graph().get_weight_buffer_info().size();
-       bss_id++) {
-    if (graph().get_weight_buffer_info()[bss_id].wb_weight != nullptr &&
-        graph().get_weight_buffer_info()[bss_id].wb_weight->size > 0) {
-      emu_input_cnt += 1;
-      if (graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const !=
-              nullptr &&
-          graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->size != 0)
-        emu_input_cnt += 1;
-    } else
-      emu_input_cnt +=
-          graph().get_weight_buffer_info()[bss_id].wb_weights.size();
-  }
-
-  ofs << "[INPUT]\n";
-  ofs << "COUNT=" << emu_input_cnt << "\n";
-
-  /* dump temp.text */
-  dump_pa = m_text->pa;
-  dump_size = m_text->req_size - 16;
-  if (dump_size != 0) {
-    snprintf(dump_name, 128, "%s/%s.text", m_dump_dir.c_str(),
-             m_dump_prefix.c_str());
-    m_mem->dump_file(dump_pa, dump_name, dump_size);
-
-    ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".text\n";
-    ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
-    m_dumpcfg_input.push_back({dump_name, dump_pa});
-  }
-
-  /* dump temp.weight */
-  for (uint32_t bss_id = 0; bss_id < graph().get_weight_buffer_info().size();
-       bss_id++) {
-    if (graph().get_weight_buffer_info()[bss_id].wb_weight != nullptr &&
-        graph().get_weight_buffer_info()[bss_id].wb_weight->req_size > 0) {
-      dump_pa = graph().get_weight_buffer_info()[bss_id].wb_weight->pa;
-      dump_size = graph().get_weight_buffer_info()[bss_id].wb_weight->req_size;
-      if (dump_size != 0) {
-        snprintf(dump_name, 128, "%s/%s.weight%d", m_dump_dir.c_str(),
-                 m_dump_prefix.c_str(), bss_id);
-        m_mem->dump_file(dump_pa, dump_name, dump_size);
-
-        ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix
-            << ".weight" << bss_id << "\n";
-        ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
-        m_dumpcfg_input.push_back({dump_name, dump_pa});
-
-        if (graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const !=
-                nullptr &&
-            graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->size >
-                0) {
-          dump_pa =
-              graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->pa;
-          dump_size = graph()
-                          .get_weight_buffer_info()[bss_id]
-                          .wb_zerocpy_const->req_size;
-          snprintf(dump_name, 128, "%s/%s.zerocpy_const%d", m_dump_dir.c_str(),
-                   m_dump_prefix.c_str(), bss_id);
-          m_mem->dump_file(dump_pa, dump_name, dump_size);
-
-          ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix
-              << ".zerocpy_const" << bss_id << "\n";
-          ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
-          m_dumpcfg_input.push_back({dump_name, dump_pa});
-        }
-      }
-    } else {
-      for (uint32_t i = 0;
-           i < graph().get_weight_buffer_info()[bss_id].wb_weights.size();
-           i++) {
-        dumpcfg_input_desc input_desc;
-        std::string name;
-
-        dump_pa = graph().get_weight_buffer_info()[bss_id].wb_weights[i]->pa;
-        dump_size =
-            graph().get_weight_buffer_info()[bss_id].wb_weights[i]->size;
-        name = m_dump_dir + "/" + m_dump_prefix + ".weight" + std::to_string(i);
-        m_mem->dump_file(dump_pa, name.c_str(), dump_size);
-
-        ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix
-            << ".weight\n";
-        ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
-        input_desc.file = name;
-        input_desc.base = dump_pa;
-        m_dumpcfg_input.push_back(input_desc);
-      }
-    }
-  }
-
-  /* dump temp.rodata */
-  dump_pa = m_rodata->pa;
-  dump_size = m_rodata->req_size;
-  snprintf(dump_name, 128, "%s/%s.ro", m_dump_dir.c_str(),
-           m_dump_prefix.c_str());
-  m_mem->dump_file(dump_pa, dump_name, dump_size);
-  ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".ro\n";
-  ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
-  m_dumpcfg_input.push_back({dump_name, dump_pa});
-
-  /* dump temp.dcr */
-  if (m_descriptor != nullptr && m_descriptor->size != 0) {
-    dump_pa = m_descriptor->pa;
-    dump_size = m_descriptor->req_size;
-    snprintf(dump_name, 128, "%s/%s.dcr", m_dump_dir.c_str(),
-             m_dump_prefix.c_str());
-    m_mem->dump_file(dump_pa, dump_name, dump_size);
-
-    ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".dcr\n";
-    ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
-    m_dumpcfg_input.push_back({dump_name, dump_pa});
-  }
-
-  /* dump temp.tcb */
-  dump_pa = m_init_tcb.pa;
-  dump_size = m_tot_tcb_cnt * sizeof(tcb_t);
-  snprintf(dump_name, 128, "%s/%s.tcb", m_dump_dir.c_str(),
-           m_dump_prefix.c_str());
-  m_dump_tcb_info[0] =
-      std::make_tuple(m_dump_dir + "/init.tcb", dump_pa,
-                      (1 + (m_core_cnt + 1) / 2) * sizeof(tcb_t));
-  m_dump_tcb_info[1] = std::make_tuple(
-      m_dump_dir + "/task.tcb", dump_pa + std::get<2>(m_dump_tcb_info[0]),
-      dump_size - std::get<2>(m_dump_tcb_info[0]));
-  m_mem->dump_file(std::get<1>(m_dump_tcb_info[0]),
-                   std::get<0>(m_dump_tcb_info[0]).c_str(),
-                   std::get<2>(m_dump_tcb_info[0]));
-  m_mem->dump_file(std::get<1>(m_dump_tcb_info[1]),
-                   std::get<0>(m_dump_tcb_info[1]).c_str(),
-                   std::get<2>(m_dump_tcb_info[1]));
-  m_mem->dump_file(dump_pa, dump_name, dump_size);
-
-  ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".tcb\n";
-  ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
-
-  /* dump temp.input[n] */
-  for (uint32_t i = 0; i < m_inputs.size(); i++) {
-    if (m_inputs[i].dump_ignore_flag)
-      continue;
-
-    dump_pa = m_inputs[i].pa;
-    dump_size = m_inputs[i].size;
-    snprintf(dump_name, 128, "%s/%s.input%u", m_dump_dir.c_str(),
-             m_dump_prefix.c_str(), i);
-
-    if (m_inputs[i].dmabuf_fd < 0)
-      m_mem->dump_file(dump_pa, dump_name, dump_size);
-    else
-      dump_share_buffer(m_inputs[i], dump_name, true);
-
-    ofs << "FILE" << std::dec << ++file_id << "=" << m_dump_prefix << ".input"
-        << i << "\n";
-    ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
-    m_dumpcfg_input.push_back({dump_name, dump_pa});
-  }
-  ofs << "\n";
-
-  ofs << "[HOST]\n";
-  ofs << "TCBP_HI=0x" << std::hex << get_high_32(m_init_tcb.pa) << "\n";
-  ofs << "TCBP_LO=0x" << get_low_32(m_init_tcb.pa) << "\n";
-  m_dumpcfg_host = {m_partition_id, get_high_32(m_init_tcb.pa),
-                    get_low_32(m_init_tcb.pa)};
-  ofs << "\n";
-
-  /* runtime.cfg: [OUTPUT] */
-  ofs << "[OUTPUT]\n";
-  ofs << "COUNT=" << std::dec << emu_output_cnt << "\n";
-
-  /* dump output.bin[n] */
-  if (strncmp(m_dump_output_prefix.c_str(), "temp", 4))
-    default_output_prefix = false;
-
-  for (uint32_t i = 0; i < m_outputs.size(); i++) {
-    if (m_outputs[i].dump_ignore_flag)
-      continue;
-
-    dump_pa = m_outputs[i].pa;
-    dump_size = m_outputs[i].size;
-
-    if (default_output_prefix) {
-      ofs << "FILE" << std::dec << i << "=" << m_dump_output_prefix << ".output"
-          << i << "\n";
-      snprintf(dump_name, 128, "%s/%s.output%u", m_dump_dir.c_str(),
-               m_dump_prefix.c_str(), i);
-      m_dumpcfg_output.push_back({dump_name, dump_pa, dump_size});
-    } else {
-      if (i == 0) {
-        ofs << "FILE" << std::dec << i << "=" << m_dump_output_prefix << "\n";
-      } else {
-        ofs << "FILE" << std::dec << i << "=" << m_dump_output_prefix << i
-            << "\n";
-      }
-    }
-
-    ofs << "BASE" << std::dec << i << "=0x" << std::hex << dump_pa << "\n";
-    ofs << "SIZE" << std::dec << i << "=0x" << std::hex << dump_size << "\n";
-  }
-
-  /* close runtime.cfg */
-  ofs.close();
-
-  /* dump metadata.txt */
+  tcb_t tcb = {0};
   ofsmt << "Total TCBs Count: " << std::dec << m_tot_tcb_cnt << "\n";
   for (uint32_t i = 0; i < m_tot_tcb_cnt; i++) {
     m_mem->read(m_init_tcb.pa + i * sizeof(tcb_t), &tcb, sizeof(tcb_t));
 
-    if (TCB_FLAG_TASK_TYPE(tcb.flag) == TCB_FLAG_TASK_TYPE_INIT) {
+    if (tcb_task_type(tcb.flag) == tcb_ctl::FLAG_TASK_TYPE_INIT) {
       /* init tcb + segmmu tcb */
       if (tcb.next != 0) {
         ofsmt << "\n***INIT TCB " << std::dec << i << " ***\n";
@@ -892,7 +780,7 @@ aipu_status_t JobV3::dump_for_emulation() {
                 << tcb.group.next_core_smmu.segs[j].ctrl1 << "\n";
         }
       }
-    } else if (TCB_FLAG_TASK_TYPE(tcb.flag) == TCB_FLAG_TASK_TYPE_TASK) {
+    } else if (tcb_task_type(tcb.flag) == tcb_ctl::FLAG_TASK_TYPE_TASK_V3) {
       ofsmt << "\n***TASK TCB " << std::dec << i << "***\n";
       ofsmt << "flag: 0x" << std::hex << tcb.flag << "\n";
 
@@ -939,6 +827,8 @@ aipu_status_t JobV3::dump_for_emulation() {
     }
   }
 
+  DEV_PA_64 dump_pa = 0;
+  uint32_t dump_size = 0;
   ofsmt << "\n***IO Tensors***\n";
   for (uint32_t i = 0; i < m_inputs.size(); i++) {
     dump_pa = m_inputs[i].pa;

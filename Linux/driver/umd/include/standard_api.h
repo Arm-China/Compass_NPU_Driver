@@ -4,8 +4,7 @@
 
 /**
  * @file  standard_api.h
- * @brief Zhouyi AIPU User Mode Driver (UMD) Standard API header (for aipu
- * v1/v2/v3)
+ * @brief Zhouyi AIPU User Mode Driver (UMD) Standard API header
  * @version 1.0
  */
 
@@ -147,26 +146,33 @@ typedef struct {
 /**
  * @brief Simulation related configuration
  *
- * @todo align with simulator 'config_t'
+ * @attention 'default' value represents user doesn't provide simulator
+ * configuration pointer
  */
 typedef struct {
   uint32_t log_level;        /**< simulator log level, default 0 */
   bool verbose;              /**< simulator log print, default false */
   const char *log_file_path; /**< simulator log file path */
   const char *json_filename; /**< specify json filename */
-  const char *plugin_name;   /**< specify plugin dynamic library filename */
+  bool print_subg_info; /**< prints subgraph information, when json_filename is
+                           set */
+
+  const char *plugin_name; /**< specify plugin dynamic library filename */
 
   const char
       *simulator; /**< only for v1/v2, specify executable simulator full path */
-  const char *npu_arch_desc; /**< only for >=v3, specify aipu target, such as
-                                'X2_1204MP3' */
+  const char *npu_arch_desc; /**< [[deprecated]] */
   uint32_t gm_size;   /**< only for >=v3, v3 default 4M,v3_2 default 8M */
   bool enable_avx;    /**< only for >=v3, default false */
   bool enable_calloc; /**< only for >=v3, default false */
 
   bool en_eval; /**< only for <=v3, enable perf evaluation, default false */
 
-  bool en_l2d; /**< [[deprecated]]: only for >=v3_2, default false */
+  int8_t fp_mode; /**< >=v3_2 only, floating-point model: 0 for softfloat
+                     (default), 1 for cpu naive float */
+
+  bool en_l2d; /**< [[deprecated]] */
+
   /* fast perf evaluation config for >=v3_2 */
   bool en_fast_perf; /**< enable fast perf, default false */
   uint32_t freq_mhz; /**< fast perf: frequency setting, default 1000 */
@@ -176,8 +182,7 @@ typedef struct {
       ddr_latency_wr; /**< fast perf: ddr latency write setting, default 0 */
   uint32_t ddr_bw; /**< fast perf: ddr bandwidth setting, indicate how many bits
                       of the axi data bus, default 256 */
-  float ddr_bw_ratio; /**< [[deprecated]]: fast perf: ddr bandwidth ratio
-                         setting, default 1.0 */
+  float ddr_bw_ratio; /**< [[deprecated]] */
   const char
       *perf_report; /**< fast perf: report filename, default './perf.csv' */
 } aipu_global_config_simulation_t;
@@ -611,6 +616,10 @@ typedef struct aipu_load_graph_cfg {
  *       Attention: if it hopes to allcate weight buffer from SRAM, it has to
  * confirm the SRAM range locates in ASID0 address scope.
  *
+ * @note qos_level
+ *       from v3_2_1(v3_2 r1p1) version, NPU begins to support high qos job core
+ * binding
+ *
  * @note fm_idxes
  *       the indexes of feature map tensors, those tensor buffers will firstly
  * try to be allocated from region specified in 'fm_mem_region'.
@@ -640,7 +649,7 @@ typedef struct aipu_create_job_cfg {
       uint8_t dbg_core_id : 3;  /**< will be deprecated in the future. range [0,
                                    max_core_id in cluster], only  support 1 core
                                    binding */
-      uint8_t qos_level : 4; /**< defalut 0, low priority, only for aipu v3 */
+      uint8_t qos_level : 4;    /**< defalut 0, low priority, only for >=v3 */
       uint8_t
           fm_mem_region : 4; /**< default 0, feature map buffer memory region */
     };
@@ -696,6 +705,12 @@ typedef struct {
   void *data;
 } aipu_mem_rw_t;
 
+typedef struct {
+  uint64_t graph_id; /* [in] specify graph id which needs to check dynamic shape
+                        or not */
+  bool dynamic_shape; /*[out] result of dynamic shape or not */
+} aipu_is_ds_t;
+
 /**
  * @brief ioctl commands for scattered operations
  *
@@ -707,6 +722,7 @@ typedef enum {
   AIPU_IOCTL_GET_DS_NUM,     /* [[deprecate]] */
   AIPU_IOCTL_GET_DS_DIM_NUM, /* [[deprecate]] */
   AIPU_IOCTL_GET_DS_INFO,    /* [[deprecate]] */
+  AIPU_IOCTL_IS_DS,
   AIPU_IOCTL_GET_DS_RANK,
   AIPU_IOCTL_GET_DS_DIM_CONSTRAINT,
   AIPU_IOCTL_SET_DYNAMIC_ASID1, /* only v3 need, for core bind and multi-model
@@ -730,6 +746,11 @@ typedef enum {
   /* register or memory rw */
   AIPU_IOCTL_RW_REGISTER,
   AIPU_IOCTL_RW_MEMORY,
+
+  /* sw/hw reset */
+  AIPU_IOCTL_SW_RESET,
+  AIPU_IOCTL_HW_RESET,
+
   AIPU_IOCTL_UMD_MAX,
 } aipu_ioctl_cmd_t;
 
@@ -953,8 +974,8 @@ aipu_status_t aipu_unload_graph(const aipu_ctx_handle_t *ctx, uint64_t graph);
  * @param[in]  graph  Graph ID returned by aipu_load_graph
  * @param[out] job    Pointer to a memory location allocated by application
  * where UMD stores the new created job ID
- * @param[in]  config Specify job's partition id and QoS level, only for aipu
- * v3. specify memory region for feature map and weight buffer
+ * @param[in]  config Specify job's partition id and QoS level,
+ *                    specify memory region for feature map and weight buffer
  *
  * @retval AIPU_STATUS_SUCCESS if successful
  *
@@ -1196,7 +1217,7 @@ aipu_status_t aipu_get_core_count(const aipu_ctx_handle_t *ctx,
  *
  * @param[in]  ctx     Pointer to a context handle struct returned by
  AIPU_init_ctx
- * @param[in]  id      core_id for aipu v1/v2, partition_id for aipu v3
+ * @param[in]  id      core_id for aipu v1/v2, partition_id for >=v3
  * @param[out] info    Pointer to a memory location allocated by application
  where UMD stores
  *                     the core information
@@ -1430,8 +1451,8 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
  *
  * @note support commands currently
  *       AIPU_IOCTL_SET_PROFILE:
- *           dynamically enable/disable profiling feature of aipu v3 simulation.
- *           arg: pointer of int
+ *           dynamically enable/disable profiling feature of aipu >=v3
+ * simulation. arg: pointer of int
  *            - 1: enable profiling
  *            - 0: disable profiling
  *       AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION:
@@ -1445,7 +1466,9 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
  *           arg: pointer of struct `aipu_dynshape_dim_num_t`
  *       AIPU_IOCTL_GET_DS_INFO: [[deprecate]]
  *           get min/max dimensions of specified graph id, input idx and min/max
- * flag arg: pointer of struct `aipu_dynshape_info_t` AIPU_IOCTL_GET_DS_RANK:
+ * flag arg: pointer of struct `aipu_dynshape_info_t` AIPU_IOCTL_IS_DS: check
+ * model is dynamic shape or not arg: pointer of struct `aipu_is_ds_t`
+ *       AIPU_IOCTL_GET_DS_RANK:
  *           get rank of specified input of graph id
  *           arg: pointer of struct `aipu_dynshape_rank_t`
  *       AIPU_IOCTL_GET_DS_DIM_CONSTRAINT:
@@ -1495,7 +1518,11 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
  *           read/write register group according different `aipu_ioctl_rw_t`'s
  * memory association type arg: pointer of `aipu_reg_rw_t` AIPU_IOCTL_RW_MEMORY:
  *           read/write memory according different `aipu_ioctl_rw_t`'s memory
- * association type arg: pointer of `aipu_mem_rw_t`
+ * association type arg: pointer of `aipu_mem_rw_t` AIPU_IOCTL_SW_RESET: only
+ * support version >=v3. Do a global soft reset on NPU hardware. arg: no
+ *       AIPU_IOCTL_HW_RESET:
+ *           only support version >=v3_2, and SOC level needs to implement gpio
+ * connection. Do a hardware reset on NPU hardware. arg: no
  */
 aipu_status_t aipu_ioctl(aipu_ctx_handle_t *ctx, uint32_t cmd,
                          void *arg = nullptr);

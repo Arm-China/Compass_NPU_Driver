@@ -58,12 +58,11 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<char[]> gbin_buf;
 #endif
 
-  AIPU_CRIT()
-      << "usage for aipu version >= v3: ./aipu_simulation_test -a <target> -b "
-         "aipu.bin -i input0.bin -c output.bin [-d ./] [-p]\n"
-      << "usage for aipu version < v3: ./aipu_simulation_test -s "
-         "</v1v2/full/path/simulator> -b aipu.bin -i input0.bin -c output.bin "
-         "[-d ./]\n";
+  AIPU_CRIT() << "usage for aipu version >= v3: ./aipu_simulation_test -b "
+                 "aipu.bin -i input0.bin -c output.bin [-d ./] [-p]\n"
+              << "usage for aipu version < v3: ./aipu_simulation_test -s "
+                 "</v1v2/full/path/simulator> -b aipu.bin -i input0.bin -c "
+                 "output.bin [-d ./]\n";
 
   /**
    * For compatibility and avoiding segfault issues in the future,
@@ -85,25 +84,21 @@ int main(int argc, char *argv[]) {
   mem_dump_config.dump_dir = opt.dump_dir;
   sim_glb_config.log_level = opt.log_level;
   sim_glb_config.verbose = opt.verbose;
-  sim_glb_config.en_eval = true;
+  sim_glb_config.en_eval = opt.profile_en;
   sim_glb_config.simulator = opt.simulator;
-  sim_glb_config.gm_size = 0x800000;
-  if (!opt.npu_arch_desc.empty()) {
-    sim_glb_config.npu_arch_desc = opt.npu_arch_desc.c_str();
-    if (opt.npu_arch_desc.find("x3") != std::string::npos ||
-        opt.npu_arch_desc.find("X3") != std::string::npos) {
-      log_path_perf = std::string(opt.dump_dir).empty()
-                          ? std::string("./perf.csv")
-                          : (std::string(opt.dump_dir) + "/perf.csv");
-      sim_glb_config.en_fast_perf = true;
-      sim_glb_config.freq_mhz = 1000;
-      sim_glb_config.ddr_latency_rd = 0;
-      sim_glb_config.ddr_latency_wr = 0;
-      sim_glb_config.ddr_bw = 512;
-      sim_glb_config.ddr_bw_ratio = 1;
-      sim_glb_config.perf_report = log_path_perf.data();
-    }
-  }
+  sim_glb_config.gm_size = 0x800000; /* modify this with actural size */
+
+  /* for x3 simulator */
+  log_path_perf = std::string(opt.dump_dir).empty()
+                      ? std::string("./perf.csv")
+                      : (std::string(opt.dump_dir) + "/perf.csv");
+  sim_glb_config.en_fast_perf = opt.profile_en;
+  sim_glb_config.freq_mhz = 1000;
+  sim_glb_config.ddr_latency_rd = 0;
+  sim_glb_config.ddr_latency_wr = 0;
+  sim_glb_config.ddr_bw = 512;
+  sim_glb_config.ddr_bw_ratio = 1.0f;
+  sim_glb_config.perf_report = log_path_perf.data();
 
   if (opt.loop_cnt != 0)
     total_loop = opt.loop_cnt;
@@ -259,15 +254,8 @@ int main(int argc, char *argv[]) {
       AIPU_INFO()("disable profiling on simulation\n");
     }
 
-    if (opt.profile_en) {
-      if (opt.npu_arch_desc.empty())
-        AIPU_CRIT()
-      ("profiler is enable, and you'd better to specify '-a <target>' when "
-       "arch >=v3\n");
-      if (profile_cnt == 0)
-        AIPU_CRIT()
-      ("profiler is enable, but profiler tensor in aipu.bin is 0\n");
-    }
+    if (opt.profile_en && profile_cnt == 0)
+      AIPU_CRIT()("profiler is enable, but profiler tensor in aipu.bin is 0\n");
 
     AIPU_INFO()
     ("enable profiler: %s, profiler cnt: %u\n",
@@ -356,6 +344,10 @@ int main(int argc, char *argv[]) {
           AIPU_JOB_CONFIG_TYPE_DUMP_INPUT | AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT |
           AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN |
           AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
+      if (opt.profile_en)
+        cfg_types |=
+            AIPU_JOB_CONFIG_TYPE_DUMP_PROFILE; /* it will dump json file if
+                                                  exist in aipu.bin */
       ret = aipu_config_job(ctx, job_id, cfg_types, &mem_dump_config);
       if (ret != AIPU_STATUS_SUCCESS) {
         aipu_get_error_message(ctx, ret, &msg);

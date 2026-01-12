@@ -11,6 +11,7 @@
 #include <linux/uaccess.h>
 #include <linux/poll.h>
 #include <linux/compat.h>
+#include <linux/gpio/consumer.h>
 #include <armchina_aipu.h>
 #include "armchina_aipu_soc.h"
 #include "aipu_mm.h"
@@ -21,6 +22,9 @@
 #include "config.h"
 
 static struct aipu_priv *aipu;
+extern struct gpio_desc *__must_check devm_gpiod_get_optional(struct device *dev,
+						       const char *con_id,
+						       enum gpiod_flags flags);
 
 static int aipu_open(struct inode *inode, struct file *filp)
 {
@@ -69,10 +73,16 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct aipu_cluster_status cluster_status;
 	struct aipu_running_job_query running_job_query;
 	int fd = 0;
-
 	u64 job_id;
 	struct aipu_rebind_buf_desc rebind_buf;
 	struct aipu_bind_buf_desc bind_buf;
+	struct aipu_partition *cls;
+
+	if (_IOC_TYPE(cmd) != AIPU_IOCTL_MAGIC) {
+		dev_err(manager->dev, "aipu: Invalid ioctl magic number %c, right %c\n",
+			_IOC_TYPE(cmd), AIPU_IOCTL_MAGIC);
+		return -ENOTTY;
+	}
 
 	switch (cmd) {
 	case AIPU_IOCTL_QUERY_CAP:
@@ -102,10 +112,13 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				buf_req.alloc_mode = AIPU_DMA_BUF_MALLOC_DEFAULT;
 
 			if (buf_req.alloc_mode == AIPU_DMA_BUF_MALLOC_IOVA ||
-			    buf_req.alloc_mode == AIPU_DMA_BUF_MALLOC_IOVA_PHY) {
+			    buf_req.alloc_mode == AIPU_DMA_BUF_MALLOC_BOTH ) {
 			    ret = aipu_job_manager_alloc_exec_id(manager, &buf_req.exec_id);
 			    if (ret)
 			    	return ret;
+			} else if (buf_req.alloc_mode == AIPU_DMA_BUF_MALLOC_PHY) {
+				if (!buf_req.exec_id)
+					return -EINVAL;
 			} else {
 				buf_req.exec_id = 0;
 			}
@@ -257,10 +270,11 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			ret = -EINVAL;
 		break;
 	case AIPU_IOCTL_GET_CLUSTER_STATUS:
+		cls = aipu->partitions;
 		if (!copy_from_user(&cluster_status, (struct aipu_cluster_status __user *)arg,
 				    sizeof(cluster_status))) {
-			if (aipu && aipu->ops && aipu->ops->get_partition_status) {
-				ret = aipu->ops->get_partition_status(aipu, &cluster_status);
+			if (cls && cls->ops->get_partition_status) {
+				ret = cls->ops->get_partition_status(cls, &cluster_status);
 				if (!ret && copy_to_user((char __user *)arg, &cluster_status,
 							 sizeof(cluster_status)))
 					ret = -EINVAL;
@@ -319,6 +333,33 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				ret = -EINVAL;
 		} else
 			ret = -EINVAL;
+		break;
+	case AIPU_IOCTL_AIPU_HW_RESET:
+		cls = aipu->partitions;
+		if (cls->ops->hw_reset) {
+			cls->ops->hw_reset(cls);
+			manager->pools->created = false;
+			manager->pools->bind = false;
+			manager->tec_intr_en = false;
+			aipu_sched_pending_job_lock(cls);
+		} else {
+			dev_warn(manager->dev, "hw reset is not supported.\n");
+		}
+		ret = 0;
+		break;
+	case AIPU_IOCTL_AIPU_SW_RESET:
+		cls = aipu->partitions;
+		if (cls->ops->soft_reset) {
+			ret = cls->ops->soft_reset(cls, true);
+			if (!ret) {
+				manager->pools->created = false;
+				manager->pools->bind = false;
+				manager->tec_intr_en = false;
+				aipu_sched_pending_job_lock(cls);
+			}
+		} else {
+			dev_warn(manager->dev, "soft reset is not supported.\n");
+		}
 		break;
 	default:
 		ret = -ENOTTY;
@@ -398,25 +439,34 @@ int armchina_aipu_probe(struct platform_device *p_dev, struct aipu_soc *soc,
 
 		dev_info(dev, "AIPU KMD (v%s) probe start...\n", KMD_VERSION);
 
+		aipu->reset_gpio = devm_gpiod_get_optional(&p_dev->dev, "reset", GPIOD_OUT_LOW);
+		if (IS_ERR(aipu->reset_gpio)) {
+			ret = PTR_ERR(aipu->reset_gpio);
+			dev_warn(&p_dev->dev, "Failed to get reset GPIO.\n");
+			aipu->reset_gpio = NULL;
+			//return ret;
+		}
+
 		ret = init_aipu_priv(aipu, p_dev, &aipu_fops, soc, ops);
-		if (ret)
+		if (ret) {
+			dev_err(dev, "FAIL TO INIT AIPU.\n");
+			aipu = NULL;
 			return ret;
+		}
 	}
 
 	of_property_read_u32(dev->of_node, "core-id", &id);
 
 	WARN_ON(!aipu->ops);
 	partition = aipu->ops->create_partitions(aipu, id, p_dev);
-	if (IS_ERR(partition))
-		goto out_clean;
+	if (IS_ERR(partition)) {
+		dev_err(dev, "FAIL TO CREATE PARTITION.\n");
+		deinit_aipu_priv(aipu);
+		ret = -EIO;
+	} else {
+		platform_set_drvdata(p_dev, partition);
+	}
 
-	platform_set_drvdata(p_dev, partition);
-	goto finish;
-
-out_clean:
-	armchina_aipu_remove(p_dev);
-
-finish:
 	return ret;
 }
 EXPORT_SYMBOL(armchina_aipu_probe);

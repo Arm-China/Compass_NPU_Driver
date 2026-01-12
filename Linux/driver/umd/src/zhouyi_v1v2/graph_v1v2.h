@@ -21,10 +21,10 @@ private:
   uint32_t m_entry = 0;
   uint32_t m_stack_size = 0;
   uint32_t m_stack_align_in_page = 0;
-  std::vector<struct GraphParamMapLoadDesc> m_param_map;
-  std::vector<struct GraphSectionDesc> m_static_sections;
-  std::vector<struct GraphSectionDesc> m_reuse_sections;
-  struct GraphIOTensors m_io;
+  std::vector<GraphParamMapLoadDesc> m_param_map;
+  std::vector<GraphSectionDesc> m_static_sections;
+  std::vector<GraphSectionDesc> m_reuse_sections;
+  GraphIOTensors m_io;
 
 public:
   void print_parse_info() override{};
@@ -37,7 +37,7 @@ public:
   aipu_status_t get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor,
                                       aipu_tensor_desc_t *desc) const override;
 
-  std::vector<struct GraphSectionDesc> &
+  std::vector<GraphSectionDesc> &
   get_static_section_ref(uint32_t bss_id) override {
     return m_static_sections;
   }
@@ -48,16 +48,16 @@ public:
     m_stack_size = size;
     m_stack_align_in_page = align;
   }
-  void add_param(uint32_t, struct GraphParamMapLoadDesc param) {
+  void add_param(uint32_t, GraphParamMapLoadDesc param) {
     m_param_map.push_back(param);
   }
-  void add_static_section(uint32_t, struct GraphSectionDesc section) {
+  void add_static_section(uint32_t, GraphSectionDesc section) {
     m_static_sections.push_back(section);
   }
-  void add_reuse_section(uint32_t, struct GraphSectionDesc section) {
+  void add_reuse_section(uint32_t, GraphSectionDesc section) {
     m_reuse_sections.push_back(section);
   }
-  void set_io_tensors(uint32_t, struct GraphIOTensors io) { m_io = io; }
+  void set_io_tensors(uint32_t, GraphIOTensors io) { m_io = io; }
 
   GraphIOTensors &get_bss_io_ref(uint32_t bss_id) override { return m_io; }
 

@@ -28,15 +28,17 @@ build_help() {
     echo "                    - r329"
     echo "                    - android (default android9)"
     echo "                    - android12"
+    echo "                    - sky1 (cix evb board)"
     echo "                    - [other platforms you add]"
     echo "-k, --kversion    kernel version (optional)"
     echo "                    - [major].[minor]"
     echo "                    - [major].[minor].[patch]"
-    echo "-v, --version     AIPU version (optional, by default build v1/2/3):"
+    echo "-v, --version     AIPU version (optional, by default build 'all'):"
     echo "                    - v1"
     echo "                    - v2"
     echo "                    - v3"
     echo "                    - v3_2"
+    echo "                    - all"
     echo "-a, --api         Build UMD API type (optional, by default standard api):"
     echo "                    - standard_api"
     echo "                    - python_api"
@@ -151,16 +153,19 @@ fi
 if [ "$BUILD_AIPU_VERSION"x == "v1"x ]  ||
    [ "$BUILD_AIPU_VERSION"x == "v2"x ]; then
     BUILD_AIPU_VERSION=aipu_v1v2
-elif [ "$BUILD_AIPU_VERSION"x == "v3"x ] || [ "$BUILD_AIPU_VERSION"x == "all"x ]; then
+elif [ "$BUILD_AIPU_VERSION"x == "v3"x ]; then
     BUILD_AIPU_VERSION=aipu_v3
 elif [ "$BUILD_AIPU_VERSION"x == "v3_2"x ]; then
     BUILD_AIPU_VERSION=aipu_v3_2
+elif [ "$BUILD_AIPU_VERSION"x == "all"x ]; then
+    BUILD_AIPU_VERSION=aipu_all
 elif [ "$BUILD_AIPU_VERSION"x != "v1"x ] &&
      [ "$BUILD_AIPU_VERSION"x != "v2"x ] &&
      [ "$BUILD_AIPU_VERSION"x != "v3"x ] &&
-     [ "$BUILD_AIPU_VERSION"x != "v3_2"x ]; then
+     [ "$BUILD_AIPU_VERSION"x != "v3_2"x ] &&
+     [ "$BUILD_AIPU_VERSION"x != "all"x ]; then
     echo -e "$COMPASS_DRV_BRENVAR_ERROR Invalid AIPU version $BUILD_AIPU_VERSION," \
-        "specify target: -v [v1|v2|v3|v3_2]"
+        "specify target: -v [v1|v2|v3|v3_2|all]"
     exit 2
 fi
 
@@ -188,6 +193,11 @@ else
         export CROSS_COMPILE=$COMPASS_DRV_BTENVAR_CROSS_COMPILE
     elif [ "$BUILD_TARGET_PLATFORM"x = "android"x ]; then
         export CROSS_COMPILE=$COMPASS_DRV_BTENVAR_CROSS_COMPILE_ANDROID
+    elif [ "$BUILD_TARGET_PLATFORM"x = "sky1"x ]; then
+	export PATH=$CONFIG_DRV_BTENVAR_CROSS_CXX_SKY1_PATH:$PATH
+        export CROSS_COMPILE=$COMPASS_DRV_BTENVAR_CROSS_COMPILE_NONE
+        export CXX=$COMPASS_DRV_BTENVAR_CROSS_NONE_CXX
+        export AR=$COMPASS_DRV_BTENVAR_CROSS_NONE_AR
     else
         export CROSS_COMPILE=$COMPASS_DRV_BTENVAR_CROSS_COMPILE_GNU
     fi
@@ -291,6 +301,7 @@ if [ "$BUILD_TEST"x = "sample"x ]; then
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=emulation_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=dynamic_shape_test
         make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=multiple_bss_test
+        make $MAKE_JOBS_NUM CXX=$CXX BUILD_TEST_CASE=reset_test
     fi
     cd -
 elif [ "$BUILD_TEST"x = "demo"x ]; then

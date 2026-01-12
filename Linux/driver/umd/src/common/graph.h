@@ -67,15 +67,15 @@ struct GraphSectionDesc {
 };
 
 struct GraphIOTensors {
-  std::vector<struct GraphIOTensorDesc> inputs;
-  std::vector<struct GraphIOTensorDesc> outputs;
-  std::vector<struct GraphIOTensorDesc> inter_dumps;
-  std::vector<struct GraphIOTensorDesc> profiler;
-  std::vector<struct GraphIOTensorDesc> printf;
-  std::vector<struct GraphIOTensorDesc> layer_counter;
-  std::vector<struct GraphIOTensorDesc> err_code;
-  std::vector<struct GraphIOTensorDesc> segmmus;
-  std::vector<struct GraphIOTensorDesc> outputs_shape;
+  std::vector<GraphIOTensorDesc> inputs;
+  std::vector<GraphIOTensorDesc> outputs;
+  std::vector<GraphIOTensorDesc> inter_dumps;
+  std::vector<GraphIOTensorDesc> profiler;
+  std::vector<GraphIOTensorDesc> printf;
+  std::vector<GraphIOTensorDesc> layer_counter;
+  std::vector<GraphIOTensorDesc> err_code;
+  std::vector<GraphIOTensorDesc> segmmus;
+  std::vector<GraphIOTensorDesc> outputs_shape;
 };
 
 struct GraphParamMapLoadDesc {
@@ -119,8 +119,7 @@ struct ConstantHashItem {
 
 /* 1.union has trivial copy constructor issue, 2.std::variant(c++17) */
 struct WeightSection {
-  std::vector<struct BinSection>
-      weight; /* size=0: no weight or shared weight */
+  std::vector<BinSection> weight; /* size=0: no weight or shared weight */
   struct ExtraWeightInfo {
     std::string file;
     std::string hash;
@@ -148,6 +147,7 @@ class Graph : public GraphBase {
 private:
   uint32_t m_zerocpy_const_size = 0;
   uint32_t m_const_size = 0;
+  std::string m_bin_target;
   static constexpr uint32_t MAX_BLOCK_SIZE = 0x4000000; /* 64M */
   // BLOCKS_TABLE m_blk_table;
 
@@ -156,21 +156,21 @@ protected:
   SharedWeightMgr *m_sw_mgr = nullptr;
 
   /* section descriptions in the graph binary */
-  struct BinSection m_btext;
-  struct BinSection m_bcrodata;
-  struct BinSection m_brodata;
-  struct BinSection m_bdesc;
-  struct BinSection m_bdata;
+  BinSection m_btext;
+  BinSection m_bcrodata;
+  BinSection m_brodata;
+  BinSection m_bdesc;
+  BinSection m_bdata;
   std::vector<RemapEntry> m_remap;
   /* dynamic shape */
-  struct BinSection m_bglobalparam;
-  struct WeightSection m_bweight;
+  BinSection m_bglobalparam;
+  WeightSection m_bweight;
 
 protected:
   /* Buffers in memory for AIPU's access */
   BufferDesc *m_text = nullptr;
   BufferDesc *m_crodata = nullptr;
-  std::vector<struct WeightBufferInfo> m_weight;
+  std::vector<WeightBufferInfo> m_weight;
 
   std::vector<std::vector<ConstantHashItem>> m_hashtable;
   std::vector<uint64_t> m_offsets;
@@ -199,27 +199,15 @@ public:
   bool m_put_ws_gm = false;
 
 private:
-  aipu_status_t load_config(aipu_load_graph_cfg_t *config);
+  aipu_status_t load_config(const aipu_load_graph_cfg_t *config);
   aipu_status_t load_common(bool ver_check);
-  /* <isa, rev> */
-  std::string get_arch_name(uint32_t hw_version, uint32_t hw_revison) {
-    const std::map<std::pair<uint32_t, uint32_t>, std::string> m_isa_table = {
-        {{AIPU_ISA_VERSION_ZHOUYI_V1, 0}, "zyv1"},
-        {{AIPU_ISA_VERSION_ZHOUYI_V1, 1}, "zyv1"}, /* z1_0701_P */
-        {{AIPU_ISA_VERSION_ZHOUYI_V2_0, 0}, "z2"},
-        {{AIPU_ISA_VERSION_ZHOUYI_V2_1, 0}, "z3"},
-        {{AIPU_ISA_VERSION_ZHOUYI_V2_2, 0}, "x1"},
-        {{AIPU_ISA_VERSION_ZHOUYI_V3, 0}, "x2"},
-        {{AIPU_ISA_VERSION_ZHOUYI_V3_2, 0}, "x3p"},
-    };
 
-    std::pair<uint32_t, uint32_t> p = std::make_pair(hw_version, hw_revison);
-    if (m_isa_table.count(p) > 0)
-      return m_isa_table.at(p);
-    return "null";
-  }
-
+  std::string version_to_target(uint32_t arch, uint32_t hw_version,
+                                uint32_t hw_config, uint32_t hw_revision);
   BLOCKS_TABLE slice_weight(uint32_t bss_id);
+
+protected:
+  virtual const std::string get_target() const { return ""; };
 
 public:
   int32_t get_dynamic_shape_dim_num(uint32_t idx,
@@ -236,22 +224,21 @@ public:
 
 public:
   virtual void set_stack(uint32_t bss_id, uint32_t size, uint32_t align) = 0;
-  virtual void add_param(uint32_t bss_id,
-                         struct GraphParamMapLoadDesc param) = 0;
+  virtual void add_param(uint32_t bss_id, GraphParamMapLoadDesc param) = 0;
   virtual void add_static_section(uint32_t bss_id,
-                                  struct GraphSectionDesc section) = 0;
-  virtual void add_reuse_section(uint32_t bss_id,
-                                 struct GraphSectionDesc section) = 0;
-  virtual void set_io_tensors(uint32_t bss_id, struct GraphIOTensors io) = 0;
+                                  GraphSectionDesc section) = 0;
+  virtual void add_reuse_section(uint32_t bss_id, GraphSectionDesc section) = 0;
+  virtual void set_io_tensors(uint32_t bss_id, GraphIOTensors io) = 0;
   virtual void set_graph_comment(const char *data, uint64_t size){};
   virtual void set_gmconfig(BinSection &gm_section) {}
   virtual void set_segmmu(BinSection &segmmu_section) {}
+  virtual void set_graphjson(BinSection &graphjson_section) {}
   virtual aipu_status_t parse_gmconfig(int bss_id) {
     return AIPU_STATUS_SUCCESS;
   }
   virtual uint32_t get_alloc_pad_size() const { return 0; }
   virtual uint32_t get_asid_align_page() const { return 0; }
-  virtual std::vector<struct GraphSectionDesc> &
+  virtual std::vector<GraphSectionDesc> &
   get_static_section_ref(uint32_t bss_id) = 0;
   virtual HASH_SECTION_TABLE &get_shared_section_ref(uint32_t) {
     static HASH_SECTION_TABLE table = {};
@@ -268,9 +255,9 @@ public:
 
 public:
   aipu_status_t load(std::istream &gbin, uint32_t size, bool ver_check = true,
-                     aipu_load_graph_cfg_t *config = nullptr) override;
+                     const aipu_load_graph_cfg_t *config = nullptr) override;
   aipu_status_t load(const char *file, bool ver_check = true,
-                     aipu_load_graph_cfg_t *config = nullptr) override;
+                     const aipu_load_graph_cfg_t *config = nullptr) override;
   aipu_status_t unload() override;
   aipu_status_t alloc_weight_buffer() override;
   aipu_status_t setup_weight_buffer(std::vector<WeightBufferInfo> &weights,
@@ -414,7 +401,7 @@ public:
     return true;
   }
 
-  bool is_dynamic_shape() const { return m_dynamic_shape; }
+  bool is_dynamic_shape() const override { return m_dynamic_shape; }
 
   bool is_dynamic_asid0() const { return m_dynamic_asid0; }
 
@@ -426,6 +413,31 @@ public:
   }
 
   virtual void set_enrty(uint32_t offset){};
+
+  uint32_t bin_to_dev_isa() {
+    struct ISA {
+      ISAType type;
+      uint32_t rev;
+    };
+
+    /* <dev_isa, bin_isa> */
+    static const std::map<uint32_t, ISA> table = {
+        {AIPU_ISA_VERSION_ZHOUYI_V1, {ISAType::ISAv1, 0}},
+        {AIPU_ISA_VERSION_ZHOUYI_V2_0, {ISAType::ISAv2, 0}},
+        {AIPU_ISA_VERSION_ZHOUYI_V2_1, {ISAType::ISAv3, 0}},
+        {AIPU_ISA_VERSION_ZHOUYI_V2_2, {ISAType::ISAv31, 0}},
+        {AIPU_ISA_VERSION_ZHOUYI_V3, {ISAType::ISAv5, 0}},
+        // {AIPU_ISA_VERSION_ZHOUYI_V3_1, {ISAType::ISAv6, 0}},
+        {AIPU_ISA_VERSION_ZHOUYI_V3_2_0, {ISAType::ISAv6, 1}},
+        {AIPU_ISA_VERSION_ZHOUYI_V3_2_1, {ISAType::ISAv6, 2}},
+    };
+
+    for (const auto &it : table) {
+      if (it.second.type == m_isa && it.second.rev == m_hw_revision)
+        return it.first;
+    }
+    return 0;
+  }
 
 public:
   Graph(void *ctx, GRAPH_ID id, DeviceBase *dev);

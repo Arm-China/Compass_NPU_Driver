@@ -36,6 +36,7 @@ typedef struct cmd_opt {
   int32_t graph_idx = -1;
   bool profile_en = false;
   uint32_t thread_num;
+  uint32_t reset_type = 0;
 } cmd_opt_t;
 
 int init_test_bench(int argc, char *argv[], cmd_opt_t *opt,

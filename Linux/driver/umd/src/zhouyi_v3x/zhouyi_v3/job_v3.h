@@ -19,24 +19,43 @@ namespace aipudrv {
 class JobV3 : public JobV3X {
 private:
   uint32_t m_segmmu_tcb_num = 0;
+  bool m_top_reuse = true;
 
 private:
   void set_job_params(uint32_t sg_cnt, uint32_t task_per_sg, uint32_t remap,
                       uint32_t core_cnt) override;
+  aipu_status_t alloc_job_buffers() override;
+  aipu_status_t free_job_buffers() override;
   aipu_status_t setup_task_tcb(uint32_t sg_id, uint32_t grid_id,
                                uint32_t core_id, uint32_t task_id,
-                               bool is_new_grid) override;
+                               bool new_grid = false) override;
   aipu_status_t setup_tcb_group(uint32_t sg_id, uint32_t grid_id,
-                                uint32_t core_id, bool is_new_grid) override;
+                                uint32_t core_id, bool new_grid) override;
   aipu_status_t setup_tcb_chain() override;
-  void get_tcb_head_cnt(uint32_t sg_idx, uint32_t &head_cnt) override;
   aipu_status_t config_tcb_smmu(DEV_PA_64 init_tcb_pa);
-  void setup_gm_sync_to_ddr(tcb_t &tcb) override;
-  DEV_PA_64 get_first_task_tcb_pa() override {
-    return m_init_tcb.pa + (1 + m_segmmu_tcb_num) * sizeof(tcb_t);
-  }
   aipu_status_t setup_segmmu(SubGraphTask &sg_task) override;
-  aipu_status_t dump_for_emulation() override;
+  aipu_status_t
+  specify_io(aipu_shared_tensor_info_t &tensor_info,
+             const std::vector<JobIOBuffer> *iobuffer_vec) override;
+  aipu_status_t alloc_reuse_buffer(); /* reserved */
+  DEV_PA_64 get_first_task_tcb_pa() override {
+    return m_init_tcb.pa + (1 + m_segmmu_tcb_num) * tcb_ctl::TCB_LEN;
+  }
+
+  uint32_t get_tcb_head_cnt(uint32_t sg_idx, uint32_t head_cnt) override {
+    static uint32_t cur_bss_idx = graph().get_subgraph(0).bss_idx;
+
+    if ((sg_idx == 0) ||
+        (cur_bss_idx != graph().get_subgraph(sg_idx).bss_idx)) {
+      cur_bss_idx = graph().get_subgraph(sg_idx).bss_idx;
+      head_cnt += 1;
+      head_cnt += m_segmmu_tcb_num;
+    }
+    return head_cnt;
+  }
+
+  /* dump */
+  aipu_status_t dump_emu_metadata(const std::string &metafile) override;
 
 public:
 #if defined(SIMULATION)

@@ -40,7 +40,8 @@ enum aipu_arch {
  * @AIPU_ISA_VERSION_ZHOUYI_V2_1: AIPU ISA version is Zhouyi V2 (Z3).
  * @AIPU_ISA_VERSION_ZHOUYI_V2_2: AIPU ISA version is Zhouyi V2 (X1).
  * @AIPU_ISA_VERSION_ZHOUYI_V3:   AIPU ISA version is Zhouyi V3.
- * @AIPU_ISA_VERSION_ZHOUYI_V3_2: AIPU ISA version is Zhouyi V3_2.
+ * @AIPU_ISA_VERSION_ZHOUYI_V3_2_0: AIPU ISA version is Zhouyi V3_2, r1p0.
+ * @AIPU_ISA_VERSION_ZHOUYI_V3_2_1: AIPU ISA version is Zhouyi V3_2, r1p1.
  *
  * Zhouyi architecture has multiple ISA versions released.
  * This enum is used to indicate the ISA version of an AIPU core in the system.
@@ -52,7 +53,8 @@ enum aipu_isa_version {
 	AIPU_ISA_VERSION_ZHOUYI_V2_2	= 4,
 	AIPU_ISA_VERSION_ZHOUYI_V3	= 5,
 	AIPU_ISA_VERSION_ZHOUYI_V3_1	= 6,
-	AIPU_ISA_VERSION_ZHOUYI_V3_2	= 7,
+	AIPU_ISA_VERSION_ZHOUYI_V3_2_0  = 7,
+	AIPU_ISA_VERSION_ZHOUYI_V3_2_1	= 8,
 };
 
 /**
@@ -235,6 +237,7 @@ struct aipu_bind_buf_desc {
  * @exec_id:    [kmd] back executive id to userspace from kmd
  * @region:     [kmd] this allocated buffer is in memory/SRAM/DTCM/GM region?
  * @asid:       [kmd] ASID region of this buffer
+ * @mode:       [umd] free memory tpye: iova, phy or both
  */
 struct aipu_buf_desc {
 	__u64 pa;
@@ -243,6 +246,7 @@ struct aipu_buf_desc {
 	__u64 exec_id;
 	__u8  region;
 	__u8  asid;
+	__u32 mode;
 };
 
 /**
@@ -250,14 +254,33 @@ struct aipu_buf_desc {
  * @AIPU_DMA_BUF_MALLOC_DEFAULT:     [aipu v3_2] malloc I/O virtual address and physical memory by standard dma api
  * @AIPU_DMA_BUF_MALLOC_IOVA:        [aipu v3_2] malloc I/O virtual address only
  * @AIPU_DMA_BUF_MALLOC_PHY:         [aipu v3_2] malloc physical memory for Allocated I/O virtual address after malloc iova
- * @AIPU_DMA_BUF_MALLOC_IOVA_PHY:    [aipu v3_2] malloc I/O virtual address and physical memory
+ * @AIPU_DMA_BUF_MALLOC_BOTH:        [aipu v3_2] malloc I/O virtual address and physical memory
+ * @AIPU_DMA_BUF_ATTACH_IOVA:        [aipu v3_2] rebind same phy memory to reserved iova when attach dma buffer
  */
 enum aipu_dma_buf_malloc_mode {
     AIPU_DMA_BUF_MALLOC_DEFAULT = 0,
     AIPU_DMA_BUF_MALLOC_IOVA = 1,
     AIPU_DMA_BUF_MALLOC_PHY = 2,
-    AIPU_DMA_BUF_MALLOC_IOVA_PHY = 3,
+    AIPU_DMA_BUF_MALLOC_BOTH = 3,
+    AIPU_DMA_BUF_ATTACH_IOVA = 4,
 };
+
+/**
+ * enum aipu_dma_buf_free_mode - dma buffer free mode for smmu scenario
+ * @AIPU_DMA_BUF_FREE_DEFAULT:     [aipu v3_2] free I/O virtual address and physical memory by standard dma api
+ * @AIPU_DMA_BUF_FREE_IOVA:        [aipu v3_2] free all the I/O virtual address of one buffer
+ * @AIPU_DMA_BUF_FREE_PHY:         [aipu v3_2] free all the physical memory blockers of one buffer
+ * @AIPU_DMA_BUF_FREE_BOTH:        [aipu v3_2] free all the I/O virtual address and physical memory
+ * @AIPU_DMA_BUF_DETA_BOTH:        [aipu v3_2] unmap reserved iova when detach dma buffer.
+ */
+enum aipu_dma_buf_free_mode {
+    AIPU_DMA_BUF_FREE_DEFAULT = 0,
+    AIPU_DMA_BUF_FREE_IOVA = 1,
+    AIPU_DMA_BUF_FREE_PHY = 2,
+    AIPU_DMA_BUF_FREE_BOTH = 3,
+    AIPU_DMA_BUF_DETA_IOVA = 4,
+};
+
 /**
  * struct aipu_buf_request - Buffer allocation request structure.
  * @bytes:         [must] Buffer size to allocate (in bytes)
@@ -313,7 +336,7 @@ struct aipu_dma_buf {
  * @AIPU_JOB_EXEC_FLAG_QOS_FAST:     [aipu v3 only] QoS fast
  * @AIPU_JOB_EXEC_FLAG_SINGLE_GROUP: [aipu v3 only] the scheduled job is a single group task
  * @AIPU_JOB_EXEC_FLAG_MULTI_GROUP:  [aipu v3 only] the scheduled job is a multi-groups task
- * @AIPU_JOB_EXEC_FLAG_DBG_DISPATCH: [aipu v3 only] the job should be scheduled with debug-dispatch
+ * @AIPU_JOB_EXEC_FLAG_BIND_DISPATCH:[aipu v3 only] the job should be scheduled with bind-dispatch
  * @AIPU_JOB_EXEC_FLAG_SEG_MMU:      [aipu v3 only] the job has configured segment mmu
  */
 enum aipu_job_execution_flag {
@@ -323,7 +346,7 @@ enum aipu_job_execution_flag {
 	AIPU_JOB_EXEC_FLAG_QOS_FAST     = 1 << 2,
 	AIPU_JOB_EXEC_FLAG_SINGLE_GROUP = 1 << 3,
 	AIPU_JOB_EXEC_FLAG_MULTI_GROUP  = 1 << 4,
-	AIPU_JOB_EXEC_FLAG_DBG_DISPATCH  = 1 << 5,
+	AIPU_JOB_EXEC_FLAG_BIND_DISPATCH  = 1 << 5,
 	AIPU_JOB_EXEC_FLAG_SEG_MMU       = 1 << 6,
 };
 
@@ -341,19 +364,21 @@ enum aipu_job_execution_flag {
  * @intr_handler_addr: [aipu v1/v2 only, must] Address of the interrupt handler (pa - asid_base)
  * @data_0_addr:       [aipu v1/v2 only, must] Address of the 0th data buffer (buf_pa - asid_base)
  * @data_1_addr:       [aipu v1/v2 only, must] Address of the 1th data buffer (buf_pa - asid_base)
- * @job_id:            [aipu v1/v2 only, must] ID of this job
  * @enable_prof:       [aipu v1/v2 only, optional] Enable performance profiling counters in SoC
- * @profile_pa:        [optional] Physical address of the profiler buffer
- * @profile_sz:        [optional] Size of the profiler buffer (should be 0 if no such a buffer)
- * @profile_fd:        [aipu v3 only] Profile data file fd
  * @enable_poll_opt:   [aipu v1/v2 only, optional] Enable optimizations for job status polling
  * @exec_flag:         [optional] Combinations of execution flags
  * @dtcm_size_kb:      [aipu v2(x1)only, optional] DTCM size in KB
+ * @is_coredump_en:    [aipu v3 and above only, optional] Coredump is enable or not
+ * @group_id:          [aipu v3_2 and above only, must] group id of tcb chain
+ * @profile_sz:        [optional] Size of the profiler buffer (should be 0 if no such a buffer)
+ * @profile_fd:        [aipu v3 only] Profile data file fd
+ * @profile_pa:        [optional] Physical address of the profiler buffer
+ * @job_id:            [aipu v1/v2 only, must] ID of this job
  * @head_tcb_pa:       [aipu v3 only, must] base address of the first init TCB of this job
  * @first_task_tcb_pa: [aipu v3 only, must] base address of the first task TCB of this job
  * @last_task_tcb_pa:  [aipu v3 only, must] base address of the last task TCB of this job
  * @tail_tcb_pa:       [aipu v3 only, must] base address of the tail TCB of this job
- * @is_coredump_en:    [aipu v3 and above only, optional] Coredump is enable or not
+
  *
  * For fields is_defer_run/do_trigger/enable_prof/enable_asid/enable_poll_opt,
  * set them to be 1/0 to enable/disable the corresponding operations.
@@ -371,20 +396,22 @@ struct aipu_job_desc {
 	__u32 intr_handler_addr;
 	__u32 data_0_addr;
 	__u32 data_1_addr;
-	__u64 job_id;
 	__u32 enable_prof;
-	__s64 profile_fd;
-	__u64 profile_pa;
-	__u32 profile_sz;
 	__u32 enable_poll_opt;
 	__u32 exec_flag;
 	__u32 dtcm_size_kb;
+	__u32 is_coredump_en;
+	__u32 group_id;
+	__u32 profile_sz;
+	__s64 profile_fd;
+	__u64 profile_pa;
+	__u64 job_id;
 	__u64 head_tcb_pa;
 	__u64 first_task_tcb_pa;
 	__u64 last_task_tcb_pa;
 	__u64 tail_tcb_pa;
-	__u32 is_coredump_en;
 	__u64 asid0_base;
+
 };
 
 /**
@@ -778,4 +805,20 @@ struct aipu_id_desc {
  * ioctl to request to bind dma shared fd memory to a reserved iova.
  */
 #define AIPU_IOCTL_BIND_DMA_BUF _IOWR(AIPU_IOCTL_MAGIC, 29, struct aipu_bind_buf_desc)
+/**
+ * DOC: AIPU_IOCTL_AIPU_HW_RESET
+ *
+ * @Description
+ *
+ * ioctl to request to do a harware reset for v3_2.
+ */
+#define AIPU_IOCTL_AIPU_HW_RESET _IO(AIPU_IOCTL_MAGIC, 30)
+/**
+ * DOC: AIPU_IOCTL_AIPU_SW_RESET
+ *
+ * @Description
+ *
+ * ioctl to request to do a top software reset for v3_2.
+ */
+#define AIPU_IOCTL_AIPU_SW_RESET _IO(AIPU_IOCTL_MAGIC, 31)
 #endif /* __UAPI_MISC_ARMCHINA_AIPU_H__ */

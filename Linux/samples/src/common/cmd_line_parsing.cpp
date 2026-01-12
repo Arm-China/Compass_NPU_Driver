@@ -39,6 +39,7 @@ static struct option opts[] = {{"bin", required_argument, NULL, 'b'},
                                {"frame_cnt", optional_argument, NULL, 'f'},
                                {"graph_idx", optional_argument, NULL, 'g'},
                                {"profile_en", optional_argument, NULL, 'p'},
+                               {"reset", optional_argument, NULL, 'e'},
                                {NULL, 0, NULL, 0}};
 
 void help(void) {
@@ -50,7 +51,8 @@ void help(void) {
       "   -i: input bins\n"
       "   -c: output bin\n"
       "   -d: dump path, once provided, samples will do a full dump\n"
-      "   -a: aipu v3 arch (X2_1204/X2_1204MP3), aipu v3_2 arch(X3P_1304...)\n"
+      "   -a: [[deprecated]]: aipu target for >=v3, this option is deprecated "
+      "now\n"
       "   -t: test flush or finish job time(flush | finish), only for "
       "basic_time_test\n"
       "   -l: simulator log level(0-3), default 1\n"
@@ -68,7 +70,8 @@ void help(void) {
       "   -p: enable profile, only for simulation_test&benchmark_test, "
       "attention: \n"
       "       1.only valid when aipu.bin enables profiler\n"
-      "       2.v3_2 simulator enables profile, its' results may not match\n";
+      "       2.v3_2 simulator enables profile, its' results may not match\n"
+      "   -e: npu reset, 0:hw reset, 1:sw reset\n";
 
   std::cout << help_info;
   exit(0);
@@ -91,8 +94,9 @@ int init_test_bench(int argc, char *argv[], cmd_opt_t *opt,
   }
 
   while (1) {
-    c = getopt_long(argc, argv, "hs:b:i:c:d:a:s:z:q:k:x:o:l:t:r:w:n:m:f:g:v:p",
-                    opts, &opt_idx);
+    c = getopt_long(argc, argv,
+                    "hs:b:i:c:d:a:s:z:q:k:x:o:l:t:r:w:n:m:f:g:v:e:p", opts,
+                    &opt_idx);
     if (-1 == c)
       break;
 
@@ -215,6 +219,9 @@ int init_test_bench(int argc, char *argv[], cmd_opt_t *opt,
       break;
     case 'm':
       opt->thread_num = atoi(optarg);
+      break;
+    case 'e':
+      opt->reset_type = atoi(optarg);
       break;
     case 'h':
       help();

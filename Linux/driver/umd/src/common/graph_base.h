@@ -15,6 +15,7 @@
 #include <fstream>
 #include <map>
 #include <set>
+#include <vector>
 
 #include "device_base.h"
 #include "memory_base.h"
@@ -22,17 +23,27 @@
 #include "type.h"
 
 namespace aipudrv {
-typedef struct batch_info {
+/* aipu.bin's isa definition is different with kmd */
+enum ISAType : uint32_t {
+  ISAv1 = 1, /* z1 */
+  ISAv2 = 2, /* z2 */
+  ISAv3 = 3, /* z3 */
+  ISAv31,    /* x1, dummy in gbuilder, same arch with ISAv3 */
+  ISAv5 = 5, /* x2 */
+  ISAv6 = 6, /* x3 */
+};
+
+struct BatchInfo {
   std::vector<char *> inputs;
   std::vector<char *> outputs;
 
-  batch_info() {
+  BatchInfo() {
     inputs.clear();
     outputs.clear();
   }
 
-  batch_info &operator()(char *input_buf[], uint32_t input_cnt,
-                         char *output_buf[], uint32_t output_cnt) {
+  BatchInfo &operator()(char *input_buf[], uint32_t input_cnt,
+                        char *output_buf[], uint32_t output_cnt) {
     for (uint32_t i = 0; i < input_cnt; i++)
       inputs.push_back(input_buf[i]);
 
@@ -56,7 +67,7 @@ typedef struct batch_info {
     inputs.clear();
     outputs.clear();
   }
-} batch_info_t;
+};
 
 class JobBase;
 class GraphBase {
@@ -65,7 +76,7 @@ private:
   typedef struct {
     uint32_t batch_dump_types;
     std::string batch_dump_dir;
-    std::vector<batch_info_t> batches;
+    std::vector<BatchInfo> batches;
   } batch_set_t;
   std::map<uint32_t, batch_set_t> m_batch_queue;
   pthread_rwlock_t m_batch_queue_lock;
@@ -75,7 +86,7 @@ protected:
   GRAPH_ID m_id;
   uint32_t m_gversion = 0;
   uint32_t m_arch = 0;
-  uint32_t m_hw_version = 0;
+  ISAType m_isa = ISAType::ISAv1;
   uint32_t m_hw_config = 0;
   uint32_t m_hw_revision = 0;
   uint32_t m_aipubin_buildversion = 0;
@@ -106,15 +117,15 @@ protected:
 public:
   uint32_t m_input_cnt = 0;
   uint32_t m_output_cnt = 0;
-  // std::vector<batch_info_t> m_batches;
+  // std::vector<BatchInfo> m_batches;
 
 public:
   GRAPH_ID id() { return m_id; }
   virtual aipu_status_t load(std::istream &gbin, uint32_t size,
                              bool ver_check = true,
-                             aipu_load_graph_cfg_t *config = nullptr) = 0;
+                             const aipu_load_graph_cfg_t *config = nullptr) = 0;
   virtual aipu_status_t load(const char *graph_file, bool ver_check = true,
-                             aipu_load_graph_cfg_t *config = nullptr) {
+                             const aipu_load_graph_cfg_t *config = nullptr) {
     return AIPU_STATUS_SUCCESS;
   };
   virtual aipu_status_t unload() = 0;
@@ -130,6 +141,7 @@ public:
   virtual aipu_status_t
   get_tensor_descriptor(aipu_tensor_type_t type, uint32_t tensor,
                         aipu_tensor_desc_t *desc) const = 0;
+  virtual bool is_dynamic_shape() const = 0;
   virtual uint32_t get_dynamic_shape_num() const = 0;
   virtual int32_t get_dynamic_shape_dim_num(uint32_t idx,
                                             bool max_shape_dim) const = 0;
@@ -160,7 +172,7 @@ public:
   aipu_status_t clean_batches(uint32_t queue_id);
   bool is_valid_batch_queue(uint32_t queue_id);
   uint32_t get_batch_queue_size(uint32_t queue_id);
-  batch_info_t &get_batch_queue_item(uint32_t queue_id, uint32_t batch_num);
+  BatchInfo &get_batch_queue_item(uint32_t queue_id, uint32_t batch_num);
   aipu_status_t add_batch(uint32_t queue_id, char *inputs[], uint32_t input_cnt,
                           char *outputs[], uint32_t output_cnt);
   aipu_status_t config_for_batch(uint32_t queue_id, uint64_t types,
@@ -172,7 +184,9 @@ public:
   /* Set functions */
   void set_gversion(uint32_t version) { m_gversion = version; }
   void set_arch(uint32_t arch) { m_arch = arch; }
-  void set_hw_version(uint32_t hw_version) { m_hw_version = hw_version; }
+  void set_isa(uint32_t hw_version) {
+    m_isa = static_cast<ISAType>(hw_version);
+  }
   void set_hw_config(uint32_t hw_config) { m_hw_config = hw_config; }
   void set_hw_revision(uint32_t hw_revision) { m_hw_revision = hw_revision; }
   void set_asid_flag(uint32_t asid_flag) { m_asid_flag = asid_flag; }
@@ -189,13 +203,14 @@ public:
   }
 
   /* Get functions */
-  uint32_t get_gversion() { return m_gversion; }
-  uint32_t get_hw_version() { return m_hw_version; }
-  uint32_t get_remap_flag() { return m_remap_flag; }
-  uint32_t get_config() { return m_hw_config; }
-  uint32_t get_buildversion() { return m_aipubin_buildversion; }
-  bool get_disable_input_reuse() { return m_disable_input_reuse; }
-  bool get_disable_output_reuse() { return m_disable_output_reuse; }
+  uint32_t get_gversion() const { return m_gversion; }
+  ISAType get_isa() const { return m_isa; }
+  uint32_t get_remap_flag() const { return m_remap_flag; }
+  uint32_t get_config() const { return m_hw_config; }
+  uint32_t get_revision() const { return m_hw_revision; }
+  uint32_t get_buildversion() const { return m_aipubin_buildversion; }
+  bool get_disable_input_reuse() const { return m_disable_input_reuse; }
+  bool get_disable_output_reuse() const { return m_disable_output_reuse; }
 
 public:
   GraphBase(void *ctx, GRAPH_ID id, DeviceBase *dev);

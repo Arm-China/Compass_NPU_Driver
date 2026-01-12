@@ -155,18 +155,18 @@ static int zhouyi_v3_2_reserve(struct aipu_partition *cluster, struct aipu_job_d
 		return ZHOUYI_V3_2_COMMAND_POOL_FULL;
 	}
 
-	dev_info(cluster->dev, "[Job 0x%llx] scheduler: TCB head 0x%llx\n",
-		 udesc->job_id, udesc->head_tcb_pa);
+	dev_info(cluster->dev, "[Job 0x%llx] scheduler: TCB head 0x%llx base 0x%llx\n",
+		 udesc->job_id, udesc->head_tcb_pa, udesc->asid0_base);
 
 	aipu_write32(cluster->reg, TSM_CMD_SCHD_ADDR_HIGH_REG_V3_2, udesc->head_tcb_pa >> 32);
 	aipu_write32(cluster->reg, TSM_CMD_SCHD_ADDR_LOW_REG_V3_2, (u32)udesc->head_tcb_pa);
 	aipu_write32(cluster->reg, TSM_COMMAND_SCHEDULE_TCB_NUM_REG_V3_2,
 		     ((udesc->tail_tcb_pa - udesc->head_tcb_pa) >> 7) + 1);
 
-	if (udesc->exec_flag & AIPU_JOB_EXEC_FLAG_DBG_DISPATCH) {
+	if (udesc->exec_flag & AIPU_JOB_EXEC_FLAG_BIND_DISPATCH) {
 		aipu_write32(cluster->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG_V3_2,
-			     TSM_DBG_DISPATCH_CMD_POOL_V3_2(pool, qos, udesc->core_id));
-		dev_dbg(cluster->dev, "debug-dispatch user job 0x%llx (0x%llx - 0x%llx, tcbp 0x%llx) core %d",
+			     TSM_BIND_DISPATCH_CMD_POOL_V3_2(pool, qos, udesc->core_id));
+		dev_dbg(cluster->dev, "bind-dispatch user job 0x%llx (0x%llx - 0x%llx, tcbp 0x%llx) core %d",
 			udesc->job_id, udesc->head_tcb_pa, udesc->tail_tcb_pa,
 			udesc->last_task_tcb_pa, udesc->core_id);
 	} else {
@@ -194,7 +194,8 @@ static void zhouyi_v3_2_print_hw_id_info(struct aipu_partition *cluster)
 	u32 iter = 0;
 
 	dev_info(aipu->dev, "############# ZHOUYI %sAIPU #############",
-		 version == AIPU_ISA_VERSION_ZHOUYI_V3_2 ? "V3_2 ": "");
+		 version == AIPU_ISA_VERSION_ZHOUYI_V3_2_0 ? "V3_2_0 ":
+		 version == AIPU_ISA_VERSION_ZHOUYI_V3_2_1 ? "V3_2_1":"");
 	dev_info(aipu->dev, "# Enabled Cluster Count: %d", aipu->cluster_cnt);
 
 	for (iter = 0; iter < aipu->partition_cnt; iter++) {
@@ -217,11 +218,13 @@ static int zhouyi_v3_2_io_rw(struct aipu_partition *cluster, struct aipu_io_req 
 	if (!cluster)
 		return -EINVAL;
 
+	//FIX ME, can't access any reg during reset/abort;
+	spin_lock(&cluster->io_lock);
 	if (io_req->reg_type == AIPU_DBG_REG)
 		zhouyi_io_rw(cluster->dbg_reg, io_req);
 	else if (io_req->offset <= ZHOUYI_V3_2_MAX_REG_OFFSET)
 		zhouyi_io_rw(cluster->reg, io_req);
-
+	spin_unlock(&cluster->io_lock);
 	return 0;
 }
 
@@ -250,7 +253,7 @@ static void zhouyi_v3_2_soft_reset_type(struct aipu_partition *cluster,
 		cluster->event_type = AIPU_IRQ_EVENT_RESET;
 	} else if (IS_POOL_IRQ_V3_2(status) && (IS_TIMEOUT_IRQ_V3_2(status) ||
 				IS_ERROR_IRQ_V3_2(status))) {
-		dev_err(cluster->dev, "pool error/timeout global reset event.\n");
+		dev_err(cluster->dev, "pool error/timeout global reset event status 0x%08x.\n", status);
 		cluster->event_type = AIPU_IRQ_EVENT_RESET;
 	}
 }
@@ -273,6 +276,8 @@ static int zhouyi_v3_2_upper_half(void *data)
 		status = aipu_read32(cluster->reg, INTERRUPT_TYPE_INFO_REG(id));
 		info.tail_tcbp = aipu_read32(cluster->reg, INTERRUPT_TCB_PTR_REG(id));
 		info.sig_flag = aipu_read32(cluster->reg,  INTERRUPT_SIGNAL_FLAG_REG(id));
+		info.group_id = GET_INTR_GROUP_ID_V3_2(aipu_read32(cluster->reg,
+				INTERRUPT_GROUP_ID_REG(id)));
 		info.cluster_id = GET_INTR_CLUSTER_ID_V3_2(status);
 		info.core_id = GET_INTR_CORE_ID_V3_2(status);
 		info.tec_id = GET_INTR_TEC_ID_V3_2(status);
@@ -349,17 +354,58 @@ static int zhouyi_v3_2_sysfs_show(struct aipu_partition *cluster, char *buf)
 }
 #endif
 
-int zhouyi_v3_2_soft_reset(struct aipu_partition *cluster, bool init_regs)
+static int zhouyi_v3_2_soft_reset(struct aipu_partition *cluster, bool init_regs)
 {
 	int ret = 0;
 	struct aipu_priv *aipu = cluster->priv;
+	unsigned long flags;
 
-	/* NOTE: this is a global soft-reset, not per-partition! */
+	/* NOTE: this is a global soft-reset */
+	spin_lock_irqsave(&cluster->io_lock, flags);
 	ret = aipu->ops->global_soft_reset(aipu);
-	if (ret)
-		return ret;
+	if (!ret)
+		cluster->ops->initialize(cluster);
+	spin_unlock_irqrestore(&cluster->io_lock, flags);
 
+	return ret;
+}
+
+static void zhouyi_v3_2_hw_reset(struct aipu_partition *cluster)
+{
+	struct aipu_priv *aipu = cluster->priv;
+	unsigned long flags;
+
+	/* NOTE: this is a global hardware reset */
+	spin_lock_irqsave(&cluster->io_lock, flags);
+	aipu->ops->global_hw_reset(aipu);
 	cluster->ops->initialize(cluster);
+	spin_unlock_irqrestore(&cluster->io_lock, flags);
+}
+
+static int zhouyi_v3_2_read_cluster_status(struct aipu_partition *cluster,
+					   struct aipu_cluster_status *status)
+{
+	int i = 1;
+
+	if (unlikely(!status))
+		return -EINVAL;
+
+	if (unlikely(!cluster))
+		return -EINVAL;
+
+	spin_lock(&cluster->io_lock);
+	aipu_write32(cluster->reg, AHB_INTERNAL_CSR_SELECTION_CTRL_REG,
+		     SELECT_DEBUG_CORE_V3_2(0, 0));
+	status->cluster_status = aipu_read32(cluster->reg, DEBUG_CLUSTER_STATUS_V3_2);
+	status->core_status = (aipu_read32(cluster->reg, DEBUG_CORE_STATUS_V3_2) >> 4) & 0b1;
+	for (; i < cluster->clusters[0].core_cnt; ++i) {
+		aipu_write32(cluster->reg, AHB_INTERNAL_CSR_SELECTION_CTRL_REG,
+			     SELECT_DEBUG_CORE_V3_2(0, i));
+		status->core_status |= (((aipu_read32(cluster->reg, DEBUG_CORE_STATUS_V3_2) >> 4)
+								& 0b1) << i);
+	}
+	aipu_write32(cluster->reg, AHB_INTERNAL_CSR_SELECTION_CTRL_REG, DISABLE_DEBUG_V3_2);
+	spin_unlock(&cluster->io_lock);
 	return 0;
 }
 
@@ -377,12 +423,14 @@ static struct aipu_operations zhouyi_v3_2_ops = {
 	.sysfs_show = zhouyi_v3_2_sysfs_show,
 #endif
 	.soft_reset = zhouyi_v3_2_soft_reset,
+	.hw_reset = zhouyi_v3_2_hw_reset,
 	.initialize = zhouyi_v3_2_initialize,
 	.destroy_command_pool = zhouyi_v3_2_destroy_command_pool,
 	.abort_command_pool = zhouyi_v3_2_abort_command_pool,
 	.disable_tick_counter = zhouyi_v3_2_disable_tick_counter,
 	.enable_tick_counter = zhouyi_v3_2_enable_tick_counter,
 	.enable_core_cnt = zhouyi_v3_2_enable_core_cnt,
+	.get_partition_status = zhouyi_v3_2_read_cluster_status,
 };
 
 struct aipu_operations *get_zhouyi_v3_2_ops(void)

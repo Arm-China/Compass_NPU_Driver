@@ -15,7 +15,9 @@
 #endif
 
 namespace aipudrv {
-GM_V3_2::GM_V3_2(JobV3_2 &job) : GM_V3X(job, job.graph()) { m_mem = job.m_mem; }
+using namespace tcb_v3_2;
+
+GM_V3_2::GM_V3_2(JobV3_2 &job) : GM_V3X(job, job.graph(), job.mem()) {}
 
 GM_V3_2::~GM_V3_2() {}
 
@@ -32,7 +34,7 @@ void GM_V3_2::setup_gm_sync_from_ddr(tcb_t &tcb) {
 
   JobV3_2 &job = reinterpret_cast<JobV3_2 &>(m_job);
   if (job.m_secbuf_desc.count(FMSection::GM) == 0 ||
-      job.m_secbuf_desc.at(FMSection::GM).size == 0) {
+      job.m_secbuf_desc.at(FMSection::GM)->size == 0) {
     LOG(LOG_INFO, "gm buffer size is 0");
     return;
   }
@@ -42,16 +44,16 @@ void GM_V3_2::setup_gm_sync_from_ddr(tcb_t &tcb) {
 
   uint32_t remap_mode = 0; /* time priority */
   uint32_t remap_size = (aligned(gm_info.remap_size, 1 << 18) >> 18) - 1;
-  tcb.grid.gm_ctrl =
-      (remap_size & 0xFF) << 8 | (remap_mode & 0x1) << 1 | GM_CTRL_REMAP_EN;
+  tcb.grid.gm_ctrl = (remap_size & 0xFF) << 8 | (remap_mode & 0x1) << 1 |
+                     tcb_ctl::GM_CTRL_REMAP_EN;
 
   if (gm_info.sync_size != 0) {
     uint32_t sync_size = (aligned(gm_info.sync_size, 1 << 18) >> 18);
-    tcb.grid.gm_sync = GM_SYNC_DDR_TO_GM | (sync_size & 0xFFF);
+    tcb.grid.gm_sync = tcb_ctl::GM_REGION_CTRL_SYNC_TO_GM | (sync_size & 0xFFF);
   }
 
-  tcb.grid.gm_addr_low = get_low_32(gm_desc.pa);
-  tcb.grid.gm_addr_high = get_high_32(gm_desc.pa);
+  tcb.grid.gm_addr_low = get_low_32(gm_desc->pa);
+  tcb.grid.gm_addr_high = get_high_32(gm_desc->pa);
 }
 
 } // namespace aipudrv

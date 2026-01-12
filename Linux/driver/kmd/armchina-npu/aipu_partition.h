@@ -56,6 +56,7 @@ struct aipu_operations {
 	int (*sysfs_show)(struct aipu_partition *aipu, char *buf);
 #endif
 	int (*soft_reset)(struct aipu_partition *aipu, bool init_regs);
+	void (*hw_reset)(struct aipu_partition *aipu);
 	void (*initialize)(struct aipu_partition *aipu);
 	int (*destroy_command_pool)(struct aipu_partition *partition, int pool);
 	int (*abort_command_pool)(struct aipu_partition *partition, int pool);
@@ -63,6 +64,7 @@ struct aipu_operations {
 	void (*disable_tick_counter)(struct aipu_partition *partition);
 	void (*enable_tick_counter)(struct aipu_partition *partition);
 	void (*enable_core_cnt)(struct aipu_partition *partition, u32 cluster_id, u32 core_cnt);
+	int (*get_partition_status)(struct aipu_partition *partition, struct aipu_cluster_status *status);
 };
 
 /**
@@ -133,8 +135,8 @@ struct aipu_partition {
 	struct cluster_info clusters[8];
 	int partition_mode;
 	int event_type;
-	struct mutex page_lock; /* protect page selection process */
 	struct io_region *dbg_reg;
+	spinlock_t io_lock;
 };
 
 /**

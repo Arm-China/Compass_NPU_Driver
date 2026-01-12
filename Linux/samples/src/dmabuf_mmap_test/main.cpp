@@ -73,7 +73,7 @@ int dmabuf_malloc(aipu_ctx_handle_t *ctx, uint64_t size, int &fd,
   }
 
   fd = dma_buf_req.fd;
-  AIPU_ERR()("get dmabuf fd %d success", fd);
+  AIPU_INFO()("get dmabuf fd %d success", fd);
 
   dma_buf.fd = dma_buf_req.fd;
   ret = aipu_ioctl(ctx, AIPU_IOCTL_GET_DMABUF_INFO, &dma_buf);

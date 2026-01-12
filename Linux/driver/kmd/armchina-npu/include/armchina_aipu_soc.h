@@ -45,7 +45,6 @@ struct aipu_soc_operations {
 	bool (*is_aipu_irq)(struct device *dev, struct aipu_soc *soc, int core_id);
 	int (*soc_pm_runtime_get_sync)(struct device *dev, struct aipu_soc *soc);
 	int (*soc_pm_runtime_put)(struct device *dev, struct aipu_soc *soc);
-	void (*hw_reset)(struct device *dev, struct aipu_soc *soc);
 };
 
 int armchina_aipu_probe(struct platform_device *p_dev, struct aipu_soc *soc,

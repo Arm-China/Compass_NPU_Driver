@@ -36,50 +36,15 @@ bool has_some_grid_done() { return simv3_2_has_grid_done; }
 
 SimulatorV3_2::SimulatorV3_2() {
   m_dev_type = DEV_TYPE_SIMULATOR_V3_2;
-  m_hw_config = 1304;
   m_dram = UMemory::get_memory();
   m_dram->set_dev(this);
-  m_dram->set_isa_version(AIPU_ISA_VERSION_ZHOUYI_V3_2);
 
   pthread_rwlock_init(&m_lock, NULL);
 }
 
 SimulatorV3_2::~SimulatorV3_2() {
-  if (m_aipu != nullptr) {
-    delete m_aipu;
-    m_aipu = nullptr;
-  }
-
   pthread_rwlock_destroy(&m_lock);
   m_dram = nullptr;
-}
-
-void SimulatorV3_2::set_cfg(const aipu_global_config_simulation_t *cfg) {
-  if (cfg == nullptr)
-    return;
-
-  m_log_level = cfg->log_level;
-  m_verbose = cfg->verbose;
-  m_enable_avx = cfg->enable_avx;
-  m_gm_size = cfg->gm_size;
-
-  if (cfg->plugin_name != nullptr)
-    m_plugin_filename = cfg->plugin_name;
-  if (cfg->json_filename != nullptr)
-    m_json_filename = cfg->json_filename;
-  if (cfg->log_file_path != nullptr)
-    m_log_filepath = cfg->log_file_path;
-  if (cfg->npu_arch_desc != nullptr)
-    m_arch_desc = cfg->npu_arch_desc;
-
-  m_en_fast_perf = cfg->en_fast_perf;
-  m_freq_mhz = cfg->freq_mhz;
-  m_ddr_latency_rd = cfg->ddr_latency_rd;
-  m_ddr_latency_wr = cfg->ddr_latency_wr;
-  m_ddr_bw = cfg->ddr_bw;
-
-  if (cfg->perf_report != nullptr)
-    m_perf_report = cfg->perf_report;
 }
 
 int SimulatorV3_2::get_grid_id(uint16_t &grid_id) {
@@ -125,96 +90,48 @@ out:
   return ret;
 }
 
-/* if dev->init() is behind graph parser, we can use config to check some
- * parameters */
-aipu_status_t SimulatorV3_2::parse_config(uint32_t config, uint32_t &sim_code) {
-  std::string target = m_arch_desc;
-  if (target.empty()) {
-    for (auto &it : m_npu_arch_map) {
-      if (it.second.config == config) {
-        target = it.first;
-        break;
-      }
-    }
-
-    if (target.empty()) {
-      LOG(LOG_ERR,
-          "Not provide npu arch, and config: %u does not support in v2",
-          config);
-      return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
-    }
-  }
-
-  uint32_t core_num = 1;
-  size_t pos = 0;
-  std::string bare_target = target;
-  if ((pos = target.find("MP", pos)) != std::string::npos) {
-    auto mp = target.substr(pos + 2, target.size() - pos - 2);
-    core_num = std::stoi(mp);
-    if (core_num == 0)
-      core_num = 1;
-    if (pos > 0 && target[pos - 1] == '_')
-      pos = pos - 1;
-    bare_target = target.substr(0, pos);
-  }
-
-  if (m_npu_arch_map.count(bare_target) != 0) {
-    auto &item = m_npu_arch_map.at(bare_target);
-    sim_code = (item.tec_num & 0xF) + ((item.aiff_num & 0xF) << 4) +
-               ((core_num & 0xF) << 8) + ((item.cluster_num & 0xF) << 12) +
-               (1 << 31);
-  } else {
-    LOG(LOG_ERR, "%s does not support in v3_2", m_arch_desc.c_str());
-    return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
-  }
-
-  return AIPU_STATUS_SUCCESS;
-}
-
 bool SimulatorV3_2::has_target(uint32_t arch, uint32_t version, uint32_t config,
                                uint32_t rev) {
-  return arch == AIPU_ARCH_ZHOUYI && version == AIPU_ISA_VERSION_ZHOUYI_V3_2;
+  return arch == AIPU_ARCH_ZHOUYI &&
+         (version == AIPU_ISA_VERSION_ZHOUYI_V3_2_0 ||
+          version == AIPU_ISA_VERSION_ZHOUYI_V3_2_1);
 }
 
-aipu_status_t SimulatorV3_2::init() {
-  uint32_t reg_val = 0, sim_code = 0;
-  BufferDesc *rev_buf = nullptr;
-  aipu_status_t ret = AIPU_STATUS_SUCCESS;
-
+aipu_ll_status_t SimulatorV3_2::init() {
   pthread_rwlock_wrlock(&m_lock);
-  if (m_aipu != nullptr) {
-    goto unlock;
+
+  if (m_initialized) {
+    pthread_rwlock_unlock(&m_lock);
+    return AIPU_LL_STATUS_SUCCESS;
   }
 
-  ret = parse_config(m_hw_config, sim_code);
-  if (ret != AIPU_STATUS_SUCCESS)
-    goto unlock;
+  if (m_cfg != nullptr)
+    m_dram->gm_init(m_cfg->gm_size);
 
-  sim_create_config(sim_code, m_config);
-  m_aipu = new sim_aipu::Aipu(m_config, static_cast<UMemory &>(*m_dram));
-  if (m_aipu == nullptr) {
-    ret = AIPU_STATUS_ERROR_DEV_ABNORMAL;
-    goto unlock;
+  m_wrapper = std::make_unique<SimWrapper>(m_target, m_cfg);
+  if (m_wrapper == nullptr || m_wrapper->init() != AIPU_LL_STATUS_SUCCESS) {
+    pthread_rwlock_unlock(&m_lock);
+    return AIPU_LL_STATUS_ERROR_INVALID_CONFIG;
   }
-
-  m_dram->gm_init(m_config.gm_size);
 
   /* reserve 4KB for debug */
+  BufferDesc *rev_buf = nullptr;
   m_dram->reserve_mem(0xC1000000, AIPU_PAGE_SIZE, &rev_buf, "rsv",
                       MEM_REGION_RSV);
   m_reserve_mem.push_back(rev_buf);
 
-  m_code = sim_code;
-  m_aipu->read_register(TSM_BUILD_INFO, reg_val);
+  uint32_t reg_val = 0;
+  m_wrapper->read_register(reg_addr::TSM_BUILD_INFO, reg_val);
   m_max_cmdpool_cnt = ((reg_val >> 16) & 0xf) + 1;
 
-  m_aipu->set_event_handler((event_handler_t)(SimulatorV3_2::sim_cb_handler),
-                            nullptr);
+  m_wrapper->set_event_handler((event_handler_t)(SimulatorV3_2::sim_cb_handler),
+                               nullptr);
   parse_cluster_info();
 
-unlock:
+  m_initialized = true;
+
   pthread_rwlock_unlock(&m_lock);
-  return ret;
+  return AIPU_LL_STATUS_SUCCESS;
 }
 
 bool SimulatorV3_2::is_cmdpool_full(int qos, int part_id, int partition_mode,
@@ -230,8 +147,7 @@ bool SimulatorV3_2::is_cmdpool_full(int qos, int part_id, int partition_mode,
   return !!cmdpool_full_flag;
 }
 
-aipu_status_t SimulatorV3_2::schedule(const JobDesc &jobdesc) {
-  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+aipu_ll_status_t SimulatorV3_2::schedule(const JobDesc &jobdesc) {
   JobV3_2 *job = static_cast<JobV3_2 *>(jobdesc.jobbase);
   uint16_t grid_id = job->get_grid_id();
   uint32_t part_id = job->get_part_id();
@@ -240,8 +156,8 @@ aipu_status_t SimulatorV3_2::schedule(const JobDesc &jobdesc) {
   job_queue_elem_t job_queue_item;
   JobDesc job_desc{0};
 
-  if (m_aipu == nullptr)
-    return AIPU_STATUS_ERROR_NULL_PTR;
+  if (m_wrapper == nullptr)
+    return AIPU_LL_STATUS_ERROR_NULL_PTR;
 
   pthread_rwlock_wrlock(&m_lock);
   if (job->m_bind_cmdpool_id == 0xffffffff)
@@ -256,7 +172,7 @@ aipu_status_t SimulatorV3_2::schedule(const JobDesc &jobdesc) {
   if (!m_cant_add_job_flag) {
     uint32_t reg_val = 0;
 
-    m_aipu->read_register(TSM_STATUS, reg_val);
+    m_wrapper->read_register(reg_addr::TSM_STATUS, reg_val);
 
     if (!is_cmdpool_full(qos, part_id, m_partition_mode, cluster_idx,
                          reg_val)) {
@@ -267,29 +183,31 @@ aipu_status_t SimulatorV3_2::schedule(const JobDesc &jobdesc) {
       job_desc = job_queue_item.jobdesc;
       m_commit_map[grid_id] = job_desc.jobbase;
 
-      m_aipu->write_register(TSM_CMD_SCHED_ADDR_HI,
-                             get_high_32(job_desc.tcb_head));
-      m_aipu->write_register(TSM_CMD_SCHED_ADDR_LO,
-                             get_low_32(job_desc.tcb_head));
-      m_aipu->write_register(TSM_CMD_TCB_NUMBER, job_desc.tcb_number);
+      m_wrapper->write_register(reg_addr::TSM_CMD_SCHED_ADDR_HI,
+                                get_high_32(job_desc.tcb_head));
+      m_wrapper->write_register(reg_addr::TSM_CMD_SCHED_ADDR_LO,
+                                get_low_32(job_desc.tcb_head));
+      m_wrapper->write_register(reg_addr::TSM_CMD_TCB_NUMBER,
+                                job_desc.tcb_number);
 
       /* specify cmdpool number & QoS */
       value = (part_id << 19) | (cmd_pool_id << 16) | (qos << 8);
-      m_aipu->write_register(TSM_CMD_SCHED_CTRL, value | CREATE_CMD_POOL);
+      m_wrapper->write_register(reg_addr::TSM_CMD_SCHED_CTRL,
+                                value | reg_ctl::CREATE_CMD_POOL);
 
       LOG(LOG_INFO, "triggering simulator...%lx", job->get_id());
-      m_aipu->write_register(TSM_CMD_SCHED_CTRL, DISPATCH_CMD_POOL);
+      m_wrapper->write_register(reg_addr::TSM_CMD_SCHED_CTRL,
+                                reg_ctl::DISPATCH_CMD_POOL);
     } else {
       LOG(LOG_ALERT, "CMD POOL %d, QOS %d [full]", cmd_pool_id, qos);
     }
   }
   pthread_rwlock_unlock(&m_lock);
 
-  return ret;
+  return AIPU_LL_STATUS_SUCCESS;
 }
 
-aipu_status_t SimulatorV3_2::fill_commit_queue() {
-  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+aipu_ll_status_t SimulatorV3_2::fill_commit_queue() {
   uint32_t max_limit = 1, max = 0;
   job_queue_elem_t job_queue_item{0};
 
@@ -301,7 +219,7 @@ aipu_status_t SimulatorV3_2::fill_commit_queue() {
     max = m_buffer_queue.size();
 
   if (m_commit_map.size() >= 16)
-    return ret;
+    return AIPU_LL_STATUS_SUCCESS;
 
   for (uint32_t i = 0; i < max; i++) {
     job_queue_item = m_buffer_queue.front();
@@ -315,31 +233,33 @@ aipu_status_t SimulatorV3_2::fill_commit_queue() {
     uint32_t reg_val = 0;
     uint32_t cluster_idx = 0;
 
-    if (m_aipu == nullptr)
-      return AIPU_STATUS_ERROR_NULL_PTR;
+    if (m_wrapper == nullptr)
+      return AIPU_LL_STATUS_ERROR_NULL_PTR;
 
     if (job->m_bind_cmdpool_id == 0xffffffff)
       cmd_pool_id = job->m_bind_cmdpool_id = get_cmdpool_id(0, part_id);
     else
       cmd_pool_id = job->m_bind_cmdpool_id;
 
-    m_aipu->read_register(TSM_STATUS, reg_val);
+    m_wrapper->read_register(reg_addr::TSM_STATUS, reg_val);
 
     if (!is_cmdpool_full(qos, part_id, m_partition_mode, cluster_idx,
                          reg_val)) {
-      m_aipu->write_register(TSM_CMD_SCHED_ADDR_HI,
-                             get_high_32(jobdesc.tcb_head));
-      m_aipu->write_register(TSM_CMD_SCHED_ADDR_LO,
-                             get_low_32(jobdesc.tcb_head));
-      m_aipu->write_register(TSM_CMD_TCB_NUMBER,
-                             get_low_32(jobdesc.tcb_number));
+      m_wrapper->write_register(reg_addr::TSM_CMD_SCHED_ADDR_HI,
+                                get_high_32(jobdesc.tcb_head));
+      m_wrapper->write_register(reg_addr::TSM_CMD_SCHED_ADDR_LO,
+                                get_low_32(jobdesc.tcb_head));
+      m_wrapper->write_register(reg_addr::TSM_CMD_TCB_NUMBER,
+                                get_low_32(jobdesc.tcb_number));
 
       /* specify cmdpool number & QoS */
       value = (part_id << 19) | (cmd_pool_id << 16) | (qos << 8);
-      // m_aipu->write_register(TSM_CMD_SCHED_CTRL, value | CREATE_CMD_POOL);
+      // m_aipu->write_register(reg_addr::TSM_CMD_SCHED_CTRL, value |
+      // reg_ctl::CREATE_CMD_POOL);
 
       LOG(LOG_INFO, "triggering simulator...%lx", job->get_id());
-      m_aipu->write_register(TSM_CMD_SCHED_CTRL, value | DISPATCH_CMD_POOL);
+      m_wrapper->write_register(reg_addr::TSM_CMD_SCHED_CTRL,
+                                value | reg_ctl::DISPATCH_CMD_POOL);
 
       m_buffer_queue.pop();
       m_commit_map[grid_id] = jobbase;
@@ -351,7 +271,7 @@ aipu_status_t SimulatorV3_2::fill_commit_queue() {
   }
 
   LOG(LOG_INFO, "Exit %s...", __FUNCTION__);
-  return ret;
+  return AIPU_LL_STATUS_SUCCESS;
 }
 
 aipu_ll_status_t SimulatorV3_2::poll_status(uint32_t max_cnt, int32_t time_out,

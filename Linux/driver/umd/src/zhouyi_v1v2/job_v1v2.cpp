@@ -26,8 +26,7 @@ JobV12::JobV12(MainContext *ctx, GraphBase &graph, DeviceBase *dev,
 JobV12::~JobV12() {}
 
 aipu_status_t JobV12::setup_rodata_v12(std::set<uint32_t> *dma_buf_idx) {
-  const std::vector<struct GraphParamMapLoadDesc> &param_map =
-      graph().m_param_map;
+  const std::vector<GraphParamMapLoadDesc> &param_map = graph().m_param_map;
 
   return setup_rodata(param_map, m_reuses_desc, *m_weights_desc, *m_rodata,
                       m_descriptor, dma_buf_idx);
@@ -141,14 +140,7 @@ aipu_status_t JobV12::init(const aipu_global_config_simulation_t *cfg,
   if (cfg == nullptr)
     return AIPU_STATUS_ERROR_NULL_PTR;
 
-  if (((graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V1) &&
-       (cfg->simulator == nullptr)) ||
-      ((graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_0) &&
-       (cfg->simulator == nullptr)) ||
-      ((graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_1) &&
-       (cfg->simulator == nullptr)) ||
-      ((graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V2_2) &&
-       (cfg->simulator == nullptr))) {
+  if (graph().get_isa() <= ISAv31 && cfg->simulator == nullptr) {
     LOG(LOG_ERR, "please provide executable simulator file path");
     return AIPU_STATUS_ERROR_INVALID_CONFIG;
   }
@@ -178,7 +170,7 @@ aipu_status_t JobV12::init(const aipu_global_config_simulation_t *cfg,
 aipu_status_t
 JobV12::specify_io_buffer(aipu_shared_tensor_info_t &tensor_info) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
-  const std::vector<struct JobIOBuffer> *iobuffer_vec = nullptr;
+  const std::vector<JobIOBuffer> *iobuffer_vec = nullptr;
   BufferDesc *bufferDesc = nullptr;
   const char *str = "free_input";
   uint32_t reuse_index = 0;
@@ -189,9 +181,7 @@ JobV12::specify_io_buffer(aipu_shared_tensor_info_t &tensor_info) {
   int fd = tensor_info.dmabuf_fd;
   int share_case_type = tensor_info.shared_case_type;
   bool update_ro = true;
-  struct aipu_dma_buf dma_buf {
-    fd, 0, 0
-  };
+  aipu_dma_buf dma_buf{fd, 0, 0};
 
   switch (type) {
   case AIPU_TENSOR_TYPE_INPUT:
@@ -329,7 +319,7 @@ aipu_status_t JobV12::alloc_load_job_buffers() {
     goto finish;
 
   /* 4. allocate reuse buffers */
-  if (graph().m_hw_version != AIPU_ISA_VERSION_ZHOUYI_V1)
+  if (graph().get_isa() != ISAv1)
     retval = alloc_reuse_buffer_optimized();
 
   if (retval == -1) {
@@ -419,8 +409,7 @@ aipu_status_t JobV12::schedule() {
   if (ret != AIPU_STATUS_SUCCESS)
     return ret;
 
-  dump_job_shared_buffers();
-  dump_job_private_buffers(*m_rodata, m_descriptor);
+  dump_buffers(true /*before*/);
 
   /* initialize error code buffer */
   for (uint32_t i = 0; i < m_err_code.size(); i++)
@@ -432,15 +421,16 @@ aipu_status_t JobV12::schedule() {
   desc.kdesc.core_id = m_bind_core_id;
   desc.kdesc.version_compatible = !graph().m_do_vcheck;
   desc.kdesc.aipu_arch = graph().m_arch;
-  desc.kdesc.aipu_version = graph().m_hw_version;
-  desc.kdesc.aipu_config = graph().m_hw_config;
-  desc.aipu_revision = graph().m_hw_revision;
+  desc.kdesc.aipu_version =
+      graph().bin_to_dev_isa(); /* maintain a m_dev_isa? */
+  desc.kdesc.aipu_config = graph().get_config();
+  desc.aipu_revision = graph().get_revision();
   desc.instruction_base_pa = m_text->pa;
 
   /**
    * note: on simulation, it's true align_asid_pa == pa.
    */
-  if (graph().m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V1) {
+  if (graph().get_isa() == ISAv1) {
     desc.kdesc.start_pc_addr = m_spc;
     desc.kdesc.intr_handler_addr = m_intr_pc;
     desc.kdesc.data_0_addr = m_rodata->pa;
@@ -524,7 +514,7 @@ aipu_status_t JobV12::schedule() {
   if (graph().m_sram_flag)
     desc.kdesc.exec_flag |= AIPU_JOB_EXEC_FLAG_SRAM_MUTEX;
 
-  ret = m_dev->schedule(desc);
+  ret = convert_ll_status(m_dev->schedule(desc));
   if (ret == AIPU_STATUS_SUCCESS) {
 #if (defined SIMULATION)
     m_status = AIPU_JOB_STATUS_DONE;

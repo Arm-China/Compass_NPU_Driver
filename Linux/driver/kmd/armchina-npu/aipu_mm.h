@@ -318,8 +318,16 @@ int aipu_free_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_buf_desc 
 void aipu_cache_flush(struct aipu_memory_manager *mm, void *vaddr, size_t size);
 void aipu_cache_clean(struct aipu_memory_manager *mm, void *vaddr, size_t size);
 void aipu_cache_invalidate(struct aipu_memory_manager *mm, void *vaddr, size_t size);
-struct aipu_phy_block *aipu_get_block_buffer(struct aipu_memory_manager *mm, u64 iova, char* str);
-struct aipu_iova_buffer *aipu_get_iova_buffer_by_job_id(struct aipu_memory_manager *mm, u64 exec_id, char* str);
-int aipu_rebind_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_rebind_buf_desc *desc, struct file *filp);
-int aipu_bind_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_bind_buf_desc *desc, struct file *filp);
+struct aipu_phy_block *aipu_get_block_buffer(struct aipu_memory_manager *mm,
+					     u64 iova, char* str);
+struct aipu_iova_buffer *aipu_get_iova_buffer_by_exec_id(struct aipu_memory_manager *mm,
+							 u64 exec_id, char* str);
+int aipu_rebind_dma_iova_phy(struct aipu_memory_manager *mm,
+			     struct aipu_rebind_buf_desc *desc,
+			     struct file *filp);
+int aipu_bind_dma_iova_phy(struct aipu_memory_manager *mm,
+			   struct aipu_bind_buf_desc *desc,
+			   struct file *filp);
+int aipu_copy_block_by_dma_fd(struct aipu_memory_manager *mm,
+			      struct aipu_dma_buf *dmabuf_info);
 #endif /* __AIPU_MM_H__ */

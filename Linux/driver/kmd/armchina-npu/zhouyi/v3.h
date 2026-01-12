@@ -77,9 +77,9 @@
  *         2) R/O for single cluster TSM
  * [9:8]   Write 0/1/2 to configure the QoS of this pool as slow/fast
  * [3:0]   Write 0/1/2/3/4/5 to issue command type as:
- *         none/create/destroy/abort/dispatch/debug-dispatch
+ *         none/create/destroy/abort/dispatch/bind-dispatch
  */
-#define _TSM_DEBUG_CORE(core)                        ((core) << 24)
+#define _TSM_BIND_CORE(core)                         ((core) << 24)
 #define _TSM_POOL(pool)                              ((pool) << 16)
 #define _TSM_MAP(map)                                ((map) << 12)
 #define _TSM_QOS(qos)                                ((qos) << 8)
@@ -87,7 +87,7 @@
 #define _TSM_DESTROY                                 0x2
 #define _TSM_ABORT                                   0x3
 #define _TSM_DISPATCH                                0x4
-#define _TSM_DEBUG_DISPATCH                          0x5
+#define _TSM_BIND_DISPATCH                           0x5
 
 #define TSM_MAP_SINGLE                              _TSM_MAP(0x0)
 #define TSM_MAP_ALL                                 _TSM_MAP(0x1)
@@ -95,8 +95,8 @@
 #define TSM_DESTROY_CMD_POOL(pool)                  (_TSM_DESTROY | _TSM_POOL(pool))
 #define TSM_ABORT_CMD_POOL(pool)                    (_TSM_ABORT | _TSM_POOL(pool))
 #define TSM_DISPATCH_CMD_POOL(pool, qos)            (_TSM_DISPATCH | (qos) | _TSM_POOL(pool))
-#define TSM_DBG_DISPATCH_CMD_POOL(pool, qos, core)  (_TSM_DEBUG_DISPATCH | (qos) | \
-						     _TSM_POOL(pool) | _TSM_DEBUG_CORE(core))
+#define TSM_BIND_DISPATCH_CMD_POOL(pool, qos, core)  (_TSM_BIND_DISPATCH | (qos) | \
+						     _TSM_POOL(pool) | _TSM_BIND_CORE(core))
 
 #define TSM_CMD_SCHD_CTRL_HANDLE_REG                0x0
 
@@ -322,6 +322,7 @@
 #define IS_SERIOUS_ERR(status_32)                   (((status_32) >> 3) & 0x3) /* error or fault */
 #define GET_INTR_TYPE(status_32)                    ((status_32) & 0x3F)
 #define IS_IRQ_TO_HANDLE(status_32)                 ((status_32) & 0xF1F)
+#define IS_COREDUMP_IRQ(status_32)                  (IS_EXCEPTION_IRQ(status_32) || (IS_TEC_IRQ(status_32) && IS_FAULT_IRQ(status_32)))
 
 #define CMD_POOL_INTR_STATUS_REG(id)                (_GET_CMD_POOL_OFFSET(id) + 0xC)
 

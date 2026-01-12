@@ -19,23 +19,12 @@
 #include "device/simulator/umemory.h"
 #include "device_base.h"
 #include "kmd/tcb.h"
-#include "simulator/aipu.h"
-#include "simulator/config.h"
 #include "standard_api.h"
 #include "utils/debug.h"
+#include "wrapper.h"
 #include "zhouyi_v3x/zhouyi_v3/job_v3.h"
 
 namespace aipudrv {
-#define TSM_BUILD_INFO 0x14
-#define TSM_STATUS 0x18
-#define TSM_CMD_POOL0_CONFIG 0x800
-#define TSM_CMD_POOL0_STATUS 0x804
-
-#define CLUSTER_PRESENT 0x1000
-
-#define MAX_PART_CNT 4
-#define MAX_CLUSTER_CNT 8
-
 class CmdPool {
 private:
   MemoryBase *m_dram = nullptr;
@@ -45,7 +34,7 @@ private:
 
 public:
   void update_tcb(DEV_PA_64 head, DEV_PA_64 tail) {
-    tcb_t prev;
+    tcb_v3::tcb_t prev;
     m_dram->read(m_tcb_tail, &prev, sizeof(prev));
     prev.next = get_low_32(head);
     m_dram->write(m_tcb_tail, &prev, sizeof(prev));
@@ -54,9 +43,9 @@ public:
 
   void set_destroy_flag() {
     if (!set_destroy_done) {
-      tcb_t prev;
+      tcb_v3::tcb_t prev;
       m_dram->read(m_tcb_tail, &prev, sizeof(prev));
-      prev.flag |= TCB_FLAG_END_TYPE_END_WITH_DESTROY;
+      prev.flag |= tcb_ctl::FLAG_END_TYPE_END_WITH_DESTROY;
       m_dram->write(m_tcb_tail, &prev, sizeof(prev));
       set_destroy_done = !set_destroy_done;
     }
@@ -79,20 +68,18 @@ public:
  * protection */
 class SimulatorV3 : public DeviceBase {
 private:
+  static constexpr uint32_t MAX_PART_CNT = 1;
+  static constexpr uint32_t MAX_CLUSTER_CNT = 1;
+
+  bool m_initialized = false;
+  std::string m_target;
+  const aipu_global_config_simulation_t *m_cfg =
+      nullptr; /* keep entity valid */
+  std::unique_ptr<SimWrapper> m_wrapper = nullptr;
+
   pthread_rwlock_t m_lock;
   std::mutex m_poll_mtex;
-  config_t m_config;
-  sim_aipu::Aipu *m_aipu = nullptr;
-  uint32_t m_code = 0;
-  uint32_t m_log_level;
-  std::string m_log_filepath;
-  bool m_verbose;
-  bool m_enable_avx;
-  bool m_en_eval;
-  uint32_t m_gm_size = 0;
-  std::string m_plugin_filename;
-  std::string m_json_filename;
-  std::string m_arch_desc;
+
   std::vector<uint32_t> m_cluster_in_part[MAX_PART_CNT];
   uint32_t m_max_partition_cnt = 0;
   uint32_t m_max_cmdpool_cnt = 0;
@@ -102,11 +89,11 @@ private:
    * @cmdpool_id: the next cmdpool index in one partition
    * @m_cmdpool_in_part: the cmdpool number belong to one partition
    */
-  struct cmdpool_info {
+  struct CmdpoolInfo {
     uint32_t cmdpool_id;
     std::vector<uint32_t> m_cmdpool_in_part;
   };
-  std::map<uint32_t, cmdpool_info> m_part_cmdpool;
+  std::map<uint32_t, CmdpoolInfo> m_part_cmdpool;
 
   /**
    * each cmdpool has a job queue for caching committed Jobs.
@@ -130,7 +117,7 @@ private:
   /* 1. buffer all jobs in this queue */
   typedef struct {
     void *job;
-    struct JobDesc jobdesc;
+    JobDesc jobdesc;
   } job_queue_elem_t;
   std::queue<job_queue_elem_t> m_buffer_queue;
 
@@ -142,12 +129,10 @@ private:
 
   volatile bool m_cmdpool_busy = false;
 
-  const std::map<std::string, arch_item_t> m_npu_arch_map = {
-      {"X2_1204", {1204, 4, 1, 1, X2_1204}},
-      {"X2_1204MP3", {1204, 4, 1, 1, X2_1204MP3}},
-  };
-
 private:
+  SimulatorV3();
+
+  aipu_ll_status_t fill_commit_queue();
   bool cmd_pool_created(uint32_t cmdpool_id) {
     return m_commit_jobs.count(cmdpool_id) == 1;
   }
@@ -180,10 +165,10 @@ private:
     m_cmdpools[cmdpool_id]->update_tcb(job_desc.tcb_head, job_desc.tcb_tail);
 
     /* specify cmdpool number & QoS */
-    m_aipu->read_register(TSM_CMD_SCHED_CTRL, value);
+    m_wrapper->read_register(reg_addr::TSM_CMD_SCHED_CTRL, value);
     value &= ~((0xf << 16) | (0x3 << 8));
-    value |= (cmdpool_id << 16) | (qos << 8) | DISPATCH_CMD_POOL;
-    m_aipu->write_register(TSM_CMD_SCHED_CTRL, value);
+    value |= (cmdpool_id << 16) | (qos << 8) | reg_ctl::DISPATCH_CMD_POOL;
+    m_wrapper->write_register(reg_addr::TSM_CMD_SCHED_CTRL, value);
   }
 
   /**
@@ -209,7 +194,8 @@ private:
   void cmd_pool_destroy(void) {
     if (!m_commit_jobs.empty()) {
       for (uint32_t i = 0; i < m_commit_jobs.size(); i++)
-        m_aipu->write_register(TSM_CMD_SCHED_CTRL, DESTROY_CMD_POOL);
+        m_wrapper->write_register(reg_addr::TSM_CMD_SCHED_CTRL,
+                                  reg_ctl::DESTROY_CMD_POOL);
 
       for (auto item : m_commit_jobs)
         m_commit_jobs[item.first].clear();
@@ -243,15 +229,15 @@ private:
     return cmdpool_id;
   }
 
-  aipu_status_t set_cluster_to_partition() {
+  aipu_ll_status_t set_cluster_to_partition() {
     uint32_t reg_val = 0, cluster_idx = 0;
     uint32_t present_cluster_cnt = 0, part_idx = 0;
     uint32_t cluster_num_in_part[MAX_PART_CNT] = {0};
     aipu_partition_cap part_cap;
 
     for (uint32_t i = 0; i < MAX_CLUSTER_CNT; i++) {
-      m_aipu->read_register(CLUSTER0_CONFIG + 0x20 * i, reg_val);
-      if (reg_val & CLUSTER_PRESENT)
+      m_wrapper->read_register(reg_addr::CLUSTER0_CONFIG + 0x20 * i, reg_val);
+      if (reg_val & reg_ctl::CLUSTER_PRESENT)
         present_cluster_cnt++;
     }
 
@@ -275,10 +261,12 @@ private:
         m_cluster_in_part[part].push_back(cluster_idx);
 
         /* specify cluster to someone partition */
-        m_aipu->read_register(CLUSTER0_CTRL + 0x20 * cluster_idx, reg_val);
-        m_aipu->write_register(CLUSTER0_CTRL + 0x20 * cluster_idx,
-                               reg_val | (part << 16));
-        m_aipu->read_register(CLUSTER0_CONFIG + 0x20 * cluster_idx, reg_val);
+        m_wrapper->read_register(reg_addr::CLUSTER0_CTRL + 0x20 * cluster_idx,
+                                 reg_val);
+        m_wrapper->write_register(reg_addr::CLUSTER0_CTRL + 0x20 * cluster_idx,
+                                  reg_val | (part << 16));
+        m_wrapper->read_register(reg_addr::CLUSTER0_CONFIG + 0x20 * cluster_idx,
+                                 reg_val);
 
         part_cap.id = part;
         part_cap.arch = AIPU_ARCH_ZHOUYI;
@@ -300,17 +288,17 @@ private:
       m_core_cnt = m_part_caps[0].clusters[0].core_cnt;
     }
 
-    return AIPU_STATUS_SUCCESS;
+    return AIPU_LL_STATUS_SUCCESS;
   }
 
-  aipu_status_t set_cmdpool_to_partition(uint32_t partition_cnt,
-                                         uint32_t cmdpool_cnt) {
+  aipu_ll_status_t set_cmdpool_to_partition(uint32_t partition_cnt,
+                                            uint32_t cmdpool_cnt) {
     uint32_t cluster_cnt = 0;
 
     if (partition_cnt > MAX_PART_CNT || cmdpool_cnt > 8) {
       LOG(LOG_ERR, "Invalid config: part %d, cmdpool %d", m_max_partition_cnt,
           m_max_cmdpool_cnt);
-      return AIPU_STATUS_ERROR_INVALID_CONFIG;
+      return AIPU_LL_STATUS_ERROR_INVALID_CONFIG;
     }
 
     for (uint32_t i = 0; i < partition_cnt; i++)
@@ -319,7 +307,7 @@ private:
     if (partition_cnt > cmdpool_cnt) {
       LOG(LOG_ERR, "Invalid config: part %d, cmdpool %d", partition_cnt,
           cmdpool_cnt);
-      return AIPU_STATUS_ERROR_INVALID_CONFIG;
+      return AIPU_LL_STATUS_ERROR_INVALID_CONFIG;
     } else {
       uint32_t part_idx = 0;
       for (uint32_t cmdpool_idx = 0; cmdpool_idx < cmdpool_cnt; cmdpool_idx++) {
@@ -330,40 +318,62 @@ private:
       }
     }
 
-    return AIPU_STATUS_SUCCESS;
+    return AIPU_LL_STATUS_SUCCESS;
   }
 
 public:
-  UMemory *get_umemory(void) { return static_cast<UMemory *>(m_dram); }
+  virtual ~SimulatorV3();
+  SimulatorV3(const SimulatorV3 &sim) = delete;
+  SimulatorV3 &operator=(const SimulatorV3 &sim) = delete;
 
-public:
+  aipu_ll_status_t init() override;
   bool has_target(uint32_t arch, uint32_t version, uint32_t config,
                   uint32_t rev) override;
-  aipu_status_t init();
-  aipu_status_t parse_config(uint32_t config, uint32_t &code);
-  aipu_status_t schedule(const JobDesc &job);
-  aipu_status_t fill_commit_queue();
+  aipu_ll_status_t schedule(const JobDesc &job) override;
+
   aipu_ll_status_t poll_status(uint32_t max_cnt, int32_t time_out,
                                bool of_this_thread, void *jobbase = nullptr);
 
-  aipu_status_t get_simulation_instance(void **simulator, void **memory) {
-    if (m_aipu != nullptr) {
-      *(sim_aipu::Aipu **)simulator = m_aipu;
-      *(sim_aipu::IMemEngine **)memory = static_cast<UMemory *>(m_dram);
-      return AIPU_STATUS_SUCCESS;
+  static SimulatorV3 *get_v3_simulator() {
+    static SimulatorV3 sim_instance;
+    return &sim_instance;
+  }
+
+  aipu_ll_status_t get_simulation_instance(void **simulator,
+                                           void **memory) override {
+    if (m_wrapper != nullptr) {
+      *(sim_aipu_t *)simulator = m_wrapper->sim();
+      *(mem_interface_t **)memory = m_wrapper->mem();
+      return AIPU_LL_STATUS_SUCCESS;
     }
-    return AIPU_STATUS_ERROR_INVALID_OP;
+    return AIPU_LL_STATUS_ERROR_INVALID_OP;
+  }
+
+  void set_target(const std::string &target) override { m_target = target; }
+
+  void set_cfg(const aipu_global_config_simulation_t *cfg) override {
+    m_cfg = cfg;
   }
 
   const char *get_config_code() const override {
-    for (auto &it : m_npu_arch_map) {
-      if (it.second.sim_code == m_config.code)
-        return it.first.c_str();
-    }
-    return "X2_1204";
+    return m_wrapper->code_to_string().c_str();
   }
 
-  bool get_profile_en() const { return m_en_eval; }
+  void enable_profiling(bool en) override { m_wrapper->enable_profiling(en); }
+
+  bool get_profile_en() const override {
+    return m_wrapper->config().perf.mode == PERF_MODE_EVAL;
+  }
+
+  aipu_ll_status_t
+  get_cluster_id(uint32_t part_id,
+                 std::vector<uint32_t> &cluster_in_part) override {
+    if (part_id > sizeof(m_cluster_in_part))
+      return AIPU_LL_STATUS_ERROR_INVALID_PARTITION_ID;
+
+    cluster_in_part = m_cluster_in_part[part_id];
+    return AIPU_LL_STATUS_SUCCESS;
+  }
 
   /**
    * the below 3 APIs help to dump tcbchains
@@ -381,82 +391,7 @@ public:
     if (m_cmdpool_bitmap & (1 << cmdpool_id))
       m_cmdpool_bitmap &= ~(1 << cmdpool_id);
   }
-
-public:
-  virtual void enable_profiling(bool en) {
-    m_en_eval = en;
-    m_aipu->enable_profiling(en);
-  }
-
-public:
-  static SimulatorV3 *
-  get_v3_simulator(const aipu_global_config_simulation_t *cfg) {
-    static SimulatorV3 sim_instance;
-    sim_instance.set_cfg(cfg);
-    return &sim_instance;
-  }
-  void set_cfg(const aipu_global_config_simulation_t *cfg);
-  aipu_status_t get_cluster_id(uint32_t part_id,
-                               std::vector<uint32_t> &cluster_in_part) {
-    if (part_id > sizeof(m_cluster_in_part))
-      return AIPU_STATUS_ERROR_INVALID_PARTITION_ID;
-
-    cluster_in_part = m_cluster_in_part[part_id];
-    return AIPU_STATUS_SUCCESS;
-  }
-
-  virtual ~SimulatorV3();
-  SimulatorV3(const SimulatorV3 &sim) = delete;
-  SimulatorV3 &operator=(const SimulatorV3 &sim) = delete;
-
-private:
-  SimulatorV3();
 };
-
-inline config_t sim_create_config(int code, uint32_t log_level = 0,
-                                  const std::string &log_path = "./sim.log",
-                                  bool verbose = false, bool enable_avx = false,
-                                  bool en_eval = 0,
-                                  uint32_t gm_size = 4 * MB_SIZE,
-                                  const std::string &plugin_filename = "",
-                                  const std::string &json_filename = "") {
-  config_t config = {0};
-
-  config.code = code;
-  config.enable_calloc = false;
-  config.max_pkg_num = -1;
-  config.enable_avx = enable_avx;
-  config.log.level = log_level;
-  config.log.verbose = verbose;
-  config.gm_size = gm_size;
-
-  strcpy(config.log.filepath, log_path.c_str());
-  strcpy(config.plugin_filename, plugin_filename.c_str());
-  strcpy(config.graph_filename, json_filename.c_str());
-
-  config.perf.mode = PERF_MODE_NONE;
-  if (en_eval)
-    config.perf.mode = PERF_MODE_EVAL;
-
-  LOG(LOG_DEBUG,
-      "\nconfig.code = %d\n"
-      "config.enable_calloc = %d\n"
-      "config.max_pkg_num = %ld\n"
-      "config.enable_avx = %d\n"
-      "config.log.filepath = %s\n"
-      "config.perf.mode = %d\n"
-      "config.log.level = %d\n"
-      "config.log.verbose = %d\n"
-      "config.gm_size = 0x%x\n"
-      "config.plugin_filename = %s\n"
-      "config.json_filename = %s\n",
-      config.code, config.enable_calloc, config.max_pkg_num, config.enable_avx,
-      config.log.filepath, config.perf.mode, config.log.level,
-      config.log.verbose, config.gm_size, config.plugin_filename,
-      config.graph_filename);
-
-  return config;
-}
 
 } // namespace aipudrv
 

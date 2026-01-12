@@ -12,8 +12,7 @@ from common.log import *
 # 	this script runs dynamic shape job with sync mode, only >=v3 supports dynamic shape
 #
 # usage:
-#   python3 dyshape.py -s /home/benchmark/resnet50 -l bin/juno/debug/ -r "1,1,1,1024/1,1/1,1,128,128" -a X3P_1304
-#    -a: only for >=v3
+#   python3 dyshape.py -s /home/benchmark/resnet50 -l bin/juno/debug/ -r "1,1,1,1024/1,1/1,1,128,128"
 #
 # note:
 #   resnet50 {aipu.bin, input0.bin, output.bin}

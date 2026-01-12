@@ -33,7 +33,7 @@ struct GMBufInfo {
 class JobV3_2;
 class GM_V3_2 : public GM_V3X {
 public:
-  void setup_gm_sync_from_ddr(tcb_t &tcb) override;
+  void setup_gm_sync_from_ddr(tcb_v3_2::tcb_t &tcb);
 
 public:
   GM_V3_2(JobV3_2 &job);

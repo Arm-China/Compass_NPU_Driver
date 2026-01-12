@@ -6,7 +6,6 @@
 #include <linux/uaccess.h>
 #include <linux/slab.h>
 #include <linux/dma-buf.h>
-#include <linux/dma-buf-map.h>
 #include <linux/version.h>
 #include <linux/platform_device.h>
 #include <linux/of.h>
@@ -23,11 +22,13 @@ static int importer_test(struct dma_buf *dmabuf)
 #if LINUX_VERSION_CODE > KERNEL_VERSION(5, 11, 0) && \
     LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
 	struct dma_buf_map map = DMA_BUF_MAP_INIT_VADDR(0);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
+	struct iosys_map map = IOSYS_MAP_INIT_VADDR(0);
 #endif
 	long err = 0;
 	struct device *dev = &importer_dev->dev;
 
-	dma_set_mask_and_coherent(dev, DMA_BIT_MASK(35));
+	dma_set_mask_and_coherent(dev, DMA_BIT_MASK(36));
 	dev_set_name(dev, "importer");
 
 	attachment = dma_buf_attach(dmabuf, &importer_dev->dev);
@@ -43,15 +44,16 @@ static int importer_test(struct dma_buf *dmabuf)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
 	vaddr = dma_buf_vmap(dmabuf);
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
+#else
 	dma_buf_vmap(dmabuf, &map);
 	vaddr = map.vaddr;
 #endif
-	memcpy(vaddr, magic, strlen(magic) + 1);
+	if (vaddr)
+		memcpy(vaddr, magic, strlen(magic) + 1);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
 	dma_buf_vunmap(dmabuf, vaddr);
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
+#else
 	dma_buf_vunmap(dmabuf, &map);
 #endif
 	dma_buf_unmap_attachment(attachment, table, DMA_BIDIRECTIONAL);
@@ -60,13 +62,13 @@ DETACH:
 	return 0;
 }
 
-int importer_open(struct inode *inode, struct file *filp)
+static int importer_open(struct inode *inode, struct file *filp)
 {
 	printk(KERN_INFO "enter %s\n", __func__);
 	return 0;
 }
 
-int importer_release(struct inode *inode, struct file *filp)
+static int importer_release(struct inode *inode, struct file *filp)
 {
 	printk(KERN_INFO "enter %s\n", __func__);
 	return 0;
@@ -98,6 +100,7 @@ static struct miscdevice mdev = {
 	.minor = MISC_DYNAMIC_MINOR,
 	.name = "importer",
 	.fops = &importer_fops,
+	.mode = 0666,
 };
 
 static int importer_probe(struct platform_device *p_dev)
@@ -110,13 +113,21 @@ static int importer_probe(struct platform_device *p_dev)
 	}
 	return 0;
 }
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static void importer_remove(struct platform_device *p_dev)
+{
+	pr_info("zhouyi importer removed.\n");
+	misc_deregister(&mdev);
+	return;
+}
+#else
 static int importer_remove(struct platform_device *p_dev)
 {
 	pr_info("zhouyi importer removed.\n");
 	misc_deregister(&mdev);
 	return 0;
 }
+#endif
 
 #ifdef CONFIG_OF
 static const struct of_device_id importer_of_match[] = {
@@ -144,3 +155,6 @@ static struct platform_driver importer_platform_driver = {
 module_platform_driver(importer_platform_driver);
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("ArmChina Zhouyi dma buffer test driver");
+#if KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE
+MODULE_IMPORT_NS(DMA_BUF);
+#endif

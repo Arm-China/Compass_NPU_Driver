@@ -23,9 +23,6 @@ private:
   uint16_t m_start_group_id = 0;
   uint16_t m_group_id_idx = 0;
   BufferDesc *m_top_job_buf = nullptr;
-  std::map<FMSection, BufferDesc> m_secbuf_desc;
-  /* put_weights_gm:weight+zcy, other:zcy */
-  std::vector<WeightBufferInfo> m_weight;
   uint64_t m_exec_id = 0;
 
 private:
@@ -33,35 +30,35 @@ private:
                       uint32_t core_cnt) override;
   aipu_status_t setup_task_tcb(uint32_t sg_id, uint32_t grid_id,
                                uint32_t core_id, uint32_t task_id,
-                               bool is_new_grid = false) override;
+                               bool new_grid = false) override;
   aipu_status_t setup_tcb_group(uint32_t sg_id, uint32_t grid_id,
                                 uint32_t core_id,
-                                bool is_new_grid = false) override;
-
+                                bool new_grid = false) override;
   aipu_status_t setup_tcb_chain() override;
-  void get_tcb_head_cnt(uint32_t sg_idx, uint32_t &head_cnt) override;
-  aipu_status_t free_job_buffers() override;
-  void free_sg_buffers(SubGraphTask &sg_task) override;
-  void setup_gm_sync_to_ddr(tcb_t &tcb) override{};
+
   aipu_status_t setup_segmmu(SubGraphTask &sg_task) override;
-  aipu_status_t dump_for_emulation() override;
+  aipu_status_t init_grid_id(uint16_t &grid_id) override;
   aipu_status_t init_group_id(uint32_t sg_cnt) override;
-  aipu_status_t alloc_load_job_buffers() override;
+  aipu_status_t alloc_job_buffers() override;
+  aipu_status_t free_job_buffers() override;
+  aipu_status_t
+  specify_io(aipu_shared_tensor_info_t &tensor_info,
+             const std::vector<JobIOBuffer> *iobuffer_vec) override;
+
   DEV_PA_64 get_first_task_tcb_pa() override {
-    return m_init_tcb.pa + 2 * sizeof(tcb_t);
+    return m_init_tcb.pa + 2 * tcb_ctl::TCB_LEN;
+  }
+  uint32_t get_tcb_head_cnt(uint32_t sg_idx, uint32_t head_cnt) override {
+    return head_cnt = 2 + sg_idx;
   }
   DEV_PA_64 get_asid0_base() override { return m_top_job_buf->asid_base; }
+  uint16_t get_last_group_id() const { return m_start_group_id + m_sg_cnt - 1; }
 
-  aipu_status_t config_tcb_smmu(tcb_t &tcb);
-  aipu_status_t config_tcb_deps(tcb_t &tcb, uint32_t sg_id);
-  aipu_status_t setup_gm_buffer();
-  aipu_status_t setup_dyn_shape_buffer();
-  aipu_status_t setup_sg_priv_buffer();
-  aipu_status_t setup_reuse_buffer();
-  aipu_status_t setup_sg_common_buffer();
-  aipu_status_t load_job_buffers();
-  aipu_status_t
-  specify_io_buffer(aipu_shared_tensor_info_t &tensor_info) override;
+  aipu_status_t config_tcb_smmu(tcb_v3_2::tcb_t &tcb);
+  aipu_status_t config_tcb_deps(tcb_v3_2::tcb_t &tcb, uint32_t sg_id);
+
+  /* dump */
+  aipu_status_t dump_emu_metadata(const std::string &metafile) override;
 
 public:
 #if defined(SIMULATION)

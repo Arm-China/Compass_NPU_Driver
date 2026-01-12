@@ -183,8 +183,7 @@ private:
   uint32_t m_dtcm_size = 0;
 
 protected:
-  DeviceBase *m_dev;
-  uint32_t m_isa_version = AIPU_ISA_VERSION_ZHOUYI_V1;
+  DeviceBase *m_dev = nullptr;
   std::map<DEV_PA_64, Buffer> m_allocated;
   std::map<DEV_PA_64, Buffer> m_reserved;
   std::map<DEV_PA_64, Buffer> *m_allocated_buf_map[2] = {
@@ -258,8 +257,6 @@ public:
   bool is_both_gm_region_enable() {
     return m_gm_enable && (get_gm_size(0) != 0) && (get_gm_size(1) != 0);
   }
-
-  void set_isa_version(uint32_t isa) { m_isa_version = isa; }
 
 public:
   /* Interfaces */

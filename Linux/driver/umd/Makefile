@@ -17,7 +17,7 @@ SRC_MISC = $(SRC_ROOT)/misc/
 SRC_UTIL = $(SRC_ROOT)/utils/
 SRC_DEVICE = $(SRC_ROOT)/device/
 
-CXXFLAGS := -std=c++14 -fPIC -Wall -Werror -rdynamic
+CXXFLAGS := -std=c++14 -fPIC -Wall -Werror -rdynamic -MMD -MP
 INCD := -I$(INC_DIR) -I$(SRC_ROOT) -I$(SRC_COMMON)
 
 LDFLAGS = -shared -Wl,-soname,$(COMPASS_DRV_BTENVAR_UMD_SO_NAME)
@@ -56,6 +56,12 @@ ifeq ($(BUILD_AIPU_VERSION), aipu_v3_2)
     CXXFLAGS += -DZHOUYI_V3_2
 endif
 
+ifeq ($(BUILD_AIPU_VERSION), aipu_all)
+    CXXFLAGS += -DZHOUYI_V12
+    CXXFLAGS += -DZHOUYI_V3
+    CXXFLAGS += -DZHOUYI_V3_2
+endif
+
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
     CXXFLAGS += -DSIMULATION
 endif
@@ -73,7 +79,8 @@ SRCS = $(SRC_COMMON)/context.cpp           \
        $(SRC_COMMON)/status_string.cpp     \
        $(SRC_COMMON)/share_weight_mgr.cpp  \
        $(SRC_MISC)/aipu_printf.cpp         \
-       $(SRC_UTIL)/helper.cpp
+       $(SRC_UTIL)/helper.cpp              \
+       $(SRC_UTIL)/sha256.cpp
 
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
     SRC_DIRS += $(SRC_DEVICE)simulator
@@ -86,7 +93,7 @@ endif
 
 # V1V2 deps
 V1V2_SRCS += $(SRC_ZHOUYI_V1V2)/graph_v1v2.cpp \
-        $(SRC_ZHOUYI_V1V2)/job_v1v2.cpp   \
+        $(SRC_ZHOUYI_V1V2)/job_v1v2.cpp \
         $(SRC_ZHOUYI_V1V2)/parser_v1v2.cpp
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
     V1V2_SRCS += $(SRC_DEVICE)/simulator/simulator.cpp
@@ -96,41 +103,47 @@ SRCS += $(V1V2_SRCS)
 
 # V3X deps
 V3X_INCD += -I./3rdparty
-V3X_SRCS += $(SRC_ZHOUYI_V3X_COMMON)/graph_v3x.cpp  \
-        $(SRC_ZHOUYI_V3X_COMMON)/job_v3x.cpp  \
+V3X_SRCS += $(SRC_ZHOUYI_V3X_COMMON)/graph_v3x.cpp \
+        $(SRC_ZHOUYI_V3X_COMMON)/job_v3x.cpp \
         $(SRC_ZHOUYI_V3X_COMMON)/parser_elf.cpp \
         $(SRC_ZHOUYI_V3X_COMMON)/dynamic_shape.cpp \
-        $(SRC_ZHOUYI_V3X_COMMON)/coredump.cpp \
-
-# V3 deps
-V3_SRCS += $(V3X_SRCS) \
-        $(SRC_ZHOUYI_V3)/job_v3.cpp \
-        $(SRC_ZHOUYI_V3)/gm_v3.cpp
+        $(SRC_ZHOUYI_V3X_COMMON)/coredump.cpp
 
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
-    V3_LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X2_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X2_SIM_LNAME)
+V3X_SRCS += $(SRC_DEVICE)/simulator/wrapper.cpp
+endif
+
+# V3 deps
+V3_SRCS += $(SRC_ZHOUYI_V3)/job_v3.cpp \
+           $(SRC_ZHOUYI_V3)/gm_v3.cpp
+
+ifeq ($(BUILD_TARGET_PLATFORM), sim)
     V3_SRCS += $(SRC_DEVICE)/simulator/simulator_v3.cpp
 endif
 
 ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
-    LDFLAGS += $(V3_LDFLAGS)
     INCD += $(V3X_INCD)
-    SRCS += $(V3_SRCS)
+    SRCS += $(V3X_SRCS) $(V3_SRCS)
 endif
 
 # V3_2 deps
-V3_2_SRCS += $(V3X_SRCS) \
-        $(SRC_ZHOUYI_V3_2)/job_v3_2.cpp \
-        $(SRC_ZHOUYI_V3_2)/gm_v3_2.cpp
+V3_2_SRCS += $(SRC_ZHOUYI_V3_2)/job_v3_2.cpp \
+             $(SRC_ZHOUYI_V3_2)/gm_v3_2.cpp
 
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
-    V3_2_LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X3P_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X3P_SIM_LNAME)
     V3_2_SRCS += $(SRC_DEVICE)/simulator/simulator_v3_2.cpp
 endif
 
 ifeq ($(BUILD_AIPU_VERSION), aipu_v3_2)
-    LDFLAGS += $(V3_2_LDFLAGS)
     INCD += $(V3X_INCD)
+    SRCS += $(V3X_SRCS) $(V3_2_SRCS)
+endif
+
+ifeq ($(BUILD_AIPU_VERSION), aipu_all)
+    SRCS += $(V3X_SRCS)
+    INCD += $(V3X_INCD)
+
+    SRCS += $(V3_SRCS)
     SRCS += $(V3_2_SRCS)
 endif
 
@@ -146,13 +159,14 @@ ifneq ($(BUILD_ANDROID_NDK), )
     CXXFLAGS += $(ANDROIDCXXFLAGS)
     LDFLAGS += $(ANDROIDCXXFLAGS) $(ANDROIDLDFLAGS)
 else
-    LDFLAGS += -lpthread
+    LDFLAGS += -lpthread -ldl
 endif
 
 CXXFLAGS += -DMACRO_UMD_VERSION=\"$(COMPASS_DRV_BTENVAR_UMD_V_MAJOR).$(COMPASS_DRV_BTENVAR_UMD_V_MINOR)\"
 
 SRC_DIRS := $(patsubst $(SRC_ROOT)/%, %, $(SRC_DIRS))
 OBJS := $(patsubst $(SRC_ROOT)/%.cpp, $(COMPASS_DRV_BTENVAR_UMD_BUILD_DIR)/%.o, $(SRCS))
+DEPS = $(OBJS:%.o=%.d)
 TARGET := $(BUILD_AIPU_DRV_ODIR)/$(COMPASS_DRV_BTENVAR_UMD_SO_NAME_FULL)
 A_TARGET := $(BUILD_AIPU_DRV_ODIR)/$(COMPASS_DRV_BTENVAR_UMD_A_NAME_FULL)
 PY_TARGET := $(BUILD_AIPU_DRV_ODIR)/$(COMPASS_DRV_BTENVAR_UMD_SO_NAME)
@@ -171,6 +185,8 @@ $(A_TARGET): $(OBJS)
 
 $(PY_TARGET): $(OBJS)
 	$(CXX) $^ $(LDFLAGS) -lstdc++ -o $@
+
+-include $(DEPS)
 
 build-repo:
 	@$(call make-repo)

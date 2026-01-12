@@ -2,16 +2,25 @@
 /* Copyright (c) 2023 Arm Technology (China) Co. Ltd. */
 
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/miscdevice.h>
 #include <linux/uaccess.h>
 #include <linux/dma-buf.h>
+#if KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE
+#include <linux/iosys-map.h>
+#else
 #include <linux/dma-buf-map.h>
+#endif
 
 static int importer_test(struct dma_buf *dmabuf)
 {
 	int ret = 0;
 	const char *magic = "This is string filled by kernel module!";
+#if KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE
+	struct iosys_map db_map = IOSYS_MAP_INIT_VADDR(0);
+#else
 	struct dma_buf_map db_map = DMA_BUF_MAP_INIT_VADDR(0);
+#endif
 
 	// write one line in dma_buf
 	ret = dma_buf_vmap(dmabuf, &db_map);
@@ -20,13 +29,13 @@ static int importer_test(struct dma_buf *dmabuf)
 	return 0;
 }
 
-int importer_open(struct inode *inode, struct file *filp)
+static int importer_open(struct inode *inode, struct file *filp)
 {
 	printk(KERN_INFO "enter %s\n", __func__);
 	return 0;
 }
 
-int importer_release(struct inode *inode, struct file *filp)
+static int importer_release(struct inode *inode, struct file *filp)
 {
 	printk(KERN_INFO "enter %s\n", __func__);
 	return 0;
@@ -75,4 +84,8 @@ static void __exit importer_exit(void)
 
 module_init(importer_init);
 module_exit(importer_exit);
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");
+MODULE_DESCRIPTION("ArmChina Zhouyi dma buffer test driver");
+#if KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE
+MODULE_IMPORT_NS(DMA_BUF);
+#endif

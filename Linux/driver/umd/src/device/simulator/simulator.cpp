@@ -20,46 +20,18 @@
 #include "utils/helper.h"
 
 namespace aipudrv {
-Simulator::Simulator() {
-  m_dev_type = DEV_TYPE_SIMULATOR_V1V2;
-  m_dram = UMemory::get_memory();
-  m_dram->set_dev(this);
-}
-
-Simulator::~Simulator() { m_dram = nullptr; }
-
-bool Simulator::has_target(uint32_t arch, uint32_t version, uint32_t config,
-                           uint32_t rev) {
-  aipu_partition_cap aipu_cap = {0};
-
-  if ((arch != 0) || (version > AIPU_ISA_VERSION_ZHOUYI_V2_2))
-    return false;
-
-  aipu_cap.arch = arch;
-  aipu_cap.version = version;
-  aipu_cap.config = config;
-  m_part_caps.push_back(aipu_cap);
-
-  if (version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
-    m_dram->set_dtcm_info(
-        get_umemory()->get_memregion_base(ASID_REGION_0, MEM_REGION_DTCM),
-        get_umemory()->get_memregion_size(ASID_REGION_0, MEM_REGION_DTCM));
-  m_dram->set_asid1(0);
-  return true;
-}
-
-aipu_status_t Simulator::create_simulation_input_file(char *fname,
-                                                      const char *interfix,
-                                                      JOB_ID id, DEV_PA_64 pa,
-                                                      uint32_t size,
-                                                      const JobDesc &job) {
+namespace {
+aipu_status_t create_simulation_input_file(char *fname, const char *interfix,
+                                           JOB_ID id, DEV_PA_64 pa,
+                                           uint32_t size, const JobDesc &job,
+                                           MemoryBase *mem) {
   snprintf(fname, FNAME_LEN, "%s/Simulation_JOB0x%lx_%s_Base0x%lx_Size0x%x.bin",
            job.output_dir.c_str(), id, interfix, pa, size);
-  return m_dram->dump_file(pa, fname, size);
+  return mem->dump_file(pa, fname, size);
 }
 
-aipu_status_t Simulator::update_simulation_rtcfg(const JobDesc &job,
-                                                 SimulationJobCtx &ctx) {
+aipu_status_t update_simulation_rtcfg(const JobDesc &job, SimulationJobCtx &ctx,
+                                      MemoryBase *mem) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   char fname[FNAME_LEN];
   std::string cfg_fname = job.output_dir + "/runtime.cfg";
@@ -71,20 +43,21 @@ aipu_status_t Simulator::update_simulation_rtcfg(const JobDesc &job,
   FileWrapper ofs(cfg_fname, std::ios::app);
 
   /* text */
-  ret =
-      create_simulation_input_file(fname, "Text", job.kdesc.job_id,
-                                   job.instruction_base_pa, job.text_size, job);
+  ret = create_simulation_input_file(fname, "Text", job.kdesc.job_id,
+                                     job.instruction_base_pa, job.text_size,
+                                     job, mem);
   if (ret != AIPU_STATUS_SUCCESS)
-    goto finish;
+    return ret;
 
   ctx.text = fname;
 
   /* weight */
   if (job.weight_size != 0) {
-    ret = create_simulation_input_file(fname, "Weight", job.kdesc.job_id,
-                                       job.weight_pa, job.weight_size, job);
+    ret =
+        create_simulation_input_file(fname, "Weight", job.kdesc.job_id,
+                                     job.weight_pa, job.weight_size, job, mem);
     if (ret != AIPU_STATUS_SUCCESS)
-      goto finish;
+      return ret;
 
     ctx.weight = fname;
     weight_cnt = 1;
@@ -95,9 +68,9 @@ aipu_status_t Simulator::update_simulation_rtcfg(const JobDesc &job,
         snprintf(inter_fix, 32, "Weight%u", i);
         ret = create_simulation_input_file(fname, inter_fix, job.kdesc.job_id,
                                            (*job.weights)[i]->pa,
-                                           (*job.weights)[i]->size, job);
+                                           (*job.weights)[i]->size, job, mem);
         if (ret != AIPU_STATUS_SUCCESS)
-          goto finish;
+          return ret;
 
         ctx.weights.push_back(fname);
       }
@@ -108,40 +81,40 @@ aipu_status_t Simulator::update_simulation_rtcfg(const JobDesc &job,
   if (job.zerocpy_const_size != 0) {
     ret = create_simulation_input_file(fname, "Zerocpy_const", job.kdesc.job_id,
                                        job.zerocpy_const_pa,
-                                       job.zerocpy_const_size, job);
+                                       job.zerocpy_const_size, job, mem);
     if (ret != AIPU_STATUS_SUCCESS)
-      goto finish;
+      return ret;
 
     ctx.zerocpy_const = fname;
     zerocpy_const_cnt = 1;
   }
 
   /* rodata */
-  ret =
-      create_simulation_input_file(fname, "Rodata", job.kdesc.job_id,
-                                   job.kdesc.data_0_addr, job.rodata_size, job);
+  ret = create_simulation_input_file(fname, "Rodata", job.kdesc.job_id,
+                                     job.kdesc.data_0_addr, job.rodata_size,
+                                     job, mem);
   if (ret != AIPU_STATUS_SUCCESS)
-    goto finish;
+    return ret;
 
   ctx.rodata = fname;
 
   /* dcr */
   if (job.dcr_size != 0) {
     ret = create_simulation_input_file(fname, "Descriptor", job.kdesc.job_id,
-                                       job.dcr_pa, job.dcr_size, job);
+                                       job.dcr_pa, job.dcr_size, job, mem);
     if (ret != AIPU_STATUS_SUCCESS)
-      goto finish;
+      return ret;
 
     ctx.dcr = fname;
     dcr_cnt = 1;
   }
 
   /* stack */
-  ret =
-      create_simulation_input_file(fname, "Stack", job.kdesc.job_id,
-                                   job.kdesc.data_1_addr, job.stack_size, job);
+  ret = create_simulation_input_file(fname, "Stack", job.kdesc.job_id,
+                                     job.kdesc.data_1_addr, job.stack_size, job,
+                                     mem);
   if (ret != AIPU_STATUS_SUCCESS)
-    goto finish;
+    return ret;
 
   ctx.stack = fname;
 
@@ -151,18 +124,18 @@ aipu_status_t Simulator::update_simulation_rtcfg(const JobDesc &job,
     snprintf(inter_fix, 32, "Reuse%u", i);
     ret = create_simulation_input_file(fname, inter_fix, job.kdesc.job_id,
                                        job.reuses[i]->pa, job.reuses[i]->size,
-                                       job);
+                                       job, mem);
     if (ret != AIPU_STATUS_SUCCESS)
-      goto finish;
+      return ret;
 
     ctx.reuses.push_back(fname);
 
     snprintf(inter_fix, 32, "AfRun_Reuse%u", i);
     ret = create_simulation_input_file(fname, inter_fix, job.kdesc.job_id,
                                        job.reuses[i]->pa, job.reuses[i]->size,
-                                       job);
+                                       job, mem);
     if (ret != AIPU_STATUS_SUCCESS)
-      goto finish;
+      return ret;
 
     reuse_outputs.push_back(fname);
   }
@@ -173,9 +146,9 @@ aipu_status_t Simulator::update_simulation_rtcfg(const JobDesc &job,
     snprintf(inter_fix, 32, "Output%u", i);
     ret = create_simulation_input_file(fname, inter_fix, job.kdesc.job_id,
                                        job.outputs[i].pa, job.outputs[i].size,
-                                       job);
+                                       job, mem);
     if (ret != AIPU_STATUS_SUCCESS)
-      goto finish;
+      return ret;
 
     ctx.outputs.push_back(fname);
   }
@@ -183,9 +156,9 @@ aipu_status_t Simulator::update_simulation_rtcfg(const JobDesc &job,
   /* misc output */
   for (auto item : job.misc_outputs) {
     auto &buf = item.second;
-    ret = m_dram->dump_file(buf.pa, item.first.c_str(), buf.size);
+    ret = mem->dump_file(buf.pa, item.first.c_str(), buf.size);
     if (ret != AIPU_STATUS_SUCCESS)
-      goto finish;
+      return ret;
   }
 
   /* init config file */
@@ -218,7 +191,7 @@ aipu_status_t Simulator::update_simulation_rtcfg(const JobDesc &job,
 
   /* Only aipu v2(X1) support DTCM */
   if (job.kdesc.aipu_version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
-    ofs << "DTCM_SIZE=0x" << std::hex << m_dram->get_dtcm_size() << "\n";
+    ofs << "DTCM_SIZE=0x" << std::hex << mem->get_dtcm_size() << "\n";
 
   ofs << "\n";
 
@@ -374,55 +347,75 @@ aipu_status_t Simulator::update_simulation_rtcfg(const JobDesc &job,
 
   snprintf(ctx.simulation_cmd, sizeof(ctx.simulation_cmd), "%s %s",
            job.simulator.c_str(), cfg_fname.c_str());
-finish:
-  return ret;
+
+  return AIPU_STATUS_SUCCESS;
+}
+} // anonymous namespace
+
+Simulator::Simulator() {
+  m_dev_type = DEV_TYPE_SIMULATOR_V1V2;
+  m_dram = UMemory::get_memory();
+  m_dram->set_dev(this);
 }
 
-aipu_status_t Simulator::schedule(const JobDesc &job) {
-  aipu_status_t ret = AIPU_STATUS_SUCCESS;
+Simulator::~Simulator() { m_dram = nullptr; }
+
+bool Simulator::has_target(uint32_t arch, uint32_t version, uint32_t config,
+                           uint32_t rev) {
+  aipu_partition_cap aipu_cap = {0};
+
+  if ((arch != 0) || (version > AIPU_ISA_VERSION_ZHOUYI_V2_2))
+    return false;
+
+  aipu_cap.arch = arch;
+  aipu_cap.version = version;
+  aipu_cap.config = config;
+  m_part_caps.push_back(aipu_cap);
+
+  if (version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
+    m_dram->set_dtcm_info(static_cast<UMemory *>(m_dram)->get_memregion_base(
+                              ASID_REGION_0, MEM_REGION_DTCM),
+                          static_cast<UMemory *>(m_dram)->get_memregion_size(
+                              ASID_REGION_0, MEM_REGION_DTCM));
+  m_dram->set_asid1(0);
+  return true;
+}
+
+aipu_ll_status_t Simulator::schedule(const JobDesc &job) {
   int sys_ret = 0;
   SimulationJobCtx ctx;
 
-  ret = update_simulation_rtcfg(job, ctx);
-  if (ret != AIPU_STATUS_SUCCESS)
-    goto error;
+  if (update_simulation_rtcfg(job, ctx, m_dram) != AIPU_STATUS_SUCCESS)
+    return AIPU_LL_STATUS_ERROR_SIM_CONFIG_FAIL;
 
   LOG(LOG_DEFAULT, "[UMD SIMULATION] %s", ctx.simulation_cmd);
   sys_ret = system(ctx.simulation_cmd);
   if (sys_ret == -1) {
     LOG(LOG_ERR, "Simulation execution failed!");
-    ret = AIPU_STATUS_ERROR_JOB_EXCEPTION;
-    goto error;
+    return AIPU_LL_STATUS_ERROR_SIM_EXE_FAIL;
   } else if (WIFEXITED(sys_ret) && (WEXITSTATUS(sys_ret) != 0)) {
     LOG(LOG_ERR, "Simulation execution failed! (simulator ret = %d)",
         WEXITSTATUS(sys_ret));
-    ret = AIPU_STATUS_ERROR_JOB_EXCEPTION;
-    goto error;
+    return AIPU_LL_STATUS_ERROR_SIM_EXE_FAIL;
   } else if (WIFSIGNALED(sys_ret)) {
     LOG(LOG_ERR, "Simulation terminated by signal %d!", WTERMSIG(sys_ret));
-    ret = AIPU_STATUS_ERROR_JOB_EXCEPTION;
-    goto error;
+    return AIPU_LL_STATUS_ERROR_SIM_EXE_FAIL;
   }
 
   for (uint32_t i = 0; i < ctx.outputs.size(); i++) {
-    ret = m_dram->load_file(job.outputs[i].pa, ctx.outputs[i].c_str(),
-                            job.outputs[i].size);
-    if (ret != AIPU_STATUS_SUCCESS)
-      goto error;
+    if (m_dram->load_file(job.outputs[i].pa, ctx.outputs[i].c_str(),
+                          job.outputs[i].size) != AIPU_STATUS_SUCCESS)
+      return AIPU_LL_STATUS_ERROR_INVALID_OP;
   }
 
   for (auto &item : job.misc_outputs) {
     const BufferDesc &buf = item.second;
-    ret = m_dram->load_file(buf.pa, item.first.c_str(), buf.size);
-    if (ret != AIPU_STATUS_SUCCESS)
-      goto error;
+    if (m_dram->load_file(buf.pa, item.first.c_str(), buf.size) !=
+        AIPU_STATUS_SUCCESS)
+      return AIPU_LL_STATUS_ERROR_INVALID_OP;
   }
 
-error:
-  return ret;
+  return AIPU_LL_STATUS_SUCCESS;
 }
 
-aipu_status_t Simulator::set_sim_log_level(uint32_t level) {
-  return AIPU_STATUS_SUCCESS;
-}
 } // namespace aipudrv

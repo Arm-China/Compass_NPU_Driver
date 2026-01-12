@@ -240,8 +240,6 @@ int main(int argc, char *argv[]) {
   sim_glb_config.log_level = 1;
   sim_glb_config.simulator = simulator;
   sim_job_config.data_dir = dump_dir;
-  if (!arch.empty())
-    sim_glb_config.npu_arch_desc = arch.c_str();
 
   ret = aipu_config_global(ctx, AIPU_CONFIG_TYPE_SIMULATION, &sim_glb_config);
   if (ret != AIPU_STATUS_SUCCESS) {

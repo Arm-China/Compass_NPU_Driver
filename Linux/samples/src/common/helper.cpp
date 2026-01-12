@@ -35,6 +35,8 @@ static bool is_output_correct(const char *src1, const char *src2,
 int dump_file_helper(const char *fname, void *src, unsigned int size) {
   int ret = 0;
   int fd = 0;
+  ssize_t wbytes = 0;
+  ssize_t writen = 0;
 
   fd = open(fname, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU | S_IRWXG | S_IRWXO);
   if (fd == -1) {
@@ -47,16 +49,16 @@ int dump_file_helper(const char *fname, void *src, unsigned int size) {
     ret = -1;
     goto finish;
   }
-  ret = write(fd, src, size);
-  if (ret != (int)size) {
-    AIPU_ERR()
-    ("write bin file %s failed, need to write 0x%x bytes, \
-            successfully write 0x%x bytes (errno = %d)!",
-     fname, size, ret, errno);
-    ret = -1;
-    goto finish;
+
+  while (writen < size) {
+    wbytes = write(fd, (const char *)src + writen, size - writen);
+    if (wbytes <= 0) {
+      AIPU_ERR()("write bin file failed: %s! (errno = %d)", fname, errno);
+      ret = -1;
+      goto finish;
+    }
+    writen += wbytes;
   }
-  ret = 0;
 
 finish:
   if (fd != -1) {

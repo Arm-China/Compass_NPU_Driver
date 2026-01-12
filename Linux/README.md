@@ -16,16 +16,14 @@ include kernel driver (KMD) and user lib (UMD).
 the reference related to how to config dts to enable AIPU on embedded boards.
 ### samples
 the samples related to how to call UMD APIs to implement inference APPs.
-### out-of-box
+### out_of_box
 the simplest demo running on simulator.
-### unit_test
-the unit test cases for UMD and KMD.
 
 
 ## 2. Compile driver
 
 ### 2.1 Cross compile KMD/UMD for HW board
-Here take Juno(arm64) board as an example, If you use nother board, please change below env variables accordingly in bash_env_setup.sh (for bash) or env_setup.sh (for csh)
+Here take Juno(arm64) board as an example, If you use another board, please change below env variables accordingly in bash_env_setup.sh (for bash) or env_setup.sh (for csh)
 
 #### prepare the depending BSP resource, eg: Linux source code, cross-compiler...
 
@@ -60,18 +58,16 @@ COMPASS_DRV_BTENVAR_CROSS_CXX=aarch64-linux-gnu-g++
 - specify corss-copiler for compiling Linux kernel
 COMPASS_DRV_BTENVAR_CROSS_COMPILE_GNU=aarch64-linux-gnu-
 
-- compile commands
+- compile commands for standard api
 
 ```bash
 $ cd Linux
 
-# for bash env
-$ source bash_env_setup.sh 
+# bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
+$ source <bash_env_setup.sh|env_setup.sh>
 
-# for csh env
-$ source env_setup.sh
-
-$ ./build_all.sh -p juno [-d]
+# v3 is for v1/v2/v3, and v3_2 is for v1/v2/v3_2, default refers to '-h'
+$ ./build_all.sh -p juno [-v <v3|v3_2>] [-d]
 ```
 
 - compile commands for python api
@@ -84,17 +80,11 @@ $ ./build_all.sh -p juno [-d]
 ```bash
 $ cd Linux
 
-# for bash env
-$ source bash_env_setup.sh
+# bash_env_setup.sh for bash env, and env_setup.sh is for csh env
+$ source <bash_env_setup.sh|env_setup.sh>
 
-# for csh env
-$ source env_setup.sh
-
-# for aipu v1/v2/v3
-$ ./build_all.sh -p juno -v v3 -a python_api [-d]
-
-# for aipu v3_2
-$ ./build_all.sh -p juno -v v3_2 -a python_api [-d]
+# v3 is for aipu v1/v2/v3, and v3_2 is for aipu v1/v2/v3_2, default refers to '-h'
+$ ./build_all.sh -p juno [-v <v3|v3_2>] -a python_api [-d]
 ```
 
 - If the command run normally, a folder named 'bin' is created, the corresponding KMD driver(aipu.ko) and UMD library(libaipudrv.so) are generated and stored in it.
@@ -112,7 +102,6 @@ Set below env variables accordingly.
     |-- bin
     |   |-- aipu_simulator_x1
     |   |-- aipu_simulator_x2
-    |   |-- aipu_simulator_x3
     |   |-- aipu_simulator_x3p
     |   |-- aipu_simulator_z1
     |   |-- aipu_simulator_z2
@@ -121,7 +110,6 @@ Set below env variables accordingly.
     `-- lib
         |-- libaipu_simulator_x1.so
         |-- libaipu_simulator_x2.so
-        |-- libaipu_simulator_x3.so
         |-- libaipu_simulator_x3p.so
         |-- libaipu_simulator_z1.so
         |-- libaipu_simulator_z2.so
@@ -147,13 +135,11 @@ COMPASS_DRV_RTENVAR_SIM_LPATH=${CONFIG_DRV_RTENVAR_SIM_BASE_PATH}/lib/
 ```bash
 $ cd Linux
 
-# for bash env
-$ source bash_env_setup.sh
+# bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
+$ source <bash_env_setup.sh|env_setup.sh>
 
-# for csh env
-$ source env_setup.sh
-
-$ ./build_all.sh -p sim [-d]
+# v3 is for v1/v2/v3, v3_2 is for v1/v2/v3_2, default refers to '-h'
+$ ./build_all.sh -p sim [-v <v3|v3_2>] [-d]
 ```
 
 - compile commands for python api
@@ -163,17 +149,11 @@ $ ./build_all.sh -p sim [-d]
 ```bash
 $ cd Linux
 
-# for bash env
-$ source bash_env_setup.sh (for bash env)
+# bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
+$ source <bash_env_setup.sh|env_setup.sh>
 
-# for csh env
-$ source env_setup.sh (for csh env)
-
-# for aipu v1/v2/v3
-$ ./build_all.sh -p sim -v v3 -a python_api [-d]
-
-# for aipu v3_2
-$ ./build_all.sh -p sim -v v3_2 -a python_api [-d]
+# v3 is for aipu v1/v2/v3, and v3_2 is for aipu v1/v2/v3_2, default refers to '-h'
+$ ./build_all.sh -p sim [-v <v3|v3_2>] -a python_api [-d]
 ```
 
 - If the command run normally, a folder named 'bin' is created, the UMD library(libaipudrv.so)
@@ -181,7 +161,7 @@ is generated and stored in it.
 
 2.3 Recommend document
 
-- driver/kmd/README.txt: some useful detail for compiling and using driver.
+- driver/kmd/porting_guide.txt: some useful details for compiling and using driver.
 
 ## 3. Compile samples
 
@@ -190,8 +170,10 @@ Here take Juno(arm64) board as an example, it has to do #2.1 firstly before doin
 
 ```bash
 $ cd Linux
-$ source bash_env_setup.sh
-$ ./build_all.sh -p juno -t sample [-d]
+# bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
+$ source <bash_env_setup.sh|env_setup.sh>
+# v3 is for v1/v2/v3, v3_2 is for v1/v2/v3_2, default refers to '-h'
+$ ./build_all.sh -p juno [-v <v3|v3_2>] -t sample [-d]
 ```
 
 After perform this command successfully, the samples are also stored in forder 'bin'.
@@ -204,8 +186,10 @@ it has to do #2.2 firstly before doing this step. then
 
 ```bash
 $ cd Linux
-$ source bash_env_setup.sh
-$ ./build_all.sh -p sim -t sample [-d]
+# bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
+$ source <bash_env_setup.sh|env_setup.sh>
+# v3 is for v1/v2/v3, v3_2 is for v1/v2/v3_2, default refers to '-h'
+$ ./build_all.sh -p sim [-v <v3|v3_2>] -t sample [-d]
 ```
 
 After perform this command successfully, the samples are also stored in forder 'bin'.
@@ -219,7 +203,3 @@ After perform this command successfully, the samples are also stored in forder '
 ## 4. Compile & run out-of-box demo
 
 - Read the detail in out-of-box README.md
-
-## 5. Compile & run unit_test
-
-- Read the detail in unit_test README.md

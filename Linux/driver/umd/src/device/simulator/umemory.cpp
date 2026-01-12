@@ -13,11 +13,12 @@
 
 #include <cstring>
 
+#include "device_base.h"
 #include "utils/helper.h"
 #include "utils/log.h"
 
 namespace aipudrv {
-UMemory::UMemory() : MemoryBase(), sim_aipu::IMemEngine() {
+UMemory::UMemory() : MemoryBase() {
   /**
    * GM allocate strategy:
    * env[UMD_GM_MEAN] == 'y/Y', mean
@@ -135,12 +136,12 @@ void UMemory::update_from_env() {
   update_asid_base(umd_asid1_base, 1);
 
   for (int i = 0; i < MEM_REGION_MAX; i++) {
-    LOG(LOG_INFO, "ASID 0: mem region [%2d]: base=0x%.8lx, size=0x%lx", i,
+    LOG(LOG_DEBUG, "ASID 0: mem region [%d]: base=0x%.8lx, size=0x%lx", i,
         m_memblock[ASID_REGION_0][i].base, m_memblock[ASID_REGION_0][i].size);
   }
 
   for (int region = ASID_REGION_1; region < m_asid_max; region++) {
-    LOG(LOG_INFO, "ASID %d: mem region [0]: base=0x%.12lx, size=0x%lx", region,
+    LOG(LOG_DEBUG, "ASID %d: mem region [0]: base=0x%.12lx, size=0x%lx", region,
         m_memblock[region][0].base, m_memblock[region][0].size);
   }
 }
@@ -239,9 +240,12 @@ aipu_status_t UMemory::malloc_internal(uint32_t size, uint32_t align,
 
     if (j == i + malloc_page) {
       DEV_PA_64 pa = m_memblock[asid][mem_region].base + i * AIPU_PAGE_SIZE;
-      DEV_PA_64 asid_base = m_isa_version <= AIPU_ISA_VERSION_ZHOUYI_V3
-                                ? get_asid_base(asid)
-                                : pa;
+      /* memory supports allocate before device initialized, and it will share
+       * the same asid base */
+      DEV_PA_64 asid_base = get_asid_base(asid);
+      if (m_dev != nullptr &&
+          m_dev->get_npu_version() >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0)
+        asid_base = pa;
       desc->init(asid_base, pa, malloc_size, size, 0, (asid << 8) | mem_region);
       buf.init(new char[malloc_size], desc);
       memset(buf.va, 0, malloc_size);

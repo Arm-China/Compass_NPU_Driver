@@ -20,6 +20,10 @@ struct ValidSyncBuffer {
 
 class JobV3;
 class GM_V3 : public GM_V3X {
+private:
+  bool m_gm_asm = false;
+  std::vector<BufferDesc *> m_gm_alloc_buffer;
+
 public:
   /**
    * index 0: record the input info, DDR->GM
@@ -28,18 +32,23 @@ public:
   DEV_PA_64 m_gm_sync_buf_base[EM_GM_BUF_MAX] = {0};
   uint32_t m_gm_sync_buf_size[EM_GM_BUF_MAX] = {0};
   int m_gm_sync_buf_cnt[EM_GM_BUF_MAX] = {0};
+  DEV_PA_64 m_gm_map_base = 0;
+
+private:
+  void set_valid_map_base(BufferDesc &buf);
+  bool gm_need_remap();
+  void set_valid_sync_region(uint32_t bss_id, uint32_t idx, uint32_t buf_type,
+                             BufferDesc &buf, ValidSyncBuffer &region);
 
 public:
   aipu_status_t gm_malloc(uint32_t bss_id, uint32_t idx, uint32_t buf_type,
-                          std::string &buf_name, BufferDesc *buf) override;
+                          std::string &name, BufferDesc *buf) override;
+  aipu_status_t setup_buffer(uint32_t bss_id, uint32_t idx, uint32_t buf_type,
+                             BufferDesc *buf);
   bool is_gm_buffer(uint32_t idx, uint32_t buf_type) override;
-  bool gm_need_remap() override;
   void gm_dynamic_switch(uint32_t core_cnt) override;
-  void set_valid_sync_region(uint32_t bss_id, uint32_t idx, uint32_t buf_type,
-                             BufferDesc &buf, ValidSyncBuffer &region);
   bool gm_need_sync_out() override;
-  void set_valid_map_base(BufferDesc &buf) override;
-  void setup_gm_sync_from_ddr(tcb_t &tcb) override;
+  void setup_gm_sync_from_ddr(tcb_v3::tcb_t &tcb);
 
 public:
   GM_V3(JobV3 &job);

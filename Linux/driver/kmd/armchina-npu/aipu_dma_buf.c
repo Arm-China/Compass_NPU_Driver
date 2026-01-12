@@ -43,7 +43,7 @@ static struct sg_table *aipu_map_dma_buf(struct dma_buf_attachment *attach,
 #if KERNEL_VERSION(5, 8, 0) > LINUX_VERSION_CODE
 	ret = dma_map_sg(attach->dev, sgt->sgl, sgt->nents, dir);
 #else
-	ret = dma_map_sgtable(attach->dev, sgt, dir, 0);
+	ret = dma_map_sgtable(attach->dev, sgt, dir, DMA_ATTR_SKIP_CPU_SYNC);
 #endif
 	if (ret) {
 		dev_err(npu, "failed to map sgtable for the attached dev\n");
@@ -151,12 +151,12 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 	char *va = NULL;
 	struct dma_buf *dmabuf = NULL;
 	struct aipu_phy_block *block;
-
 	DEFINE_DMA_BUF_EXPORT_INFO(exp);
 
 	if (!mm || !request || !request->bytes)
 		return -EINVAL;
-	if(mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2 && mm->has_iommu) {
+
+	if(mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0 && mm->has_iommu) {
 		memset(&inter_req, 0, sizeof(struct aipu_buf_request));
 		inter_req.bytes = request->bytes;
 		inter_req.align_in_page = 1;
@@ -168,7 +168,7 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 		inter_req.alloc_mode = AIPU_DMA_BUF_MALLOC_DEFAULT;
 #else
 		inter_req.exec_id = DMA_BUF_EXEC_ID;
-		inter_req.alloc_mode = AIPU_DMA_BUF_MALLOC_IOVA_PHY;
+		inter_req.alloc_mode = AIPU_DMA_BUF_MALLOC_BOTH;
 #endif
 		ret = aipu_alloc_dma_iova_phy(mm,  &inter_req, NULL);
 		if (ret) {
@@ -230,7 +230,7 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 		goto fail;
 	}
 
-	if(mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2)
+	if(mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0)
 		block->dmabuf = dmabuf;
 	request->fd = dma_buf_fd(dmabuf, exp.flags);
 	return 0;
@@ -238,7 +238,7 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 fail:
 	if (priv)
 		devm_kfree(mm->dev, priv);
-	if(mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2)
+	if(mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0)
 		aipu_free_dma_iova_phy(mm, &inter_req.desc, NULL);
 	else
 		aipu_mm_free(mm, &inter_req.desc, NULL, true);
@@ -268,11 +268,12 @@ int aipu_free_dma_buf(struct aipu_memory_manager *mm, int fd)
 	buf.bytes = priv->bytes;
 	buf.region = AIPU_BUF_REGION_DEFAULT;
 	buf.asid = AIPU_BUF_ASID_0;
-	if(mm->has_iommu && mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2) {
+	if(mm->has_iommu && mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0) {
 #if AIPU_USE_STANDARD_DMA_API_FOR_V3_2
 		buf.exec_id = 0;
 #else
 		buf.exec_id = DMA_BUF_EXEC_ID;
+		buf.mode = AIPU_DMA_BUF_FREE_BOTH;
 #endif
 	} else {
 		buf.exec_id = 0;
@@ -315,24 +316,31 @@ int aipu_attach_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf *dma
 	struct dma_buf_attachment *attach = NULL;
 	struct sg_table *table = NULL;
 	struct aipu_dma_buf_importer *im_buf = NULL;
+	int ret = 0;
 
 	if (!mm || !dmabuf_info || dmabuf_info->fd <= 0)
 		return -EINVAL;
 
-	dmabuf = dma_buf_get(dmabuf_info->fd);
-	if (!dmabuf)
-		return -EINVAL;
+	if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0 && mm->has_iommu) {
+		ret = aipu_copy_block_by_dma_fd(mm, dmabuf_info);
+		if(ret)
+			return ret;
+	} else {
+		dmabuf = dma_buf_get(dmabuf_info->fd);
+		if (!dmabuf)
+			return -EINVAL;
+		attach = dma_buf_attach(dmabuf, mm->dev);
+		if (!attach)
+			return -EINVAL;
 
-	attach = dma_buf_attach(dmabuf, mm->dev);
-	if (!attach)
-		return -EINVAL;
+		table = dma_buf_map_attachment(attach, DMA_BIDIRECTIONAL);
+		if (!table)
+			return -EINVAL;
 
-	table = dma_buf_map_attachment(attach, DMA_BIDIRECTIONAL);
-	if (!table)
-		return -EINVAL;
-
-	dmabuf_info->pa = sg_dma_address(table->sgl);
-	dmabuf_info->bytes = sg_dma_len(table->sgl);
+		dmabuf_info->pa = sg_dma_address(table->sgl);
+		dmabuf_info->bytes = sg_dma_len(table->sgl);
+		dma_buf_put(dmabuf);
+	}
 
 	im_buf = devm_kzalloc(mm->dev, sizeof(*im_buf), GFP_KERNEL);
 	if (!im_buf)
@@ -341,11 +349,16 @@ int aipu_attach_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf *dma
 	im_buf->fd = dmabuf_info->fd;
 	im_buf->attach = attach;
 	im_buf->table = table;
+	if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0 && mm->has_iommu) {
+		im_buf->desc.pa = dmabuf_info->pa;
+		im_buf->desc.bytes = dmabuf_info->bytes;
+		im_buf->desc.exec_id = DMA_BUF_EXEC_ID;
+	}
 	mutex_lock(&mm->lock);
 	list_add(&im_buf->node, &mm->importer_bufs->node);
 	mutex_unlock(&mm->lock);
 
-	dma_buf_put(dmabuf);
+
 	return 0;
 }
 
@@ -366,8 +379,13 @@ int aipu_detach_dma_buf(struct aipu_memory_manager *mm, int fd)
 	mutex_lock(&mm->lock);
 	list_for_each_entry_safe(im_buf, next, &mm->importer_bufs->node, node) {
 		if (fd == im_buf->fd) {
-			dma_buf_unmap_attachment(im_buf->attach, im_buf->table, DMA_BIDIRECTIONAL);
-			dma_buf_detach(dmabuf, im_buf->attach);
+			if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0 && mm->has_iommu) {
+				im_buf->desc.mode = AIPU_DMA_BUF_DETA_IOVA;
+				aipu_free_dma_iova_phy(mm, &im_buf->desc, NULL);
+			} else {
+				dma_buf_unmap_attachment(im_buf->attach, im_buf->table, DMA_BIDIRECTIONAL);
+				dma_buf_detach(dmabuf, im_buf->attach);
+			}
 			list_del(&im_buf->node);
 			devm_kfree(mm->dev, im_buf);
 			ret = 0;
@@ -375,7 +393,6 @@ int aipu_detach_dma_buf(struct aipu_memory_manager *mm, int fd)
 		}
 	}
 	mutex_unlock(&mm->lock);
-
 	dma_buf_put(dmabuf);
 	return ret;
 }

@@ -75,6 +75,10 @@ To build with the R329 SoC impl.:
 
     $./build_all.sh -p r329
 
+To build with the cix evb board impl.:
+
+    $./build_all.sh -p sky1 -v v3
+
 If you implement your specific SoC integration instead of using the default/r329 samples,
 you are suggested to update the build_all.sh and build with
 
@@ -87,6 +91,7 @@ If you would like to build for a single/compatible Zhouyi architecture(s), try t
     $./build_all.sh -p MY_SOC -v v2     #build Zhouyi V2 compatible version (including Z2/Z3/X1)
     $./build_all.sh -p MY_SOC -v v3     #build Zhouyi V3 only
     $./build_all.sh -p MY_SOC -v v3_2   #build Zhouyi V3_2 only
+    $./build_all.sh -p MY_SOC -v all    #build Zhouyi v3&V3_2 at the same time
 
 2.2 Build in kernel
 -------------------
@@ -368,7 +373,8 @@ region reserved/allocated for AIPU:
     > For Zhouyi V1: within [0x0, 0xC0000000);
     > For Zhouyi V2: lower 32 bits address within [0x0, 0xC0000000); no limits for higher 32 bits;
     > For Zhouyi V3: lower 32 bits address within [0x0, 0xE0000000); no limits for higher 32 bits;
-    > For Zhouyi V3_2: address starts from asidX base [base, base + 3.5GB); no limits for higher 32 bits;
+    > For Zhouyi V3_2: address starts from asidX base [base, base + 3.5GB). Also, address space
+    range 0xe0000000-0xffffffff can't be aipu's memory address space; no limits for higher 32 bits;
 
 Note that how many bytes to reserve depends on your target application scenario. The following values
 to reserve are just for the purpose of usage demo. For example,
@@ -540,13 +546,46 @@ followed:
         /* other attributes... */
     };
 
-This attribute is optional and by default this value in driver is 0 if not activated in DTS.
+This attribute is optional and by default this value in driver is 0
+if not activated in DTS. For Linux kernel version >= 6.1, dma-rangs
+is gotten from parrent node. You are suggested to use the following
+sample dts configuration.
+    /* case 3 */
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+
+        aipu_res_0: memory@A0000000 {
+            compatible = "shared-dma-pool";
+            no-map;
+            reg = <0x0 0xA0000000 0x0 0x10000000>;
+            host-aipu-offset = <0x0 0x80000000>;
+            asid = <0 1>;
+        };
+    };
+
+     aipu_bus: aipu-bus {
+         compatible = "simple-bus";
+         #address-cells = <2>;
+         #size-cells = <2>;
+         ranges;
+
+         dma-ranges = <0x0 0x20000000  0x0 0xA0000000  0x0 0x40000000>;
+         aipu@64000000 {
+             compatible = "armchina,zhouyi";
+             reg = <0x0 0x64000000 0x0 0x3230>;
+             memory-region=<&aipu_res_0>;
+             gm-policy = <1>;
+             interrupts = <GIC_SPI 168 IRQ_TYPE_EDGE_RISING>>;
+         };
+     };
 
 Alternatively, the zhouyi driver also supports to configure the offset between buses
 (npu-mem vs. cpu-mem) by using an attribute called "host-aipu-offset". For example,
 when specifying the offset to be 0x80000000, it means that dma_addr = cpu_pa - 0x80000000.
 
-    /* case 3 */
+    /* case 4 */
     reserved-memory {
         #address-cells = <2>;
         #size-cells = <2>;
@@ -570,9 +609,6 @@ when specifying the offset to be 0x80000000, it means that dma_addr = cpu_pa - 0
 
         /* other attributes... */
     };
-
-For Linux kernel version >= 6.1, if the offset is not zero in your system, you are suggested
-to use host-aipu-offset instead of dma-ranges to specify this value.
 
 3.1.5 ASID Region Base & Size
 -----------------------------
@@ -964,9 +1000,8 @@ To write values into a register, you should follow the following format:
     $echo addr_hex  value_hex > /sys/devices/platform/64000000.aipu0/ext_registers
 
 where:
-    <reg_offset>  is the offset of a register you would like to write
-    <write_time>  is how many time you would like to do the write operation
-    <write_value> is the real value you would like to configure
+    <addr_hex>  is the offset of a register you would like to write
+    <value_hex> is the real value you would like to configure
 
 For example, to write Data Address 0 Register (offset 0x14) with 0x1000, just execute:
 
@@ -1022,10 +1057,43 @@ This feature only works for V1/V2.
 
 6.4 soc level hardware reset interface
 
-kmd reserves hardware reset interface for soc level, Need customer impplements it when software reset can't take effect.
+kmd supports hardware reset interface and customer need to config specified gpio.
+For example:
+
+	fpga_gpio: gpio@64ff2008 {
+		#address-cells = <2>;
+		#size-cells = <2>;
+
+		compatible = "armchina,fpga-gpio";
+		reg = <0x0 0x64ff2008 0x0 0x4>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		status = "okay";
+	};
+
+	aipu0@64000000 {
+		#address-cells = <2>;
+		#size-cells = <1>;
+
+		compatible = "armchina,zhouyi";
+...
+		reset-gpios = <&fpga_gpio 0 GPIO_ACTIVE_LOW>;
+...
+	};
+
+the following interface hw_reset function is removed.
+static struct aipu_soc_operations default_ops = {
+        .is_aipu_irq = NULL,
+        .soc_pm_runtime_get_sync = NULL,
+        .soc_pm_runtime_put = NULL,
+       .hw_reset = NULL,
+};
+
 struct aipu_soc_operations {
-    ....
-	void (*hw_reset)(struct device *dev, struct aipu_soc *soc);
+        bool (*is_aipu_irq)(struct device *dev, struct aipu_soc *soc, int core_id);
+        int (*soc_pm_runtime_get_sync)(struct device *dev, struct aipu_soc *soc);
+        int (*soc_pm_runtime_put)(struct device *dev, struct aipu_soc *soc);
+       void (*hw_reset)(struct device *dev, struct aipu_soc *soc);
 };
 
 7. Configurations in KMD
@@ -1071,6 +1139,8 @@ the following Linux kernel versions:
     6.0.1
     6.1.0
     6.2.16
+    6.6.113
+    6.12.54
 
 If you find that KMD has compatibility issues with any kernel version (> 5.0), please contact us
 and report the issues. Thanks.

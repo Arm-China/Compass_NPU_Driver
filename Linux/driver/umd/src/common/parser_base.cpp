@@ -69,7 +69,7 @@ ParserBase::sort_io_tensor(std::vector<GraphIOTensorDesc> &tensors) const {
   return ret;
 }
 
-aipu_status_t ParserBase::sort_io(struct GraphIOTensors &io) {
+aipu_status_t ParserBase::sort_io(GraphIOTensors &io) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
   ret = sort_io_tensor(io.inputs);
@@ -95,8 +95,7 @@ finish:
 template <typename sub_section_desc_v3_t>
 aipu_status_t ParserBase::fill_io_tensor_desc_inner(
     uint32_t reuse_sec_iter, uint32_t sub_sec_iter,
-    const sub_section_desc_v3_t &sub_section_load,
-    struct GraphIOTensors &desc) const {
+    const sub_section_desc_v3_t &sub_section_load, GraphIOTensors &desc) const {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   GraphIOTensorDesc io_desc = {0};
 
@@ -371,7 +370,7 @@ aipu_status_t ParserBase::parse_graph_header_top(std::istream &gbin,
   gobj.set_buildversion(header.build_version);
   gobj.set_gversion(GRAPH_VERSION(header.version));
   gobj.set_arch(AIPU_ARCH(header.device));
-  gobj.set_hw_version(AIPU_VERSION(header.device));
+  gobj.set_isa(AIPU_VERSION(header.device));
   gobj.set_hw_config(AIPU_CONFIG(header.device));
   gobj.set_hw_revision(AIPU_REVISION(header.device));
   gobj.set_asid_flag(GET_ASID_FLAG(header.flag));

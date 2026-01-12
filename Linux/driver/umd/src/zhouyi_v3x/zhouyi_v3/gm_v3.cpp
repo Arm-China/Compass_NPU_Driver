@@ -15,12 +15,11 @@
 #endif
 
 namespace aipudrv {
-GM_V3::GM_V3(JobV3 &job) : GM_V3X(job, job.graph()) { m_mem = job.m_mem; }
+using namespace tcb_v3;
 
-GM_V3::~GM_V3() {
-  for (auto buf : m_gm_free_buffer)
-    m_mem->free(&buf);
-}
+GM_V3::GM_V3(JobV3 &job) : GM_V3X(job, job.graph(), job.mem()) {}
+
+GM_V3::~GM_V3() {}
 
 void GM_V3::gm_dynamic_switch(uint32_t core_cnt) {
   /**
@@ -44,29 +43,13 @@ void GM_V3::gm_dynamic_switch(uint32_t core_cnt) {
 aipu_status_t GM_V3::gm_malloc(uint32_t bss_id, uint32_t idx, uint32_t buf_type,
                                std::string &buf_name, BufferDesc *buf) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
-  ValidSyncBuffer io_region = {0};
-  uint32_t mem_region = AIPU_BUF_REGION_DEFAULT;
-  const std::vector<struct GraphSectionDesc> &section_desc =
+
+  const std::vector<GraphSectionDesc> &section_desc =
       (buf_type == GM_BUF_TYPE_REUSE) ? m_graph.get_bss(bss_id).reuse_sections
                                       : m_graph.get_bss(bss_id).static_sections;
-  uint32_t gm_region_sz = (m_job.m_qos == AIPU_JOB_QOS_SLOW)
-                              ? m_mem->get_gm_size(AIPU_JOB_QOS_SLOW)
-                              : m_mem->get_gm_size(AIPU_JOB_QOS_HIGH);
   uint32_t buf_size = section_desc[idx].size, gm_size = 0;
-  int pad_sz = m_graph.get_alloc_pad_size();
+
   uint32_t gm_id = 0;
-
-  /* check which GM region the buffer comes from */
-#if 0
-    if (m_job.m_sg_cnt == 1)
-    {
-        if (m_job.m_qos == AIPU_JOB_QOS_SLOW)
-            mem_region = AIPU_BUF_REGION_QOS_SLOW_GM;
-        else if (m_job.m_qos == AIPU_JOB_QOS_HIGH)
-            mem_region = AIPU_BUF_REGION_QOS_FAST_GM;
-    }
-#endif
-
   if (m_job.m_qos == AIPU_JOB_QOS_HIGH)
     gm_id = 1;
   gm_size = m_mem->get_gm_size(gm_id);
@@ -74,33 +57,40 @@ aipu_status_t GM_V3::gm_malloc(uint32_t bss_id, uint32_t idx, uint32_t buf_type,
   if (buf_size < gm_size)
     buf_size = gm_size;
 
+  int pad_sz = m_graph.get_alloc_pad_size();
+  uint32_t mem_region = AIPU_BUF_REGION_DEFAULT;
   ret = m_mem->malloc(buf_size + pad_sz, section_desc[idx].align_in_page, &buf,
                       buf_name.c_str(), AIPU_ASID0 | mem_region);
   if (ret != AIPU_STATUS_SUCCESS)
-    goto out;
+    return ret;
+
+  return AIPU_STATUS_SUCCESS;
+}
+
+aipu_status_t GM_V3::setup_buffer(uint32_t bss_id, uint32_t idx,
+                                  uint32_t buf_type, BufferDesc *buf) {
+  ValidSyncBuffer io_region = {0};
+
+  uint32_t gm_region_sz = (m_job.m_qos == AIPU_JOB_QOS_SLOW)
+                              ? m_mem->get_gm_size(AIPU_JOB_QOS_SLOW)
+                              : m_mem->get_gm_size(AIPU_JOB_QOS_HIGH);
 
   /* record and free weight buffer, the reuse buffer is freed in another path */
-  if (buf_type == GM_BUF_TYPE_WEIGHT)
-    m_gm_free_buffer.push_back(buf);
+  if (buf_type == GM_BUF_TYPE_WEIGHT) {
+    LOG(LOG_WARN, "v3 hasn't support put weight into gm at runtime");
+    return AIPU_STATUS_SUCCESS;
+  }
 
-  /* ignore reuse temp buffer (non input/output) TODO: need this? */
+  /* ignore reuse temp buffer (non input/output) */
   if (buf_type == GM_BUF_TYPE_REUSE &&
       m_graph.m_gm_config_desc[buf_type][idx].sub_buf_type ==
           GM_SUB_BUF_TYPE_IGNORE)
-    goto out;
-
-  if (m_job.get_coredump() != nullptr) {
-    ret = m_job.get_coredump()->set_gm_info(gm_id, buf);
-    if (ret != AIPU_STATUS_SUCCESS) {
-      LOG(LOG_ERR, "set coredump gm information fail");
-      goto out;
-    }
-  }
+    return AIPU_STATUS_SUCCESS;
 
   set_valid_map_base(*buf);
   if (m_graph.m_gm_config_desc[buf_type][idx].sub_buf_type ==
       GM_SUB_BUF_TYPE_TEMP)
-    goto out;
+    return AIPU_STATUS_SUCCESS;
 
   set_valid_sync_region(bss_id, idx, buf_type, *buf, io_region);
   for (int _buf_typ = EM_GM_BUF_INPUT; _buf_typ < EM_GM_BUF_MAX; _buf_typ++) {
@@ -130,12 +120,11 @@ aipu_status_t GM_V3::gm_malloc(uint32_t bss_id, uint32_t idx, uint32_t buf_type,
     } else {
       LOG(LOG_ERR, "GM buff invalid: pa: %lx, sz: %x, base_pa: %lx\n", sync_pa,
           sync_sz, m_gm_sync_buf_base[_buf_typ]);
-      ret = AIPU_STATUS_ERROR_INVALID_GM;
+      return AIPU_STATUS_ERROR_INVALID_GM;
     }
   }
 
-out:
-  return ret;
+  return AIPU_STATUS_SUCCESS;
 }
 
 bool GM_V3::is_gm_buffer(uint32_t idx, uint32_t buf_type) {
@@ -277,21 +266,21 @@ void GM_V3::setup_gm_sync_from_ddr(tcb_t &tcb) {
     gm_region_idx = 1;
 
   if (m_mem->is_both_gm_region_enable())
-    tcb.grid.gm_ctrl = GM_CTRL_REMAP_BOTH_REGION_EN;
+    tcb.grid.gm_ctrl = tcb_ctl::GM_CTRL_REMAP_BOTH_REGION_EN;
   else
-    tcb.grid.gm_ctrl = GM_CTRL_REMAP_REGION0_EN;
+    tcb.grid.gm_ctrl = tcb_ctl::GM_CTRL_REMAP_REGION0_EN;
 
   tcb.grid.gm_rgnx_addr[0].v64 = 0;
   tcb.grid.gm_rgnx_addr[1].v64 = 0;
   tcb.grid.gm_rgnx_addr[gm_region_idx].v64 = m_gm_map_base;
 
-  tcb.grid.gm_rgnx_ctrl[0] = GM_REGION_CTRL_IGNORE_CFG;
-  tcb.grid.gm_rgnx_ctrl[1] = GM_REGION_CTRL_IGNORE_CFG;
+  tcb.grid.gm_rgnx_ctrl[0] = tcb_ctl::GM_REGION_CTRL_IGNORE_CFG;
+  tcb.grid.gm_rgnx_ctrl[1] = tcb_ctl::GM_REGION_CTRL_IGNORE_CFG;
   if (m_gm_map_base != 0)
     tcb.grid.gm_rgnx_ctrl[gm_region_idx] = 0;
 
   if (m_gm_sync_buf_size[EM_GM_BUF_INPUT] != 0) {
-    tcb.grid.gm_rgnx_ctrl[gm_region_idx] = GM_REGION_CTRL_SYNC_TO_GM;
+    tcb.grid.gm_rgnx_ctrl[gm_region_idx] = tcb_ctl::GM_REGION_CTRL_SYNC_TO_GM;
     DEV_PA_64 offset = m_gm_sync_buf_base[EM_GM_BUF_INPUT] - m_gm_map_base;
     tcb.grid.gm_rgnx_ctrl[gm_region_idx] |=
         get_low_32(offset >> 12) & 0xffff000;

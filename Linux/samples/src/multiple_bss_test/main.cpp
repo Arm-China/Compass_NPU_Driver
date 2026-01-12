@@ -98,8 +98,6 @@ int main(int argc, char *argv[]) {
   sim_glb_config.en_eval = true;
   sim_glb_config.simulator = opt.simulator;
   sim_job_config.data_dir = opt.dump_dir;
-  if (!opt.npu_arch_desc.empty())
-    sim_glb_config.npu_arch_desc = opt.npu_arch_desc.c_str();
 
   for (loop = 0; loop < total_loop; loop++) {
     ret = aipu_init_context(&ctx);

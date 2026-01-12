@@ -72,20 +72,20 @@ def sgsf_finish():
             global_cfg = aipu_global_config_simulation_t()
             global_cfg.simulator = opt.m_simulator
             global_cfg.log_file_path = opt.m_dump_path
+
+            # driver will load profiler enable flag according NPU target
             global_cfg.en_eval = True if opt.m_profile_en else False
-            if len(opt.m_target) != 0:
-                global_cfg.npu_arch_desc = opt.m_target
-                if opt.m_profile_en and ("x3" in global_cfg.npu_arch_desc or "X3" in global_cfg.npu_arch_desc):
-                    global_cfg.en_fast_perf = True
-                    global_cfg.freq_mhz = 1000
-                    global_cfg.ddr_latency_rd = 0
-                    global_cfg.ddr_latency_wr = 0
-                    global_cfg.ddr_bw = 512
-                    global_cfg.ddr_bw_ratio = 1
-                    if len(opt.m_dump_path) == 0:
-                        global_cfg.perf_report = "./perf.csv"
-                    else:
-                        global_cfg.perf_report = os.path.join(opt.m_dump_path, "perf.csv")
+            global_cfg.en_fast_perf = True if opt.m_profile_en else False
+            global_cfg.freq_mhz = 1000
+            global_cfg.ddr_latency_rd = 0
+            global_cfg.ddr_latency_wr = 0
+            global_cfg.ddr_bw = 512
+            global_cfg.ddr_bw_ratio = 1
+            if len(opt.m_dump_path) == 0:
+                global_cfg.perf_report = "./perf.csv"
+            else:
+                global_cfg.perf_report = os.path.join(opt.m_dump_path, "perf.csv")
+
             ret = npu.aipu_config_global(AIPU_CONFIG_TYPE_SIMULATION, global_cfg)
             if ret != AIPU_STATUS_SUCCESS:
                 raise RuntimeError(f'aipu_config_global [fail], err: {npu.aipu_get_error_message(ret)}')

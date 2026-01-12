@@ -23,7 +23,7 @@ protected:
   bool m_tick_counter = false;
 
 private:
-  aipu_ll_status_t init();
+  aipu_ll_status_t init() override;
   void deinit();
   aipu_ll_status_t get_status(uint32_t max_cnt, bool of_this_thread,
                               void *jobbase = nullptr);
@@ -31,7 +31,7 @@ private:
 public:
   bool has_target(uint32_t arch, uint32_t version, uint32_t config,
                   uint32_t rev) override;
-  aipu_status_t schedule(const JobDesc &job) override;
+  aipu_ll_status_t schedule(const JobDesc &job) override;
   aipu_ll_status_t read_reg(uint32_t partition_id, uint32_t offset,
                             uint32_t *value,
                             RegType type = RegType::AIPU_HOST_REG) override;
@@ -50,17 +50,17 @@ public:
   const char *get_config_code() const override;
 
 public:
-  static aipu_status_t get_aipu(DeviceBase **dev) {
-    aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  static aipu_ll_status_t get_aipu(DeviceBase **dev) {
+    aipu_ll_status_t ret = AIPU_LL_STATUS_SUCCESS;
 
     if (dev == nullptr)
-      return AIPU_STATUS_ERROR_NULL_PTR;
+      return AIPU_LL_STATUS_ERROR_NULL_PTR;
 
     std::lock_guard<std::mutex> lock_(m_tex);
     if (m_aipu == nullptr) {
       m_aipu = new Aipu();
-      ret = convert_ll_status(m_aipu->init());
-      if (ret != AIPU_STATUS_SUCCESS) {
+      ret = m_aipu->init();
+      if (ret != AIPU_LL_STATUS_SUCCESS) {
         delete m_aipu;
         m_aipu = nullptr;
         return ret;
@@ -69,7 +69,7 @@ public:
 
     m_aipu->inc_ref_cnt();
     *dev = m_aipu;
-    return AIPU_STATUS_SUCCESS;
+    return AIPU_LL_STATUS_SUCCESS;
   };
 
   static bool put_aipu(DeviceBase **dev) {
@@ -97,9 +97,9 @@ private:
   static std::mutex m_tex;
   static Aipu *m_aipu;
   std::mutex m_group_id_mtx;
-  std::map<uint16_t, struct aipu_id_desc> m_group_id_table;
+  std::map<uint16_t, aipu_id_desc> m_group_id_table;
   std::mutex m_dma_buf_mtx;
-  std::map<int, struct aipu_dma_buf> m_dma_buf_map;
+  std::map<int, aipu_dma_buf> m_dma_buf_map;
 };
 } // namespace aipudrv
 

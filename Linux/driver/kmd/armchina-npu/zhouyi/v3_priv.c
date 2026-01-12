@@ -27,7 +27,7 @@ static int init_aipu_partition(struct aipu_partition *partition, u32 *clusters, 
 	partition->reg = &partition->priv->reg;
 	partition->irq_obj = partition->priv->irq_obj;
 	mutex_init(&partition->reset_lock);
-	mutex_init(&partition->page_lock);
+	spin_lock_init(&partition->io_lock);
 	partition->ops = get_zhouyi_v3_ops();
 
 	/* unused fields */
@@ -214,35 +214,12 @@ static int v3_global_soft_reset(struct aipu_priv *aipu)
 	return zhouyi_soft_reset(&aipu->reg, TSM_SOFT_RESET_REG, aipu->reset_delay_us);
 }
 
-static int zhouyi_v3_read_cluster_status(struct aipu_priv *aipu, struct aipu_cluster_status *status)
-{
-	int i = 1;
 
-	if (unlikely(!status))
-		return -EINVAL;
-
-	if (unlikely(!aipu))
-		return -EINVAL;
-
-	mutex_lock(&aipu->partitions[0].page_lock);
-	aipu_write32(&aipu->reg, DEBUG_PAGE_SELECTION_REG, SELECT_DEBUG_CORE(0, 0));
-	status->cluster_status = aipu_read32(&aipu->reg, DEBUG_CLUSTER_STATUS);
-	status->core_status = (aipu_read32(&aipu->reg, DEBUG_CORE_STATUS) >> 4) & 0b1;
-	for (; i < aipu->partitions[0].clusters[0].core_cnt; ++i) {
-		aipu_write32(&aipu->reg, DEBUG_PAGE_SELECTION_REG, SELECT_DEBUG_CORE(0, i));
-		status->core_status |= (((aipu_read32(&aipu->reg, DEBUG_CORE_STATUS) >> 4)
-								& 0b1) << i);
-	}
-	aipu_write32(&aipu->reg, DEBUG_PAGE_SELECTION_REG, DISABLE_DEBUG);
-	mutex_unlock(&aipu->partitions[0].page_lock);
-	return 0;
-}
 
 static struct aipu_priv_operations v3_priv_ops = {
 	.create_partitions = v3_create_partitions,
 	.destroy_partitions = v3_destroy_partitions,
 	.global_soft_reset = v3_global_soft_reset,
-	.get_partition_status = zhouyi_v3_read_cluster_status,
 };
 
 struct aipu_priv_operations *get_v3_priv_ops(void)

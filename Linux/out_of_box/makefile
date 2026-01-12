@@ -10,12 +10,13 @@ SO_DIR := ./umd
 BUILD_DIR := ./umd
 DIR_TARGET := $(BUILD_DIR)
 TARGET := $(BUILD_DIR)/aipu_$(TEST_CASE)
-CXXFLAGS = -O0 -g -Wall -Werror -std=c++14 -I./src -DX86_LINUX=1
+CXXFLAGS = -O0 -g -Wall -Werror -std=c++14 -I./src -DX86_LINUX=1 -MMD -MP
 LDFLAGS = -L$(SO_DIR) -laipudrv -lpthread
 
 SRC_DIR := ./src
 SRCS := $(wildcard $(SRC_DIR)/*.cpp)
 OBJS = $(patsubst %cpp, %o, $(SRCS))
+DEPS = $(OBJS:%.o=%.d)
 
 all: $(DIR_TARGET) $(TARGET)
 
@@ -26,6 +27,8 @@ $(DIR_TARGET):
 $(TARGET): $(OBJS)
 	$(CXX) $^ $(LDFLAGS) -o $@
 	$(RM) $(OBJS)
+
+-include $(DEPS)
 
 clean:
 	$(RM) $(OBJS) $(BUILD_DIR)

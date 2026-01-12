@@ -76,10 +76,10 @@ public:
   JobBase *get_job_object(JOB_ID id);
   aipu_status_t get_status_msg(aipu_status_t status, const char **msg);
   aipu_status_t load_graph(const char *graph_file, GRAPH_ID *id,
-                           aipu_load_graph_cfg_t *config = nullptr);
+                           const aipu_load_graph_cfg_t *config = nullptr);
   aipu_status_t load_graph(const char *graph_buf, uint32_t graph_size,
                            GRAPH_ID *id,
-                           aipu_load_graph_cfg_t *config = nullptr);
+                           const aipu_load_graph_cfg_t *config = nullptr);
   aipu_status_t load_share_weight_graph(const char *graph_file, uint64_t **ids,
                                         uint32_t *id_cnt,
                                         aipu_load_graph_cfg_t *config);
@@ -127,7 +127,18 @@ public:
   }
 
 public:
-  DeviceBase *get_dev() { return m_dev; };
+  DeviceBase *get_dev() { return m_dev; }
+
+#ifdef SIMULATION
+  void set_dev(DeviceBase *dev) {
+    if (m_dev == nullptr)
+      m_dev = dev;
+  }
+
+  const aipu_global_config_simulation_t *sim_cfg() { return &m_sim_cfg; }
+#endif
+
+  MemoryBase *get_mem() { return m_dram; }
 
   /**
    * dump a combination runtime.cfg for all jobs in one running period,

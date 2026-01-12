@@ -8,18 +8,87 @@
 #include <stdint.h>
 
 namespace aipudrv {
+inline uint32_t tcb_task_type(uint32_t flag) { return flag & 0xF; }
+
+inline uint32_t tcb_dep_type(uint32_t flag) { return flag & 0x30; }
+
+namespace tcb_ctl {
+constexpr uint32_t TCB_LEN = (128u);
 /**
  * #reserved[8:11], dtcm_en[7], rd_en[6], wr_en[5], size[0:4]
  */
-#define ZY_ASID_WR (1 << 5)
-#define ZY_ASID_RD (1 << 6)
-#define ZY_DTCM_EN (1 << 7)
+constexpr uint32_t ASID_WR = (1 << 5);
+constexpr uint32_t ASID_RD = (1 << 6);
 
-#if (defined ZHOUYI_V3)
-enum class TCBType { TCB_INIT = 0, TCB_TASK, TCB_LOOP };
+constexpr uint32_t FLAG_DEP_TYPE_NONE = 0;
+constexpr uint32_t FLAG_DEP_TYPE_PRE_ALL = (2 << 4);
 
-enum class TCBDepType { TCB_NO_DEP = 0, TCB_IMMIDIATE_DEP, TCB_PRE_ALL_DEP };
+constexpr uint32_t FLAG_END_TYPE_GROUP_END = (1 << 6);
+constexpr uint32_t FLAG_END_TYPE_GRID_END = (1 << 7);
 
+constexpr uint32_t GM_REGION_CTRL_SYNC_TO_GM = (1 << 30);
+constexpr uint32_t GM_REGION_CTRL_SYNC_TO_DDR = (2UL << 30);
+constexpr uint32_t GM_REGION_CTRL_IGNORE_CFG = (3UL << 30);
+
+/* v3 */
+constexpr uint32_t FLAG_TASK_TYPE_INIT = 0;
+constexpr uint32_t FLAG_TASK_TYPE_TASK_V3 = 1;
+
+constexpr uint32_t FLAG_DEP_TYPE_IMMEDIATE = (1 << 4);
+
+constexpr uint32_t FLAG_END_TYPE_END_WITH_DESTROY = (1 << 8);
+
+constexpr uint32_t EN_INTERRUPT_DONE = 1;
+constexpr uint32_t EN_INTERRUPT_EXCEPTION = (1 << 2);
+constexpr uint32_t EN_INTERRUPT_FAULT = (1 << 3);
+constexpr uint32_t EN_INTERRUPT_ERROR = (1 << 4);
+constexpr uint32_t EN_INTERRUPT_SIGNAL = (1 << 5);
+constexpr uint32_t EN_INTERRUPT_ALL_TYPE_V3 =
+    (EN_INTERRUPT_DONE | EN_INTERRUPT_EXCEPTION | EN_INTERRUPT_FAULT |
+     EN_INTERRUPT_ERROR | EN_INTERRUPT_SIGNAL);
+
+constexpr uint32_t EN_INTERRUPT_TEC = (1 << 8);
+constexpr uint32_t EN_INTERRUPT_CORE = (1 << 9);
+constexpr uint32_t EN_INTERRUPT_CLUSTER = (1 << 10);
+
+constexpr uint32_t GM_CTRL_REMAP_REGION0_EN = (0x1);
+constexpr uint32_t GM_CTRL_REMAP_BOTH_REGION_EN = (0x2);
+
+/* v3_2 */
+constexpr uint32_t FLAG_TASK_TYPE_GRID_INIT = 0;
+constexpr uint32_t FLAG_TASK_TYPE_GROUP_INIT = 1;
+constexpr uint32_t FLAG_TASK_TYPE_TASK_V32 = 2;
+
+constexpr uint32_t FLAG_DEP_TYPE_GROUP = (1 << 4);
+
+constexpr uint32_t FLAG_END_TYPE_POOL_END = (1 << 8);
+
+constexpr uint32_t FLAG_GRID_INIT = (1 << 21);
+constexpr uint32_t FLAG_L2D_FLUSH = (1 << 22);
+
+/* group tcb interrupt */
+constexpr uint32_t EN_INTERRUPT_GROUP_DONE = (1 << 0);
+
+constexpr uint32_t EN_GROUP_DEPEND = (1 << 15);
+
+constexpr uint32_t EN_INTERRUPT_TEC_DONE = (1 << 0);
+constexpr uint32_t EN_INTERRUPT_TEC_SIGNAL = (1 << 1);
+constexpr uint32_t EN_INTERRUPT_TEC_EXCEPTION = (1 << 2);
+constexpr uint32_t EN_INTERRUPT_TEC_FAULT = (1 << 3);
+constexpr uint32_t EN_INTERRUPT_POOL_ERROR = (1 << 4);
+constexpr uint32_t EN_INTERRUPT_TIMEOUT = (1 << 5);
+/* default close tec done */
+constexpr uint32_t EN_INTERRUPT_ALL_TYPE_V32 =
+    (EN_INTERRUPT_TEC_SIGNAL | EN_INTERRUPT_TEC_EXCEPTION |
+     EN_INTERRUPT_TEC_FAULT | EN_INTERRUPT_POOL_ERROR | EN_INTERRUPT_TIMEOUT);
+
+/* grid tcb interrupt */
+constexpr uint32_t EN_INTERRUPT_GRID_ALL = (1 << 0 | 1 << 3);
+
+constexpr uint32_t GM_CTRL_REMAP_EN = (0x1);
+}; // namespace tcb_ctl
+
+namespace tcb_v3 {
 union addr64_t {
   uint64_t v64;
   struct {
@@ -102,78 +171,15 @@ struct tcb_t {
     };
   };
 };
+}; /* namespace tcb_v3 */
 
-#define TCB_FLAG_TASK_TYPE(flag) (flag & 0xF)
-#define TCB_FLAG_TASK_TYPE_INIT 0
-#define TCB_FLAG_TASK_TYPE_TASK 1
-#define TCB_FLAG_TASK_TYPE_LOOP_TASK 2
-
-#define TCB_FLAG_DEP_TYPE_NONE 0
-#define TCB_FLAG_DEP_TYPE_IMMEDIATE (1 << 4)
-#define TCB_FLAG_DEP_TYPE_PRE_ALL (2 << 4)
-
-#define TCB_FLAG_END_TYPE_NOT_END 0
-#define TCB_FLAG_END_TYPE_GROUP_END (1 << 6)
-#define TCB_FLAG_END_TYPE_GRID_END (1 << 7)
-#define TCB_FLAG_END_TYPE_END_WITH_DESTROY (1 << 8)
-
-#define EN_INTERRUPT_DONE 1
-#define EN_INTERRUPT_EXCEPTION (1 << 2)
-#define EN_INTERRUPT_FAULT (1 << 3)
-#define EN_INTERRUPT_ERROR (1 << 4)
-#define EN_INTERRUPT_SIGNAL (1 << 5)
-#define EN_INTERRUPT_ALL_TYPE                                                  \
-  (EN_INTERRUPT_DONE | EN_INTERRUPT_EXCEPTION | EN_INTERRUPT_FAULT |           \
-   EN_INTERRUPT_ERROR | EN_INTERRUPT_SIGNAL)
-#define EN_INTERRUPT_TEC (1 << 8)
-#define EN_INTERRUPT_CORE (1 << 9)
-#define EN_INTERRUPT_CLUSTER (1 << 10)
-#define EN_INTERRUPT_POOL (1 << 11)
-
-/**
- * GM data sync direction
- * GM_REGION_CTRL_SYNC_TO_GM: DDR to GM region
- * GM_REGION_CTRL_SYNC_TO_DDR: GM region to DDR
- */
-#define GM_CTRL_TSM_IGNORE_CFG (0xf)
-#define GM_REGION_CTRL_ONLY_UPDATE_REG (0 << 30)
-#define GM_REGION_CTRL_SYNC_TO_GM (1 << 30)
-#define GM_REGION_CTRL_SYNC_TO_DDR (2UL << 30)
-#define GM_REGION_CTRL_IGNORE_CFG (3UL << 30)
-
-#define GM_CTRL_REMAP_BOTH_REGION_DEN (0x0)
-#define GM_CTRL_REMAP_REGION0_EN (0x1)
-#define GM_CTRL_REMAP_BOTH_REGION_EN (0x2)
-
-#else
-
-enum class TCBType { TCB_GRID_INIT = 0, TCB_GROUP_INIT, TCB_TASK };
-
-enum class TCBDepType { TCB_NO_DEP = 0, TCB_GROUP_DEP, TCB_PRE_ALL_DEP };
-
-union addr64_t {
-  uint64_t v64;
-  struct {
-    uint32_t lo;
-    uint32_t hi;
-  } v32;
-};
-
+namespace tcb_v3_2 {
 union config64_t {
   uint64_t v64;
   struct {
     uint32_t ctrl0;
     uint32_t ctrl1;
   } v32;
-};
-
-struct smmu_conf_t {
-  uint32_t ctrl;
-  uint32_t remap;
-  struct {
-    uint32_t ctrl0;
-    uint32_t ctrl1;
-  } segs[4];
 };
 
 struct tcb_t {
@@ -247,56 +253,7 @@ struct tcb_t {
   };
   uint16_t group_deps[4];
 };
-
-#define TCB_FLAG_TASK_TYPE(flag) (flag & 0xF)
-#define TCB_FLAG_TASK_TYPE_GRID_INIT 0
-#define TCB_FLAG_TASK_TYPE_GROUP_INIT 1
-#define TCB_FLAG_TASK_TYPE_TASK 2
-
-#define TCB_FLAG_DEP_TYPE(flag) (flag & 0x30)
-#define TCB_FLAG_DEP_TYPE_NONE 0
-#define TCB_FLAG_DEP_TYPE_GROUP (1 << 4)
-#define TCB_FLAG_DEP_TYPE_PRE_ALL (2 << 4)
-
-#define TCB_FLAG_END_TYPE_NOT_END 0
-#define TCB_FLAG_END_TYPE_GROUP_END (1 << 6)
-#define TCB_FLAG_END_TYPE_GRID_END (1 << 7)
-#define TCB_FLAG_END_TYPE_POOL_END (1 << 8)
-
-#define TCB_FLAG_CORE_NUM(n) ((n & 0xF) << 16)
-#define TCB_FLAG_BROADCAST_START (1 << 20)
-#define TCB_FLAG_GRID_INIT (1 << 21)
-#define TCB_FLAG_L2D_FLUSH (1 << 22)
-
-/* task tcb interrupt */
-#define EN_INTERRUPT_TEC_DONE (1 << 0)
-#define EN_INTERRUPT_TEC_SIGNAL (1 << 1)
-#define EN_INTERRUPT_TEC_EXCEPTION (1 << 2)
-#define EN_INTERRUPT_TEC_FAULT (1 << 3)
-#define EN_INTERRUPT_TEC_ALL                                                   \
-  (EN_INTERRUPT_TEC_DONE | EN_INTERRUPT_TEC_SIGNAL |                           \
-   EN_INTERRUPT_TEC_EXCEPTION | EN_INTERRUPT_TEC_FAULT)
-
-/* grid tcb interrupt */
-#define EN_INTERRUPT_GRID_DONE (1 << 0)
-#define EN_INTERRUPT_GRID_GM_FALUT (1 << 3)
-#define EN_INTERRUPT_GRID_ALL                                                  \
-  (EN_INTERRUPT_GRID_DONE | EN_INTERRUPT_GRID_GM_FALUT)
-
-/* group tcb interrupt */
-#define EN_INTERRUPT_GROUP_DONE (1 << 0)
-
-#define GM_CTRL_REMAP_EN (0x1)
-#define GM_CTRL_REMAP_MODE_RES_PRIOR (0x2)
-#define GM_MAX_SIZE (8 << 20)
-
-#define GM_SYNC_ONLY_UPDATE_REG (0 << 30)
-#define GM_SYNC_DDR_TO_GM (1UL << 30)
-#define GM_SYNC_IGNORE_CFG (3UL << 30)
-
-#define EN_GROUP_DEPEND (1 << 15)
-
-#endif
-} // namespace aipudrv
+}; /* namespace tcb_v3_2 */
+}; // namespace aipudrv
 
 #endif //!__TCB_H__

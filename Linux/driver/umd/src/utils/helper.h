@@ -143,6 +143,11 @@ std::string &replace(std::string &s, const std::string &old_s,
                      const std::string &new_s);
 
 /**
+ * This function is used to check hash of file
+ */
+bool check_hash(const std::string &file, const std::string &hash);
+
+/**
  * @brief This class is for generating runtime.cfg for simulation.
  */
 class FileWrapper {

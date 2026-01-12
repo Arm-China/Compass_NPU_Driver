@@ -39,15 +39,16 @@ aipu_status_t Coredump::init() {
 
   /* assume 1 partition, otherwise coredump data structure needs to change */
   uint32_t partition_cnt = 0;
-  aipu_status_t ret = m_dev->get_partition_count(&partition_cnt);
+  aipu_status_t ret =
+      convert_ll_status(m_dev->get_partition_count(&partition_cnt));
   if (ret != AIPU_STATUS_SUCCESS)
     return ret;
 
-  ret = m_dev->get_cluster_count(0, &m_attr.cluster_cnt);
+  ret = convert_ll_status(m_dev->get_cluster_count(0, &m_attr.cluster_cnt));
   if (ret != AIPU_STATUS_SUCCESS)
     return ret;
 
-  ret = m_dev->get_core_count(0, 0, &m_attr.core_cnt);
+  ret = convert_ll_status(m_dev->get_core_count(0, 0, &m_attr.core_cnt));
   if (ret != AIPU_STATUS_SUCCESS)
     return ret;
 
@@ -227,12 +228,12 @@ aipu_status_t Coredump::do_coredump() {
     DEV_PA_64 tcbp_pa =
         m_job->m_tcbs->asid_base + tec_buf->gpr[24]; /* m_tcbs->align_asid_pa */
     char *tcbp_va = nullptr;
-    m_mem->pa_to_va(tcbp_pa, sizeof(tcb_t), &tcbp_va);
+    m_mem->pa_to_va(tcbp_pa, tcb_ctl::TCB_LEN, &tcbp_va);
     note_name = "tcb_" + common_suffix;
     oss.clear();
     oss.str(std::string());
     oss.write((char *)&tcbp_start, sizeof(uint32_t));
-    oss.write(tcbp_va, sizeof(tcb_t));
+    oss.write(tcbp_va, tcb_ctl::TCB_LEN);
     set_bin_note(oss.str().c_str(), oss.str().size(), note_name);
 
     /* note: stack */
@@ -241,9 +242,15 @@ aipu_status_t Coredump::do_coredump() {
         m_job->m_sgt_allocated[0]->tasks[0].stack->asid_base +
         tec_buf
             ->gpr[29]; /* m_sgt_allocated[0]->tasks[0].stack->align_asid_pa */
+
+    uint32_t sp = 0;
+    if (m_job->graph().get_isa() == ISAv5)
+      sp = reinterpret_cast<tcb_v3::tcb_t *>(tcbp_va)->task.sp;
+    else if (m_job->graph().get_isa() == ISAv6)
+      sp = reinterpret_cast<tcb_v3_2::tcb_t *>(tcbp_va)->task.sp;
+
+    uint32_t stack_size = sp - tec_buf->gpr[29];
     char *sp_va = nullptr;
-    uint32_t stack_size =
-        reinterpret_cast<tcb_t *>(tcbp_va)->task.sp - tec_buf->gpr[29];
     m_mem->pa_to_va(sp_pa, stack_size, &sp_va);
     note_name = "stack_" + common_suffix;
     oss.clear();
@@ -269,7 +276,7 @@ aipu_status_t Coredump::do_coredump() {
      * cluster */
     note_name = std::string("gm_cluster") + std::to_string(cluster_id);
     for (uint32_t i = 0; i < m_gm_bufs.size(); ++i) {
-      BufferDesc *desc = m_gm_bufs[i].first;
+      const BufferDesc *desc = m_gm_bufs[i].first;
       uint32_t gm_addr = get_low_32(desc->align_asid_pa);
       note_name += std::string("_") + std::to_string(i);
       oss.clear();
@@ -293,7 +300,7 @@ aipu_status_t Coredump::do_coredump() {
 
   write();
 
-  if (m_job->graph().m_hw_version >= AIPU_ISA_VERSION_ZHOUYI_V3_2)
+  if (m_job->graph().get_isa() == ISAv6)
     ret =
         convert_ll_status(m_dev->ioctl_cmd(AIPU_IOCTL_ABORT_CMDPOOL, nullptr));
 
@@ -522,11 +529,11 @@ Coredump::get_tsm_regs(uint32_t cluster_id, uint32_t core_id) {
   static std::mutex debug_link_mutex;
   std::lock_guard<std::mutex> lock(debug_link_mutex);
   std::vector<RegsMap> regs;
-#if (defined ZHOUYI_V3)
-  regs = get_v3_tsm_regs(cluster_id, core_id);
-#elif (defined ZHOUYI_V3_2)
-  regs = get_v3_2_tsm_regs(cluster_id, core_id);
-#endif
+
+  if (m_job->graph().get_isa() == ISAv5)
+    regs = get_v3_tsm_regs(cluster_id, core_id);
+  else if (m_job->graph().get_isa() == ISAv6)
+    regs = get_v3_2_tsm_regs(cluster_id, core_id);
 
   /* core_id will not impact tsm base registers and cluster */
   m_dev->write_reg(core_id, TSM_PAGE_SELECTION_CONTROL,

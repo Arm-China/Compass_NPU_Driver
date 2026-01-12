@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * @file  graph_v3.h
- * @brief AIPU User Mode Driver (UMD) aipu v3 graph module header
+ * @file  graph_v3x.h
+ * @brief AIPU User Mode Driver (UMD) aipu v3x graph module header
  */
 
 #ifndef _GRAPH_V3_H_
@@ -125,17 +125,17 @@ struct BinSubGraphSection {
 struct Subgraph {
   uint32_t id;
   uint32_t bss_idx;
-  struct BinSubGraphSection text;
-  struct BinSubGraphSection rodata;
-  struct BinSubGraphSection dcr;
+  BinSubGraphSection text;
+  BinSubGraphSection rodata;
+  BinSubGraphSection dcr;
   uint32_t printfifo_size;
   uint32_t profiler_buf_size;
   uint32_t private_data_size;
   uint32_t warmup_len;
   std::vector<uint32_t> precursors;
   int32_t precursor_cnt;
-  std::vector<struct GraphParamMapLoadDesc> private_buffers_map;
-  std::vector<struct GraphSectionDesc> private_buffers;
+  std::vector<GraphParamMapLoadDesc> private_buffers_map;
+  std::vector<GraphSectionDesc> private_buffers;
 };
 
 struct ConstInfo {
@@ -149,13 +149,13 @@ struct BSS {
   uint32_t stack_align_in_page;
   uint32_t const_size;
   uint32_t zerocpy_const_size;
-  std::vector<struct GraphParamMapLoadDesc> param_map;
-  std::vector<struct GraphSectionDesc> static_sections;
-  std::vector<struct GraphSectionDesc> reuse_sections;
+  std::vector<GraphParamMapLoadDesc> param_map;
+  std::vector<GraphSectionDesc> static_sections;
+  std::vector<GraphSectionDesc> reuse_sections;
   /* std::map<sec.type, std::map<hash, GraphSectionDesc>> */
   std::map<uint32_t, std::map<std::array<uint8_t, 32>, GraphSectionDesc>>
       shared_static_sections;
-  struct GraphIOTensors io;
+  GraphIOTensors io;
 };
 
 struct FMSectionInfo {
@@ -194,11 +194,13 @@ class GraphV3X : public Graph {
 private:
   /* m_bss_vec[0].reuse_sections includes all bss reuse sections,
    * static_sections not exactly */
-  std::vector<struct BSS> m_bss_vec;
-  std::vector<struct Subgraph> m_subgraphs;
-  std::vector<struct GMConfig> m_gmconfig;
+  std::vector<BSS> m_bss_vec;
+  std::vector<Subgraph> m_subgraphs;
+  std::vector<GMConfig> m_gmconfig;
   std::string m_comment;
+  std::string m_target;
   BinSection m_bsegmmu;
+  BinSection m_bgraphjson;
   bool m_fake_subgraph = false;
   bool m_coredump_en = false;
   uint32_t m_max_ws_size = 0;
@@ -211,6 +213,9 @@ public:
   /* 2: REUSE/STATIC, key: index */
   std::map<uint32_t, GMConfigDesc> m_gm_config_desc[2];
   uint32_t m_segmmu_num = 0;
+
+private:
+  const std::string get_target() const override { return m_target; }
 
 public:
   aipu_status_t parse_gmconfig(int bss_id);
@@ -238,7 +243,7 @@ public:
   }
 
 public:
-  void set_subgraph(struct Subgraph sg) { m_subgraphs.push_back(sg); }
+  void set_subgraph(Subgraph sg) { m_subgraphs.push_back(sg); }
 
   void set_fake_subgraph() { m_fake_subgraph = true; }
 
@@ -250,7 +255,7 @@ public:
     return m_subgraphs[sg_id];
   }
 
-  void set_bss(struct BSS bss) { m_bss_vec.push_back(bss); }
+  void set_bss(BSS bss) { m_bss_vec.push_back(bss); }
 
   BSS &get_bss(uint32_t bss_id) { return m_bss_vec[bss_id]; }
 
@@ -265,7 +270,16 @@ public:
       m_comment.assign(data, size);
       m_comment = replace(m_comment, 0, '\n');
       m_comment = replace(m_comment, "\n\n", "\n");
-      LOG(LOG_INFO, "aipu.bin comment:\n%s", m_comment.c_str());
+
+      std::string key = "target:X"; /* much safer? */
+      size_t start = m_comment.find(key);
+      if (start != std::string::npos) {
+        start += key.length();
+        size_t end = m_comment.find(';', start);
+        if (end != std::string::npos)
+          m_target = std::string("X") + m_comment.substr(start, end - start);
+      }
+      LOG(LOG_DEBUG, "aipu.bin comment:\n%s", m_comment.c_str());
     }
   }
 
@@ -276,12 +290,16 @@ public:
     m_gmconfig.push_back(gmconfig);
   }
 
-  void set_segmmu(BinSection &segmmu_section) {
+  void set_segmmu(BinSection &segmmu_section) override {
     m_segmmu_num = *(uint32_t *)segmmu_section.va;
 
     /* extract the head 4 bytes segmmu num information */
     if (m_segmmu_num != 0)
       m_bsegmmu.init(segmmu_section.va + 4, segmmu_section.size - 4);
+  }
+
+  void set_graphjson(BinSection &graphjson_section) override {
+    m_bgraphjson.init(graphjson_section.va, graphjson_section.size);
   }
 
   void set_stack(uint32_t bss_id, uint32_t size, uint32_t align) {
@@ -290,13 +308,13 @@ public:
       m_bss_vec[bss_id].stack_align_in_page = align;
     }
   }
-  void add_param(uint32_t bss_id, struct GraphParamMapLoadDesc param) {
+  void add_param(uint32_t bss_id, GraphParamMapLoadDesc param) {
     if (bss_id < (uint32_t)m_bss_vec.size()) {
       m_bss_vec[bss_id].param_map.push_back(param);
     }
   }
 
-  void add_static_section(uint32_t bss_id, struct GraphSectionDesc section) {
+  void add_static_section(uint32_t bss_id, GraphSectionDesc section) {
     if (bss_id < (uint32_t)m_bss_vec.size()) {
       m_bss_vec[bss_id].static_sections.push_back(section);
 
@@ -324,14 +342,14 @@ public:
     }
   }
 
-  void add_reuse_section(uint32_t bss_id, struct GraphSectionDesc section) {
+  void add_reuse_section(uint32_t bss_id, GraphSectionDesc section) {
     if (bss_id < (uint32_t)m_bss_vec.size())
       m_bss_vec[bss_id].reuse_sections.push_back(section);
 
     if (bss_id != 0)
       m_bss_vec[0].reuse_sections.push_back(section);
   }
-  void set_io_tensors(uint32_t bss_id, struct GraphIOTensors io) {
+  void set_io_tensors(uint32_t bss_id, GraphIOTensors io) {
     if (bss_id < (uint32_t)m_bss_vec.size())
       m_bss_vec[bss_id].io = io;
   }
@@ -362,7 +380,7 @@ public:
                : 0;
   }
 
-  std::vector<struct GraphSectionDesc> &
+  std::vector<GraphSectionDesc> &
   get_static_section_ref(uint32_t bss_id) override {
     return m_bss_vec[bss_id].static_sections;
   }
@@ -372,11 +390,11 @@ public:
   };
 
   uint32_t get_alloc_pad_size() const override {
-    return m_hw_version == AIPU_ISA_VERSION_ZHOUYI_V3 ? 0x800 : 0;
+    return m_isa == ISAv5 ? 0x800 : 0;
   }
 
   uint32_t get_asid_align_page() const override {
-    return m_hw_version >= AIPU_ISA_VERSION_ZHOUYI_V3_2 ? 256 : 1;
+    return m_isa == ISAv6 ? 256 : 1;
   }
 
   aipu_data_type_t get_io_tensor_type(int idx) const override {
@@ -392,7 +410,8 @@ public:
         {FMSection::ModelParam, "model_param"},
         {FMSection::Rodata, "rodata"},
         {FMSection::Dcr, "dcr"},
-        {FMSection::TcbChain, "tcb_chain"},
+        {FMSection::TcbChain,
+         "tcbs"}, /* which is aligned with malloc(name) for x2 holdtcb */
         {FMSection::TotalPriv, "total_priv"},
         {FMSection::TotalReuse, "total_reuse"},
         {FMSection::GM, "gm"},

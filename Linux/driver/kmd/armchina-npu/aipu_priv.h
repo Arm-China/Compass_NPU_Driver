@@ -26,7 +26,7 @@ struct aipu_priv_operations {
 						    struct platform_device *p_dev);
 	void (*destroy_partitions)(struct aipu_priv *aipu);
 	int (*global_soft_reset)(struct aipu_priv *aipu);
-	int (*get_partition_status)(struct aipu_priv *aipu, struct aipu_cluster_status *status);
+	void (*global_hw_reset)(struct aipu_priv *aipu);
 };
 
 /**
@@ -50,6 +50,9 @@ struct aipu_priv_operations {
  * @ops:           aipu_priv version specific operations
  * @reset_delay_us: global soft-reset delay time
  * @is_init:       init flag
+ * @dbg_reg:	   debugger region
+ * @reset_gpio:	   aipu hw reset gpio
+ * @io_lock:	   lock between rest/abort and io opertion
  */
 struct aipu_priv {
 	int version;
@@ -73,6 +76,7 @@ struct aipu_priv {
 	int core_reset_delay_us;
 	bool is_init;
 	struct io_region dbg_reg;
+	struct gpio_desc *reset_gpio;
 };
 
 int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,

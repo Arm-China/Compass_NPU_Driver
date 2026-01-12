@@ -19,11 +19,18 @@
 typedef enum {
   AIPU_LL_STATUS_SUCCESS,
   AIPU_LL_STATUS_ERROR_OPERATION_UNSUPPORTED,
+  AIPU_LL_STATUS_ERROR_INVALID_OP,
   AIPU_LL_STATUS_ERROR_NULL_PTR,
+  AIPU_LL_STATUS_ERROR_INVALID_PARTITION_ID,
+  AIPU_LL_STATUS_ERROR_INVALID_CLUSTER_ID,
+  AIPU_LL_STATUS_ERROR_INVALID_CONFIG,
+  AIPU_LL_STATUS_ERROR_SIM_CONFIG_FAIL,
+  AIPU_LL_STATUS_ERROR_SIM_EXE_FAIL,
   AIPU_LL_STATUS_ERROR_OPEN_FAIL,
   AIPU_LL_STATUS_ERROR_IOCTL_QUERY_CAP_FAIL,
   AIPU_LL_STATUS_ERROR_IOCTL_QUERY_CORE_CAP_FAIL,
   AIPU_LL_STATUS_ERROR_IOCTL_REQ_IO_FAIL,
+  AIPU_LL_STATUS_ERROR_IOCTL_JOB_DISPATCH_FAIL,
   AIPU_LL_STATUS_ERROR_POLL_FAIL,
   AIPU_LL_STATUS_ERROR_POLL_TIMEOUT,
   AIPU_LL_STATUS_ERROR_IOCTL_QUERY_STATUS_FAIL,
@@ -42,15 +49,34 @@ inline aipu_status_t convert_ll_status(aipu_ll_status_t status) {
   case AIPU_LL_STATUS_ERROR_OPERATION_UNSUPPORTED:
     return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
 
+  case AIPU_LL_STATUS_ERROR_INVALID_OP:
+    return AIPU_STATUS_ERROR_INVALID_OP;
+
   case AIPU_LL_STATUS_ERROR_NULL_PTR:
     return AIPU_STATUS_ERROR_NULL_PTR;
+
+  case AIPU_LL_STATUS_ERROR_INVALID_PARTITION_ID:
+    return AIPU_STATUS_ERROR_INVALID_PARTITION_ID;
+
+  case AIPU_LL_STATUS_ERROR_INVALID_CLUSTER_ID:
+    return AIPU_STATUS_ERROR_INVALID_CLUSTER_ID;
+
+  case AIPU_LL_STATUS_ERROR_INVALID_CONFIG:
+    return AIPU_STATUS_ERROR_INVALID_CONFIG;
+
+  case AIPU_LL_STATUS_ERROR_SIM_EXE_FAIL:
+    return AIPU_STATUS_ERROR_JOB_EXCEPTION;
 
   case AIPU_LL_STATUS_ERROR_OPEN_FAIL:
     return AIPU_STATUS_ERROR_OPEN_DEV_FAIL;
 
+  case AIPU_LL_STATUS_ERROR_IOCTL_JOB_DISPATCH_FAIL:
+    return AIPU_STATUS_ERROR_JOB_DISPATCH_FAIL;
+
   case AIPU_LL_STATUS_ERROR_POLL_TIMEOUT:
     return AIPU_STATUS_ERROR_TIMEOUT;
 
+  case AIPU_LL_STATUS_ERROR_SIM_CONFIG_FAIL:
   case AIPU_LL_STATUS_ERROR_IOCTL_QUERY_CAP_FAIL:
   case AIPU_LL_STATUS_ERROR_IOCTL_QUERY_CORE_CAP_FAIL:
   case AIPU_LL_STATUS_ERROR_IOCTL_REQ_IO_FAIL:
@@ -70,7 +96,7 @@ inline aipu_status_t convert_ll_status(aipu_ll_status_t status) {
 namespace aipudrv {
 struct JobDesc {
   /* job descriptor for KMD, part of the members shared with x86 simulation */
-  struct aipu_job_desc kdesc;
+  aipu_job_desc kdesc;
 
   /* shared */
   uint32_t aipu_revision;
@@ -132,42 +158,44 @@ protected:
   uint32_t m_cluster_cnt = 0;
   uint32_t m_core_cnt = 1;
   std::atomic_int m_ref_cnt{0};
-  uint32_t m_hw_config;
 
-  typedef struct {
-    uint32_t config;
-    uint32_t tec_num;
-    uint32_t aiff_num;
-    uint32_t cluster_num;
-    int32_t sim_code;
-  } arch_item_t;
+protected:
+  int dec_ref_cnt() { return --m_ref_cnt; }
+  int inc_ref_cnt() { return ++m_ref_cnt; }
+  uint32_t target_to_config(const std::string &target) {
+    constexpr uint32_t CONFIG_LEN = 4;
+
+    uint32_t config = 0;
+    size_t pos = target.find('_');
+    if (pos != std::string::npos) {
+      pos += 1;
+
+      if (pos + CONFIG_LEN <= target.length()) {
+        std::string config_str = target.substr(pos, CONFIG_LEN);
+        config = std::stoi(config_str);
+      }
+    }
+    return config;
+  }
 
 public:
   virtual bool has_target(uint32_t arch, uint32_t version, uint32_t config,
                           uint32_t rev) = 0;
-  virtual const char *get_config_code() const { return nullptr; };
+  virtual aipu_ll_status_t schedule(const JobDesc &job) = 0;
+
+  virtual void set_target(const std::string &) {}
+  virtual void set_cfg(const aipu_global_config_simulation_t *) {}
+
+  virtual aipu_ll_status_t init() { return AIPU_LL_STATUS_SUCCESS; }
+  virtual aipu_ll_status_t get_simulation_instance(void **simulator,
+                                                   void **memory) {
+    *simulator = nullptr;
+    *memory = nullptr;
+    return AIPU_LL_STATUS_SUCCESS;
+  }
   virtual aipu_ll_status_t ioctl_cmd(uint32_t cmd, void *arg) {
     return AIPU_LL_STATUS_SUCCESS;
   };
-  virtual aipu_status_t get_cluster_id(uint32_t part_id,
-                                       std::vector<uint32_t> &) {
-    return AIPU_STATUS_ERROR_INVALID_PARTITION_ID;
-  }
-  virtual uint32_t tec_cnt_per_core(uint32_t partition_idx) const {
-    if ((partition_idx >= 0) && (partition_idx < m_partition_cnt))
-      return m_part_caps.at(partition_idx).clusters[0].tec_cnt;
-    else
-      return 0;
-  }
-  virtual aipu_status_t schedule(const JobDesc &job) = 0;
-  virtual aipu_status_t get_simulation_instance(void **simulator,
-                                                void **memory) {
-    *simulator = nullptr;
-    *memory = nullptr;
-    return AIPU_STATUS_SUCCESS;
-  }
-
-  MemoryBase *get_mem() { return m_dram; }
   virtual aipu_ll_status_t read_reg(uint32_t core_id, uint32_t offset,
                                     uint32_t *value,
                                     RegType type = RegType::AIPU_HOST_REG) {
@@ -184,48 +212,67 @@ public:
                                        void *jobbase = nullptr) {
     return AIPU_LL_STATUS_SUCCESS;
   }
-  int dec_ref_cnt() { return --m_ref_cnt; }
-  int inc_ref_cnt() { return ++m_ref_cnt; }
-  virtual bool get_profile_en() const { return false; }
 
   virtual aipu_ll_status_t get_device_status(device_status_t *status) {
     return AIPU_LL_STATUS_SUCCESS;
   }
 
-  void set_hw_config(uint32_t hw_config) { m_hw_config = hw_config; }
+  virtual aipu_ll_status_t get_cluster_id(uint32_t part_id,
+                                          std::vector<uint32_t> &) {
+    return AIPU_LL_STATUS_ERROR_INVALID_PARTITION_ID;
+  }
+
+  virtual const char *get_config_code() const { return nullptr; }
+
+  virtual int get_grid_id(uint16_t &grid_id) { return 0; }
+
+  virtual int get_start_group_id(int group_cnt, uint16_t &start_group_id) {
+    return 0;
+  }
+
+  virtual int put_start_group_id(uint16_t start_group_id, int group_cnt) {
+    return 0;
+  }
+
+  /**
+   * indirectly call simulator's internal interface via this wrapper
+   */
+  virtual void enable_profiling(bool en) {}
+  virtual void dump_profiling() {}
+  virtual bool get_profile_en() const { return false; }
 
 public:
-  aipu_status_t get_partition_count(uint32_t *cnt) {
+  MemoryBase *get_mem() { return m_dram; }
+
+  aipu_ll_status_t get_partition_count(uint32_t *cnt) {
     if (cnt == nullptr)
-      return AIPU_STATUS_ERROR_NULL_PTR;
+      return AIPU_LL_STATUS_ERROR_NULL_PTR;
 
     if (m_partition_cnt >= 0) {
       *cnt = m_partition_cnt;
-      return AIPU_STATUS_SUCCESS;
+      return AIPU_LL_STATUS_SUCCESS;
     }
-    return AIPU_STATUS_ERROR_INVALID_OP;
+    return AIPU_LL_STATUS_ERROR_INVALID_OP;
   }
 
-  aipu_status_t get_cluster_count(uint32_t partition_id, uint32_t *cnt) {
+  aipu_ll_status_t get_cluster_count(uint32_t partition_id, uint32_t *cnt) {
     if (cnt == nullptr)
-      return AIPU_STATUS_ERROR_NULL_PTR;
+      return AIPU_LL_STATUS_ERROR_NULL_PTR;
 
     if (partition_id == 0) {
       *cnt = m_cluster_cnt;
-      return AIPU_STATUS_SUCCESS;
+      return AIPU_LL_STATUS_SUCCESS;
     } else if (partition_id < m_partition_cnt) {
       if (m_part_caps.at(partition_id).cluster_cnt > 0) {
         *cnt = m_part_caps.at(partition_id).cluster_cnt;
-        return AIPU_STATUS_SUCCESS;
-      } else {
-        return AIPU_STATUS_ERROR_INVALID_OP;
+        return AIPU_LL_STATUS_SUCCESS;
       }
     }
-
-    return AIPU_STATUS_ERROR_INVALID_OP;
+    return AIPU_LL_STATUS_ERROR_INVALID_OP;
   }
 
-  aipu_status_t get_next_cluster_id(uint32_t partition_id, uint32_t &next_id) {
+  aipu_ll_status_t get_next_cluster_id(uint32_t partition_id,
+                                       uint32_t &next_id) {
     static uint32_t next_cluster_in_part[4] = {0};
 
     if (partition_id < m_partition_cnt) {
@@ -234,64 +281,62 @@ public:
         if (next_cluster_in_part[partition_id] >=
             m_part_caps.at(partition_id).cluster_cnt)
           next_cluster_in_part[partition_id] = 0;
-        return AIPU_STATUS_SUCCESS;
-      } else {
-        return AIPU_STATUS_ERROR_INVALID_OP;
+        return AIPU_LL_STATUS_SUCCESS;
       }
     }
 
-    return AIPU_STATUS_ERROR_INVALID_OP;
+    return AIPU_LL_STATUS_ERROR_INVALID_OP;
   }
 
   /**
    * currently implement the logic according to all clusters in one partition
    * are the homegeneous ARCH. the core count is same in separate clusters.
    */
-  aipu_status_t get_core_count(uint32_t partition_id, uint32_t cluster_id,
-                               uint32_t *cnt) {
+  aipu_ll_status_t get_core_count(uint32_t partition_id, uint32_t cluster_id,
+                                  uint32_t *cnt) {
     if (cnt == nullptr)
-      return AIPU_STATUS_ERROR_NULL_PTR;
+      return AIPU_LL_STATUS_ERROR_NULL_PTR;
 
     *cnt = 0;
     if (partition_id > m_partition_cnt)
-      return AIPU_STATUS_ERROR_INVALID_PARTITION_ID;
+      return AIPU_LL_STATUS_ERROR_INVALID_PARTITION_ID;
 
     if ((partition_id == 0) && (cluster_id == 0)) {
       *cnt = m_core_cnt;
     } else {
 #if SIMULATION
       if (cluster_id > m_cluster_cnt)
-        return AIPU_STATUS_ERROR_INVALID_CLUSTER_ID;
+        return AIPU_LL_STATUS_ERROR_INVALID_CLUSTER_ID;
 #else
       if (cluster_id > m_part_caps.at(partition_id).cluster_cnt)
-        return AIPU_STATUS_ERROR_INVALID_CLUSTER_ID;
+        return AIPU_LL_STATUS_ERROR_INVALID_CLUSTER_ID;
 #endif
       *cnt = m_part_caps.at(partition_id).clusters[cluster_id].core_cnt;
     }
 
     if (*cnt <= 0)
-      return AIPU_STATUS_ERROR_INVALID_OP;
+      return AIPU_LL_STATUS_ERROR_INVALID_OP;
     else
-      return AIPU_STATUS_SUCCESS;
+      return AIPU_LL_STATUS_SUCCESS;
   }
 
-  aipu_status_t get_core_info(uint32_t id, aipu_core_info_t *info) {
-    if (info != nullptr) {
-      uint32_t cnt = 0;
+  aipu_ll_status_t get_core_info(uint32_t id, aipu_core_info_t *info) {
+    if (info == nullptr)
+      return AIPU_LL_STATUS_ERROR_NULL_PTR;
 
-      if (m_part_caps[0].version == AIPU_ISA_VERSION_ZHOUYI_V3)
-        cnt = m_partition_cnt;
-      else
-        cnt = m_core_cnt;
+    uint32_t cnt = 0;
 
-      if (id >= 0 && id < cnt) {
-        info->reg_base = m_part_caps[id].info.reg_base;
-        return AIPU_STATUS_SUCCESS;
-      }
+    if (m_part_caps[0].version >= AIPU_ISA_VERSION_ZHOUYI_V3)
+      cnt = m_partition_cnt;
+    else
+      cnt = m_core_cnt;
 
-      return AIPU_STATUS_ERROR_INVALID_OP;
+    if (id >= 0 && id < cnt) {
+      info->reg_base = m_part_caps[id].info.reg_base;
+      return AIPU_LL_STATUS_SUCCESS;
     }
-    return AIPU_STATUS_ERROR_NULL_PTR;
+
+    return AIPU_LL_STATUS_ERROR_INVALID_OP;
   }
 
   DeviceType get_dev_type() { return m_dev_type; }
@@ -314,22 +359,11 @@ public:
       return 4;
   }
 
-  /**
-   * indirectly call simulator's internal interface via this wrapper
-   */
-public:
-  virtual void enable_profiling(bool en) {}
-  virtual void dump_profiling() {}
-
-public:
-  virtual int get_grid_id(uint16_t &grid_id) { return 0; }
-
-  virtual int get_start_group_id(int group_cnt, uint16_t &start_group_id) {
-    return 0;
-  }
-
-  virtual int put_start_group_id(uint16_t start_group_id, int group_cnt) {
-    return 0;
+  uint32_t tec_cnt_per_core(uint32_t partition_idx) const {
+    uint32_t tec_cnt = 0;
+    if ((partition_idx >= 0) && (partition_idx < m_partition_cnt))
+      tec_cnt = m_part_caps.at(partition_idx).clusters[0].tec_cnt;
+    return tec_cnt;
   }
 
 public:

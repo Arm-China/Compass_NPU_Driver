@@ -8,7 +8,7 @@ RM  := rm -rf
 SRC_ROOT := ./src
 UMD_INC := ../driver/umd/include
 TARGET := $(BUILD_AIPU_DRV_ODIR)/aipu_$(BUILD_TEST_CASE)
-CXXFLAGS := -Wall -Werror -std=c++14 -I$(SRC_ROOT) -I$(UMD_INC)
+CXXFLAGS := -Wall -Werror -std=c++14 -I$(SRC_ROOT) -I$(UMD_INC) -MMD -MP
 LDFLAGS = -L$(BUILD_AIPU_DRV_ODIR) -laipudrv
 ANDROIDCXXFLAGS := --target=aarch64-none-linux-android21 \
                    -I$(BUILD_ANDROID_NDK)/sysroot/usr/include \
@@ -21,16 +21,6 @@ ANDROIDLDFLAGS := -Wl,-O3 -Wl,--gc-sections \
                   -Wl,--exclude-libs,$(BUILD_ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/aarch64-linux-android/4.9.x/libgcc.a \
                   -Wl,--exclude-libs,$(BUILD_ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/aarch64-linux-android/lib64/libatomic.a \
                   -static-libstdc++ -Wl,--build-id -Wl,--warn-shared-textrel -Wl,--fatal-warnings -Qunused-arguments -Wl,-z,noexecstack  -Wl,-z,defs
-
-ifeq ($(BUILD_TARGET_PLATFORM), sim)
-    ifeq ($(BUILD_AIPU_VERSION), aipu_v3)
-        LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X2_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X2_SIM_LNAME)
-    endif
-
-    ifeq ($(BUILD_AIPU_VERSION), aipu_v3_2)
-        LDFLAGS += -L$(CONFIG_DRV_BRENVAR_X3P_SIM_LPATH) -l$(COMPASS_DRV_BRENVAR_X3P_SIM_LNAME)
-    endif
-endif
 
 ifeq ($(BUILD_TARGET_PLATFORM), sim)
     CXXFLAGS += -DSIMULATION=1
@@ -93,6 +83,7 @@ SRCS += $(wildcard $(SRC_ROOT)/$(BUILD_TEST_CASE)/*.cpp)
 SRC_DIRS := $(SRC_ROOT)/common $(SRC_ROOT)/$(BUILD_TEST_CASE)
 SRC_DIRS := $(patsubst $(SRC_ROOT)/%, %, $(SRC_DIRS))
 OBJS = $(patsubst $(SRC_ROOT)/%.cpp, $(COMPASS_DRV_BTENVAR_TEST_BUILD_DIR)/%.o, $(SRCS))
+DEPS = $(OBJS:%.o=%.d)
 
 all: build-repo $(TARGET)
 endif
@@ -114,6 +105,8 @@ $(TARGET): $(OBJS)
 	$(CXX) $^ $(LDFLAGS) -o $@
 	$(RM) $(OBJS)
 endif
+
+-include $(DEPS)
 
 build-repo:
 	@$(call make-repo)

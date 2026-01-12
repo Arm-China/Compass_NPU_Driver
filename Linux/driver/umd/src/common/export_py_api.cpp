@@ -64,7 +64,7 @@ struct aipu_load_graph_cfg_wrapper_t {
 struct aipu_global_config_simulation_wrapper_t {
   std::string simulator;
   std::string log_file_path;
-  std::string npu_arch_desc;
+  std::string npu_arch_desc; /* [[deprecated]]: ignore */
   std::string plugin_name;
   std::string json_filename;
   uint32_t log_level;

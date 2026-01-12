@@ -46,7 +46,7 @@ else
     EXTRA_CFLAGS += -DCONFIG_ARMCHINA_NPU_ARCH_V1 \
                     -DCONFIG_ARMCHINA_NPU_ARCH_V2 \
                     -DCONFIG_ARMCHINA_NPU_ARCH_V3 \
-                    -DCONFIG_ARMCHINA_NPU_ARCH_v3_2
+                    -DCONFIG_ARMCHINA_NPU_ARCH_V3_2
 endif
 
 ifeq ($(BUILD_TARGET_PLATFORM_KMD), BUILD_PLATFORM_R329)

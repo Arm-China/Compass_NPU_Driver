@@ -198,7 +198,7 @@ static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_d
 
 	if (trigger_type == ZHOUYI_TRIGGER_TYPE_CREATE          ||
 	    trigger_type == ZHOUYI_TRIGGER_TYPE_UPDATE_DISPATCH ||
-	    trigger_type == ZHOUYI_TRIGGER_TYPE_DEBUG_DISPATCH) {
+	    trigger_type == ZHOUYI_TRIGGER_TYPE_BIND_DISPATCH) {
 		aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_HIGH_REG, udesc->head_tcb_pa >> 32);
 		aipu_write32(partition->reg, TSM_CMD_SCHD_ADDR_LOW_REG, (u32)udesc->head_tcb_pa);
 	}
@@ -208,11 +208,11 @@ static int zhouyi_v3_reserve(struct aipu_partition *partition, struct aipu_job_d
 
 	aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_INFO_REG, (u16)udesc->job_id);
 
-	if (trigger_type == ZHOUYI_TRIGGER_TYPE_DEBUG_DISPATCH) {
+	if (trigger_type == ZHOUYI_TRIGGER_TYPE_BIND_DISPATCH) {
 		aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
-			     TSM_DBG_DISPATCH_CMD_POOL(partition->id, get_qos(udesc->exec_flag),
+			     TSM_BIND_DISPATCH_CMD_POOL(partition->id, get_qos(udesc->exec_flag),
 						       udesc->core_id));
-		dev_dbg(partition->dev, "debug-dispatch user job 0x%llx", udesc->job_id);
+		dev_dbg(partition->dev, "bind-dispatch user job 0x%llx", udesc->job_id);
 	} else {
 		aipu_write32(partition->reg, TSM_CMD_SCHD_CTRL_HANDLE_REG,
 			     TSM_DISPATCH_CMD_POOL(partition->id, get_qos(udesc->exec_flag)));
@@ -493,6 +493,31 @@ u64 get_gm_size(u32 val)
 	return _val ? (SZ_1M << (_val - 1)) : 512 * SZ_1K;
 }
 
+static int zhouyi_v3_read_cluster_status(struct aipu_partition *cluster,
+					 struct aipu_cluster_status *status)
+{
+	int i = 1;
+
+	if (unlikely(!status))
+		return -EINVAL;
+
+	if (unlikely(!cluster))
+		return -EINVAL;
+
+	spin_lock(&cluster->io_lock);
+	aipu_write32(cluster->reg, DEBUG_PAGE_SELECTION_REG, SELECT_DEBUG_CORE(0, 0));
+	status->cluster_status = aipu_read32(cluster->reg, DEBUG_CLUSTER_STATUS);
+	status->core_status = (aipu_read32(cluster->reg, DEBUG_CORE_STATUS) >> 4) & 0b1;
+	for (; i < cluster->clusters[0].core_cnt; ++i) {
+		aipu_write32(cluster->reg, DEBUG_PAGE_SELECTION_REG, SELECT_DEBUG_CORE(0, i));
+		status->core_status |= (((aipu_read32(cluster->reg, DEBUG_CORE_STATUS) >> 4)
+								& 0b1) << i);
+	}
+	aipu_write32(cluster->reg, DEBUG_PAGE_SELECTION_REG, DISABLE_DEBUG);
+	spin_unlock(&cluster->io_lock);
+	return 0;
+}
+
 static struct aipu_operations zhouyi_v3_ops = {
 	.get_config = NULL,
 	.enable_interrupt = zhouyi_v3_enable_interrupt,
@@ -508,6 +533,7 @@ static struct aipu_operations zhouyi_v3_ops = {
 	.sysfs_show = zhouyi_v3_sysfs_show,
 #endif
 	.soft_reset = zhouyi_v3_soft_reset,
+	.hw_reset = NULL,
 	.initialize = zhouyi_v3_initialize,
 	.destroy_command_pool = zhouyi_v3_destroy_command_pool,
 	.abort_command_pool = zhouyi_v3_abort_command_pool,
@@ -515,6 +541,7 @@ static struct aipu_operations zhouyi_v3_ops = {
 	.disable_tick_counter = zhouyi_v3_disable_tick_counter,
 	.enable_tick_counter = zhouyi_v3_enable_tick_counter,
 	.enable_core_cnt = zhouyi_v3_enable_core_cnt,
+	.get_partition_status = zhouyi_v3_read_cluster_status,
 };
 
 struct aipu_operations *get_zhouyi_v3_ops(void)

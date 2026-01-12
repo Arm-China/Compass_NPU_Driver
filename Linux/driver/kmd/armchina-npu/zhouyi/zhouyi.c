@@ -130,7 +130,9 @@ int zhouyi_get_hw_version_number(struct io_region *io, int *rev)
 	case ZHOUYI_V3_REVISION_ID_R0P3:
 		return AIPU_ISA_VERSION_ZHOUYI_V3;
 	case ZHOUYI_V3_2_REVISION_ID_R1P0:
-		return AIPU_ISA_VERSION_ZHOUYI_V3_2;
+		return AIPU_ISA_VERSION_ZHOUYI_V3_2_0;
+	case ZHOUYI_V3_2_REVISION_ID_R2P0:
+		return AIPU_ISA_VERSION_ZHOUYI_V3_2_1;
 	}
 
 	return 0;

@@ -61,13 +61,13 @@ aipu_status_t JobBase::get_status_blocking(aipu_job_status_t *status,
   if ((m_status == AIPU_JOB_STATUS_DONE) ||
       (m_status == AIPU_JOB_STATUS_EXCEPTION)) {
     *status = (aipu_job_status_t)m_status;
-    dump_job_private_buffers_after_run(*m_rodata, m_descriptor);
-    dump_job_shared_buffers_after_run();
-    if (m_cfg->en_fast_perf) {
+    dump_buffers(false /*before*/);
+    if (m_dev->get_profile_en()) /* get profiler en from device instead of
+                                    job.m_cfg */
+    {
       m_dev->dump_profiling();
     }
-  } else if (m_status == AIPU_JOB_COREDUMP &&
-             m_dev->get_npu_version() >= AIPU_ISA_VERSION_ZHOUYI_V3) {
+  } else if (m_status == AIPU_JOB_COREDUMP && graph().get_isa() >= ISAv5) {
     *status = (aipu_job_status_t)m_status;
     do_coredump();
   } else {
@@ -127,8 +127,7 @@ aipu_status_t JobBase::get_tensor(aipu_tensor_type_t type, uint32_t tensor,
                                   void *data) {
   DEV_PA_64 pa = 0;
   uint64_t size = 0;
-  uint32_t isa = AIPU_ISA_VERSION_ZHOUYI_V1;
-  std::vector<struct JobIOBuffer> *iobuffer_vec = nullptr;
+  std::vector<JobIOBuffer> *iobuffer_vec = nullptr;
 
   if (nullptr == data)
     return AIPU_STATUS_ERROR_NULL_PTR;
@@ -136,8 +135,6 @@ aipu_status_t JobBase::get_tensor(aipu_tensor_type_t type, uint32_t tensor,
   /* Applications cannot get tensors if a job is not done status */
   if (m_status != AIPU_JOB_STATUS_DONE)
     return AIPU_STATUS_ERROR_INVALID_OP;
-
-  isa = m_dev->get_npu_version();
 
   switch (type) {
   case AIPU_TENSOR_TYPE_INPUT:
@@ -153,7 +150,7 @@ aipu_status_t JobBase::get_tensor(aipu_tensor_type_t type, uint32_t tensor,
     break;
 
   case AIPU_TENSOR_TYPE_PRINTF:
-    if (isa == AIPU_ISA_VERSION_ZHOUYI_V3) {
+    if (graph().get_isa() == ISAv5) {
       // Todo
     } else {
       iobuffer_vec = &m_printf;
@@ -161,7 +158,7 @@ aipu_status_t JobBase::get_tensor(aipu_tensor_type_t type, uint32_t tensor,
     break;
 
   case AIPU_TENSOR_TYPE_PROFILER:
-    // if (isa == AIPU_ISA_VERSION_ZHOUYI_V3)
+    // if (graph().get_isa() == ISAv5)
     // {
     //     std::string profile_file_name = m_dump_dir + "/" + m_dump_misc_prefix
     //     + "_PerfData.bin"; LOG(LOG_ALERT, "check dump file: %s",
@@ -216,11 +213,12 @@ aipu_status_t JobBase::rewrite_rodata(uint32_t offset, uint32_t value) {
   return AIPU_STATUS_SUCCESS;
 }
 
-aipu_status_t JobBase::setup_rodata(
-    const std::vector<struct GraphParamMapLoadDesc> &param_map,
-    const std::vector<BufferDesc *> &reuse_buf,
-    const std::vector<BufferDesc *> &static_buf, BufferDesc &rodata,
-    BufferDesc *dcr, std::set<uint32_t> *dma_buf_idx) {
+aipu_status_t
+JobBase::setup_rodata(const std::vector<GraphParamMapLoadDesc> &param_map,
+                      const std::vector<BufferDesc *> &reuse_buf,
+                      const std::vector<BufferDesc *> &static_buf,
+                      BufferDesc &rodata, BufferDesc *dcr,
+                      std::set<uint32_t> *dma_buf_idx) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   char *ro_va = nullptr;
   char *dcr_va = nullptr;
@@ -349,7 +347,7 @@ void JobBase::setup_remap(BufferDesc &rodata, BufferDesc *descriptor) {
   }
 }
 
-void JobBase::create_io_buffers(std::vector<struct JobIOBuffer> &bufs,
+void JobBase::create_io_buffers(std::vector<JobIOBuffer> &bufs,
                                 const std::vector<GraphIOTensorDesc> &desc,
                                 const std::vector<BufferDesc *> &reuses) {
   uint32_t cnt = desc.size();
@@ -367,7 +365,7 @@ void JobBase::create_io_buffers(std::vector<struct JobIOBuffer> &bufs,
   }
 }
 
-void JobBase::create_io_buffers(const struct GraphIOTensors &io,
+void JobBase::create_io_buffers(const GraphIOTensors &io,
                                 const std::vector<BufferDesc *> &reuses) {
   create_io_buffers(m_inputs, io.inputs, reuses);
   create_io_buffers(m_outputs, io.outputs, reuses);
@@ -380,7 +378,7 @@ void JobBase::create_io_buffers(const struct GraphIOTensors &io,
   create_io_buffers(m_outputs_shape, io.outputs_shape, reuses);
 }
 
-void JobBase::update_io_buffers(const struct GraphIOTensors &io,
+void JobBase::update_io_buffers(const GraphIOTensors &io,
                                 const std::vector<BufferDesc *> &reuses) {
   m_inputs.clear();
   m_outputs.clear();
@@ -389,64 +387,14 @@ void JobBase::update_io_buffers(const struct GraphIOTensors &io,
 }
 
 void JobBase::update_single_io_buffers(
-    const std::vector<struct GraphIOTensorDesc> &graph_iobufs,
-    std::vector<struct JobIOBuffer> &job_iobufs,
+    const std::vector<GraphIOTensorDesc> &graph_iobufs,
+    std::vector<JobIOBuffer> &job_iobufs,
     const std::vector<BufferDesc *> &reuses) {
   job_iobufs.clear();
   create_io_buffers(job_iobufs, graph_iobufs, reuses);
 }
 
-void JobBase::dump_buffer(DEV_PA_64 pa, const char *bin_va, uint32_t size,
-                          const char *name) {
-  char file_name[4096];
-
-  if (bin_va != nullptr) {
-    snprintf(file_name, 4096,
-             "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_Binary_Size_0x%x.bin",
-             m_dump_dir.c_str(), graph().m_id, m_id, name, size);
-    umd_dump_file_helper(file_name, bin_va, size);
-  }
-
-  snprintf(file_name, 4096,
-           "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_DRAM_PA_0x%lx_Size_0x%x.bin",
-           m_dump_dir.c_str(), graph().m_id, m_id, name, pa, size);
-  m_mem->dump_file(pa, file_name, size);
-}
-
-void JobBase::dump_single_buffer(DEV_PA_64 pa, uint32_t size,
-                                 const char *name) {
-  char file_name[2048] = {0};
-
-  snprintf(file_name, 2048,
-           "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_DRAM_PA_0x%lx_Size_0x%x.bin",
-           m_dump_dir.c_str(), graph().m_id, m_id, name, pa, size);
-  m_mem->dump_file(pa, file_name, size);
-}
-
-void JobBase::dump_share_buffer(JobIOBuffer &iobuf, const char *name,
-                                bool keep_name) {
-  char file_name[2048] = {0};
-  char *va = nullptr;
-
-  if (!keep_name)
-    snprintf(file_name, 2048,
-             "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_DRAM_PA_0x%lx_Size_0x%x.bin",
-             m_dump_dir.c_str(), graph().m_id, m_id, name, iobuf.pa,
-             iobuf.size);
-  else
-    snprintf(file_name, 2048, "%s", name);
-
-  va = (char *)mmap(NULL, iobuf.dmabuf_size, PROT_READ, MAP_SHARED,
-                    iobuf.dmabuf_fd, 0);
-  if (MAP_FAILED == va)
-    LOG(LOG_ERR, "%s: mmap dma_buf fail", __FUNCTION__);
-
-  umd_dump_file_helper(file_name, va + iobuf.offset_in_dmabuf, iobuf.size);
-  munmap(va, iobuf.dmabuf_size);
-}
-
-int JobBase::readwrite_dma_buf(struct JobIOBuffer &iobuf, void *data,
-                               bool read) {
+int JobBase::readwrite_dma_buf(JobIOBuffer &iobuf, void *data, bool read) {
   char *va = nullptr;
   int ret = 0;
 
@@ -472,23 +420,25 @@ aipu_status_t JobBase::config_mem_dump(uint64_t types,
                                        const aipu_job_config_dump_t *config) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-  if ((config != nullptr) && (config->dump_dir != nullptr)) {
-    if (access(config->dump_dir, F_OK) != 0) {
-      LOG(LOG_ERR, "%s [non-exist]", config->dump_dir);
-      ret = AIPU_STATUS_ERROR_INVALID_CONFIG;
-      goto finish;
+  if (config != nullptr) {
+    if (config->dump_dir != nullptr) {
+      if (access(config->dump_dir, F_OK) != 0) {
+        LOG(LOG_ERR, "%s [non-exist]", config->dump_dir);
+        ret = AIPU_STATUS_ERROR_INVALID_CONFIG;
+        goto finish;
+      }
+      m_dump_dir = config->dump_dir;
     }
-    m_dump_dir = config->dump_dir;
+
+    if (config->prefix != nullptr)
+      m_dump_prefix = config->prefix;
+
+    if (config->output_prefix != nullptr)
+      m_dump_output_prefix = config->output_prefix;
+
+    if (config->misc_prefix != nullptr)
+      m_dump_misc_prefix = config->misc_prefix;
   }
-
-  if ((config != nullptr) && (config->prefix != nullptr))
-    m_dump_prefix = config->prefix;
-
-  if ((config != nullptr) && (config->output_prefix != nullptr))
-    m_dump_output_prefix = config->output_prefix;
-
-  if ((config != nullptr) && (config->misc_prefix != nullptr))
-    m_dump_misc_prefix = config->misc_prefix;
 
   m_dump_text = types & AIPU_JOB_CONFIG_TYPE_DUMP_TEXT;
   m_dump_weight = types & AIPU_JOB_CONFIG_TYPE_DUMP_WEIGHT;
@@ -505,19 +455,67 @@ finish:
   return ret;
 }
 
-void JobBase::dump_job_shared_buffers() {
+void JobBase::dump_buffer(DEV_PA_64 pa, uint32_t size, const char *name,
+                          const char *bin_va) {
+  char file_name[4096];
+
+  if (bin_va != nullptr) {
+    snprintf(file_name, 4096,
+             "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_Binary_Size_0x%x.bin",
+             m_dump_dir.c_str(), graph().m_id, m_id, name, size);
+    umd_dump_file_helper(file_name, bin_va, size);
+  }
+
+  snprintf(file_name, 4096,
+           "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_DRAM_PA_0x%lx_Size_0x%x.bin",
+           m_dump_dir.c_str(), graph().m_id, m_id, name, pa, size);
+  m_mem->dump_file(pa, file_name, size);
+}
+
+void JobBase::dump_buffer(JobIOBuffer &iobuf, const char *name,
+                          bool keep_name) {
+  char file_name[2048] = {0};
+  char *va = nullptr;
+
+  if (!keep_name)
+    snprintf(file_name, 2048,
+             "%s/Graph_0x%lx_Job_0x%lx_%s_Dump_in_DRAM_PA_0x%lx_Size_0x%x.bin",
+             m_dump_dir.c_str(), graph().m_id, m_id, name, iobuf.pa,
+             iobuf.size);
+  else
+    snprintf(file_name, 2048, "%s", name);
+
+  if (iobuf.dmabuf_fd < 0) {
+    m_mem->dump_file(iobuf.pa, file_name, iobuf.size);
+  } else {
+    va = (char *)mmap(NULL, iobuf.dmabuf_size, PROT_READ, MAP_SHARED,
+                      iobuf.dmabuf_fd, 0);
+    if (MAP_FAILED == va)
+      LOG(LOG_ERR, "%s: mmap dma_buf fail", __FUNCTION__);
+
+    umd_dump_file_helper(file_name, va + iobuf.offset_in_dmabuf, iobuf.size);
+    munmap(va, iobuf.dmabuf_size);
+  }
+}
+
+void JobBase::dump_buffers(bool before) {
   DEV_PA_64 dump_pa;
   uint32_t dump_size;
   const char *bin_va = nullptr;
 
-  if (m_dump_text) {
+  if (m_dump_text && m_text != nullptr) {
     dump_pa = m_text->pa;
     bin_va = graph().m_btext.va;
     dump_size = graph().m_btext.size;
-    dump_buffer(dump_pa, bin_va, dump_size, "Text_BeforeRun");
+    dump_buffer(dump_pa, dump_size,
+                (before ? "Text_BeforeRun" : "Text_AfterRun"),
+                (before ? bin_va : nullptr));
   }
 
-  if (m_dump_weight && (graph().has_weight() > 0)) {
+  if (m_dump_weight) {
+    std::string weight_name = before ? "Weight_BeforeRun" : "Weight_AfterRun";
+    std::string zcy_name =
+        before ? "Zerocpy_const_BeforeRun" : "Zerocpy_const_AfterRun";
     for (uint32_t bss_id = 0; bss_id < graph().get_weight_buffer_info().size();
          bss_id++) {
       if (graph().get_weight_buffer_info()[bss_id].wb_weight != nullptr &&
@@ -526,7 +524,7 @@ void JobBase::dump_job_shared_buffers() {
         dump_size =
             graph().get_weight_buffer_info()[bss_id].wb_weight->req_size;
         if (dump_size != 0)
-          dump_buffer(dump_pa, nullptr, dump_size, "Weight_BeforeRun");
+          dump_buffer(dump_pa, dump_size, weight_name.c_str(), nullptr);
       }
 
       if (graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const !=
@@ -536,131 +534,67 @@ void JobBase::dump_job_shared_buffers() {
         dump_size =
             graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->req_size;
         if (dump_size != 0)
-          dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_BeforeRun");
+          dump_buffer(dump_pa, dump_size, zcy_name.c_str(), nullptr);
       }
     }
   }
-}
 
-void JobBase::dump_job_private_buffers(BufferDesc &rodata,
-                                       BufferDesc *descriptor) {
-  DEV_PA_64 dump_pa;
-  uint32_t dump_size;
-  const char *bin_va = nullptr;
-
-  if (m_dump_rodata) {
-    dump_pa = rodata.pa;
+  if (m_dump_rodata && m_rodata != nullptr) {
+    dump_pa = m_rodata->pa;
     bin_va = graph().m_brodata.va;
     dump_size = graph().m_brodata.size;
     if (dump_size != 0)
-      dump_buffer(dump_pa, bin_va, dump_size, "Rodata_BeforeRun");
+      dump_buffer(dump_pa, dump_size,
+                  (before ? "Rodata_BeforeRun" : "Rodata_AfterRun"),
+                  (before ? bin_va : nullptr));
   }
 
-  if (m_dump_dcr && descriptor != nullptr) {
-    dump_pa = descriptor->pa;
+  if (m_dump_dcr && m_descriptor != nullptr) {
+    dump_pa = m_descriptor->pa;
     bin_va = graph().m_bdesc.va;
     dump_size = graph().m_bdesc.size;
     if (dump_size != 0)
-      dump_buffer(dump_pa, bin_va, dump_size, "Descriptor_BeforeRun");
+      dump_buffer(dump_pa, dump_size,
+                  (before ? "Descriptor_BeforeRun" : "Descriptor_AfterRun"),
+                  (before ? bin_va : nullptr));
   }
 
-  if (m_dump_input) {
+  if (m_dump_input && before) {
     for (uint32_t i = 0; i < m_inputs.size(); i++) {
       if (m_inputs[i].dump_ignore_flag)
         continue;
 
-      char name[32];
-      dump_pa = m_inputs[i].pa;
-      dump_size = m_inputs[i].size;
-      snprintf(name, 32, "Input%u", m_inputs[i].id);
-      if (dump_size != 0) {
-        if (m_inputs[i].dmabuf_fd < 0)
-          dump_buffer(dump_pa, nullptr, dump_size, name);
-        else
-          dump_share_buffer(m_inputs[i], name);
-      }
+      std::string name = std::string("Input") + std::to_string(m_inputs[i].id);
+      if (m_inputs[i].size != 0)
+        dump_buffer(m_inputs[i], name.c_str());
     }
   }
-}
 
-void JobBase::dump_job_shared_buffers_after_run() {
-  DEV_PA_64 dump_pa = 0;
-  uint32_t dump_size = 0;
+  if (m_dump_output && !before) {
+    for (uint32_t i = 0; i < m_outputs.size(); i++) {
+      if (m_outputs[i].dump_ignore_flag)
+        continue;
 
-  if (m_dump_text) {
-    dump_pa = m_text->pa;
-    dump_size = graph().m_btext.size;
-    dump_single_buffer(dump_pa, dump_size, "Text_AfterRun");
-  }
-
-  if (m_dump_weight && (graph().has_weight() > 0)) {
-    for (uint32_t bss_id = 0; bss_id < graph().get_weight_buffer_info().size();
-         bss_id++) {
-      if (graph().get_weight_buffer_info()[bss_id].wb_weight != nullptr &&
-          graph().get_weight_buffer_info()[bss_id].wb_weight->size > 0) {
-        dump_pa = graph().get_weight_buffer_info()[bss_id].wb_weight->pa;
-        dump_size =
-            graph().get_weight_buffer_info()[bss_id].wb_weight->req_size;
-        if (dump_size != 0)
-          dump_single_buffer(dump_pa, dump_size, "Weight_AfterRun");
-      }
-
-      if (graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const !=
-              nullptr &&
-          graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->size > 0) {
-        dump_pa = graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->pa;
-        dump_size =
-            graph().get_weight_buffer_info()[bss_id].wb_zerocpy_const->req_size;
-        if (dump_size != 0)
-          dump_buffer(dump_pa, nullptr, dump_size, "Zerocpy_const_AfterRun");
-      }
+      std::string name =
+          std::string("Output") + std::to_string(m_outputs[i].id);
+      if (m_outputs[i].size != 0)
+        dump_buffer(m_outputs[i], name.c_str());
     }
   }
-}
-
-void JobBase::dump_job_private_buffers_after_run(BufferDesc &rodata,
-                                                 BufferDesc *descriptor) {
-  DEV_PA_64 dump_pa;
-  uint32_t dump_size;
 
   if (m_dump_emu) {
     for (uint32_t i = 0; i < m_outputs.size(); i++) {
       if (m_outputs[i].dump_ignore_flag)
         continue;
 
-      std::string dump_name =
+      std::string name =
           m_dump_dir + "/" + m_dump_prefix + ".output" + std::to_string(i);
-
-      dump_pa = m_outputs[i].pa;
-      dump_size = m_outputs[i].size;
-
-      if (m_outputs[i].dmabuf_fd < 0)
-        m_mem->dump_file(dump_pa, dump_name.c_str(), dump_size);
-      else {
-        char name[32];
-        snprintf(name, 32, "Output%u", m_outputs[i].id);
-        dump_share_buffer(m_outputs[i], name);
-      }
+      if (m_outputs[i].size != 0)
+        dump_buffer(m_outputs[i], name.c_str(), true);
     }
   }
 
-  if (m_dump_output) {
-    for (uint32_t i = 0; i < m_outputs.size(); i++) {
-      if (m_outputs[i].dump_ignore_flag)
-        continue;
-
-      char name[32];
-      dump_pa = m_outputs[i].pa;
-      dump_size = m_outputs[i].size;
-      snprintf(name, 32, "Output%u", m_outputs[i].id);
-      if (m_outputs[i].dmabuf_fd < 0)
-        dump_buffer(dump_pa, nullptr, dump_size, name);
-      else
-        dump_share_buffer(m_outputs[i], name);
-    }
-  }
-
-  if (m_dump_reuse) {
+  if (m_dump_reuse && !before) {
     if ((m_dev->get_dev_type() == DEV_TYPE_AIPU) ||
         (m_dev->get_dev_type() == DEV_TYPE_SIMULATOR_V3) ||
         (m_dev->get_dev_type() == DEV_TYPE_SIMULATOR_V3_2)) {
@@ -671,29 +605,26 @@ void JobBase::dump_job_private_buffers_after_run(BufferDesc &rodata,
         dump_size = m_job_reuses[i]->size;
         snprintf(name, 32, "AfRun_Reuse%u", i);
         if (dump_size != 0)
-          dump_buffer(dump_pa, nullptr, dump_size, name);
+          dump_buffer(dump_pa, dump_size, name, nullptr);
       }
     }
   }
 
-  if (m_dump_rodata) {
-    dump_pa = rodata.pa;
-    dump_size = graph().m_brodata.size;
-    if (dump_size != 0)
-      dump_buffer(dump_pa, nullptr, dump_size, "Rodata_AfterRun");
-  }
-
-  if (m_dump_dcr && descriptor != nullptr) {
-    dump_pa = descriptor->pa;
-    dump_size = graph().m_bdesc.size;
-    if (dump_size != 0)
-      dump_buffer(dump_pa, nullptr, dump_size, "Descriptor_AfterRun");
-  }
-
+  /**
+   * v3x dump graph json file, .note.graphjson needs aipurun enable '-p'
+   * TODO:
+   *  - if user doesn't provide json file, driver try to use json file in
+   * aipu.bin
+   *  - if user provides json file, driver should use user's json file
+   *  - to support above feature, simulator needs to add 'set_graphjson_file'
+   * API
+   */
   if (m_dump_profile) {
-    if (m_profile_fd > 0)
-      close(m_profile_fd);
+    std::string fullpath = m_dump_dir + "/" + m_dump_prefix + ".graph.json";
+    dump_graphjson(fullpath);
   }
+
+  dump_extension_buffers(before);
 }
 
 aipu_status_t JobBase::validate_schedule_status() {

@@ -3,7 +3,7 @@
 #
 KERNEL_DIR := $(CONFIG_DRV_BTENVAR_JUNO_KPATH)
 CROSS_COMPILE := $(CONFIG_DRV_BTENVAR_CROSS_CXX_PATH)/aarch64-linux-gnu-
-ARCH := arm64
+ARCH := $(COMPASS_DRV_BTENVAR_ARCH)
 
 CC:= $(CROSS_COMPILE)gcc
 LD:= $(CROSS_COMPILE)ld
@@ -17,7 +17,7 @@ all: modules
 
 modules:
 	@$(call check_env)
-	$(MAKE) ARCH=$(ARCH) -C $(KERNEL_DIR) M=$(PWD) modules
+	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KERNEL_DIR) M=$(PWD) modules
 	@echo "clean temp files"; rm -fr *.o *.symvers *.order *.mod.c *.mod .*.cmd .tmp_versions
 clean:
 	$(MAKE) ARCH=$(ARCH) -C $(KERNEL_DIR) M=$(PWD) clean

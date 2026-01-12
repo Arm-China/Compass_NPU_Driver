@@ -8,6 +8,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/of.h>
+#include <linux/version.h>
 #include "armchina_aipu_soc.h"
 
 static struct aipu_soc default_soc = {
@@ -24,7 +25,6 @@ static struct aipu_soc_operations default_ops = {
 	.is_aipu_irq = NULL,
 	.soc_pm_runtime_get_sync = NULL,
 	.soc_pm_runtime_put = NULL,
-	.hw_reset = NULL,
 };
 
 static int default_probe(struct platform_device *p_dev)
@@ -32,10 +32,17 @@ static int default_probe(struct platform_device *p_dev)
 	return armchina_aipu_probe(p_dev, &default_soc, &default_ops);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static void default_remove(struct platform_device *p_dev)
+{
+	armchina_aipu_remove(p_dev);
+}
+#else
 static int default_remove(struct platform_device *p_dev)
 {
 	return armchina_aipu_remove(p_dev);
 }
+#endif
 
 static int default_suspend(struct platform_device *p_dev, pm_message_t state)
 {

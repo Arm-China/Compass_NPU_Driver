@@ -257,12 +257,14 @@ static struct aipu_operations zhouyi_v1_ops = {
 	.sysfs_show = zhouyi_v1_sysfs_show,
 #endif
 	.soft_reset = zhouyi_v1_soft_reset,
+	.hw_reset = NULL,
 	.initialize = zhouyi_v1_initialize,
 	.destroy_command_pool = zhouyi_v1_destroy_command_pool,
 	.abort_command_pool = zhouyi_v1_abort_command_pool,
 	.exit_dispatch = zhouyi_v1_exit_dispatch,
 	.disable_tick_counter = zhouyi_v1_disable_tick_counter,
 	.enable_tick_counter = zhouyi_v1_enable_tick_counter,
+	.get_partition_status = NULL,
 };
 
 struct aipu_operations *get_zhouyi_v1_ops(void)

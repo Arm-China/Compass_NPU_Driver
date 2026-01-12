@@ -13,7 +13,6 @@
 namespace aipudrv {
 GraphBase::GraphBase(void *ctx, GRAPH_ID id, DeviceBase *dev)
     : m_ctx(ctx), m_id(id), m_dev(dev) {
-  m_mem = m_dev->get_mem();
   pthread_rwlock_init(&m_lock, NULL);
   pthread_rwlock_init(&m_batch_queue_lock, NULL);
 }
@@ -164,10 +163,10 @@ uint32_t GraphBase::get_batch_queue_size(uint32_t queue_id) {
   return size;
 }
 
-batch_info_t &GraphBase::get_batch_queue_item(uint32_t queue_id,
-                                              uint32_t batch_num) {
+BatchInfo &GraphBase::get_batch_queue_item(uint32_t queue_id,
+                                           uint32_t batch_num) {
   pthread_rwlock_rdlock(&m_batch_queue_lock);
-  batch_info_t &batch_info = m_batch_queue[queue_id].batches[batch_num];
+  BatchInfo &batch_info = m_batch_queue[queue_id].batches[batch_num];
   pthread_rwlock_unlock(&m_batch_queue_lock);
   return batch_info;
 }
@@ -176,7 +175,7 @@ aipu_status_t GraphBase::add_batch(uint32_t queue_id, char *inputs[],
                                    uint32_t input_cnt, char *outputs[],
                                    uint32_t output_cnt) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
-  batch_info_t inter_batch;
+  BatchInfo inter_batch;
 
   if (!is_valid_batch_queue(queue_id))
     return AIPU_STATUS_ERROR_NO_BATCH_QUEUE;

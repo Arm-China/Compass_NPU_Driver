@@ -876,6 +876,17 @@
 		};
 	};
 
+	fpga_gpio: gpio@64ff2008 {
+		#address-cells = <2>;
+		#size-cells = <2>;
+
+		compatible = "armchina,fpga-gpio";
+		reg = <0x0 0x64ff2008 0x0 0x4>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		status = "okay";
+	};
+
 	aipu0@64000000 {
 		#address-cells = <2>;
 		#size-cells = <1>;
@@ -886,6 +897,7 @@
 		reg = <0x0 0x64000000 0x0 0x3230>;
 		memory-region=<&aipu_reserved_0 &aipu_reserved_1 &aipu_reserved_2 &aipu_reserved_3>;
 		dma-ranges=<0x0 0x20000000 0x0 0xA0000000 0x30000000>; /* for kernel version < 6.1 */
+		reset-gpios = <&fpga_gpio 0 GPIO_ACTIVE_LOW>;
 		gm-policy = <1>;                      /* x2 only: shared by tasks of all QoS level */
 		interrupts = <0 168 IRQ_TYPE_EDGE_RISING>;
 	};
@@ -895,6 +907,5 @@
 		#size-cells = <1>;
 
 		compatible = "armchina,importer";
-		dma-ranges = <0x0 0x20000000 0x0 0xA0000000 0x10000000>; /* for kernel version < 6.1 */
 	};
 };

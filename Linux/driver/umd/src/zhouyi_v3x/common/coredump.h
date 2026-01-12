@@ -89,7 +89,7 @@ struct NoteCommonBuffer {
 
   void write(std::ostream &oss) {
     if (buf != nullptr && size != 0)
-      oss.write((char *)buf, sizeof(tcb_t));
+      oss.write((char *)buf, tcb_ctl::TCB_LEN);
   }
 };
 
@@ -122,9 +122,9 @@ private:
   CoredumpAttr m_attr = {0};
   uint32_t m_gm_cnt = 1;
   std::vector<std::pair<DEV_PA_32, char *>> m_tecs_bufs;
-  std::vector<std::pair<BufferDesc *, char *>> m_gm_bufs;
+  std::vector<std::pair<const BufferDesc *, char *>> m_gm_bufs;
   std::vector<char *> m_sm_bufs;
-  std::map<uint32_t, BufferDesc *> m_job_gm_bufs;
+  std::map<uint32_t, const BufferDesc *> m_job_gm_bufs;
   BufferDesc *m_desc = nullptr;
 
   aipu_status_t get_lm_sm_info();
@@ -177,7 +177,7 @@ public:
     return m_tecs_bufs;
   }
 
-  aipu_status_t set_gm_info(uint32_t gm_id, BufferDesc *buf) {
+  aipu_status_t set_gm_info(uint32_t gm_id, const BufferDesc *buf) {
     if (gm_id >= m_gm_cnt)
       return AIPU_STATUS_ERROR_INVALID_GM;
 

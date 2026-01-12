@@ -106,14 +106,14 @@
 #define _TSM_DESTROY_V3_2                                 0x2
 #define _TSM_ABORT_V3_2                                   0x3
 #define _TSM_DISPATCH_V3_2                                0x4
-#define _TSM_DEBUG_DISPATCH_V3_2                          0x5
+#define _TSM_BIND_DISPATCH_V3_2                           0x5
 
 #define TSM_MAP_SINGLE_V3_2                              _TSM_MAP_V3_2(0x0)
 #define TSM_MAP_ALL_V3_2                                 _TSM_MAP_V3_2(0x1)
 #define TSM_CREATE_CMD_POOL_V3_2(pool, map)              (_TSM_CREATE_V3_2 | _TSM_POOL_V3_2(pool) | (map))
 #define TSM_DESTROY_CMD_POOL_V3_2(pool)                  (_TSM_DESTROY_V3_2 | _TSM_POOL_V3_2(pool))
 #define TSM_ABORT_CMD_POOL_V3_2(pool)                    (_TSM_ABORT_V3_2 | _TSM_POOL_V3_2(pool))
-#define TSM_DBG_DISPATCH_CMD_POOL_V3_2(pool, qos, core)  (_TSM_DEBUG_DISPATCH_V3_2 | (qos) | \
+#define TSM_BIND_DISPATCH_CMD_POOL_V3_2(pool, qos, core)  (_TSM_BIND_DISPATCH_V3_2 | (qos) | \
 						     _TSM_POOL_V3_2(pool) | _TSM_DIRECT_CORE_V3_2(core))
 
 #define TSM_CMD_SCHD_CTRL_HANDLE_REG_V3_2             0x0
@@ -410,6 +410,7 @@
 #define GET_INTR_CLUSTER_ID_V3_2(status_32)           (((status_32) >> 24) & 0xFF)
 #define GET_INTR_CORE_ID_V3_2(status_32)              (((status_32) >> 20) & 0xF)
 #define GET_INTR_TEC_ID_V3_2(status_32)               (((status_32) >> 16) & 0xF)
+#define GET_INTR_GROUP_ID_V3_2(status_32)             ((status_32) & 0xFF)
 #define IS_POOL_IRQ_V3_2(status_32)                   (((status_32) >> 11) & 0x1)
 #define IS_CLUSTER_IRQ_V3_2(status_32)                (((status_32) >> 10) & 0x1)
 #define IS_CORE_IRQ_V3_2(status_32)                   (((status_32) >> 9) & 0x1)
@@ -424,6 +425,7 @@
 #define IS_SERIOUS_ERR_V3_2(status_32)                (((status_32) >> 3) & 0x7)
 #define GET_INTR_TYPE_V3_2(status_32)                 ((status_32) & 0x3F)
 #define IS_IRQ_TO_HANDLE_V3_2(status_32)              ((status_32) & 0xF1F)
+#define IS_COREDUMP_IRQ_V3_2(status_32)               (IS_EXCEPTION_IRQ_V3_2(status_32))
 
 #define INTERRUPT_TYPE_INFO_REG(id)                 (_GET_PER_INTERRUPT_REGISTER_OFFSET(id) + 0x0)
 
@@ -457,6 +459,7 @@
 #define GET_PRINF_SIZE_V3_2(flag)                     ((flag) & 0xFFFF)
 #define GET_PROFILER_BUF_PA_V3_2(flag)                (((flag) & 0xFFFFF) << 12)
 
+#define INTERRUPT_GROUP_ID_REG(id)               (_GET_PER_INTERRUPT_REGISTER_OFFSET(id) + 0x8)
 #define INTERRUPT_SIGNAL_FLAG_REG(id)               (_GET_PER_INTERRUPT_REGISTER_OFFSET(id) + 0xc)
 
 #define ZHOUYI_V3_2_MAX_REG_OFFSET                    0x322C

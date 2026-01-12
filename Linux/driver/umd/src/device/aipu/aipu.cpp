@@ -81,27 +81,29 @@ aipu_ll_status_t Aipu::init() {
 
   m_dram = UKMemory::get_memory(m_fd);
   m_dram->set_dev(this);
-  m_dram->set_isa_version(m_part_caps.at(0).version);
   for (uint32_t i = 0; i < cap.asid_cnt; ++i) {
     m_dram->set_asid_base(i, cap.asid_base[i]);
     LOG(LOG_DEBUG, "asid index: %u, asid base: 0x%llx", i, cap.asid_base[i]);
   }
 
-  if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V1)
-    m_dram->set_asid_base(0, 0);
-
-  if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
-    m_dram->set_dtcm_info(cap.dtcm_base, cap.dtcm_size);
-
-  if (m_part_caps.at(0).version <= AIPU_ISA_VERSION_ZHOUYI_V3)
+  if (m_part_caps.at(0).version <= AIPU_ISA_VERSION_ZHOUYI_V3) {
     m_dram->set_asid1(0); /* z1~x2 asid0/1 same base as default */
+
+    if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V1)
+      m_dram->set_asid_base(0, 0);
+    else if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V2_2)
+      m_dram->set_dtcm_info(cap.dtcm_base, cap.dtcm_size);
+    else if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3)
+      m_part_caps[0].config = 1204; /* x2 hardware doesn't provide config
+                                       information, default is 1204 */
+  }
 
   if (m_part_caps.at(0).version >= AIPU_ISA_VERSION_ZHOUYI_V3 &&
       m_dram->is_gm_enable()) {
     if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3) {
       m_dram->set_gm_size(0, cap.gm0_size);
       m_dram->set_gm_size(1, cap.gm1_size);
-    } else if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_2) {
+    } else if (m_part_caps.at(0).version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0) {
       m_dram->set_gm_size(0, cap.gm0_size);
     }
   }
@@ -127,8 +129,7 @@ bool Aipu::has_target(uint32_t arch, uint32_t version, uint32_t config,
                       uint32_t rev) {
   for (uint32_t i = 0; i < m_part_caps.size(); i++) {
     if (arch == m_part_caps[i].arch && version == m_part_caps[i].version &&
-        (version >= AIPU_ISA_VERSION_ZHOUYI_V3 ||
-         config == m_part_caps[i].config))
+        config == m_part_caps[i].config)
       return true;
   }
 
@@ -177,17 +178,17 @@ aipu_ll_status_t Aipu::write_reg(uint32_t partition_id, uint32_t offset,
   return AIPU_LL_STATUS_SUCCESS;
 }
 
-aipu_status_t Aipu::schedule(const JobDesc &job) {
+aipu_ll_status_t Aipu::schedule(const JobDesc &job) {
   int kret = 0;
 
   LOG(LOG_INFO, "dispatch job: 0x%llx", job.kdesc.job_id);
   kret = ioctl(m_fd, AIPU_IOCTL_SCHEDULE_JOB, &job.kdesc);
   if (kret) {
     LOG(LOG_ERR, "schedule job [fail]");
-    return AIPU_STATUS_ERROR_JOB_DISPATCH_FAIL;
+    return AIPU_LL_STATUS_ERROR_IOCTL_JOB_DISPATCH_FAIL;
   }
 
-  return AIPU_STATUS_SUCCESS;
+  return AIPU_LL_STATUS_SUCCESS;
 }
 
 aipu_ll_status_t Aipu::get_status(uint32_t max_cnt, bool of_this_thread,
@@ -253,7 +254,7 @@ aipu_ll_status_t Aipu::poll_status(uint32_t max_cnt, int32_t time_out,
                                    bool of_this_thread, void *jobbase) {
   aipu_ll_status_t ret = AIPU_LL_STATUS_SUCCESS;
   int kret = 0;
-  struct pollfd poll_list;
+  pollfd poll_list;
   JobBase *job = (JobBase *)jobbase;
 
   /**
@@ -301,7 +302,7 @@ aipu_ll_status_t Aipu::poll_status(uint32_t max_cnt, int32_t time_out,
 aipu_ll_status_t readwrite_dmabuf_helper(int devfd, aipu_dmabuf_op_t *dmabuf_op,
                                          bool write) {
   aipu_ll_status_t ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
-  struct aipu_dma_buf dma_buf = {0};
+  aipu_dma_buf dma_buf = {0};
   char *va = nullptr;
   int kret = 0;
 
@@ -385,9 +386,8 @@ aipu_ll_status_t Aipu::ioctl_cmd(uint32_t cmd, void *arg) {
     break;
 
   case AIPU_IOCTL_ALLOC_DMABUF: {
-    struct aipu_dma_buf_request *dmabuf_reg =
-        (struct aipu_dma_buf_request *)arg;
-    struct aipu_dma_buf dma_buf = {0};
+    aipu_dma_buf_request *dmabuf_reg = (aipu_dma_buf_request *)arg;
+    aipu_dma_buf dma_buf = {0};
     std::string name;
 #if defined(ZHOUYI_V3) && !defined(SIMULATION)
     dmabuf_reg->bytes += 0x800;
@@ -427,7 +427,7 @@ aipu_ll_status_t Aipu::ioctl_cmd(uint32_t cmd, void *arg) {
     {
       std::lock_guard<std::mutex> lock_(m_dma_buf_mtx);
       if (m_dma_buf_map.count(dma_buf_fd) == 1) {
-        struct aipu_dma_buf dma_buf = m_dma_buf_map[dma_buf_fd];
+        aipu_dma_buf dma_buf = m_dma_buf_map[dma_buf_fd];
         std::string name = "dmabuf_fd_" + std::to_string(dma_buf.fd);
         m_dram->add_tracking(dma_buf.pa, dma_buf.bytes, MemOperationFree,
                              name.c_str(), false, 0);
@@ -438,7 +438,7 @@ aipu_ll_status_t Aipu::ioctl_cmd(uint32_t cmd, void *arg) {
   } break;
 
   case AIPU_IOCTL_GET_DMABUF_INFO:
-    kret = ioctl(m_fd, AIPU_IOCTL_GET_DMA_BUF_INFO, (struct aipu_dma_buf *)arg);
+    kret = ioctl(m_fd, AIPU_IOCTL_GET_DMA_BUF_INFO, (aipu_dma_buf *)arg);
     if (kret < 0) {
       LOG(LOG_ERR, "get dma_buf [fail]");
       ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
@@ -454,7 +454,7 @@ aipu_ll_status_t Aipu::ioctl_cmd(uint32_t cmd, void *arg) {
     break;
 
   case AIPU_IOCTL_ATTACH_DMABUF: {
-    struct aipu_dma_buf *dma_buf = (struct aipu_dma_buf *)arg;
+    aipu_dma_buf *dma_buf = (aipu_dma_buf *)arg;
     std::string name;
 
     kret = ioctl(m_fd, AIPU_IOCTL_ATTACH_DMA_BUF, dma_buf);
@@ -486,7 +486,7 @@ aipu_ll_status_t Aipu::ioctl_cmd(uint32_t cmd, void *arg) {
     {
       std::lock_guard<std::mutex> lock_(m_dma_buf_mtx);
       if (m_dma_buf_map.count(dmabuf_fd) == 1) {
-        struct aipu_dma_buf dma_buf = m_dma_buf_map[dmabuf_fd];
+        aipu_dma_buf dma_buf = m_dma_buf_map[dmabuf_fd];
         std::string name = "dmabuf_fd_" + std::to_string(dma_buf.fd);
         m_dram->add_tracking(dma_buf.pa, dma_buf.bytes, MemOperationFree,
                              name.c_str(), false, 0);
@@ -509,11 +509,41 @@ aipu_ll_status_t Aipu::ioctl_cmd(uint32_t cmd, void *arg) {
 
   /* command from kmd define */
   case AIPU_IOCTL_REBIND_DMA_BUF: {
-    struct aipu_rebind_buf_desc *desc = (struct aipu_rebind_buf_desc *)arg;
+    aipu_rebind_buf_desc *desc = (aipu_rebind_buf_desc *)arg;
 
     kret = ioctl(m_fd, AIPU_IOCTL_REBIND_DMA_BUF, desc);
     if (kret != AIPU_LL_STATUS_SUCCESS) {
       LOG(LOG_ERR, "ioctl rebind dmabuf to specified iova [fail]");
+      ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+    }
+    break;
+  }
+
+  case AIPU_IOCTL_SW_RESET: {
+    if (m_part_caps.at(0).version < AIPU_ISA_VERSION_ZHOUYI_V3) {
+      LOG(LOG_ERR, "only >=v3 support sw reset");
+      ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+      goto out;
+    }
+
+    kret = ioctl(m_fd, AIPU_IOCTL_AIPU_SW_RESET, NULL);
+    if (kret != AIPU_LL_STATUS_SUCCESS) {
+      LOG(LOG_ERR, "ioctl global soft reset [fail]");
+      ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+    }
+    break;
+  }
+
+  case AIPU_IOCTL_HW_RESET: {
+    if (m_part_caps.at(0).version < AIPU_ISA_VERSION_ZHOUYI_V3_2_0) {
+      LOG(LOG_ERR, "only >=v3_2 support hw reset");
+      ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
+      goto out;
+    }
+
+    kret = ioctl(m_fd, AIPU_IOCTL_AIPU_HW_RESET, NULL);
+    if (kret != AIPU_LL_STATUS_SUCCESS) {
+      LOG(LOG_ERR, "ioctl global hardware reset [fail]");
       ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
     }
     break;
@@ -543,12 +573,12 @@ out:
 }
 
 int Aipu::get_start_group_id(int group_cnt, uint16_t &start_group_id) {
-  struct aipu_id_desc id_desc = {0};
+  aipu_id_desc id_desc = {0};
 
   if (group_cnt == 0)
     return 0;
 
-  if (m_part_caps.at(0).version < AIPU_ISA_VERSION_ZHOUYI_V3_2)
+  if (m_part_caps.at(0).version < AIPU_ISA_VERSION_ZHOUYI_V3_2_0)
     return 0;
 
   id_desc.size = group_cnt;
@@ -568,7 +598,7 @@ int Aipu::put_start_group_id(uint16_t start_group_id, int group_cnt) {
   if (group_cnt == 0)
     return 0;
 
-  if (m_part_caps.at(0).version < AIPU_ISA_VERSION_ZHOUYI_V3_2)
+  if (m_part_caps.at(0).version < AIPU_ISA_VERSION_ZHOUYI_V3_2_0)
     return 0;
 
   std::lock_guard<std::mutex> lock_(m_group_id_mtx);
@@ -600,7 +630,7 @@ const char *Aipu::get_config_code() const {
   if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3) {
     code = std::string("X2_") + std::to_string(config) + "MP" +
            std::to_string(m_core_cnt);
-  } else if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_2) {
+  } else if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_2_0) {
     uint32_t aiff_cnt = config / 100 == 13 ? 2 : (config / 100 == 12 ? 1 : 0);
     uint32_t tec_cnt = tec_cnt_per_core(0);
     code = std::string("X3P-K1C") + std::to_string(m_core_cnt) + "A" +
@@ -618,7 +648,7 @@ aipu_ll_status_t Aipu::get_device_status(device_status_t *status) {
     return AIPU_LL_STATUS_ERROR_NULL_PTR;
 
   if (m_part_caps.at(0).version >= AIPU_ISA_VERSION_ZHOUYI_V3) {
-    struct aipu_cluster_status cluster_status;
+    aipu_cluster_status cluster_status;
     memset(&cluster_status, 0, sizeof(aipu_cluster_status));
     kret = ioctl(m_fd, AIPU_IOCTL_GET_CLUSTER_STATUS, &cluster_status);
     if (kret < 0) {
@@ -630,7 +660,7 @@ aipu_ll_status_t Aipu::get_device_status(device_status_t *status) {
         cluster_status.cluster_status & X2_CLUSTER_IDLE &&
         cluster_status.cluster_status & X2_BUS_IDLE) {
       *status = DEV_IDLE;
-    } else if (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_2 &&
+    } else if (m_part_caps.at(0).version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0 &&
                cluster_status.cluster_status & X3_CLUSTER_IDLE &&
                cluster_status.cluster_status & X3_BUS_IDLE) {
       *status = DEV_IDLE;
@@ -644,7 +674,7 @@ aipu_ll_status_t Aipu::get_device_status(device_status_t *status) {
 
     if ((m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3 &&
          value & X2_CMDPOOL_EXCEPTION) ||
-        (m_part_caps.at(0).version == AIPU_ISA_VERSION_ZHOUYI_V3_2 &&
+        (m_part_caps.at(0).version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0 &&
          value & X3_CMDPOOL_EXCEPTION))
       *status = DEV_EXCEPTION;
   } else {

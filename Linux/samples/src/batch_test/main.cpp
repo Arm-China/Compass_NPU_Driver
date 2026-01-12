@@ -266,7 +266,7 @@ int main(int argc, char *argv[]) {
       }
 
       output_data[k].clear();
-      if (output_buf != nullptr) {
+      if (output_buf[k] != nullptr) {
         delete[] output_buf[k];
         output_buf[k] = nullptr;
       }

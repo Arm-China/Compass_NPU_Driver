@@ -56,10 +56,10 @@ private:
   aipu_status_t setup_rodata_v12(std::set<uint32_t> *dma_buf_idx = nullptr);
   aipu_status_t get_runtime_err_code() const override;
 
-  aipu_status_t alloc_load_job_buffers() override;
+  aipu_status_t alloc_load_job_buffers();
   aipu_status_t free_job_buffers() override;
-  aipu_status_t alloc_reuse_buffer() override;
-  int alloc_reuse_buffer_optimized() override;
+  aipu_status_t alloc_reuse_buffer();
+  int alloc_reuse_buffer_optimized();
 
 public:
   aipu_status_t init(const aipu_global_config_simulation_t *cfg,

@@ -13,7 +13,10 @@
 #include <sys/stat.h>
 
 #include <cstring>
+#include <iomanip>
 
+#include "context.h"
+#include "device/device.h"
 #include "parser_base.h"
 #include "share_weight_mgr.h"
 #include "utils/helper.h"
@@ -34,7 +37,7 @@ Graph::Graph(void *ctx, GRAPH_ID id, DeviceBase *dev)
 Graph::~Graph() {}
 
 aipu_status_t Graph::load(std::istream &gbin, uint32_t size, bool ver_check,
-                          aipu_load_graph_cfg_t *config) {
+                          const aipu_load_graph_cfg_t *config) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   ret = load_config(config);
   if (ret != AIPU_STATUS_SUCCESS)
@@ -48,7 +51,7 @@ aipu_status_t Graph::load(std::istream &gbin, uint32_t size, bool ver_check,
 }
 
 aipu_status_t Graph::load(const char *file, bool ver_check,
-                          aipu_load_graph_cfg_t *config) {
+                          const aipu_load_graph_cfg_t *config) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
   ret = load_config(config);
@@ -62,7 +65,7 @@ aipu_status_t Graph::load(const char *file, bool ver_check,
   return load_common(ver_check);
 }
 
-aipu_status_t Graph::load_config(aipu_load_graph_cfg_t *config) {
+aipu_status_t Graph::load_config(const aipu_load_graph_cfg_t *config) {
   if (config != nullptr) {
     if (config->extra_weight_path != nullptr) {
       if (access(config->extra_weight_path, F_OK) == 0) {
@@ -88,20 +91,43 @@ aipu_status_t Graph::load_config(aipu_load_graph_cfg_t *config) {
 }
 
 aipu_status_t Graph::load_common(bool ver_check) {
-  m_mem->dump_tracking_log_start();
-  m_do_vcheck = ver_check;
-  if (ver_check &&
-      !m_dev->has_target(m_arch, m_hw_version, m_hw_config, m_hw_revision)) {
-    LOG(LOG_ERR, "aipu.bin's isa is %s, please build correct driver version",
-        get_arch_name(m_hw_version, m_hw_revision).c_str());
+  m_bin_target = version_to_target(0, m_isa, m_hw_config, m_hw_revision);
+  if (m_bin_target.empty())
     return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
-  }
-  m_dev->set_hw_config(m_hw_config);
 
-  if (m_hw_version > AIPU_ISA_VERSION_ZHOUYI_V3)
-    m_dynamic_asid0 = true;
+  LOG(LOG_INFO, "aipu binary target %s", m_bin_target.c_str());
 
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
+  uint32_t dev_isa = bin_to_dev_isa();
+
+#ifdef SIMULATION
+  MainContext *ctx = reinterpret_cast<MainContext *>(m_ctx);
+  ret = get_device(m_bin_target, dev_isa, &m_dev, ctx->sim_cfg());
+  if (ret != AIPU_STATUS_SUCCESS)
+    return ret;
+
+  ctx->set_dev(m_dev);
+#endif
+
+  if (ver_check &&
+      !m_dev->has_target(m_arch, dev_isa, m_hw_config, m_hw_revision)) {
+    LOG(LOG_ERR, "aipu.bin target %s, which cannot match with npu device",
+        m_bin_target.c_str());
+    return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
+  }
+
+  if (m_isa <= ISAv5 && (m_put_weight_gm || m_put_desc_gm || m_put_ws_gm)) {
+    LOG(LOG_ERR, "only >= v3_2 version supports put_xx_gm feature, but now %u",
+        m_isa);
+    return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
+  }
+
+  m_do_vcheck = ver_check;
+  m_mem = m_dev->get_mem();
+  m_mem->dump_tracking_log_start();
+
+  if (m_isa > ISAv5)
+    m_dynamic_asid0 = true;
 
   if (!m_dynamic_asid0) {
     if (m_btext.size != 0) {
@@ -124,6 +150,45 @@ aipu_status_t Graph::load_common(bool ver_check) {
   }
 
   return collect_fm_sections();
+}
+
+std::string Graph::version_to_target(uint32_t arch, uint32_t hw_version,
+                                     uint32_t hw_config, uint32_t hw_revision) {
+  const static std::set<std::string> targets = {
+      "Z1_0904", "Z1_1002",  "Z1_0701",  "Z1_0701_P", "Z2_1104",  "Z2_0901",
+      "Z2_1002", "Z2_1004",  "Z3_1204",  "Z3_1104",   "Z3_1002",  "Z3_0901",
+      "X1_1204", "X2_1204",  "Z5_0901",  "X3_1304",   "X3_1302",  "X3_1202",
+      "X3_1204", "X3P_1304", "X3P_1302", "X3P_1202",  "X3P_1204", "X3S_1304",
+  };
+
+  std::ostringstream str;
+  if (hw_version > ISAv3) {
+    str << "X";
+
+    hw_version -= ISAv3;
+    str << hw_version;
+
+    if (hw_revision == 1)
+      str << "P";
+    else if (hw_revision == 2)
+      str << "S";
+  } else {
+    str << "Z" << hw_version;
+  }
+
+  str << "_" << std::setw(4) << std::setfill('0') << hw_config;
+  if (hw_revision == 1 && hw_version < ISAv3)
+    str << "_P";
+  std::string target = str.str();
+  if (targets.count(target) == 0) {
+    LOG(LOG_ERR, "unsupport target %s", target.c_str());
+    return "";
+  }
+
+  std::string detailed_target = get_target();
+  if (detailed_target.find(target) != std::string::npos)
+    target = detailed_target;
+  return target;
 }
 
 /**
@@ -507,6 +572,14 @@ aipu_status_t Graph::set_graph_extra_weight(const BinSection &extra_weight) {
           extra_weight_info.file.c_str());
       return AIPU_STATUS_ERROR_READ_FILE_FAIL;
     }
+
+    bool match = check_hash(extra_weight_info.file, extra_weight_info.hash);
+    if (!match) {
+      LOG(LOG_ERR, "file:%s cannot match its hash code",
+          extra_weight_info.file.c_str());
+      return AIPU_STATUS_ERROR_UNKNOWN_BIN;
+    }
+
     m_bweight.extra_weight_infos.push_back(extra_weight_info);
   }
 

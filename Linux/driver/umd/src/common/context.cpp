@@ -37,7 +37,6 @@
 #include "job_base.h"
 #include "memory_base.h"
 #include "parser_base.h"
-#include "super_graph.h"
 
 volatile int32_t UMD_LOG_LEVEL = LOG_WARN;
 volatile char UMD_LOG_TIMESTAMP = 'n';
@@ -130,18 +129,26 @@ MainContext::~MainContext() {
 
 bool MainContext::is_deinit_ok() { return true; }
 
+/**
+ * after context initialization, memory is available on hardware and simulator
+ */
 aipu_status_t MainContext::init() {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
 
-  /* arm64 platform init m_dev here; simulation re-init m_dev later again. */
+  /* only for arm64, simulator is depending on aipu.bin */
   ret = get_device(&m_dev);
   if (ret != AIPU_STATUS_SUCCESS)
     return ret;
 
-  /* init m_dram here as debugger may allocate buffer after contex initializing
-   * done */
   if (m_dev != nullptr && m_dev->get_mem() != nullptr)
     m_dram = m_dev->get_mem();
+
+#ifdef SIMULATION
+  m_dram = UMemory::get_memory();
+#endif
+
+  if (m_dram == nullptr)
+    return AIPU_STATUS_ERROR_DEV_ABNORMAL;
 
   m_umd_version = MACRO_UMD_VERSION;
 
@@ -273,15 +280,6 @@ aipu_status_t MainContext::create_graph_object(std::istream &gbin,
   *id = create_unique_graph_id();
 
   uint32_t g_version = ParserBase::get_graph_bin_version(gbin);
-  aipu_status_t ret = set_device_cfg(g_version, &m_dev, &m_sim_cfg);
-  if (ret != AIPU_STATUS_SUCCESS)
-    return ret;
-
-  {
-    std::lock_guard<std::mutex> lock_(mtex);
-    if (m_dram == nullptr)
-      m_dram = m_dev->get_mem();
-  }
 
   GraphBase *pobj = nullptr;
 #if (defined ZHOUYI_V12)
@@ -303,30 +301,30 @@ aipu_status_t MainContext::create_graph_object(std::istream &gbin,
 }
 
 aipu_status_t MainContext::load_graph(const char *graph_file, GRAPH_ID *id,
-                                      aipu_load_graph_cfg_t *config) {
+                                      const aipu_load_graph_cfg_t *config) {
   if ((graph_file == nullptr) || (id == nullptr))
     return AIPU_STATUS_ERROR_NULL_PTR;
 
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   GraphBase *p_gobj = nullptr;
-  std::ifstream gbin;
-  gbin.open(graph_file, std::ifstream::in | std::ifstream::binary);
-  if (!gbin.is_open())
-    return AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
 
-  gbin.seekg(0, gbin.end);
-  uint32_t size = gbin.tellg();
-  gbin.seekg(0, gbin.beg);
+  {
+    std::ifstream gbin(graph_file, std::ifstream::in | std::ifstream::binary);
+    if (!gbin.is_open())
+      return AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
 
-  ret = create_graph_object(gbin, size, id, &p_gobj);
-  if (ret != AIPU_STATUS_SUCCESS)
-    return ret;
+    gbin.seekg(0, gbin.end);
+    uint32_t size = gbin.tellg();
+    gbin.seekg(0, gbin.beg);
 
-  gbin.close();
+    ret = create_graph_object(gbin, size, id, &p_gobj);
+    if (ret != AIPU_STATUS_SUCCESS)
+      return ret;
 
-  if (p_gobj == nullptr) {
-    ret = AIPU_STATUS_ERROR_GVERSION_UNSUPPORTED;
-    goto finish;
+    if (p_gobj == nullptr) {
+      ret = AIPU_STATUS_ERROR_GVERSION_UNSUPPORTED;
+      goto finish;
+    }
   }
 
   ret = p_gobj->load(graph_file, m_do_vcheck, config);
@@ -349,7 +347,7 @@ finish:
 
 aipu_status_t MainContext::load_graph(const char *graph_buf,
                                       uint32_t graph_size, GRAPH_ID *id,
-                                      aipu_load_graph_cfg_t *config) {
+                                      const aipu_load_graph_cfg_t *config) {
   if ((graph_buf == nullptr) || (id == nullptr))
     return AIPU_STATUS_ERROR_NULL_PTR;
 
@@ -545,25 +543,40 @@ finish:
 
 aipu_status_t MainContext::get_simulation_instance(void **simulator,
                                                    void **memory) {
-  return m_dev->get_simulation_instance(simulator, memory);
+  if (simulator == nullptr || memory == nullptr || m_dev == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  return convert_ll_status(m_dev->get_simulation_instance(simulator, memory));
 }
 
 aipu_status_t MainContext::get_partition_count(uint32_t *cnt) {
-  return m_dev->get_partition_count(cnt);
+  if (cnt == nullptr || m_dev == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  return convert_ll_status(m_dev->get_partition_count(cnt));
 }
 
 aipu_status_t MainContext::get_cluster_count(uint32_t partition_id,
                                              uint32_t *cnt) {
-  return m_dev->get_cluster_count(partition_id, cnt);
+  if (cnt == nullptr || m_dev == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  return convert_ll_status(m_dev->get_cluster_count(partition_id, cnt));
 }
 
 aipu_status_t MainContext::get_core_count(uint32_t partition_id,
                                           uint32_t cluster, uint32_t *cnt) {
-  return m_dev->get_core_count(partition_id, cluster, cnt);
+  if (cnt == nullptr || m_dev == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  return convert_ll_status(m_dev->get_core_count(partition_id, cluster, cnt));
 }
 
 aipu_status_t MainContext::get_core_info(uint32_t id, aipu_core_info_t *info) {
-  return m_dev->get_core_info(id, info);
+  if (info == nullptr || m_dev == nullptr)
+    return AIPU_STATUS_ERROR_NULL_PTR;
+
+  return convert_ll_status(m_dev->get_core_info(id, info));
 }
 
 aipu_status_t
@@ -597,14 +610,12 @@ finish:
 aipu_status_t
 MainContext::config_simulation(uint64_t types,
                                aipu_global_config_simulation_t *config) {
-  aipu_status_t ret = AIPU_STATUS_SUCCESS;
-  char *sim_npu_arch_env = getenv("SIM_NPU_ARCH");
-
-  const std::set<uint32_t> gm_sz_cfg = {0,
-                                        512 << 10, // 512KB
-                                        1 << 20,   // 1MB
-                                        2 << 20,   4 << 20,  8 << 20,
-                                        16 << 20,  32 << 20, 64 << 20};
+  /* aipu GM size */
+  static const std::set<uint32_t> gm_sz_cfg = {0,         // x3p
+                                               512 << 10, // 512KB
+                                               1 << 20,   // 1MB
+                                               2 << 20,   4 << 20,  8 << 20,
+                                               16 << 20,  32 << 20, 64 << 20};
 
   if (config == nullptr)
     return AIPU_STATUS_ERROR_NULL_PTR;
@@ -631,6 +642,8 @@ MainContext::config_simulation(uint64_t types,
   }
 
   if (config->log_file_path != nullptr) {
+    if (m_sim_cfg.log_file_path == nullptr)
+      m_sim_cfg.log_file_path = new char[BUF_LEN];
     strncpy((char *)m_sim_cfg.log_file_path, config->log_file_path, BUF_LEN);
   }
 
@@ -640,14 +653,14 @@ MainContext::config_simulation(uint64_t types,
   m_sim_cfg.enable_calloc = config->enable_calloc;
   m_sim_cfg.en_eval = config->en_eval;
   m_sim_cfg.en_l2d = config->en_l2d;
+  m_sim_cfg.fp_mode = config->fp_mode;
+  /* decide by user otherwise simulator object needs to set 1 always */
+  m_sim_cfg.print_subg_info = config->print_subg_info;
 
   m_sim_cfg.gm_size = config->gm_size;
   if (gm_sz_cfg.count(m_sim_cfg.gm_size) != 1) {
-#if (defined ZHOUYI_V3)
-    m_sim_cfg.gm_size = 4 * MB_SIZE;
-#else
-    m_sim_cfg.gm_size = 8 * MB_SIZE;
-#endif
+    LOG(LOG_ERR, "cannot accept gm size 0x%x", config->gm_size);
+    return AIPU_STATUS_ERROR_INVALID_CONFIG;
   }
 
   m_sim_cfg.en_fast_perf = config->en_fast_perf;
@@ -663,22 +676,7 @@ MainContext::config_simulation(uint64_t types,
     strncpy((char *)m_sim_cfg.perf_report, config->perf_report, BUF_LEN);
   }
 
-  if ((config->npu_arch_desc != nullptr) || (sim_npu_arch_env != nullptr)) {
-    if (m_sim_cfg.npu_arch_desc == nullptr)
-      m_sim_cfg.npu_arch_desc = new char[64];
-
-    if (config->npu_arch_desc != nullptr)
-      strncpy((char *)m_sim_cfg.npu_arch_desc, config->npu_arch_desc, 64);
-    else
-      strncpy((char *)m_sim_cfg.npu_arch_desc, sim_npu_arch_env, 64);
-
-    ret = set_device_cfg(AIPU_LOADABLE_GRAPH_ELF_V0, &m_dev, &m_sim_cfg);
-    if (ret != AIPU_STATUS_SUCCESS)
-      goto out;
-  }
-
-out:
-  return ret;
+  return AIPU_STATUS_SUCCESS;
 }
 
 aipu_status_t MainContext::config_hw(uint64_t types,
@@ -715,6 +713,9 @@ aipu_status_t MainContext::debugger_malloc(uint32_t size, void **va) {
    * dreg0: buffer base address in device space
    * dreg1: magic number requested by debugger
    */
+  if (m_dev == nullptr)
+    return AIPU_STATUS_ERROR_DEV_ABNORMAL;
+
   if (m_dev->get_npu_version() >= AIPU_ISA_VERSION_ZHOUYI_V3) {
     m_dev->write_reg(0, 0x0c, buf->pa);
     m_dev->write_reg(0, 0x08, 0x1248FFA5);
@@ -752,8 +753,9 @@ aipu_status_t MainContext::aipu_get_target(char *target) {
   std::string isa_version, arch_cfg;
   std::stringstream config_ss;
   std::set<std::string> arch_set = {
-      "Z1_0904", "Z1_1002", "Z1_0701", "Z2_1104", "Z2_1002",  "Z2_0901",
-      "Z3_1104", "Z3_0901", "X1_1204", "X2_1204", "X3P_1304",
+      "Z1_0904",  "Z1_1002",  "Z1_0701",  "Z2_1104",  "Z2_1002",
+      "Z2_0901",  "Z3_1104",  "Z3_0901",  "X1_1204",  "X2_1204",
+      "X3P_1304", "X3P_1302", "X3P_1202", "X3P_1204", "X3S_1304",
   };
 
 #if SIMULATION
@@ -780,11 +782,12 @@ aipu_status_t MainContext::aipu_get_target(char *target) {
     break;
   case AIPU_ISA_VERSION_ZHOUYI_V3:
     isa_version = "X2_";
-    config = 1204;
     break;
-  case AIPU_ISA_VERSION_ZHOUYI_V3_2:
+  case AIPU_ISA_VERSION_ZHOUYI_V3_2_0:
     isa_version = "X3P_";
-    config = 1300 + m_dev->get_npu_tec_cnt();
+    break;
+  case AIPU_ISA_VERSION_ZHOUYI_V3_2_1:
+    isa_version = "X3S_";
     break;
   default:
     return AIPU_STATUS_ERROR_INVALID_CONFIG;
@@ -845,14 +848,14 @@ aipu_status_t MainContext::run_batch(GraphBase &graph, uint32_t queue_id,
   JOB_ID job_id = 0;
   JobBase *job = nullptr;
   aipu_job_status_t status = AIPU_JOB_STATUS_NO_STATUS;
-  typedef struct job_info {
+  struct JobInfo {
     JOB_ID job_id;
     JobBase *job;
-    batch_info_t *batch;
-  } job_info_t;
+    BatchInfo *batch;
+  };
 
-  job_info_t job_info_item = {0};
-  std::queue<job_info_t> job_queue;
+  JobInfo job_info_item = {0};
+  std::queue<JobInfo> job_queue;
   uint32_t types = 0;
   uint32_t batch_num = 0;
   uint32_t max_in_flight = 3;
@@ -874,7 +877,7 @@ repeat:
     if (job_queue.size() >= max_in_flight)
       break;
 
-    batch_info_t &batch = graph.get_batch_queue_item(queue_id, batch_num);
+    BatchInfo &batch = graph.get_batch_queue_item(queue_id, batch_num);
     ret = graph.create_job(&job_id, &m_sim_cfg, &m_hw_cfg, config);
     if (ret == AIPU_STATUS_ERROR_BUF_ALLOC_FAIL) {
       break;
@@ -956,7 +959,7 @@ poll_job_sts:
         goto out;
     }
 #else
-    job_info_t job_info_item = job_queue.front();
+    JobInfo job_info_item = job_queue.front();
     job_queue.pop();
     status = AIPU_JOB_STATUS_NO_STATUS;
     ret = get_status(job_info_item.job, &status);
@@ -989,7 +992,7 @@ poll_job_sts:
 
 out:
   for (uint32_t i = 0; i < job_queue.size(); i++) {
-    job_info_t job_info_item = job_queue.front();
+    JobInfo job_info_item = job_queue.front();
     job_queue.pop();
     graph.destroy_job(job_info_item.job_id);
   }
@@ -1007,7 +1010,8 @@ aipu_status_t MainContext::ioctl_cmd(uint32_t cmd, void *arg) {
 
   if (cmd != AIPU_IOCTL_ENABLE_TICKCOUNTER &&
       cmd != AIPU_IOCTL_DISABLE_TICKCOUNTER &&
-      cmd != AIPU_IOCTL_ABORT_CMDPOOL) {
+      cmd != AIPU_IOCTL_ABORT_CMDPOOL && cmd != AIPU_IOCTL_SW_RESET &&
+      cmd != AIPU_IOCTL_HW_RESET) {
     if (arg == nullptr)
       return AIPU_STATUS_ERROR_NULL_PTR;
   }
@@ -1016,9 +1020,16 @@ aipu_status_t MainContext::ioctl_cmd(uint32_t cmd, void *arg) {
     return AIPU_STATUS_ERROR_INVALID_OP;
 
   switch (cmd) {
-  case AIPU_IOCTL_SET_PROFILE:
-    m_dev->enable_profiling((*(int32_t *)arg) != 0);
-    break;
+  case AIPU_IOCTL_SET_PROFILE: {
+    bool profile_en = *(int32_t *)arg != 0;
+    if (m_dev == nullptr) {
+      /* set different target synchronously */
+      m_sim_cfg.en_eval = profile_en;
+      m_sim_cfg.en_fast_perf = profile_en;
+    } else {
+      m_dev->enable_profiling(profile_en);
+    }
+  } break;
 
   case AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION: {
     aipu_bin_buildversion_t *buildver = (aipu_bin_buildversion_t *)arg;
@@ -1118,6 +1129,18 @@ aipu_status_t MainContext::ioctl_cmd(uint32_t cmd, void *arg) {
       LOG(LOG_ERR, "get dynamic shape failed");
       return AIPU_STATUS_ERROR_GET_SHAPE_FAILED;
     }
+  } break;
+
+  case AIPU_IOCTL_IS_DS: {
+    aipu_is_ds_t *is_ds = (aipu_is_ds_t *)arg;
+    if (!valid_graph_id(is_ds->graph_id))
+      return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+    p_gobj = get_graph_object(is_ds->graph_id);
+    if (p_gobj == nullptr)
+      return AIPU_STATUS_ERROR_INVALID_GRAPH_ID;
+
+    is_ds->dynamic_shape = p_gobj->is_dynamic_shape();
   } break;
 
   case AIPU_IOCTL_GET_DS_RANK: {

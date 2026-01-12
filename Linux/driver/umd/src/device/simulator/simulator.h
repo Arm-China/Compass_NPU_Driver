@@ -43,34 +43,24 @@ struct SimulationJobCtx {
 };
 
 class Simulator : public DeviceBase {
-private:
-  aipu_status_t create_simulation_input_file(char *fname, const char *interfix,
-                                             JOB_ID id, DEV_PA_64 pa,
-                                             uint32_t size, const JobDesc &job);
-  aipu_status_t update_simulation_rtcfg(const JobDesc &job,
-                                        SimulationJobCtx &ctx);
-
 public:
-  UMemory *get_umemory(void) { return static_cast<UMemory *>(m_dram); }
-
-public:
-  bool has_target(uint32_t arch, uint32_t version, uint32_t config,
-                  uint32_t rev) override;
-  aipu_status_t schedule(const JobDesc &job);
-  aipu_status_t get_simulation_instance(void **simulator, void **memory) {
-    return AIPU_STATUS_ERROR_INVALID_OP;
-  }
-  aipu_status_t set_sim_log_level(uint32_t level);
-
-public:
-  static Simulator *get_simulator() {
-    static Simulator sim_instance;
-    sim_instance.inc_ref_cnt();
-    return &sim_instance;
-  }
   virtual ~Simulator();
   Simulator(const Simulator &sim) = delete;
   Simulator &operator=(const Simulator &sim) = delete;
+
+  bool has_target(uint32_t arch, uint32_t version, uint32_t config,
+                  uint32_t rev) override;
+  aipu_ll_status_t schedule(const JobDesc &job);
+
+  static Simulator *get_simulator() {
+    static Simulator sim_instance;
+    return &sim_instance;
+  }
+
+  aipu_ll_status_t get_simulation_instance(void **, void **) {
+    LOG(LOG_ERR, "v1/v2 has no simulator instance");
+    return AIPU_LL_STATUS_ERROR_INVALID_OP;
+  }
 
 private:
   Simulator();

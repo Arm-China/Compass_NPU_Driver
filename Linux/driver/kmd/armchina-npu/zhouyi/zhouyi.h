@@ -34,6 +34,7 @@
 #define ZHOUYI_V3_REVISION_ID_R0P2            0x10000
 #define ZHOUYI_V3_REVISION_ID_R0P3            0x10003
 #define ZHOUYI_V3_2_REVISION_ID_R1P0          0x10210
+#define ZHOUYI_V3_2_REVISION_ID_R2P0          0x10220
 
 /*
  * Soft Reset
@@ -82,7 +83,7 @@
 #define ZHOUYI_TRIGGER_TYPE_CREATE               0
 #define ZHOUYI_TRIGGER_TYPE_UPDATE_DISPATCH      1
 #define ZHOUYI_TRIGGER_TYPE_DISPATCH             2
-#define ZHOUYI_TRIGGER_TYPE_DEBUG_DISPATCH       3
+#define ZHOUYI_TRIGGER_TYPE_BIND_DISPATCH        3
 
 int zhouyi_read_status_reg(struct io_region *io);
 void zhouyi_clear_qempty_interrupt(struct io_region *io);

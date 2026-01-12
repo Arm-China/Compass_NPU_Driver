@@ -121,4 +121,80 @@ struct aipu_tcb {
 #define IS_TASK_TCB(flag)               (((flag) & 0x3) == TCB_FLAG_TASK_TYPE_TASK)
 #define IS_GRID_END(flag)               ((flag) & TCB_FLAG_END_TYPE_GRID_END)
 
+struct aipu_tcb_v32
+{
+    uint32_t flag;
+    union {
+        struct
+        {
+            uint32_t next;
+            uint32_t rsvd0[1];
+            uint32_t spc;
+            uint32_t interrupt_en;
+            uint16_t group_id;
+            uint16_t grid_id;
+            uint16_t task_id;
+            uint16_t warmup_len;
+            uint16_t grid_dim_x;
+            uint16_t grid_dim_y;
+            uint16_t grid_dim_z;
+            uint16_t group_dim_x;
+            uint16_t group_dim_y;
+            uint16_t group_dim_z;
+            uint16_t group_id_x;
+            uint16_t group_id_y;
+            uint16_t group_id_z;
+            uint16_t task_id_x;
+            uint16_t task_id_y;
+            uint16_t task_id_z;
+            uint32_t sp;
+            uint32_t pp;
+            uint32_t dp;
+            uint32_t cp;
+            uint32_t pprint;
+            uint32_t pprofiler;
+            uint16_t core_id;
+            uint16_t cluster_id;
+            uint16_t rsvd1;
+            uint16_t tec_id;
+            uint32_t rsvd2[5];
+            uint32_t dsize;
+            uint32_t tcbp;
+            uint32_t global_param;
+            uint32_t rsvd3;
+        } task;
+
+        union {
+            struct
+            {
+                uint32_t rsvd0;
+                uint32_t group_num;
+                uint32_t rsvd1;
+                uint32_t interrupt_en;
+                uint16_t group_id;
+                uint16_t grid_id;
+                uint32_t rsvd2[6];
+                uint32_t gm_ctrl;
+                uint32_t gm_sync;
+                uint32_t gm_addr_low;
+                uint32_t gm_addr_high;
+                uint32_t rsvd3[14];
+            } grid;
+
+            struct
+            {
+                uint32_t segmmu_ctrl;
+                uint32_t segmmu_remap_ctrl0;
+                uint32_t segmmu_remap_ctrl1;
+                uint32_t interrupt_en;
+                uint16_t group_id;
+                uint16_t grid_id;
+                uint32_t segmmu_seg_ctrl[16];
+                uint32_t asids[8];
+            } group;
+        };
+    };
+    uint16_t group_deps[4];
+};
+
 #endif /* __AIPU_TCB_H__ */

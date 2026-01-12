@@ -463,7 +463,7 @@ aipu_status_t aipu_malloc(const aipu_ctx_handle_t *ctx, uint32_t size,
 
   *handle =
       nullptr; // In order to allocate BufferDesc object in UMemory::malloc
-  aipudrv::MemoryBase *p_mem = p_ctx->get_dev()->get_mem();
+  aipudrv::MemoryBase *p_mem = p_ctx->get_mem();
   return p_mem->malloc(size, align, (aipudrv::BufferDesc **)handle, nullptr,
                        (asid << 8) | AIPU_MEM_REGION_DEFAULT);
 }
@@ -479,7 +479,7 @@ aipu_status_t aipu_free(const aipu_ctx_handle_t *ctx, void **handle) {
   if (p_ctx == nullptr)
     return AIPU_STATUS_ERROR_INVALID_CTX;
 
-  aipudrv::MemoryBase *p_mem = p_ctx->get_dev()->get_mem();
+  aipudrv::MemoryBase *p_mem = p_ctx->get_mem();
   return p_mem->free((aipudrv::BufferDesc **)handle);
 }
 
@@ -496,7 +496,7 @@ aipu_status_t aipu_memcpy(const aipu_ctx_handle_t *ctx, void *dst,
   if (p_ctx == nullptr)
     return AIPU_STATUS_ERROR_INVALID_CTX;
 
-  aipudrv::MemoryBase *p_mem = p_ctx->get_dev()->get_mem();
+  aipudrv::MemoryBase *p_mem = p_ctx->get_mem();
   if (kind == AIPU_MEMCPY_HOST_TO_DEVICE) {
     p_mem->write(((aipudrv::BufferDesc *)dst)->pa, src, size);
   } else if (kind == AIPU_MEMCPY_DEVICE_TO_HOST) {
@@ -523,7 +523,7 @@ aipu_status_t aipu_get_va(const aipu_ctx_handle_t *ctx, const void *buffer_desc,
   if (p_ctx == nullptr)
     return AIPU_STATUS_ERROR_INVALID_CTX;
 
-  aipudrv::MemoryBase *p_mem = p_ctx->get_dev()->get_mem();
+  aipudrv::MemoryBase *p_mem = p_ctx->get_mem();
   auto buf = (aipudrv::BufferDesc *)buffer_desc;
   p_mem->pa_to_va(buf->pa, buf->size, data_ptr);
   return AIPU_STATUS_SUCCESS;

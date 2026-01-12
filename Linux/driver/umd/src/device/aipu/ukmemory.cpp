@@ -50,9 +50,9 @@ aipu_status_t UKMemory::malloc(uint32_t size, uint32_t align, BufferDesc **desc,
   buf_req.region = asid_mem_cfg & 0xff;
   buf_req.reserve_iova_size = 0;
   buf_req.alloc_mode = AIPU_DMA_BUF_MALLOC_DEFAULT;
-  if (m_isa_version > AIPU_ISA_VERSION_ZHOUYI_V3) {
+  if (m_dev->get_npu_version() > AIPU_ISA_VERSION_ZHOUYI_V3) {
     buf_req.reserve_iova_size = rsv_iova_size;
-    buf_req.alloc_mode = AIPU_DMA_BUF_MALLOC_IOVA_PHY;
+    buf_req.alloc_mode = AIPU_DMA_BUF_MALLOC_BOTH;
   }
 
   if (*desc == nullptr) {
@@ -69,7 +69,7 @@ aipu_status_t UKMemory::malloc(uint32_t size, uint32_t align, BufferDesc **desc,
 
   kret = ioctl(m_fd, cmd, &buf_req);
   if (kret != 0) {
-    LOG(LOG_ALERT, "ioctl alloc buffer: size 0x%x [fail]", size);
+    LOG(LOG_ALERT, "ioctl alloc [%s] buffer: size 0x%x [fail]", str, size);
     return AIPU_STATUS_ERROR_BUF_ALLOC_FAIL;
   }
 
@@ -89,7 +89,7 @@ aipu_status_t UKMemory::malloc(uint32_t size, uint32_t align, BufferDesc **desc,
   if (buf_req.desc.region == AIPU_BUF_REGION_DTCM)
     base = get_dtcm_base() - 0xD0000000;
   else if (buf_req.desc.asid == 0 &&
-           m_isa_version <= AIPU_ISA_VERSION_ZHOUYI_V3)
+           m_dev->get_npu_version() <= AIPU_ISA_VERSION_ZHOUYI_V3)
     base = get_asid_base(0);
   else
     base = buf_req.desc.pa;
@@ -131,6 +131,7 @@ aipu_status_t UKMemory::free(BufferDesc **desc, const char *str) {
     kdesc.pa = (*desc)->pa;
     kdesc.bytes = (*desc)->size;
     kdesc.exec_id = (*desc)->exec_id;
+    kdesc.mode = AIPU_DMA_BUF_FREE_BOTH;
     munmap(iter->second.va, kdesc.bytes);
     kret = ioctl(m_fd, free_cmd, &kdesc);
     if (kret != 0) {
@@ -180,6 +181,7 @@ aipu_status_t UKMemory::free_phybuffer(BufferDesc *desc, const char *str) {
     kdesc.pa = desc->pa;
     kdesc.bytes = desc->size;
     kdesc.exec_id = desc->exec_id;
+    kdesc.mode = AIPU_DMA_BUF_FREE_BOTH;
     munmap(iter->second.va, kdesc.bytes);
     kret = ioctl(m_fd, free_cmd, &kdesc);
     if (kret != 0) {
@@ -218,6 +220,7 @@ aipu_status_t UKMemory::free_all(void) {
     pa = desc->pa;
     kdesc.bytes = desc->size;
     kdesc.exec_id = desc->exec_id;
+    kdesc.mode = AIPU_DMA_BUF_FREE_BOTH;
     size = desc->size;
     munmap(iter->second.va, kdesc.bytes);
     kret = ioctl(m_fd, AIPU_IOCTL_FREE_BUF, &kdesc);

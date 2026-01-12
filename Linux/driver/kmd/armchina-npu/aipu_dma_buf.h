@@ -23,6 +23,7 @@ struct aipu_dma_buf_importer {
 	struct dma_buf_attachment *attach;
 	struct sg_table *table;
 	struct list_head node;
+	struct aipu_buf_desc desc;
 };
 
 int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_request *request);

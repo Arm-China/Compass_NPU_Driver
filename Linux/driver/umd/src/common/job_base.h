@@ -94,15 +94,15 @@ protected:
   BufferDesc *m_descriptor = nullptr;
   BufferDesc *m_pprint = nullptr;
 
-  std::vector<struct JobIOBuffer> m_inputs;
-  std::vector<struct JobIOBuffer> m_outputs;
-  std::vector<struct JobIOBuffer> m_inter_dumps;
-  std::vector<struct JobIOBuffer> m_profiler;
-  std::vector<struct JobIOBuffer> m_printf;
-  std::vector<struct JobIOBuffer> m_layer_counter;
-  std::vector<struct JobIOBuffer> m_err_code;
-  std::vector<struct JobIOBuffer> m_segmmus;
-  std::vector<struct JobIOBuffer> m_outputs_shape;
+  std::vector<JobIOBuffer> m_inputs;
+  std::vector<JobIOBuffer> m_outputs;
+  std::vector<JobIOBuffer> m_inter_dumps;
+  std::vector<JobIOBuffer> m_profiler;
+  std::vector<JobIOBuffer> m_printf;
+  std::vector<JobIOBuffer> m_layer_counter;
+  std::vector<JobIOBuffer> m_err_code;
+  std::vector<JobIOBuffer> m_segmmus;
+  std::vector<JobIOBuffer> m_outputs_shape;
 
 protected:
   bool m_dump_text = false;
@@ -147,7 +147,7 @@ protected:
 private:
   DEV_PA_64 get_base_pa(int sec_type, BufferDesc &rodata,
                         BufferDesc *descriptor, bool align_asid);
-  void create_io_buffers(std::vector<struct JobIOBuffer> &bufs,
+  void create_io_buffers(std::vector<JobIOBuffer> &bufs,
                          const std::vector<GraphIOTensorDesc> &desc,
                          const std::vector<BufferDesc *> &reuses);
 
@@ -155,38 +155,31 @@ protected:
   virtual Graph &graph() = 0;
   virtual uint32_t get_subgraph_cnt() = 0;
   virtual const std::vector<BufferDesc *> &get_reuse() = 0;
-  virtual aipu_status_t alloc_load_job_buffers() = 0;
   virtual aipu_status_t free_job_buffers() = 0;
-  virtual int alloc_reuse_buffer_optimized() = 0;
-  virtual aipu_status_t alloc_reuse_buffer() = 0;
 
   aipu_status_t
-  setup_rodata(const std::vector<struct GraphParamMapLoadDesc> &param_map,
+  setup_rodata(const std::vector<GraphParamMapLoadDesc> &param_map,
                const std::vector<BufferDesc *> &reuse_buf,
                const std::vector<BufferDesc *> &static_buf, BufferDesc &rodata,
                BufferDesc *dcr, std::set<uint32_t> *dma_buf_idx = nullptr);
   void setup_remap(BufferDesc &rodata, BufferDesc *descriptor);
-  void create_io_buffers(const struct GraphIOTensors &io,
+  void create_io_buffers(const GraphIOTensors &io,
                          const std::vector<BufferDesc *> &reuses);
-  void update_io_buffers(const struct GraphIOTensors &io,
+  void update_io_buffers(const GraphIOTensors &io,
                          const std::vector<BufferDesc *> &reuses);
-  void update_single_io_buffers(
-      const std::vector<struct GraphIOTensorDesc> &graph_iobufs,
-      std::vector<struct JobIOBuffer> &job_iobufs,
-      const std::vector<BufferDesc *> &reuses);
-  int readwrite_dma_buf(struct JobIOBuffer &iobuf, void *data,
-                        bool read = true);
+  void
+  update_single_io_buffers(const std::vector<GraphIOTensorDesc> &graph_iobufs,
+                           std::vector<JobIOBuffer> &job_iobufs,
+                           const std::vector<BufferDesc *> &reuses);
+  int readwrite_dma_buf(JobIOBuffer &iobuf, void *data, bool read = true);
   aipu_status_t validate_schedule_status();
-  void dump_buffer(DEV_PA_64 pa, const char *bin_va, uint32_t size,
-                   const char *name);
-  void dump_single_buffer(DEV_PA_64 pa, uint32_t size, const char *name);
-  void dump_share_buffer(struct JobIOBuffer &iobuf, const char *name,
-                         bool keep_name = false);
-  void dump_job_shared_buffers();
-  void dump_job_shared_buffers_after_run();
-  void dump_job_private_buffers(BufferDesc &rodata, BufferDesc *descriptor);
-  void dump_job_private_buffers_after_run(BufferDesc &rodata,
-                                          BufferDesc *descriptor);
+  void dump_buffer(DEV_PA_64 pa, uint32_t size, const char *name,
+                   const char *bin_va = nullptr);
+  void dump_buffer(JobIOBuffer &iobuf, const char *name,
+                   bool keep_name = false);
+  void dump_buffers(bool before);
+  virtual void dump_extension_buffers(bool before) {}
+  virtual void dump_graphjson(const std::string &fullpath) {}
   virtual aipu_status_t get_runtime_err_code() const {
     return AIPU_STATUS_SUCCESS;
   }
@@ -251,9 +244,9 @@ public:
 
   aipu_job_callback_func_t get_job_cb() { return m_callback_func; }
 
-  std::vector<struct JobIOBuffer> &get_inputs_ref() { return m_inputs; }
+  std::vector<JobIOBuffer> &get_inputs_ref() { return m_inputs; }
 
-  std::vector<struct JobIOBuffer> &get_outputs_ref() { return m_outputs; }
+  std::vector<JobIOBuffer> &get_outputs_ref() { return m_outputs; }
 
   DEV_PA_64 debugger_get_instr_base() const { return m_text->pa; }
 

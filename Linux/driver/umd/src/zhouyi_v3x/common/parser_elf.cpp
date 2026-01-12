@@ -152,13 +152,12 @@ aipu_status_t ParserELF::parse_subgraph(char *start, uint32_t id,
   start += sizeof(gbin_sg_desc) - sizeof(int32_t);
   if (gbin_sg_desc.precursor_cnt > 0) {
     for (int32_t i = 0; i < gbin_sg_desc.precursor_cnt; i++) {
-      struct ElfPrecursorDesc pre;
+      ElfPrecursorDesc pre;
       memcpy(&pre, start, sizeof(pre));
       sg.precursors.push_back(pre.id);
       start += sizeof(pre);
     }
-    sg_desc_size +=
-        sizeof(struct ElfPrecursorDesc) * gbin_sg_desc.precursor_cnt;
+    sg_desc_size += sizeof(ElfPrecursorDesc) * gbin_sg_desc.precursor_cnt;
   }
 
   /**
@@ -221,7 +220,7 @@ aipu_status_t ParserELF::parse_no_subgraph(char *start, uint32_t id,
   memcpy(&fm_list, start_va, sizeof(fm_list));
   start_va += sizeof(fm_list);
   for (uint32_t i = 0; i < fm_list.num_fm_descriptor; i++) {
-    struct BSS bss = {0};
+    BSS bss = {0};
 
     static_cast<GraphV3X &>(gobj).set_bss(bss);
     ret = parse_bss_section(start_va, 0, i, gobj, &next);
@@ -310,7 +309,7 @@ aipu_status_t ParserELF::parse_graph(const char *file, Graph &gobj) {
 
 aipu_status_t ParserELF::parse_graph_common(Graph &gobj) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
-  struct ElfSubGraphList sg_desc_header = {0};
+  ElfSubGraphList sg_desc_header = {0};
   FeatureMapList fm_list = {0};
   char *start = nullptr;
   char *next = nullptr;
@@ -375,6 +374,9 @@ aipu_status_t ParserELF::parse_graph_common(Graph &gobj) {
   if (sections[ELFSectionSegmmu].size != 0)
     gobj.set_segmmu(sections[ELFSectionSegmmu]);
 
+  if (sections[ELFSectionGraphJson].size != 0)
+    gobj.set_graphjson(sections[ELFSectionGraphJson]);
+
   if (sections[ELFSectionCompilerMsg].size != 0) {
     memcpy((void *)&m_aipu_compile_msg, sections[ELFSectionCompilerMsg].va,
            sections[ELFSectionCompilerMsg].size);
@@ -386,11 +388,7 @@ aipu_status_t ParserELF::parse_graph_common(Graph &gobj) {
         AIPU_DISABLE_INPUT_REUSE(m_aipu_compile_msg.reserve0[0]));
     gobj.set_disable_output_reuse(
         AIPU_DISABLE_OUTPUT_REUSE(m_aipu_compile_msg.reserve0[0]));
-    gobj.set_hw_version(AIPU_VERSION(m_aipu_compile_msg.device));
-    if (AIPU_VERSION(m_aipu_compile_msg.device) ==
-            AIPU_ISA_VERSION_ZHOUYI_V3_1 &&
-        AIPU_REVISION(m_aipu_compile_msg.device) == 1)
-      gobj.set_hw_version(AIPU_VERSION(m_aipu_compile_msg.device) + 1);
+    gobj.set_isa(AIPU_VERSION(m_aipu_compile_msg.device));
   }
 
   if (m_aipu_compile_msg.flag & (1 << 6)) {
@@ -408,7 +406,7 @@ aipu_status_t ParserELF::parse_graph_common(Graph &gobj) {
   start = (char *)sections[ELFSectionSubGraphs].va;
   memcpy(&sg_desc_header, start, sizeof(sg_desc_header));
 
-  LOG(LOG_DEBUG, "sg cnt: %d", sg_desc_header.subgraphs_cnt);
+  LOG(LOG_INFO, "sg cnt: %d", sg_desc_header.subgraphs_cnt);
   start += sizeof(sg_desc_header);
   if (sg_desc_header.subgraphs_cnt > 0) {
     for (uint32_t i = 0; i < sg_desc_header.subgraphs_cnt; i++) {
@@ -426,7 +424,7 @@ aipu_status_t ParserELF::parse_graph_common(Graph &gobj) {
     memcpy(&fm_list, start, sizeof(fm_list));
     start += sizeof(fm_list);
     for (uint32_t i = 0; i < fm_list.num_fm_descriptor; i++) {
-      struct BSS bss = {0};
+      BSS bss = {0};
 
       static_cast<GraphV3X &>(gobj).set_bss(bss);
       ret =

@@ -276,7 +276,7 @@ CACHE_FAIL:
 	return ret;
 }
 
-void aipu_mm_hold_tcb_buf_free(struct aipu_memory_manager *mm)
+static void aipu_mm_hold_tcb_buf_free(struct aipu_memory_manager *mm)
 {
 	struct aipu_hold_tcb_buf *htbuf_head = mm->hold_tcb_head;
 	struct aipu_hold_tcb_buf *htbuf = NULL;
@@ -887,13 +887,13 @@ static int aipu_mm_reserved_iova_for_never_map(struct aipu_memory_manager *mm, b
 		return -EINVAL;
 
 	iommu_domain = mm->iommu_domain;
-	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3_2) {
+	if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0) {
 		iova_len = SZ_512M;
 
 		iovad = &mm->iova_domain;
 	} else {
-	cookie = iommu_domain->iova_cookie;
-	iovad = &cookie->iovad;
+		cookie = iommu_domain->iova_cookie;
+		iovad = &cookie->iovad;
 	}
 
 #if (KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE)
@@ -929,8 +929,13 @@ static int aipu_mm_add_iova_region(struct aipu_memory_manager *mm)
 	if (!mm)
 		return -EINVAL;
 
-	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3_2)
+	if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0)
 		iova_region_size = 0xe0000000;
+
+#if defined(CONFIG_ARCH_CIX)
+	if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3)
+		iova_region_size = 0x3ffff000;
+#endif
 
 #if (KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE)
 	mm->dev->bus_dma_limit = 0x800000000;
@@ -1161,6 +1166,7 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	int ret = 0;
 	struct iommu_group *group = NULL;
 	int asid = 0;
+	unsigned long order;
 
 	if (!mm || !p_dev)
 		return -EINVAL;
@@ -1232,8 +1238,10 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	 */
 	if (version >= AIPU_ISA_VERSION_ZHOUYI_V3) {
 		ret = of_property_read_u32(mm->dev->of_node, "gm-policy", &mm->gm_policy);
-		if (ret || mm->gm_policy > AIPU_GM_POLICY_HALF_DIVIDED)
+		if (ret || mm->gm_policy > AIPU_GM_POLICY_HALF_DIVIDED) {
 			mm->gm_policy = AIPU_GM_POLICY_SHARED;
+			ret = 0;
+		}
 
 		if (IS_ERR(aipu_common_create_attr(mm->dev, &mm->gm_policy_attr, "gm_policy", 0644,
 						   aipu_gm_policy_sysfs_show,
@@ -1253,16 +1261,17 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	if (group) {
 		mm->has_iommu = true;
 		mm->iommu_domain = iommu_get_domain_for_dev(mm->dev);
-		if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2) {
+		if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0) {
 			mm->valid_asid_cnt = 0;
 			mm->iova_base = 0x100000000ULL;   // start from 4GB
 			mm->iova_size = 0x800000000ULL;  // total szie 32GB
 
+			order = __ffs(mm->iommu_domain->pgsize_bitmap);
 #if (KERNEL_VERSION(4, 15, 0) <= LINUX_VERSION_CODE)
-			init_iova_domain(&mm->iova_domain, PAGE_SIZE,
+			init_iova_domain(&mm->iova_domain, 1UL << order,
 					mm->iova_base >> PAGE_SHIFT);
 #else
-			init_iova_domain(&mm->iova_domain, PAGE_SIZE,
+			init_iova_domain(&mm->iova_domain, 1UL << order,
 					mm->iova_base >> PAGE_SHIFT,
 					DMA_BIT_MASK(36)>>PAGE_SHIFT);
 #endif
@@ -1288,7 +1297,7 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 	if (!mm->has_iommu)
 		mm->res_cnt = aipu_mm_add_reserved_regions(mm);
 #if AIPU_USE_STANDARD_DMA_API_FOR_V3_2
-	else if (mm->version <= AIPU_ISA_VERSION_ZHOUYI_V3_2)
+	else if (mm->version <= AIPU_ISA_VERSION_ZHOUYI_V3_2_0)
 		mm->res_cnt = aipu_mm_add_iova_region(mm);
 #else
 	else if (mm->version <= AIPU_ISA_VERSION_ZHOUYI_V3)
@@ -1299,7 +1308,6 @@ int aipu_init_mm(struct aipu_memory_manager *mm, struct platform_device *p_dev, 
 		aipu_mm_set_asid_base(mm);
 
 	dev_info(mm->dev, "driver mem management is %s\n", mm->res_cnt ? "enabled" : "disabled");
-
 finish:
 	if (ret)
 		aipu_deinit_mm(mm);
@@ -1426,7 +1434,7 @@ static bool aipu_mm_check_address_validity(struct aipu_memory_manager *mm,
 		lower_bound = asid_base + size_4G - SZ_1G;
 		upper_bound = asid_base + size_4G;
 
-		if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3_2) {
+		if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0) {
 			lower_bound += SZ_512M;
 		} else {
 			if (desc->asid > AIPU_BUF_ASID_0) {
@@ -1648,7 +1656,7 @@ void aipu_mm_free_buffers(struct aipu_memory_manager *mm, struct file *filp)
 	struct aipu_mem_region_obj *obj = NULL;
 	struct aipu_mem_region_obj *next = NULL;
 
-	if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2 && mm->has_iommu)
+	if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0 && mm->has_iommu)
 		aipu_free_all_dma_iova_phy(mm, filp);
 
 	mutex_lock(&mm->lock);
@@ -1665,7 +1673,7 @@ void aipu_mm_free_buffers(struct aipu_memory_manager *mm, struct file *filp)
 	}
 }
 
-int aipu_vma_map_pages(struct vm_area_struct *vma, struct page **pages,
+static int aipu_vma_map_pages(struct vm_area_struct *vma, struct page **pages,
 				unsigned long num)
 {
 	unsigned long count = vma_pages(vma);
@@ -1722,7 +1730,7 @@ int aipu_mm_mmap_buf(struct aipu_memory_manager *mm, struct vm_area_struct *vma,
 #else
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 #endif
-	if(mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2 && mm->has_iommu) {
+	if(mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0 && mm->has_iommu) {
 		block = aipu_get_block_buffer(mm, iova, "mmap");
 		if(!block)
 			return -EINVAL;
@@ -1849,15 +1857,28 @@ unlock:
 char *aipu_mm_get_va(struct aipu_memory_manager *mm, u64 dev_pa)
 {
 	struct aipu_mem_region *reg = NULL;
+	struct aipu_phy_block *blk= NULL;
+	char * va = NULL;
 
 	if (!mm)
 		return NULL;
 
-	reg = aipu_mm_find_region(mm, dev_pa, "get_va");
-	if (!reg)
-		return NULL;
+	if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0 && mm->has_iommu) {
+		blk = aipu_get_block_buffer(mm, dev_pa, "get va");
+		if (!blk) {
+			dev_err(mm->dev, "get va: no BLK found (0x%llx)\n",
+				dev_pa);
+			return NULL;
+		}
+		va = ((char *)(blk->va) + dev_pa - blk->iova_start);
+	} else {
+		reg = aipu_mm_find_region(mm, dev_pa, "get_va");
+		if (!reg)
+			return NULL;
+		va = (char *)((unsigned long)reg->base_va + dev_pa - reg->base_iova);
+	}
 
-	return (char *)((unsigned long)reg->base_va + dev_pa - reg->base_iova);
+	return va;
 }
 
 /**
@@ -2444,7 +2465,8 @@ struct aipu_phy_block *aipu_get_block_buffer(struct aipu_memory_manager *mm, u64
 	return NULL;
 }
 
-struct aipu_iova_buffer *aipu_get_iova_buffer_by_exec_id(struct aipu_memory_manager *mm, u64 exec_id, char* str)
+struct aipu_iova_buffer *aipu_get_iova_buffer_by_exec_id(struct aipu_memory_manager *mm,
+						u64 exec_id, char* str)
 {
 	struct aipu_iova_buffer *buffer = NULL;
 
@@ -2502,8 +2524,9 @@ static struct aipu_iova_buffer* aipu_alloc_iova(struct aipu_memory_manager *mm,
 	reserved_iova = ALIGN(buf_req->reserve_iova_size, PAGE_SIZE);
 	pfn_hi = (mm->iova_base + mm->iova_size - 1) >> PAGE_SHIFT;
 
-	if ((iova_size + reserved_iova) > mm->iova_size) {
-		dev_err(mm->dev, "iova_size is larger than total size.\n");
+	if ((iova_size + reserved_iova) > mm->iova_size ||
+	    (iova_size + reserved_iova) > (3UL * SZ_1G + SZ_512M)) {
+		dev_err(mm->dev, "iova_size is larger than total size or 3.5GB.\n");
 		return NULL;
 	}
 
@@ -2587,8 +2610,11 @@ static struct page **aipu_dma_alloc_pages(struct device *dev,
 	struct page **pages;
 	unsigned int i = 0, nid = dev_to_node(dev);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	order_mask &= (2U << MAX_PAGE_ORDER) - 1;
+#else
 	order_mask &= (2U << MAX_ORDER) - 1;
-	//pr_info("order_mask 0x%lx\n", order_mask);
+#endif
 	if (!order_mask)
 		return NULL;
 
@@ -2639,7 +2665,7 @@ static struct page **aipu_dma_alloc_pages(struct device *dev,
 	return pages;
 }
 
-int aipu_add_block_into_buffer(struct aipu_iova_buffer *buffer, struct aipu_phy_block *block)
+static int aipu_add_block_into_buffer(struct aipu_iova_buffer *buffer, struct aipu_phy_block *block)
 {
 	struct aipu_dma_buf_priv *priv;
 	if (!buffer || !block)
@@ -2661,7 +2687,7 @@ int aipu_add_block_into_buffer(struct aipu_iova_buffer *buffer, struct aipu_phy_
 	return 0;
 }
 
-struct aipu_phy_block *aipu_remove_block_node(struct aipu_iova_buffer *buffer, u64 pa)
+static struct aipu_phy_block *aipu_remove_block_node(struct aipu_iova_buffer *buffer, u64 pa)
 {
 	struct aipu_phy_block *block = NULL;
 	struct aipu_phy_block *tmp;
@@ -2692,21 +2718,16 @@ static struct aipu_phy_block *aipu_alloc_phy_block(struct aipu_memory_manager *m
 	u32 page_count;
 	u64 mem_size = 0;
 	u64 iova_addr = 0;
-	size_t alloc_sizes = PAGE_SIZE;
+	unsigned int min_size;
+	unsigned int alloc_sizes = mm->iommu_domain->pgsize_bitmap;
 
 	iova_addr = buffer->iova_start + buffer->allocated_size;
 	mem_size = ALIGN(buf_req->bytes, PAGE_SIZE);
 	page_count = mem_size >> PAGE_SHIFT;
 
-	/* if (page_count < 32) //0-128K
-		alloc_sizes = PAGE_SIZE; //4KB
-	else //if (page_count < 4096) //128k-16MB
-		alloc_sizes = PAGE_SIZE*16; //128KB
-	else //if (page_count < 16384) //16MB-64MB
-		alloc_sizes = PAGE_SIZE*256; //1MB
-	else //above 64MB
-		alloc_sizes = PAGE_SIZE*512; //2MB
-	*/
+	min_size = alloc_sizes & -alloc_sizes;
+	if (min_size < PAGE_SIZE)
+		alloc_sizes |= PAGE_SIZE;
 
 	if ((buffer->allocated_size + buf_req->bytes) > buffer->iova_size) {
 		dev_err(mm->dev, "iova space is not enough for phy memory allcation.");
@@ -2758,7 +2779,7 @@ static void aipu_free_phy_block(struct aipu_memory_manager *mm, struct aipu_phy_
 }
 
 static int aipu_map_sg_to_iommu(struct aipu_memory_manager *mm,
-                                struct aipu_phy_block *block)
+			 	struct aipu_phy_block *block)
 {
 	size_t mapped_size;
 
@@ -2772,9 +2793,17 @@ static int aipu_map_sg_to_iommu(struct aipu_memory_manager *mm,
 	}
 
 	// map to iommu
-	mapped_size = iommu_map_sg(mm->iommu_domain, block->iova_start, block->sgt.sgl, block->sgt.nents, IOMMU_READ | IOMMU_WRITE);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+	mapped_size = iommu_map_sg(mm->iommu_domain, block->iova_start,
+				   block->sgt.sgl, block->sgt.nents,
+				   IOMMU_READ | IOMMU_WRITE, GFP_KERNEL);
+#else
+	mapped_size = iommu_map_sg(mm->iommu_domain, block->iova_start,
+				   block->sgt.sgl, block->sgt.nents,
+				   IOMMU_READ | IOMMU_WRITE);
+#endif
 	if (mapped_size < block->size) {
-		dev_err(mm->dev, "IOMMU mapping failed: mapped=0x%zx iova 0x%llx size 0x%x\n",
+		dev_err(mm->dev, "IOMMU mapping failed: mapped=0x%zx iova 0x%llx page count 0x%x\n",
 			mapped_size, block->iova_start, block->sgt.nents);
 		sg_free_table(&block->sgt);
 		return -ENOMEM;
@@ -2785,6 +2814,63 @@ static int aipu_map_sg_to_iommu(struct aipu_memory_manager *mm,
 	//dev_info(mm->dev, "Mapped 0x%llx bytes to IOVA 0x%llx\n",
 	//	block->size, block->iova_start);
 	return 0;
+}
+
+int aipu_copy_block_by_dma_fd(struct aipu_memory_manager *mm,
+			      struct aipu_dma_buf *dmabuf_info)
+{
+	struct dma_buf *dmabuf = NULL;
+	struct aipu_dma_buf_priv *priv = NULL;
+	struct aipu_iova_buffer* buffer;
+	struct aipu_phy_block *block, *new;
+	int ret = 0;
+
+	if (!mm || !dmabuf_info)
+		return -EINVAL;
+
+	dmabuf = dma_buf_get(dmabuf_info->fd);
+	if (!dmabuf)
+		return -EINVAL;
+
+	priv = (struct aipu_dma_buf_priv *)dmabuf->priv;
+	dma_buf_put(dmabuf);
+	block = aipu_get_block_buffer(mm, priv->dev_pa, "attach get block");
+	if (!block) {
+		return -EINVAL;
+	}
+
+	buffer = aipu_get_iova_buffer_by_exec_id(mm, dmabuf_info->exec_id, "dma block malloc iova");
+	if(!buffer) {
+		return -EINVAL;
+	}
+
+	new = kzalloc(sizeof(*new), GFP_KERNEL);
+	if (!new) {
+		return -ENOMEM;
+	}
+	new->pages = block->pages;
+	new->size = block->size;
+	new->page_count = block->page_count;
+	new->sgt.nents = block->page_count;
+	new->dmabuf = NULL;
+	INIT_LIST_HEAD(&new->list);
+	new->bind_memory = true;
+
+	//Add block into buffer's list
+	aipu_add_block_into_buffer(buffer, new);
+
+	//map new iova
+	ret = aipu_map_sg_to_iommu(mm, new);
+	if (ret) {
+		dev_err(mm->dev, "Map block iova 0x%llx size 0x%llx FAILED.\n", new->iova_start, new->size);
+		aipu_remove_block_node(buffer, new->iova_start);
+		kfree(new);
+		return -ENOMEM;
+	}
+	dmabuf_info->pa = new->iova_start;
+	dmabuf_info->bytes = new->size;
+
+	return ret;
 }
 
 int aipu_alloc_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_buf_request *buf_req,
@@ -2846,7 +2932,7 @@ int aipu_alloc_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_buf_requ
 		aipu_cache_invalidate(mm, block->va, block->size);
 		break;
 
-	case AIPU_DMA_BUF_MALLOC_IOVA_PHY:
+	case AIPU_DMA_BUF_MALLOC_BOTH:
 		buffer = aipu_alloc_iova(mm, buf_req, filp);
 		if (!buffer) {
 			dev_err(mm->dev, "Malloc iova size 0x%llx FAILED.\n",  buf_req->bytes + buf_req->reserve_iova_size);
@@ -2896,7 +2982,7 @@ int aipu_free_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_buf_desc 
 	if (!desc || !mm)
 		return -EINVAL;
 
-	if (!desc->exec_id)
+	if (!desc->exec_id || desc->mode == AIPU_DMA_BUF_FREE_DEFAULT)
 		return aipu_mm_free(mm, desc, filp, true);
 
 	if (desc->exec_id >= AIPU_EXEC_ID)
@@ -2924,23 +3010,30 @@ int aipu_free_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_buf_desc 
 				break;
 			}
 		}
-	//free all for job buffer once
+
+		if (free_iova || !buffer->ref_count)
+			aipu_free_iova(mm, buffer);
+	//free physical memory or iova for job buffer once
 	} else {
 		list_for_each_entry_safe(block, tmp, &buffer->phy_blocks, list) {
 			if (!block->bind_memory) {
-				list_del(&block->list);
-				buffer->ref_count--;
-				buffer->allocated_size -= block->size;
-				iommu_unmap(mm->iommu_domain, block->iova_start, block->size);
-				aipu_free_phy_block(mm, block);
+				if (desc->mode == AIPU_DMA_BUF_FREE_BOTH  ||
+				    desc->mode == AIPU_DMA_BUF_FREE_PHY) {
+					list_del(&block->list);
+					buffer->ref_count--;
+					buffer->allocated_size -= block->size;
+					iommu_unmap(mm->iommu_domain, block->iova_start, block->size);
+					aipu_free_phy_block(mm, block);
+				}
 			} else {
 				free_iova = false;
 			}
 		}
-	}
 
-	if (free_iova || !buffer->ref_count)
-		aipu_free_iova(mm, buffer);
+		if (free_iova && (desc->mode == AIPU_DMA_BUF_FREE_BOTH ||
+		    desc->mode == AIPU_DMA_BUF_FREE_IOVA))
+			aipu_free_iova(mm, buffer);
+	}
 
 	return 0;
 }
@@ -2956,6 +3049,11 @@ int aipu_rebind_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_rebind_
 
 	if (!mm || !desc)
 		return -EINVAL;
+
+	if (!mm->has_iommu) {
+		dev_err(mm->dev, "reserved memory can't support rebind iova.\n");
+		return -EINVAL;
+	}
 
 	//handle before iova buffer;
 	buffer = aipu_get_iova_buffer(mm, pa_unmap, "rebind dma buffer");
@@ -3013,8 +3111,13 @@ int aipu_bind_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_bind_buf_
 	if (!mm || !desc)
 		return -EINVAL;
 
+	if (!mm->has_iommu) {
+		dev_err(mm->dev, "reserved memory can't support rebind iova.\n");
+		return -EINVAL;
+	}
+
 	//bind new iova buffer
-	buffer = aipu_get_iova_buffer_by_exec_id(mm, exec_id, "rebind dma buf");
+	buffer = aipu_get_iova_buffer_by_exec_id(mm, exec_id, "bind dma buf");
 	if (!buffer) {
 		return -EINVAL;
 	}
@@ -3094,7 +3197,6 @@ static int aipu_free_all_dma_iova_phy(struct aipu_memory_manager *mm, struct fil
 	mutex_unlock(&mm->buffer_mutex);
 
 	//unmap sg table and free phy memory
-	pr_info("free buffer count %d for CTRL + C\n", buffer_count);
 	for (index = 0; index < buffer_count; index++) {
 		list_for_each_entry_safe(block, tmp, &pbuf[index]->phy_blocks, list) {
 			if (block) {

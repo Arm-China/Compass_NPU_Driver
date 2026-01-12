@@ -202,6 +202,7 @@ struct GraphIOTensorDesc {
 };
 
 class Graph;
+struct GraphIOTensors;
 class ParserBase {
 private:
   aipu_status_t sort_io_tensor(std::vector<GraphIOTensorDesc> &tensors) const;
@@ -209,7 +210,7 @@ private:
   aipu_status_t
   fill_io_tensor_desc_inner(uint32_t reuse_sec_iter, uint32_t sub_sec_iter,
                             const sub_section_desc_type &sub_section_load,
-                            struct GraphIOTensors &desc) const;
+                            GraphIOTensors &desc) const;
 
 protected:
   mutable uint32_t m_static_buf_idx = 0;
@@ -219,7 +220,7 @@ protected:
   aipu_status_t parse_bss_section(char *bss, uint32_t size, uint32_t id,
                                   Graph &gobj, char **next) const;
   aipu_status_t parse_remap_section(char *remap, Graph &gobj);
-  aipu_status_t sort_io(struct GraphIOTensors &io);
+  aipu_status_t sort_io(GraphIOTensors &io);
 
 public:
   virtual aipu_status_t parse_graph(std::istream &gbin, uint32_t size,

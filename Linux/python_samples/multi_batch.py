@@ -11,9 +11,8 @@ from common.log import *
 # 	this script runs job sync mode
 #
 # usage:
-#   python3 multi_batch.py -s /home/benchmark/resnet50 -l bin/sim/debug/ -e ./aipu_simulator_x1 -d ./output -a X3P_1304
+#   python3 multi_batch.py -s /home/benchmark/resnet50 -l bin/sim/debug/ -e ./aipu_simulator_x1 -d ./output
 #    -e: only for v1v2
-#    -a: only for >=v3
 #
 # note:
 #   resnet50 {aipu.bin, input0.bin, output.bin}

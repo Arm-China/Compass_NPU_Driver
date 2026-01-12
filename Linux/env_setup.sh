@@ -16,7 +16,7 @@
 #
 # files depending hierarchies:
 #
-# /project/ai/scrach01
+# /project/ai/scratch01
 # |
 # |-- AIPU_BSP
 # |   |-- kernel
@@ -60,7 +60,8 @@ setenv CONFIG_DRV_BTENVAR_BSP_BASE_DIR       ${CONFIG_DRV_BTENVAR_BASE_DIR}/AIPU
 setenv CONFIG_DRV_RTENVAR_SIM_BASE_PATH      ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/simulator
 
 setenv CONFIG_DRV_BTENVAR_JUNO_4_9_KPATH     ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/kernel/linux-4.9.168
-setenv CONFIG_DRV_BTENVAR_JUNO_KPATH         ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/kernel/linux-5.11.18_2025
+setenv CONFIG_DRV_BTENVAR_JUNO_KPATH         ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/kernel/linux-6.12.54/6.12.54/
+setenv CONFIG_DRV_BTENVAR_SKY1_KPATH         ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/kernel/linux-6.1.44/6.1.44/
 setenv CONFIG_DRV_BTENVAR_6CG_KPATH          ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/kernel/linux-xlnx-armchina
 setenv CONFIG_DRV_BTENVAR_ANDROID_KPATH      ${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/linux-kernel/linux-android-4.14.59
 setenv CONFIG_DRV_BTENVAR_ANDROID12_KPATH    ${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/linux-kernel/kernel-5.10.117
@@ -73,6 +74,7 @@ setenv CONFIG_DRV_BTENVAR_CROSS_CXX_PATH     ${CONFIG_DRV_BTENVAR_BSP_BASE_DIR}/
 setenv CONFIG_DRV_BTENVAR_ANDROID_NDK_PATH   ${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/build_env/android_ndk/android-ndk-r20b
 setenv CONFIG_DRV_BTENVAR_ANDROID_CXX_PATH   ${CONFIG_DRV_BTENVAR_ANDROID_NDK_PATH}/toolchains/llvm/prebuilt/linux-x86_64/bin
 setenv CONFIG_DRV_BTENVAR_CROSS_CXX_ANDROID_PATH    ${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/build_env/aarch64-linux-android-4.9/bin
+setenv CONFIG_DRV_BTENVAR_CROSS_CXX_SKY1_PATH     ${CONFIG_DRV_BTENVAR_BASE_DIR}/toolchain/arm-gnu-toolchain-12.3.rel1-x86_64-aarch64-none-linux-gnu/bin/
 # add C/C++ libs path(s) here for your platform(s)
 
 # 1.3. Other paths
@@ -93,9 +95,12 @@ setenv COMPASS_DRV_BTENVAR_X86_AR            ar
 # 2.3. Target platform: arm64
 setenv COMPASS_DRV_BTENVAR_CROSS_CXX         aarch64-linux-gnu-g++
 setenv COMPASS_DRV_BTENVAR_CROSS_AR          aarch64-linux-gnu-ar
+setenv COMPASS_DRV_BTENVAR_CROSS_NONE_CXX    aarch64-none-linux-gnu-g++
+setenv COMPASS_DRV_BTENVAR_CROSS_NONE_AR     aarch64-none-linux-gnu-ar
 setenv COMPASS_DRV_BTENVAR_ARCH              arm64
 setenv COMPASS_DRV_BTENVAR_CROSS_COMPILE     aarch64-linux-
 setenv COMPASS_DRV_BTENVAR_CROSS_COMPILE_GNU aarch64-linux-gnu-
+setenv COMPASS_DRV_BTENVAR_CROSS_COMPILE_NONE aarch64-none-linux-gnu-
 setenv COMPASS_DRV_BTENVAR_CROSS_COMPILE_ANDROID aarch64-linux-android-
 
 # Add toolchain(s) here for your supported platform(s)
@@ -115,14 +120,6 @@ setenv COMPASS_DRV_RTENVAR_Z2_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu
 setenv COMPASS_DRV_RTENVAR_Z3_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu_simulator_z3
 setenv COMPASS_DRV_RTENVAR_X1_SIMULATOR      ${CONFIG_DRV_RTENVAR_SIM_PATH}/aipu_simulator_x1
 
-# 3.2. aipu v3 simulator
-setenv CONFIG_DRV_BRENVAR_X2_SIM_LPATH       ${COMPASS_DRV_RTENVAR_SIM_LPATH}
-setenv COMPASS_DRV_BRENVAR_X2_SIM_LNAME      aipu_simulator_x2
-
-# 3.3. aipu v3_2 simulator
-setenv CONFIG_DRV_BRENVAR_X3P_SIM_LPATH       ${COMPASS_DRV_RTENVAR_SIM_LPATH}
-setenv COMPASS_DRV_BRENVAR_X3P_SIM_LNAME      aipu_simulator_x3p
-
 ##############################################
 #          4. Driver Internal                #
 ##############################################
@@ -140,14 +137,14 @@ setenv COMPASS_DRV_BTENVAR_TEST_BUILD_DIR    `pwd`/build/samples/
 
 # Driver naming
 setenv COMPASS_DRV_BTENVAR_UMD_V_MAJOR 6
-setenv COMPASS_DRV_BTENVAR_UMD_V_MINOR 0.0
+setenv COMPASS_DRV_BTENVAR_UMD_V_MINOR 1.0
 setenv COMPASS_DRV_BTENVAR_UMD_SO_NAME       libaipudrv.so
 setenv COMPASS_DRV_BTENVAR_UMD_SO_NAME_MAJOR ${COMPASS_DRV_BTENVAR_UMD_SO_NAME}.${COMPASS_DRV_BTENVAR_UMD_V_MAJOR}
 setenv COMPASS_DRV_BTENVAR_UMD_SO_NAME_FULL  ${COMPASS_DRV_BTENVAR_UMD_SO_NAME_MAJOR}.${COMPASS_DRV_BTENVAR_UMD_V_MINOR}
 setenv COMPASS_DRV_BTENVAR_UMD_A_NAME        libaipudrv.a
 setenv COMPASS_DRV_BTENVAR_UMD_A_NAME_MAJOR  ${COMPASS_DRV_BTENVAR_UMD_A_NAME}.${COMPASS_DRV_BTENVAR_UMD_V_MAJOR}
 setenv COMPASS_DRV_BTENVAR_UMD_A_NAME_FULL   ${COMPASS_DRV_BTENVAR_UMD_A_NAME_MAJOR}.${COMPASS_DRV_BTENVAR_UMD_V_MINOR}
-setenv COMPASS_DRV_BTENVAR_KMD_VERSION 6.0.0
+setenv COMPASS_DRV_BTENVAR_KMD_VERSION 6.1.0
 
 setenv COMPASS_DRV_BRENVAR_ERROR             "\033[31;1m[DRV ERROR]\033[0m"
 setenv COMPASS_DRV_BRENVAR_WARN              "\033[31;1m[DRV WARN]\033[0m"

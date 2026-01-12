@@ -3,13 +3,18 @@
 
 #include <linux/platform_device.h>
 #include <linux/of.h>
+#include <linux/delay.h>
+#include <linux/gpio/consumer.h>
 #include "aipu_priv.h"
 #include "aipu_partition.h"
 #include "aipu_common.h"
 #include "zhouyi.h"
 #include "v3_2.h"
 
-int aipu_init_debugger_reg_v3_2(struct platform_device *p_dev, struct io_region *reg)
+extern void gpiod_set_value(struct gpio_desc *desc, int value);
+extern int gpiod_get_value(const struct gpio_desc *desc);
+
+static int aipu_init_debugger_reg_v3_2(struct platform_device *p_dev, struct io_region *reg)
 {
 	int ret = 0;
 	struct resource *res = NULL;
@@ -38,7 +43,7 @@ int aipu_init_debugger_reg_v3_2(struct platform_device *p_dev, struct io_region 
 	return ret;
 }
 
-u32 aipu_get_gm_size(u32 val)
+static u32 aipu_get_gm_size(u32 val)
 {
     val &= 0x7;
     return val ? SZ_1M << (val - 1) : 0;
@@ -64,7 +69,7 @@ static int init_aipu_cluster(struct aipu_partition *cluster, struct aipu_priv *a
 	cluster->irq_obj = cluster->priv->irq_obj;
 	cluster->partition_mode = PARTITION_MODE_NONE;
 	mutex_init(&cluster->reset_lock);
-	mutex_init(&cluster->page_lock);
+	spin_lock_init(&cluster->io_lock);
 	cluster->ops = get_zhouyi_v3_2_ops();
 
 	/* unused fields */
@@ -89,7 +94,7 @@ static int init_aipu_cluster(struct aipu_partition *cluster, struct aipu_priv *a
 		cluster->config = 0;
 	cluster->clusters[0].tec_cnt = GET_TEC_NUM_V3_2(val);
 
-	if (version == AIPU_ISA_VERSION_ZHOUYI_V3_2) {
+	if (version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0) {
 		aipu_write32(&aipu->reg, AHB_INTERNAL_CSR_SELECTION_CTRL_REG,
 		     SELECT_DEBUG_CORE_V3_2(0, 0));
 		val = aipu_read32(cluster->reg, CLUSTER_GM_FEATURE_V3_2(0));
@@ -124,9 +129,13 @@ static struct aipu_partition *v3_2_create_cluster(struct aipu_priv *aipu,
 	if (!aipu || !p_dev)
 		return ERR_PTR(-EINVAL);
 
-	zhouyi_detect_aipu_version(p_dev, &version, &config, NULL);
+	ret = zhouyi_detect_aipu_version(p_dev, &version, &config, NULL);
+	if (ret)
+		return ERR_PTR(ret);
+
 	dev_info(&p_dev->dev, "AIPU detected: zhouyi%s\n",
-		 version == AIPU_ISA_VERSION_ZHOUYI_V3_2?"-v3_2":"");
+		 version == AIPU_ISA_VERSION_ZHOUYI_V3_2_0 ? "-v3_2_0":
+		 version == AIPU_ISA_VERSION_ZHOUYI_V3_2_1 ? "-v3_2_1":"");
 
 	WARN_ON(!aipu->is_init);
 
@@ -146,11 +155,14 @@ static struct aipu_partition *v3_2_create_cluster(struct aipu_priv *aipu,
 		//return ERR_PTR(ret);
 	}
 
-	/* global soft-reset before per partition config */
-	ret = aipu->ops->global_soft_reset(aipu);
-	if (ret) {
-		dev_err(&p_dev->dev, "[init partition] global soft reset failed");
-		return ERR_PTR(ret);
+	if (aipu->reset_gpio) {
+		aipu->ops->global_hw_reset(aipu);
+	} else {
+		ret = aipu->ops->global_soft_reset(aipu);
+		if (ret) {
+			dev_err(&p_dev->dev, "[init partition] global soft reset failed");
+			return ERR_PTR(ret);
+		}
 	}
 
 	ret = init_aipu_cluster(cluster, aipu, p_dev, version);
@@ -201,49 +213,37 @@ static void v3_2_destroy_cluster(struct aipu_priv *aipu)
 		aipu->dbg_reg.size = 0;
 
 		for (i = 0; i < aipu->partition_cnt; i++) {
+			if (!aipu->partitions[i].is_init)
+				return;
 			aipu_common_destroy_attr(aipu->partitions[i].dev,
 						 &aipu->partitions[i].reg_attr);
 		}
 	}
 }
 
-int v3_2_global_soft_reset(struct aipu_priv *aipu)
+static int v3_2_global_soft_reset(struct aipu_priv *aipu)
 {
 	return zhouyi_soft_reset(&aipu->reg, PMU_TOP_SOFT_RESET_REG, aipu->reset_delay_us);
 }
 
-static int zhouyi_v3_2_read_cluster_status(struct aipu_priv *aipu,
-					   struct aipu_cluster_status *status)
+static void v3_2_global_hw_reset(struct aipu_priv *aipu)
 {
-	int i = 1;
-
-	if (unlikely(!status))
-		return -EINVAL;
-
-	if (unlikely(!aipu))
-		return -EINVAL;
-
-	mutex_lock(&aipu->partitions[0].page_lock);
-	aipu_write32(&aipu->reg, AHB_INTERNAL_CSR_SELECTION_CTRL_REG,
-		     SELECT_DEBUG_CORE_V3_2(0, 0));
-	status->cluster_status = aipu_read32(&aipu->reg, DEBUG_CLUSTER_STATUS_V3_2);
-	status->core_status = (aipu_read32(&aipu->reg, DEBUG_CORE_STATUS_V3_2) >> 4) & 0b1;
-	for (; i < aipu->partitions[0].clusters[0].core_cnt; ++i) {
-		aipu_write32(&aipu->reg, AHB_INTERNAL_CSR_SELECTION_CTRL_REG,
-			     SELECT_DEBUG_CORE_V3_2(0, i));
-		status->core_status |= (((aipu_read32(&aipu->reg, DEBUG_CORE_STATUS_V3_2) >> 4)
-								& 0b1) << i);
+	if (aipu && aipu->reset_gpio) {
+		gpiod_set_value(aipu->reset_gpio, 0);
+		udelay(1);
+		gpiod_set_value(aipu->reset_gpio, 1);
+		udelay(20);
+		gpiod_set_value(aipu->reset_gpio, 0);
+		udelay(20);
+		dev_dbg(aipu->dev, "v3_2 global hw reset finished.\n");
 	}
-	aipu_write32(&aipu->reg, AHB_INTERNAL_CSR_SELECTION_CTRL_REG, DISABLE_DEBUG_V3_2);
-	mutex_unlock(&aipu->partitions[0].page_lock);
-	return 0;
 }
 
 static struct aipu_priv_operations v3_2_priv_ops = {
 	.create_partitions = v3_2_create_cluster,
 	.destroy_partitions = v3_2_destroy_cluster,
 	.global_soft_reset = v3_2_global_soft_reset,
-	.get_partition_status = zhouyi_v3_2_read_cluster_status,
+	.global_hw_reset = v3_2_global_hw_reset,
 };
 
 struct aipu_priv_operations *get_v3_2_priv_ops(void)

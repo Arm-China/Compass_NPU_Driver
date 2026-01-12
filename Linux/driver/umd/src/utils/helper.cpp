@@ -26,6 +26,7 @@
 
 #include "helper.h"
 #include "log.h"
+#include "sha256.h"
 #include "standard_api.h"
 
 aipu_status_t umd_dump_file_helper(const char *fname, const void *src,
@@ -33,6 +34,7 @@ aipu_status_t umd_dump_file_helper(const char *fname, const void *src,
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   int fd = 0;
   int wbytes = 0;
+  ssize_t writen = 0;
 
   if ((fname == nullptr) || (src == nullptr)) {
     ret = AIPU_STATUS_ERROR_NULL_PTR;
@@ -55,13 +57,15 @@ aipu_status_t umd_dump_file_helper(const char *fname, const void *src,
     ret = AIPU_STATUS_ERROR_OPEN_FILE_FAIL;
     goto finish;
   }
-  wbytes = write(fd, src, size);
-  if (wbytes != (int)size) {
-    LOG(LOG_ERR, "write bin file %s failed, need to write 0x%x bytes, \
-            successfully write 0x%x bytes (errno = %d)!",
-        fname, size, wbytes, errno);
-    ret = AIPU_STATUS_ERROR_WRITE_FILE_FAIL;
-    goto finish;
+
+  while (writen < size) {
+    wbytes = write(fd, (const char *)src + writen, size - writen);
+    if (wbytes <= 0) {
+      LOG(LOG_ERR, "write bin file failed: %s! (errno = %d)", fname, errno);
+      ret = AIPU_STATUS_ERROR_WRITE_FILE_FAIL;
+      goto finish;
+    }
+    writen += wbytes;
   }
 
 finish:
@@ -420,6 +424,7 @@ std::string &replace(std::string &s, char old_c, char new_c) {
   }
   return s;
 }
+
 std::string &replace(std::string &s, const std::string &old_s,
                      const std::string &new_s) {
   size_t pos = 0;
@@ -428,4 +433,17 @@ std::string &replace(std::string &s, const std::string &old_s,
     pos += new_s.length();
   }
   return s;
+}
+
+bool check_hash(const std::string &file, const std::string &refer_hash) {
+  char *data = nullptr;
+  size_t size = 0;
+  aipu_status_t ret =
+      umd_mmap_file_helper(file.c_str(), (void **)&data, &size, true);
+  if (ret != AIPU_STATUS_SUCCESS)
+    return false;
+
+  std::string hash = sha256_hex(data, size);
+  munmap(data, size);
+  return hash == refer_hash;
 }
