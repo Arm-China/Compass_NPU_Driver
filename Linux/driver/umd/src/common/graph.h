@@ -103,12 +103,25 @@ struct WeightBufferInfo {
   /* only affect weight in a gathered buffer case */
   BufferDesc *wb_weight = nullptr;
   BufferDesc *wb_zerocpy_const = nullptr;
+  BufferDesc *wb_weight_index = nullptr;
+  DEV_PA_64 wb_weight_index_gm_pa = 0;
 
   /* describe each static section, scattered has independent malloced buffer */
   std::vector<BufferDesc *> wb_weights;
 
   /* weight buffer ASID base address */
   DEV_PA_64 wb_asid_base = 0;
+};
+
+enum GMWeightStorageFlag {
+  GM_WT_FLAG_NO_WEIGHT = 0, /* no weight or weight index in GM */
+  GM_WT_FLAG_WEIGHT_FM, /* whole weight and fm(reuse, dsr, workspace) in GM */
+  GM_WT_FLAG_WEIGHT_INDEX_FM,   /* weight index and fm(reuse, dsr, workspace) in
+                                   GM */
+  GM_WT_FLAG_WEIGHT_ONLY,       /* only whole weight in GM */
+  GM_WT_FLAG_WEIGHT_INDEX_ONLY, /* only weight index in GM */
+  GM_WT_FLAG_NO_SUPPORT, /* no support for setting zerocpy_const index to GM
+                            when weight is in ASID1 */
 };
 
 struct ConstantHashItem {
@@ -197,6 +210,8 @@ public:
   bool m_put_weight_gm = false;
   bool m_put_desc_gm = false;
   bool m_put_ws_gm = false;
+
+  int m_wt_in_gm_storage_flag = GM_WT_FLAG_NO_WEIGHT;
 
 private:
   aipu_status_t load_config(const aipu_load_graph_cfg_t *config);
@@ -340,15 +355,28 @@ public:
     m_zerocpy_const_size = zerocpy_const_size;
   }
 
+  virtual void
+  set_weight_indices_size(uint32_t bss_id, uint32_t cst_indices_size_in_gm,
+                          uint32_t zerocpy_cst_indices_size_in_gm) {
+    (void)bss_id;
+    (void)cst_indices_size_in_gm;
+    (void)zerocpy_cst_indices_size_in_gm;
+    return;
+  }
+
   virtual uint32_t get_zerocpy_const_size(uint32_t bss_id = 0) const {
-    if (bss_id == 0)
-      return m_zerocpy_const_size;
-    return 0;
+    return (bss_id == 0) ? m_zerocpy_const_size : 0;
   }
 
   virtual uint32_t get_const_size(uint32_t bss_id = 0) const {
-    if (bss_id == 0)
-      return m_const_size;
+    return (bss_id == 0) ? m_const_size : 0;
+  }
+
+  virtual uint32_t get_const_indices_size(uint32_t bss_id = 0) const {
+    return 0;
+  }
+
+  virtual uint32_t get_zcy_const_indices_size(uint32_t bss_id = 0) const {
     return 0;
   }
 

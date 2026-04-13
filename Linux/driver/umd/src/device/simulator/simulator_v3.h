@@ -359,10 +359,12 @@ public:
     return m_wrapper->code_to_string().c_str();
   }
 
-  void enable_profiling(bool en) override { m_wrapper->enable_profiling(en); }
+  void enable_profiling(int32_t mode) override {
+    m_wrapper->enable_profiling(mode);
+  }
 
   bool get_profile_en() const override {
-    return m_wrapper->config().perf.mode == PERF_MODE_EVAL;
+    return m_wrapper->config().perf.mode != PERF_MODE_NONE;
   }
 
   aipu_ll_status_t

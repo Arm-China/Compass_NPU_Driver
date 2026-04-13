@@ -121,6 +121,12 @@ int check_result_helper(const std::vector<char *> &outputs,
                         const std::vector<aipu_tensor_desc_t> &descs,
                         const std::vector<char *> &gt,
                         const std::vector<uint32_t> &gt_size) {
+  if (gt.size() == 0) {
+    AIPU_INFO()
+    ("output gt file count is not provided, will not do comparision!\n");
+    return 0;
+  }
+
   if (outputs.size() != descs.size()) {
     AIPU_ERR()
     ("output data count (%lu) != benchmark tensor count (%lu)!\n",
@@ -133,12 +139,6 @@ int check_result_helper(const std::vector<char *> &outputs,
     ("output gt file count (%lu) != gt size count (%lu)!\n", gt.size(),
      gt_size.size());
     return -1;
-  }
-
-  if (gt.size() == 0) {
-    AIPU_INFO()
-    ("output gt file count is not provided, will not do comparision!\n");
-    return 0;
   }
 
   uint32_t tot_size = 0;
@@ -159,6 +159,7 @@ int check_result_helper(const std::vector<char *> &outputs,
          gt_size[0]);
         return -1;
       }
+      offset += descs[id].size;
     } else {
       check_va = gt[id];
       if (descs[id].size > gt_size[id]) {
@@ -177,7 +178,6 @@ int check_result_helper(const std::vector<char *> &outputs,
       AIPU_ERR()
       ("Test Result Check FAILED! (%u/%lu)\n", id + 1, outputs.size());
     }
-    offset += descs[id].size;
   }
 
   return pass;
@@ -187,65 +187,11 @@ int check_result(const std::vector<std::shared_ptr<char>> &outputs,
                  const std::vector<aipu_tensor_desc_t> &descs,
                  const std::vector<char *> &gt,
                  const std::vector<uint32_t> &gt_size) {
-  if (outputs.size() == 0 || gt.size() == 0) {
-    AIPU_ERR()
-    ("output data count (%lu) gt count (%lu)!\n", outputs.size(), gt.size());
-    return -1;
-  }
+  std::vector<char *> outputs_raw;
+  for (auto o : outputs)
+    outputs_raw.push_back(o.get());
 
-  if (outputs.size() != descs.size()) {
-    AIPU_ERR()
-    ("output data count (%lu) != benchmark tensor count (%lu)!\n",
-     outputs.size(), descs.size());
-    return -1;
-  }
-
-  if (gt.size() != gt_size.size()) {
-    AIPU_ERR()
-    ("output gt file count (%lu) != gt size count (%lu)!\n", gt.size(),
-     gt_size.size());
-    return -1;
-  }
-
-  uint32_t tot_size = 0;
-  for (uint32_t i = 0; i < descs.size(); i++)
-    tot_size += descs[i].size;
-
-  int pass = 0;
-  uint32_t offset = 0;
-  for (uint32_t id = 0; id < descs.size(); id++) {
-    const char *out_va = outputs[id].get();
-    const char *check_va = nullptr;
-
-    if (gt.size() == 1) {
-      check_va = gt[0] + offset;
-      if (tot_size > gt_size[0]) {
-        AIPU_ERR()
-        ("total output size (0x%x) > total gt size: (0x%x)!\n", tot_size,
-         gt_size[0]);
-        return -1;
-      }
-    } else {
-      check_va = gt[id];
-      if (descs[id].size > gt_size[id]) {
-        AIPU_ERR()
-        ("%uth output descs.size (0x%x) > gt size: (0x%x)!\n", id,
-         descs[id].size, gt_size[id]);
-        return -1;
-      }
-    }
-
-    bool ret = is_output_correct(out_va, check_va, descs[id].size);
-    if (ret) {
-      AIPU_CRIT()("Test Result Check PASS! (%u/%lu)\n", id + 1, outputs.size());
-    } else {
-      pass = -1;
-      AIPU_ERR()
-      ("Test Result Check FAILED! (%u/%lu)\n", id + 1, outputs.size());
-    }
-  }
-
-  return pass;
+  return check_result_helper(outputs_raw, descs, gt, gt_size);
 }
 
 /**

@@ -58,7 +58,6 @@ int main(int argc, char *argv[]) {
   int input_file_idx = 0;
   uint32_t input_cnt, output_cnt;
   vector<aipu_tensor_desc_t> input_desc;
-  vector<char *> input_data;
   vector<vector<aipu_tensor_desc_t>> output_desc_vec;
   vector<aipu_tensor_desc_t> output_desc;
   aipu_create_job_cfg create_job_cfg = {0};
@@ -109,7 +108,6 @@ int main(int argc, char *argv[]) {
 
   sim_glb_config.simulator = opt.simulator;
   sim_glb_config.verbose = opt.verbose;
-  sim_glb_config.en_eval = true;
   sim_job_config.data_dir = opt.dump_dir;
 
   ret = aipu_init_context(&ctx);
@@ -293,7 +291,7 @@ int main(int argc, char *argv[]) {
              (status[job] != AIPU_JOB_STATUS_EXCEPTION)) {
         ret = aipu_get_job_status(ctx, job_id[job], &status[job], 2000);
         if (ret == AIPU_STATUS_ERROR_TIMEOUT) {
-          AIPU_INFO()("flush job timeout\n");
+          AIPU_INFO()("wait aipu done\n");
           continue;
         } else if (ret != AIPU_STATUS_SUCCESS) {
           aipu_get_error_message(ctx, ret, &msg);

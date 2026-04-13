@@ -27,33 +27,30 @@ using namespace std;
 #define FNAME_MAX_LEN 4096
 
 static struct option opts[] = {{"sim", required_argument, NULL, 's'},
-                               {"cfg_dir", required_argument, NULL, 'C'},
                                {"bin", required_argument, NULL, 'b'},
                                {"idata", required_argument, NULL, 'i'},
                                {"check", required_argument, NULL, 'c'},
                                {"dump_dir", required_argument, NULL, 'd'},
-                               {"arch", required_argument, NULL, 'a'},
                                {"help", no_argument, NULL, 'h'},
                                {NULL, 0, NULL, 0}};
 
 static void help() {
-  string help_str =
-      "-s: aipu v1/v2 simulator path\n"
-      "-b: benchmark aipu.bin path\n"
-      "-i: benchmark input.bin path\n"
-      "-c: benchmark output.bin path\n"
-      "-d: the result output dir\n"
-      "-a: ARCH args for aipu v3 or above, eg: X2_1204/X2_1204MP3\n"
-      "usage1 for aipu v1/v2:\n"
-      "   test -s /demo/sim/aipu_simulator_z1 -b /demo/benchmark/aipu.bin "
-      "-i /demo/benchmark/input0.bin,/demo/benchmark/input1.bin -c "
-      "/demo/benchmark/output.bin "
-      "-d /demo/output(create folder firstly)\n"
-      "usage2 for aipu v3 or above:\n"
-      "   test -a [X2_1204 | X2_1204MP3] -b /demo/benchmark/aipu.bin "
-      "-i /demo/benchmark/input0.bin,/demo/benchmark/input1.bin -c "
-      "/demo/benchmark/output.bin "
-      "-d /demo/output(create folder firstly)\n";
+  string help_str = "-s: aipu v1/v2 simulator path\n"
+                    "-b: benchmark aipu.bin path\n"
+                    "-i: benchmark input.bin path\n"
+                    "-c: benchmark output.bin path\n"
+                    "-d: the result output dir\n"
+                    "usage1 for aipu v1/v2:\n"
+                    "   ./aipu_simulation_test -s /demo/sim/aipu_simulator_z1 "
+                    "-b /demo/benchmark/aipu.bin"
+                    " -i /demo/benchmark/input0.bin,/demo/benchmark/input1.bin "
+                    "-c /demo/benchmark/output.bin "
+                    " -d /demo/output(create folder firstly)\n"
+                    "usage2 for aipu v3 or above:\n"
+                    "   ./aipu_simulation_test -b /demo/benchmark/aipu.bin"
+                    " -i /demo/benchmark/input0.bin,/demo/benchmark/input1.bin "
+                    "-c /demo/benchmark/output.bin "
+                    " -d /demo/output(create folder firstly)\n";
 
   cout << help_str;
   exit(0);
@@ -108,9 +105,7 @@ int main(int argc, char *argv[]) {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   int pass = 0, opt = 0, opt_idx = 0;
   extern char *optarg;
-  string arch = ""; // X2_1204, X2_1204MP3
   char simulator[FNAME_MAX_LEN] = {0};
-  char cfg_file_dir[FNAME_MAX_LEN] = {0};
   char bin_file_name[FNAME_MAX_LEN] = {0};
   char check_file_name[FNAME_MAX_LEN] = {0};
   char dump_dir[FNAME_MAX_LEN] = {0};
@@ -160,16 +155,9 @@ int main(int argc, char *argv[]) {
       }
       printf("\n");
       break;
-    case 'a':
-      arch = optarg;
-      break;
 
     case 's':
       strcpy(simulator, optarg);
-      break;
-
-    case 'C':
-      strcpy(cfg_file_dir, optarg);
       break;
 
     case 'b':
@@ -198,8 +186,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  if ((arch.empty() && (simulator[0] == 0)) || (cfg_file_dir[0] == 0) ||
-      (bin_file_name[0] == 0) || (check_file_name[0] == 0) ||
+  if ((bin_file_name[0] == 0) || (check_file_name[0] == 0) ||
       (dump_dir[0] == 0)) {
     fprintf(stderr, "[TEST ERROR] need more options!\n");
     goto finish;

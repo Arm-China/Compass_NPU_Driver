@@ -28,9 +28,7 @@
 
 namespace aipudrv {
 SharedWeightMgr::SharedWeightMgr(MainContext *ctx, const char *zip_file)
-    : m_ctx(ctx), m_zip_file(zip_file) {
-  m_mem = m_ctx->get_dev()->get_mem();
-}
+    : m_ctx(ctx), m_zip_file(zip_file) {}
 
 aipu_status_t SharedWeightMgr::parse() {
   const char *zip_file = m_zip_file.c_str();
@@ -101,6 +99,9 @@ aipu_status_t SharedWeightMgr::parse() {
 
 aipu_status_t
 SharedWeightMgr::alloc_weight_buffer(const std::vector<GRAPH_ID> &graph_ids) {
+  /* simulator device depends on aipu.bin parsing */
+  m_mem = m_ctx->get_dev()->get_mem();
+
   for (auto &id : graph_ids) {
     Graph *gobj = reinterpret_cast<Graph *>(m_ctx->get_graph_object(id));
     if (gobj == nullptr)

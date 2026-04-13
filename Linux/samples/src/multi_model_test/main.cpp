@@ -66,10 +66,8 @@ void pipeline() {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
   const char *msg = nullptr;
   vector<aipu_tensor_desc_t> input_desc;
-  vector<char *> input_data;
   vector<aipu_tensor_desc_t> output_desc;
   vector<shared_ptr<char>> output_data_vec;
-  vector<char *> gt;
   aipu_status_t aipu_sts = AIPU_STATUS_SUCCESS;
   aipu_job_status_t aipu_job_sts = AIPU_JOB_STATUS_NO_STATUS;
   aipu_create_job_cfg_t create_job_cfg = {0};

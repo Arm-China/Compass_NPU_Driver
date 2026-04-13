@@ -72,13 +72,16 @@ struct aipu_global_config_simulation_wrapper_t {
   bool verbose;
   bool enable_avx = 0;
   bool enable_calloc = 0;
-  bool en_eval = 0;
-  bool en_l2d = 0;
+  bool en_eval =
+      0; /* [[deprecated]].only for <=v3 perf, replaced by 'perf_mode'  */
+  bool en_l2d = 0; /* [[deprecated]]  */
 
+  int32_t perf_mode; /**< value of 'aipu_simulation_perf_t' */
   /**
    * fast evaluation config for aipu v3_2
    */
-  bool en_fast_perf;
+  bool en_fast_perf =
+      false; /**< [[deprecated]].only for >v3 perf, replaced by 'perf_mode' */
   uint32_t freq_mhz = 1000;
   uint32_t ddr_latency_rd = 0;
   uint32_t ddr_latency_wr = 0;
@@ -283,6 +286,7 @@ public:
       cfg_.verbose = wrapper.verbose;
       cfg_.enable_avx = wrapper.enable_avx;
       cfg_.enable_calloc = wrapper.enable_calloc;
+      cfg_.perf_mode = wrapper.perf_mode;
       cfg_.en_eval = wrapper.en_eval;
       cfg_.en_l2d = wrapper.en_l2d;
       cfg_.en_fast_perf = wrapper.en_fast_perf;
@@ -928,8 +932,8 @@ public:
    *              - AIPU_IOCTL_SET_PROFILE
    *                  dynamically enable/disable profiling feature of aipu v3
    * simulation kwargs: dict or unpacking arguments
-   *                   - "set_profile": int
-   *                  ret: tuple of 'aipu_status_t'
+   *                   - "set_profile": int, value refers to
+   * 'aipu_simulation_perf_t' ret: tuple of 'aipu_status_t'
    *              - AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION
    *                  get model binary's build version
    *                  kwargs: dict or unpacking arguments
@@ -1656,6 +1660,8 @@ PYBIND11_MODULE(libaipudrv, m) {
                      &aipu_global_config_simulation_wrapper_t::enable_avx)
       .def_readwrite("enable_calloc",
                      &aipu_global_config_simulation_wrapper_t::enable_calloc)
+      .def_readwrite("perf_mode",
+                     &aipu_global_config_simulation_wrapper_t::perf_mode)
       .def_readwrite("en_eval",
                      &aipu_global_config_simulation_wrapper_t::en_eval)
       .def_readwrite("en_l2d", &aipu_global_config_simulation_wrapper_t::en_l2d)
@@ -1800,6 +1806,16 @@ PYBIND11_MODULE(libaipudrv, m) {
              aipu_mem_region_t::AIPU_MEM_REGION_DEFAULT)
       .value("AIPU_MEM_REGION_SRAM", aipu_mem_region_t::AIPU_MEM_REGION_SRAM)
       .value("AIPU_MEM_REGION_DTCM", aipu_mem_region_t::AIPU_MEM_REGION_DTCM)
+      .export_values();
+
+  py::enum_<aipu_simulation_perf_t>(m, "aipu_simulation_perf_t")
+      .value("AIPU_PERF_MODE_NONE", aipu_simulation_perf_t::AIPU_PERF_MODE_NONE)
+      .value("AIPU_PERF_MODE_FAST", aipu_simulation_perf_t::AIPU_PERF_MODE_FAST)
+      .value("AIPU_PERF_MODE_EVAL", aipu_simulation_perf_t::AIPU_PERF_MODE_EVAL)
+      .value("AIPU_PERF_MODE_IDU", aipu_simulation_perf_t::AIPU_PERF_MODE_IDU)
+      .value("AIPU_PERF_MODE_PROBE",
+             aipu_simulation_perf_t::AIPU_PERF_MODE_PROBE)
+      .value("AIPU_PERF_MODE_SLOW", aipu_simulation_perf_t::AIPU_PERF_MODE_SLOW)
       .export_values();
 
   py::enum_<aipu_ioctl_cmd_t>(m, "aipu_ioctl_cmd_t")

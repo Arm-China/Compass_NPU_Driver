@@ -32,6 +32,8 @@ GraphV3X::GraphV3X(void *ctx, GRAPH_ID id, DeviceBase *dev)
   m_subgraphs.clear();
   m_gmconfig.clear();
   m_hashtable.clear();
+  m_bsegmmu.init(nullptr, 0);
+  m_bgraphjson.init(nullptr, 0);
   m_parser = new ParserELF();
 
 #ifndef SIMULATION
@@ -110,6 +112,38 @@ void GraphV3X::print_parse_info() {
   }
   LOG(LOG_DEFAULT,
       "============================================================");
+}
+
+int GraphV3X::get_weight_in_gm_storage_flag() {
+  bool three_var_any =
+      (m_gm_config_desc[0].size() != 0) || m_put_desc_gm || m_put_ws_gm;
+  bool swt_not_empty = !m_swt_idxes.empty();
+
+  if (!three_var_any) {
+    if (m_put_weight_gm && !swt_not_empty)
+      return GM_WT_FLAG_WEIGHT_ONLY;
+    if (!m_put_weight_gm && swt_not_empty) {
+      uint32_t zcy_const_indices_size = 0;
+      uint32_t const_indices_size = 0;
+      for (uint32_t i = 0; i < get_bss_cnt(); ++i) {
+        zcy_const_indices_size += get_zcy_const_indices_size(i);
+        const_indices_size += get_const_indices_size(i);
+      }
+      if (zcy_const_indices_size != 0) {
+        LOG(LOG_ERR,
+            "When weight is in ASID1, the zcy_const index cannot be set.");
+        return GM_WT_FLAG_NO_SUPPORT;
+      }
+      return GM_WT_FLAG_WEIGHT_INDEX_ONLY;
+    }
+  }
+
+  if (m_put_weight_gm && !swt_not_empty)
+    return GM_WT_FLAG_WEIGHT_FM;
+  if (!m_put_weight_gm && swt_not_empty)
+    return GM_WT_FLAG_WEIGHT_INDEX_FM;
+
+  return GM_WT_FLAG_NO_WEIGHT;
 }
 
 aipu_status_t GraphV3X::parse_gmconfig(int bss_id) {
@@ -192,6 +226,12 @@ aipu_status_t GraphV3X::parse_gmconfig(int bss_id) {
     else
       LOG(LOG_WARN, "Runtime current only supports put in/out/inout/temp "
                     "buffers into GM\n");
+
+    m_wt_in_gm_storage_flag = get_weight_in_gm_storage_flag();
+    if (m_wt_in_gm_storage_flag == GM_WT_FLAG_NO_SUPPORT) {
+      return AIPU_STATUS_ERROR_INVALID_GM;
+    }
+    LOG(LOG_DEBUG, "m_wt_in_gm_storage_flag = %d", m_wt_in_gm_storage_flag);
   }
 
   return AIPU_STATUS_SUCCESS;
@@ -211,7 +251,23 @@ aipu_status_t GraphV3X::collect_fm_sections() {
     offset += ALIGN_PAGE(m_bcrodata.size);
   }
 
-  if (!m_put_weight_gm) {
+  // TODO(optimization): Currently, weights cannot be shared across jobs,
+  // causing memory waste. Optimization approach: Once weights are placed in GM,
+  // set asid0/1 to shared mode (both with same base). UMD allocates one VA per
+  // graph; subsequent PAs (including weights) are bound by each job. KMD should
+  // support independent PA release; otherwise, unload graph is required and the
+  // entire space is released only when the graph is destroyed.
+  if (m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_FM) {
+    uint32_t total_weight_size =
+        ALIGN_PAGE(get_const_size(0)) + ALIGN_PAGE(get_zerocpy_const_size(0));
+    if (total_weight_size != 0) {
+      m_fmsec_info.info[FMSection::TotalWeight] =
+          FMSectionInfo::BufInfo{offset, total_weight_size};
+      offset += ALIGN_PAGE(total_weight_size);
+    }
+  } else if (m_wt_in_gm_storage_flag == GM_WT_FLAG_NO_WEIGHT ||
+             m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_ONLY ||
+             m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_ONLY) {
     uint64_t zcy_size = 0;
     for (uint32_t bss_id = 0; bss_id < get_bss_cnt(); ++bss_id)
       zcy_size += ALIGN_PAGE(get_zerocpy_const_size(bss_id));
@@ -247,7 +303,8 @@ aipu_status_t GraphV3X::collect_fm_sections() {
       FMSectionInfo::BufInfo{offset, tcb_cnt * tcb_ctl::TCB_LEN};
   offset += ALIGN_PAGE(tcb_cnt * tcb_ctl::TCB_LEN);
 
-  offset += k_tcb_reserved;
+  if (m_isa == ISAType::ISAv6 && m_hw_revision < 2)
+    offset += k_tcb_reserved;
 
   m_max_ws_size = 0;
   uint32_t private_size = 0;
@@ -271,11 +328,9 @@ aipu_status_t GraphV3X::collect_fm_sections() {
   }
 
   uint32_t total_reuse_size = 0;
-  std::vector<uint32_t> gm_reuse_idx;
   for (uint32_t i = 0; i < m_bss_vec[0].reuse_sections.size(); ++i) {
     if (m_mem->is_gm_enable() &&
         m_gm_config_desc[GM_BUF_TYPE_REUSE].count(i) != 0) {
-      gm_reuse_idx.push_back(i);
       continue;
     }
     const GraphSectionDesc &section_desc = m_bss_vec[0].reuse_sections[i];
@@ -292,10 +347,13 @@ aipu_status_t GraphV3X::collect_fm_sections() {
   if (ret != AIPU_STATUS_SUCCESS)
     return ret;
 
-  if (m_gmsec_info.remap_size > 0) {
-    m_fmsec_info.info[FMSection::GM] =
-        FMSectionInfo::BufInfo{offset, m_gmsec_info.remap_size};
-    offset += ALIGN_PAGE(m_gmsec_info.remap_size);
+  if (m_wt_in_gm_storage_flag != GM_WT_FLAG_WEIGHT_ONLY &&
+      m_wt_in_gm_storage_flag != GM_WT_FLAG_WEIGHT_INDEX_ONLY) {
+    if (m_gmsec_info.remap_size > 0) {
+      m_fmsec_info.info[FMSection::GM] =
+          FMSectionInfo::BufInfo{offset, m_gmsec_info.remap_size};
+      offset += ALIGN_PAGE(m_gmsec_info.remap_size);
+    }
   }
 
   if (get_subgraph_cnt() != 0) {
@@ -385,11 +443,31 @@ aipu_status_t GraphV3X::collect_gm_info() {
   uint32_t remap_size = 0;
   uint32_t sync_size = 0;
 
-  if (m_put_weight_gm) {
+  if (m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_FM) {
     uint32_t const_size = 0;
     for (uint32_t i = 0; i < get_bss_cnt(); ++i) {
       const_size += ALIGN_PAGE(get_const_size(i));
       const_size += ALIGN_PAGE(get_zerocpy_const_size(i));
+    }
+    m_gmsec_info.info[GM_BUF_TYPE_WEIGHT] =
+        GMSectionInfo::BufInfo{"weight", const_size, remap_size};
+    remap_size += ALIGN_PAGE(const_size);
+    sync_size += ALIGN_PAGE(const_size);
+  } else if (m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_ONLY) {
+    uint32_t const_size = 0;
+    for (uint32_t i = 0; i < get_bss_cnt(); ++i) {
+      const_size += ALIGN_PAGE(get_const_size(i));
+    }
+    m_gmsec_info.info[GM_BUF_TYPE_WEIGHT] =
+        GMSectionInfo::BufInfo{"weight", const_size, remap_size};
+    remap_size += ALIGN_PAGE(const_size);
+    sync_size += ALIGN_PAGE(const_size);
+  } else if (m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_FM ||
+             m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_ONLY) {
+    uint32_t const_size = 0;
+    for (auto idx : m_swt_idxes) {
+      const auto &section = m_bss_vec[0].static_sections[idx];
+      const_size += (section.size);
     }
     m_gmsec_info.info[GM_BUF_TYPE_WEIGHT] =
         GMSectionInfo::BufInfo{"weight", const_size, remap_size};

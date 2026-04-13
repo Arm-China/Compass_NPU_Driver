@@ -52,6 +52,7 @@ enum class FMSection {
   TcbChain,
   TotalPriv,
   TotalReuse,
+  TotalWeight,
   GM,
   Stack,
   Dpdata,
@@ -149,6 +150,8 @@ struct BSS {
   uint32_t stack_align_in_page;
   uint32_t const_size;
   uint32_t zerocpy_const_size;
+  uint32_t cst_indices_size_in_gm;
+  uint32_t zerocpy_cst_indices_size_in_gm;
   std::vector<GraphParamMapLoadDesc> param_map;
   std::vector<GraphSectionDesc> static_sections;
   std::vector<GraphSectionDesc> reuse_sections;
@@ -216,6 +219,7 @@ public:
 
 private:
   const std::string get_target() const override { return m_target; }
+  int get_weight_in_gm_storage_flag();
 
 public:
   aipu_status_t parse_gmconfig(int bss_id);
@@ -369,6 +373,16 @@ public:
     }
   }
 
+  void
+  set_weight_indices_size(uint32_t bss_id, uint32_t cst_indices_size_in_gm,
+                          uint32_t zerocpy_cst_indices_size_in_gm) override {
+    if (bss_id < (uint32_t)m_bss_vec.size()) {
+      m_bss_vec[bss_id].cst_indices_size_in_gm = cst_indices_size_in_gm;
+      m_bss_vec[bss_id].zerocpy_cst_indices_size_in_gm =
+          zerocpy_cst_indices_size_in_gm;
+    }
+  }
+
   uint32_t get_const_size(uint32_t bss_id = 0) const override {
     return bss_id < (uint32_t)m_bss_vec.size() ? m_bss_vec[bss_id].const_size
                                                : 0;
@@ -377,6 +391,18 @@ public:
   uint32_t get_zerocpy_const_size(uint32_t bss_id = 0) const override {
     return bss_id < (uint32_t)m_bss_vec.size()
                ? m_bss_vec[bss_id].zerocpy_const_size
+               : 0;
+  }
+
+  uint32_t get_const_indices_size(uint32_t bss_id = 0) const override {
+    return bss_id < (uint32_t)m_bss_vec.size()
+               ? m_bss_vec[bss_id].cst_indices_size_in_gm
+               : 0;
+  }
+
+  uint32_t get_zcy_const_indices_size(uint32_t bss_id = 0) const override {
+    return bss_id < (uint32_t)m_bss_vec.size()
+               ? m_bss_vec[bss_id].zerocpy_cst_indices_size_in_gm
                : 0;
   }
 
@@ -414,6 +440,7 @@ public:
          "tcbs"}, /* which is aligned with malloc(name) for x2 holdtcb */
         {FMSection::TotalPriv, "total_priv"},
         {FMSection::TotalReuse, "total_reuse"},
+        {FMSection::TotalWeight, "total_weight"},
         {FMSection::GM, "gm"},
         {FMSection::Stack, "Stack"},
         {FMSection::Dpdata, "Dpdata"},

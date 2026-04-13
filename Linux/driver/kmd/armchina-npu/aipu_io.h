@@ -15,8 +15,8 @@
  */
 struct io_region {
 	u64  phys;
-	void *kern;
-	u32  size;
+	void __iomem *kern;
+	u64  size;
 };
 
 int init_aipu_ioregion(struct io_region *region, u64 phys_base, u32 size);

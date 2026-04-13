@@ -34,10 +34,8 @@ int main(int argc, char *argv[]) {
   uint64_t graph_id, job_id;
   uint32_t input_cnt, output_cnt;
   vector<aipu_tensor_desc_t> input_desc;
-  vector<char *> input_data;
   vector<aipu_tensor_desc_t> output_desc;
   vector<char *> output_data;
-  vector<char *> gt;
   cmd_opt_t opt;
   int pass = -1, loop = 0, total_loop = 2;
   uint32_t frame_cnt = 1;

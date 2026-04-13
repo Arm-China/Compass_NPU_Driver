@@ -355,27 +355,29 @@ aipu_ll_status_t Aipu::ioctl_cmd(uint32_t cmd, void *arg) {
     }
     break;
 
-  case AIPU_IOCTL_ENABLE_TICKCOUNTER:
-    if (!m_tick_counter) {
+  case AIPU_IOCTL_ENABLE_TICKCOUNTER: {
+    bool expected = false;
+    if (m_tick_counter.compare_exchange_strong(expected, true)) {
       kret = ioctl(m_fd, AIPU_IOCTL_ENABLE_TICK_COUNTER);
       if (kret < 0) {
         LOG(LOG_ERR, "enable tick counter [fail]");
         ret = AIPU_LL_STATUS_ERROR_IOCTL_TICK_COUNTER;
+        m_tick_counter.store(false);
       }
-      m_tick_counter = true;
     }
-    break;
+  } break;
 
-  case AIPU_IOCTL_DISABLE_TICKCOUNTER:
-    if (m_tick_counter) {
+  case AIPU_IOCTL_DISABLE_TICKCOUNTER: {
+    bool expected = true;
+    if (m_tick_counter.compare_exchange_strong(expected, false)) {
       kret = ioctl(m_fd, AIPU_IOCTL_DISABLE_TICK_COUNTER);
       if (kret < 0) {
         LOG(LOG_ERR, "disable tick counter [fail]");
         ret = AIPU_LL_STATUS_ERROR_IOCTL_TICK_COUNTER;
+        m_tick_counter.store(true);
       }
-      m_tick_counter = false;
     }
-    break;
+  } break;
 
   case AIPU_IOCTL_CONFIG_CLUSTERS:
     kret = ioctl(m_fd, AIPU_IOCTL_CONFIG_CLUSTERS, arg);
@@ -531,6 +533,7 @@ aipu_ll_status_t Aipu::ioctl_cmd(uint32_t cmd, void *arg) {
       LOG(LOG_ERR, "ioctl global soft reset [fail]");
       ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
     }
+    m_tick_counter.store(false);
     break;
   }
 
@@ -546,6 +549,7 @@ aipu_ll_status_t Aipu::ioctl_cmd(uint32_t cmd, void *arg) {
       LOG(LOG_ERR, "ioctl global hardware reset [fail]");
       ret = AIPU_LL_STATUS_ERROR_IOCTL_FAIL;
     }
+    m_tick_counter.store(false);
     break;
   }
 

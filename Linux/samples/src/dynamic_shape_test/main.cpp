@@ -7,15 +7,14 @@
  * @brief AIPU UMD test application: dynamic shape test, including shared weight
  * case
  * @note
- * - format1: aipu_dynamic_shape_test -b aipu.bin -i input.bin -d ./output -a
- * <aipu_target>
- * - format2: aipu_dynamic_shape_test -b aipu.bin -i input.bin -d ./output -a
- * <aipu_target> \ -r "1,256,4096/1,1,256,256" -w <extra_weight_dir>
+ * - format1: aipu_dynamic_shape_test -b aipu.bin -i input.bin -d ./output
+ * - format2: aipu_dynamic_shape_test -b aipu.bin -i input.bin -d ./output -r
+ * "1,256,4096/1,1,256,256" \ -w <extra_weight_dir>
  * - format3: aipu_dynamic_shape_test -b aipu.zip -i input1.bin,input2.bin \
- *                                    -d ./output -a <aipu_target> -r
- * "1,256,4096/1,1,256,256" -g 0
+ *                                    -d ./output -r "1,256,4096/1,1,256,256" -g
+ * 0
  * - format4: aipu_dynamic_shape_test -b aipu.zip -i
- * input1.bin,input2.bin,input1.bin,input2.bin \ -d ./output -a <aipu_target> -r
+ * input1.bin,input2.bin,input1.bin,input2.bin \ -d ./output -r
  * "1,256,4096/1,1,256,256:1,1,256,256" (format3/4 is mainly for zip file graph,
  * inputs of different grpah need to be orderd, and use  ':' seperates two
  * graphs dynamic shape, '-g' specify graph index, and if not provided, run all

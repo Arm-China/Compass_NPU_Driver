@@ -143,6 +143,15 @@ typedef struct {
   const char *data_dir;
 } aipu_job_config_simulation_t;
 
+typedef enum {
+  AIPU_PERF_MODE_NONE,  //!< non perf mode
+  AIPU_PERF_MODE_FAST,  //!< fast evaluation
+  AIPU_PERF_MODE_EVAL,  //!< profiling
+  AIPU_PERF_MODE_IDU,   //!< only IDU evaluation
+  AIPU_PERF_MODE_PROBE, //!< function unit coverage rate.
+  AIPU_PERF_MODE_SLOW,  //!< bit accurate with profile.
+} aipu_simulation_perf_t;
+
 /**
  * @brief Simulation related configuration
  *
@@ -166,15 +175,18 @@ typedef struct {
   bool enable_avx;    /**< only for >=v3, default false */
   bool enable_calloc; /**< only for >=v3, default false */
 
-  bool en_eval; /**< only for <=v3, enable perf evaluation, default false */
-
   int8_t fp_mode; /**< >=v3_2 only, floating-point model: 0 for softfloat
                      (default), 1 for cpu naive float */
 
   bool en_l2d; /**< [[deprecated]] */
 
+  bool en_eval; /**< [[deprecated]].only for <=v3 perf, replaced by 'perf_mode'
+                 */
+  bool en_fast_perf; /**< [[deprecated]].only for >v3 perf, replaced by
+                        'perf_mode' */
+
+  int32_t perf_mode; /**< value of 'aipu_simulation_perf_t' */
   /* fast perf evaluation config for >=v3_2 */
-  bool en_fast_perf; /**< enable fast perf, default false */
   uint32_t freq_mhz; /**< fast perf: frequency setting, default 1000 */
   uint32_t
       ddr_latency_rd; /**< fast perf: ddr latency read setting, default 0 */
@@ -540,6 +552,8 @@ typedef enum {
   AIPU_MEM_REGION_DEFAULT = 0, /**< DDR */
   AIPU_MEM_REGION_SRAM = 1,    /**< On-Chip Memory */
   AIPU_MEM_REGION_DTCM = 2,    /**< Data Tightly Couped Memory, only for v2 */
+  AIPU_MEM_REGION_GM =
+      3, /**< weight indices in GM, only for v3_2 and above versions */
 } aipu_mem_region_t;
 
 /**
@@ -591,9 +605,10 @@ typedef struct aipu_load_graph_cfg {
     };
   };
 
-  int32_t *wt_idxes; /**< specify weights allocated from 'wt_mem_region'. make
-                        sure region in asid1 3G/3.5G range, otherwise DONT use
-                        this feature */
+  int32_t
+      *wt_idxes; /**< specify weights allocated from 'wt_mem_region'. make sure
+                    region in asid1 3G/3.5G range('weight index to GM' has no
+                    such restriction), otherwise DONT use this feature */
   int32_t wt_idxes_cnt;          /**< the emement number in wt_idxes */
   const char *extra_weight_path; /**< the extra weight files path */
   bool put_weight_gm;
@@ -896,7 +911,7 @@ aipu_status_t aipu_get_error_message(const aipu_ctx_handle_t *ctx,
  * AIPU_CONFIG_TYPE_SIMULATION/aipu_global_config_simulation_t
  * @note accepted types/config: AIPU_GLOBAL_CONFIG_TYPE_DISABLE_VER_CHECK/none
  * @note accepted types/config: AIPU_GLOBAL_CONFIG_TYPE_ENABLE_VER_CHECK/none
- * @note accepted types/config: AIPU_CONFIG_TYPE_HW
+ * @note accepted types/config: AIPU_CONFIG_TYPE_HW/aipu_global_config_hw_t
  */
 aipu_status_t aipu_config_global(const aipu_ctx_handle_t *ctx, uint64_t types,
                                  void *config);
@@ -1451,10 +1466,8 @@ aipu_status_t aipu_finish_batch(const aipu_ctx_handle_t *ctx, uint64_t graph_id,
  *
  * @note support commands currently
  *       AIPU_IOCTL_SET_PROFILE:
- *           dynamically enable/disable profiling feature of aipu >=v3
- * simulation. arg: pointer of int
- *            - 1: enable profiling
- *            - 0: disable profiling
+ *           dynamically set profiling mode of aipu >=v3 simulation.
+ *           arg: pointer of int (value refers to 'aipu_simulation_perf_t')
  *       AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION:
  *           get model binary's build version.
  *           arg: pointer of struct `aipu_bin_buildversion_t`

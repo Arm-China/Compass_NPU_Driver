@@ -59,7 +59,7 @@ int aipu_read32(struct io_region *region, int offset)
 	u32 val = 0;
 
 	if (region && region->kern && offset < region->size) {
-		val = readl((void __iomem *)((unsigned long)(region->kern) + offset));
+		val = readl((u8 __iomem *)region->kern + offset);
 		pr_debug("[Read AIPU Register]: reg addr: 0x%llx + 0x%x, read back value: 0x%x\n",
 			 region->phys, offset, val);
 		return val;
@@ -75,8 +75,9 @@ int aipu_read32(struct io_region *region, int offset)
  */
 void aipu_write32(struct io_region *region, int offset, unsigned int data)
 {
-	if (region && region->kern && offset < region->size)
-		writel((u32)data, (void __iomem *)((unsigned long)(region->kern) + offset));
-	pr_debug("[Write AIPU Register]: reg addr: 0x%llx + 0x%x, write value: 0x%x\n",
-		 region->phys, offset, (u32)data);
+	if (region && region->kern && offset < region->size) {
+		writel((u32)data, (u8 __iomem *)region->kern + offset);
+		pr_debug("[Write AIPU Register]: reg addr: 0x%llx + 0x%x, write value: 0x%x\n",
+			 region->phys, offset, (u32)data);
+	}
 }

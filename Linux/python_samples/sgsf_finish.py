@@ -13,9 +13,8 @@ from common.log import *
 #   this script runs job with sync mode.
 #
 # usage:
-#   python3 sgsf_finish.py -s /home/benchmark/resnet50 -l bin/sim/debug/ -e ./aipu_simulator_x1 -d ./output -a X3P_1304 [-p]
+#   python3 sgsf_finish.py -s /home/benchmark/resnet50 -l bin/sim/debug/ -e ./aipu_simulator_x1 -d ./output [-p]
 #    -e: only for v1v2 simulator
-#    -a: only for >=v3 simulator
 #
 # feature:
 #   1.support simulator
@@ -63,7 +62,7 @@ def sgsf_finish():
         context_init = True
         log.info('aipu_init_context [ok]')
 
-        if is_hw and opt.m_profile_en:
+        if is_hw and opt.m_perf_mode:
             ret, = npu.aipu_ioctl(AIPU_IOCTL_ENABLE_TICKCOUNTER)
             if ret != AIPU_STATUS_SUCCESS:
                 raise RuntimeError(
@@ -74,8 +73,7 @@ def sgsf_finish():
             global_cfg.log_file_path = opt.m_dump_path
 
             # driver will load profiler enable flag according NPU target
-            global_cfg.en_eval = True if opt.m_profile_en else False
-            global_cfg.en_fast_perf = True if opt.m_profile_en else False
+            global_cfg.perf_mode = opt.m_perf_mode
             global_cfg.freq_mhz = 1000
             global_cfg.ddr_latency_rd = 0
             global_cfg.ddr_latency_wr = 0
@@ -181,15 +179,6 @@ def sgsf_finish():
             log.debug('aipu_create_job [ok]')
 
             if is_hw is False:
-                # profile
-                # ret,profile_cnt = npu.aipu_get_tensor_count(graph_id, AIPU_TENSOR_TYPE_PROFILER)
-                # if ret != AIPU_STATUS_SUCCESS:
-                #     raise RuntimeError(f'aipu_get_tensor_count [fail], err: {npu.aipu_get_error_message(ret)}')
-
-                # if opt.m_profile_en is False:
-                #     npu.aipu_ioctl(AIPU_IOCTL_SET_PROFILE, set_profile=0)
-                # log.info((f'enable' if opt.m_profile_en else 'disable') + f' profile, and aipu.bin profile cnt {profile_cnt}')
-
                 # v1&v2 temp.* directory
                 cfg = aipu_job_config_simulation_t()
                 cfg.data_dir = "./" if len(opt.m_dump_path) == 0 else opt.m_dump_path
@@ -265,7 +254,7 @@ def sgsf_finish():
                 raise RuntimeError(f'aipu_finish_job [fail], err: {npu.aipu_get_error_message(ret)}')
             log.info(f'aipu_finish_job [ok]')
 
-            if opt.m_profile_en:
+            if opt.m_perf_mode:
                 ret, num = npu.aipu_get_tensor_count(graph_id, AIPU_TENSOR_TYPE_PROFILER)
                 if ret != AIPU_STATUS_SUCCESS or num == 0:
                     raise RuntimeError(
@@ -310,7 +299,7 @@ def sgsf_finish():
             log.info(f'aipu_unload_graph [ok]')
 
     finally:
-        if is_hw and opt.m_profile_en:
+        if is_hw and opt.m_perf_mode:
             ret, = npu.aipu_ioctl(AIPU_IOCTL_DISABLE_TICKCOUNTER)
             if ret != AIPU_STATUS_SUCCESS:
                 raise RuntimeError(

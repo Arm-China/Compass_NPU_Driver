@@ -228,12 +228,14 @@ public:
     return AIPU_LL_STATUS_SUCCESS;
   }
 
-  void enable_profiling(bool en) override { m_wrapper->enable_profiling(en); }
+  void enable_profiling(int32_t mode) override {
+    m_wrapper->enable_profiling(mode);
+  }
 
   void dump_profiling() override { m_wrapper->dump_profiling(); }
 
   bool get_profile_en() const override {
-    return m_wrapper->config().perf.mode == PERF_MODE_FAST;
+    return m_wrapper->config().perf.mode != PERF_MODE_NONE;
   }
 };
 } // namespace aipudrv

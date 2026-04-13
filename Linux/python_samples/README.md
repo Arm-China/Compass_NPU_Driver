@@ -7,8 +7,8 @@ The samples can quickly deploy NPU inference application through exported UMD Py
 - If you try to run on simulator `-p` is `sim`, otherwise, `-p` is `juno`. You need to check `/dev/aipu` on hardware
 
 ```bash
-# v3 is for aipu v1/v2/v3, and v3_2 is for v1/v2/v3_2
-$ ./build_all.sh -p <sim/juno> -v <v3|v3_2> -a python_api [-d]
+# using '-h' for more details
+$ ./build_all.sh -p <sim/juno> -a python_api [-d]
 ```
 Refer to Linux/README.md for more detai information.
 
@@ -19,7 +19,6 @@ $ python3 sgsf_finish.py [-e <path/to/executable/simulator>] -s ./resnet50/ -l .
 ```
 arguments:
 - -e: specify full executable simualtor path only valid on v1&v2 (./aipu_simulator_x1)
-- -a: specify target of aipu, only valid on v3 or above
 - -s: single benchmark path (./resnet50), it has to put model,input and check files in it. eg: aipu.bin,input0.bin, output.bin
 - -l: specify UMD Python Wrapper library path (./lib), it has libaipudrv.so in it.
 - -d: specify dump file path, create it firstly

@@ -10,16 +10,16 @@ You may update it based on the specification in AIPU Software Programming Guide
 if you need to support more features.  
 
 Before running this demo, you should ensure follows:
-1. Replace `<YOUR_WORKSPACE>` in `out-of-box-test.sh` by the value of `CONFIG_DRV_BTENVAR_BASE_DIR` setting in `bash_env_setup.sh`, which is under main source code `<project>/Linux/`, and it will recover automatically after running
+1. Switch shell to bash
 2. Move corresponding AIPU target benchmark folder to 'out_of_box/benchmarks', and ensure it has aipu.bin,input0.bin,output.bin files
 
 To build & run this demo application, please follow these steps:
 
 1. Compile and execute the applicateion with provided benchmark resnet_50 by:
 ```bash
-    $ ./out-of-box-test.sh -a X3P_1304 -c resnet_50_x3p # for X3P
-    $ ./out-of-box-test.sh -a X2_1204MP3 -c resnet_50_x2 # for X2
-    $ ./out-of-box-test.sh -s X1 -c resnet_50_x1         # for X1
+    $ ./out-of-box-test.sh -c resnet_50_x3p # for X3P
+    $ ./out-of-box-test.sh -c resnet_50_x2 # for X2
+    $ ./out-of-box-test.sh -s X1 -c resnet_50_x1 # for X1
 ```
 
 2. A log "[TEST INFO] Test Result Check PASS!" will be printed
@@ -34,10 +34,10 @@ $ ./run.sh -c resnet_50_x1 -s X1
 ```
 - for aipu v3(3 cores)  
 ```bash
-$ ./run.sh -a X2_1204MP3 -c resnet_50_x2
+$ ./run.sh -c resnet_50_x2
 ```
 
 - for aipu v3_2(1 cores)  
 ```bash
-$ ./run.sh -a X3P_1304 -c resnet_50_x3p
+$ ./run.sh -c resnet_50_x3p
 ```

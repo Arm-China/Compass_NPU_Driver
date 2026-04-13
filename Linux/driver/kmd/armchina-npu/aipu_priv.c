@@ -10,11 +10,11 @@
 #include "v3.h"
 #include "v3_2.h"
 
-static int init_misc_dev(struct aipu_priv *aipu)
+static int init_misc_dev(struct aipu_priv *aipu, const struct file_operations *fops)
 {
 	aipu->misc.minor = MISC_DYNAMIC_MINOR;
 	aipu->misc.name = "aipu";
-	aipu->misc.fops = aipu->aipu_fops;
+	aipu->misc.fops = fops;
 	aipu->misc.mode = 0666;
 	return misc_register(&aipu->misc);
 }
@@ -106,7 +106,7 @@ int init_aipu_priv(struct aipu_priv *aipu, struct platform_device *p_dev,
 		goto finish;
 	}
 
-	ret = init_misc_dev(aipu);
+	ret = init_misc_dev(aipu, fops);
 	if (ret)
 		goto finish;
 

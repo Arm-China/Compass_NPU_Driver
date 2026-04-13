@@ -20,7 +20,7 @@ namespace aipudrv {
 class Aipu : public DeviceBase {
 protected:
   int m_fd = 0;
-  bool m_tick_counter = false;
+  std::atomic<bool> m_tick_counter = {false};
 
 private:
   aipu_ll_status_t init() override;

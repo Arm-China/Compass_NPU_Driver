@@ -38,10 +38,8 @@ int main(int argc, char *argv[]) {
   uint64_t graph_id, job_id;
   uint32_t profile_cnt, input_cnt, output_cnt;
   vector<aipu_tensor_desc_t> input_desc;
-  vector<char *> input_data;
   vector<aipu_tensor_desc_t> output_desc;
   vector<char *> output_data;
-  vector<char *> gt;
   cmd_opt_t opt;
   uint32_t part_cnt = 0, part_idx = 0;
   int pass = -1, loop = 0, total_loop = 2;
@@ -84,15 +82,14 @@ int main(int argc, char *argv[]) {
   mem_dump_config.dump_dir = opt.dump_dir;
   sim_glb_config.log_level = opt.log_level;
   sim_glb_config.verbose = opt.verbose;
-  sim_glb_config.en_eval = opt.profile_en;
   sim_glb_config.simulator = opt.simulator;
   sim_glb_config.gm_size = 0x800000; /* modify this with actural size */
+  sim_glb_config.perf_mode = opt.perf_mode;
 
   /* for x3 simulator */
   log_path_perf = std::string(opt.dump_dir).empty()
                       ? std::string("./perf.csv")
                       : (std::string(opt.dump_dir) + "/perf.csv");
-  sim_glb_config.en_fast_perf = opt.profile_en;
   sim_glb_config.freq_mhz = 1000;
   sim_glb_config.ddr_latency_rd = 0;
   sim_glb_config.ddr_latency_wr = 0;
@@ -248,18 +245,17 @@ int main(int argc, char *argv[]) {
       goto unload_graph;
     }
 
-    if (!opt.profile_en) {
-      int enable = 0;
-      aipu_ioctl(ctx, AIPU_IOCTL_SET_PROFILE, &enable);
+    if (opt.perf_mode == 0) {
+      aipu_ioctl(ctx, AIPU_IOCTL_SET_PROFILE, &opt.perf_mode);
       AIPU_INFO()("disable profiling on simulation\n");
     }
 
-    if (opt.profile_en && profile_cnt == 0)
+    if (opt.perf_mode && profile_cnt == 0)
       AIPU_CRIT()("profiler is enable, but profiler tensor in aipu.bin is 0\n");
 
     AIPU_INFO()
     ("enable profiler: %s, profiler cnt: %u\n",
-     opt.profile_en ? "true" : "false", profile_cnt);
+     opt.perf_mode ? "true" : "false", profile_cnt);
 
     ret = aipu_get_cluster_count(ctx, 0, &cluster_cnt);
     if (ret != AIPU_STATUS_SUCCESS) {
@@ -344,7 +340,7 @@ int main(int argc, char *argv[]) {
           AIPU_JOB_CONFIG_TYPE_DUMP_INPUT | AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT |
           AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN |
           AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
-      if (opt.profile_en)
+      if (opt.perf_mode)
         cfg_types |=
             AIPU_JOB_CONFIG_TYPE_DUMP_PROFILE; /* it will dump json file if
                                                   exist in aipu.bin */

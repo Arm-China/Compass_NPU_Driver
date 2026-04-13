@@ -22,7 +22,7 @@ namespace aipudrv {
 #define ALIGN_ADDR(bytes) ((ALIGN_PAGE(bytes)) / (4096))
 
 inline size_t aligned(size_t s, size_t align = 256) {
-  return (s + align - 1) & ~(align - 1);
+  return (align == 0) ? s : ((s + align - 1) & ~(align - 1));
 }
 
 /**

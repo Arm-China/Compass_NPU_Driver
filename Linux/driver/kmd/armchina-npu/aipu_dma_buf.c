@@ -150,7 +150,9 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 	struct aipu_dma_buf_priv *priv = NULL;
 	char *va = NULL;
 	struct dma_buf *dmabuf = NULL;
-	struct aipu_phy_block *block;
+#if !AIPU_USE_STANDARD_DMA_API_FOR_V3_2
+	struct aipu_phy_block *block = NULL;
+#endif
 	DEFINE_DMA_BUF_EXPORT_INFO(exp);
 
 	if (!mm || !request || !request->bytes)
@@ -175,15 +177,15 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 			dev_err(mm->dev, "alloc phy memory fail.");
 			return ret;
 		}
-#if AIPU_USE_STANDARD_DMA_API_FOR_V3_2
+#if !AIPU_USE_STANDARD_DMA_API_FOR_V3_2
+		block = aipu_get_block_buffer(mm, inter_req.desc.pa, "aipu_alloc_dma_buf");
+		va = block->va;
+#else
 		va = aipu_mm_get_va(mm, inter_req.desc.pa);
 		if (!va) {
 			ret = -EFAULT;
 			goto fail;
 		}
-#else
-		block = aipu_get_block_buffer(mm, inter_req.desc.pa, "aipu_alloc_dma_buf");
-		va = block->va;
 #endif
 	} else {
 		memset(&inter_req, 0, sizeof(struct aipu_buf_request));
@@ -230,8 +232,11 @@ int aipu_alloc_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf_reque
 		goto fail;
 	}
 
+#if !AIPU_USE_STANDARD_DMA_API_FOR_V3_2
+	/* PRQA S 2812 2 */
 	if(mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0)
 		block->dmabuf = dmabuf;
+#endif
 	request->fd = dma_buf_fd(dmabuf, exp.flags);
 	return 0;
 
@@ -358,7 +363,6 @@ int aipu_attach_dma_buf(struct aipu_memory_manager *mm, struct aipu_dma_buf *dma
 	list_add(&im_buf->node, &mm->importer_bufs->node);
 	mutex_unlock(&mm->lock);
 
-
 	return 0;
 }
 
@@ -377,6 +381,7 @@ int aipu_detach_dma_buf(struct aipu_memory_manager *mm, int fd)
 		return -EINVAL;
 
 	mutex_lock(&mm->lock);
+	/* PRQA S 2810, 0497, 0602 1 */ /* list_for_each_entry_safe is a kernel macro */
 	list_for_each_entry_safe(im_buf, next, &mm->importer_bufs->node, node) {
 		if (fd == im_buf->fd) {
 			if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0 && mm->has_iommu) {
@@ -398,5 +403,6 @@ int aipu_detach_dma_buf(struct aipu_memory_manager *mm, int fd)
 }
 
 #if KERNEL_VERSION(5, 4, 0) < LINUX_VERSION_CODE
+/* PRQA S 0602 1 */
 MODULE_IMPORT_NS(DMA_BUF);
 #endif

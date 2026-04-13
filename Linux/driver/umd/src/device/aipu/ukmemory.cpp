@@ -63,8 +63,11 @@ aipu_status_t UKMemory::malloc(uint32_t size, uint32_t align, BufferDesc **desc,
   if (size == 0)
     return AIPU_STATUS_ERROR_INVALID_SIZE;
 
-  /* specific command for tcb alloc/free */
-  if ((str != nullptr) && (!strncmp(str, "tcbs", 4)))
+  /* specific command for tcb alloc/free. Add "jot_top" strings here for reseved
+     memory type, and new memory management don't need buffer data type and
+     can't support reserved memory. */
+  if ((str != nullptr) &&
+      ((!strncmp(str, "job_top", 7)) || ((!strncmp(str, "tcbs", 4)))))
     buf_req.data_type = AIPU_MM_DATA_TYPE_TCB;
 
   kret = ioctl(m_fd, cmd, &buf_req);

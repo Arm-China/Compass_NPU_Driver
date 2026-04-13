@@ -66,8 +66,8 @@ $ cd Linux
 # bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
 $ source <bash_env_setup.sh|env_setup.sh>
 
-# v3 is for v1/v2/v3, and v3_2 is for v1/v2/v3_2, default refers to '-h'
-$ ./build_all.sh -p juno [-v <v3|v3_2>] [-d]
+# using '-h' for more details
+$ ./build_all.sh -p juno [-d]
 ```
 
 - compile commands for python api
@@ -83,8 +83,8 @@ $ cd Linux
 # bash_env_setup.sh for bash env, and env_setup.sh is for csh env
 $ source <bash_env_setup.sh|env_setup.sh>
 
-# v3 is for aipu v1/v2/v3, and v3_2 is for aipu v1/v2/v3_2, default refers to '-h'
-$ ./build_all.sh -p juno [-v <v3|v3_2>] -a python_api [-d]
+# using '-h' for more details
+$ ./build_all.sh -p juno -a python_api [-d]
 ```
 
 - If the command run normally, a folder named 'bin' is created, the corresponding KMD driver(aipu.ko) and UMD library(libaipudrv.so) are generated and stored in it.
@@ -138,8 +138,8 @@ $ cd Linux
 # bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
 $ source <bash_env_setup.sh|env_setup.sh>
 
-# v3 is for v1/v2/v3, v3_2 is for v1/v2/v3_2, default refers to '-h'
-$ ./build_all.sh -p sim [-v <v3|v3_2>] [-d]
+# using '-h' for more details
+$ ./build_all.sh -p sim [-d]
 ```
 
 - compile commands for python api
@@ -152,8 +152,8 @@ $ cd Linux
 # bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
 $ source <bash_env_setup.sh|env_setup.sh>
 
-# v3 is for aipu v1/v2/v3, and v3_2 is for aipu v1/v2/v3_2, default refers to '-h'
-$ ./build_all.sh -p sim [-v <v3|v3_2>] -a python_api [-d]
+# using '-h' for more details
+$ ./build_all.sh -p sim -a python_api [-d]
 ```
 
 - If the command run normally, a folder named 'bin' is created, the UMD library(libaipudrv.so)
@@ -172,8 +172,8 @@ Here take Juno(arm64) board as an example, it has to do #2.1 firstly before doin
 $ cd Linux
 # bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
 $ source <bash_env_setup.sh|env_setup.sh>
-# v3 is for v1/v2/v3, v3_2 is for v1/v2/v3_2, default refers to '-h'
-$ ./build_all.sh -p juno [-v <v3|v3_2>] -t sample [-d]
+# using '-h' for more details
+$ ./build_all.sh -p juno -t sample [-d]
 ```
 
 After perform this command successfully, the samples are also stored in forder 'bin'.
@@ -188,8 +188,8 @@ it has to do #2.2 firstly before doing this step. then
 $ cd Linux
 # bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
 $ source <bash_env_setup.sh|env_setup.sh>
-# v3 is for v1/v2/v3, v3_2 is for v1/v2/v3_2, default refers to '-h'
-$ ./build_all.sh -p sim [-v <v3|v3_2>] -t sample [-d]
+# using '-h' for more details
+$ ./build_all.sh -p sim -t sample [-d]
 ```
 
 After perform this command successfully, the samples are also stored in forder 'bin'.

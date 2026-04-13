@@ -219,7 +219,7 @@ aipu_status_t JobV3_2::free_job_buffers() {
         m_weight[i].wb_zerocpy_const->size != 0)
       m_mem->free_bufferdesc(&m_weight[i].wb_zerocpy_const);
 
-    if (graph().m_put_weight_gm) {
+    if (graph().m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_FM) {
       if (m_weight[i].wb_weight != nullptr && m_weight[i].wb_weight->size != 0)
         m_mem->free_bufferdesc(&m_weight[i].wb_weight);
     }

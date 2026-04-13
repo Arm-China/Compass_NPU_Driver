@@ -260,6 +260,9 @@ void GM_V3::setup_gm_sync_from_ddr(tcb_t &tcb) {
   if (!m_mem->is_both_gm_region_enable() && m_job.m_qos == AIPU_JOB_QOS_HIGH)
     return;
 
+  if (!m_gm_asm && m_job.m_sg_cnt == 1)
+    return;
+
   if (m_job.m_qos == AIPU_JOB_QOS_SLOW)
     gm_region_idx = 0;
   else if (m_job.m_qos == AIPU_JOB_QOS_HIGH)

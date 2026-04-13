@@ -9,7 +9,6 @@ TEST_APP=aipu_simulation_test
 TEST_APP_DIR=./umd
 BENCHMARK_CASE_DIR=./benchmarks
 OUTPUT_DUMP_TOP_DIR=./output
-TARGET=""
 CASE=""
 SIMULATOR=""
 
@@ -19,12 +18,10 @@ test_run_help() {
     echo "-h, --help        help"
     echo "-c, --case        benchmark case(s) to run (under out_of_box/benchmarks)"
     echo "-s, --simulator   Z1/Z2/Z3/X1 simulator version (optional, only when you try to run Z1/Z2/Z3/X1 benchmark):"
-    echo "-a, --target      X2_1204MP3/X3P_1304MP2... (ignore for aipu v1/v2)"
     echo "========================================================================="
     echo "usage: put case into 'bechmarks' folder, Attention: '-s' and '-a' can only specify one of them"
     echo "  - Z1~X1: ./run.sh -s <Z1/Z2/Z3/X1> -c <case>"
-    echo "  - X2: ./run.sh -a <X2_1204/X2_1204MP3> -c <case>"
-    echo "  - X3P: ./run.sh -a <X3P_1304> -c <case>"
+    echo "  - X2 or above: ./run.sh -c <case>"
     exit 0
 }
 
@@ -32,7 +29,7 @@ if [ $# = 0 ]; then
     test_run_help
 fi
 
-ARGS=`getopt -o hs:c:a: --long help,simulator,case,target: -n 'run.sh' -- "$@"`
+ARGS=`getopt -o hs:c: --long help,simulator,case: -n 'run.sh' -- "$@"`
 eval set -- "${ARGS}"
 
 while [ -n "$1" ]
@@ -47,10 +44,6 @@ do
          ;;
      -s|--simulator)
          SIMULATOR="$2"
-         shift
-         ;;
-     -a|--target)
-         TARGET="$2"
          shift
          ;;
      --)
@@ -100,14 +93,10 @@ mkdir -p ./${OUTPUT_DIR}
 ARGS="--bin=${BENCHMARK_CASE_DIR}/${CASE}/aipu.bin \
     --idata=${BENCHMARK_CASE_DIR}/${CASE}/input0.bin \
     --check=${BENCHMARK_CASE_DIR}/${CASE}/output.bin \
-    --dump_dir=${OUTPUT_DIR} \
-    --cfg_dir=./"
+    --dump_dir=${OUTPUT_DIR}"
 
 SIM_ARGS=""
-
-if [[ -n "$TARGET" && -z "$SIMULATOR" ]]; then
-    ARGS="-a $TARGET $ARGS"
-else
+if [[ -n "$SIMULATOR" ]]; then
     SIM_ARGS="--sim=${EXECUTABLE_SIMULATOR}"
 fi
 

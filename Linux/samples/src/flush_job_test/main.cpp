@@ -34,10 +34,8 @@ int main(int argc, char *argv[]) {
   uint64_t graph_id;
   uint32_t input_cnt, output_cnt;
   vector<aipu_tensor_desc_t> input_desc;
-  vector<char *> input_data; /* multi-jobs use the same input vector */
   vector<aipu_tensor_desc_t> output_desc;
   vector<vector<std::shared_ptr<char>>> job_outputs;
-  vector<char *> gt;
   cmd_opt_t opt;
   aipu_create_job_cfg_t create_job_cfg = {0};
   int pass = -1;
@@ -208,7 +206,7 @@ int main(int argc, char *argv[]) {
              (jobs_status[job] != AIPU_JOB_STATUS_EXCEPTION)) {
         ret = aipu_get_job_status(ctx, jobs_id[job], &jobs_status[job], 2000);
         if (ret == AIPU_STATUS_ERROR_TIMEOUT) {
-          AIPU_INFO()("flush job timeout\n");
+          AIPU_INFO()("wait aipu done\n");
           continue;
         } else if (ret != AIPU_STATUS_SUCCESS) {
           aipu_get_error_message(ctx, ret, &msg);

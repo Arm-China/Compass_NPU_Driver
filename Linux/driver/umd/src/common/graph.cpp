@@ -77,6 +77,12 @@ aipu_status_t Graph::load_config(const aipu_load_graph_cfg_t *config) {
       }
     }
 
+    if (config->put_weight_gm && config->wt_mem_region == AIPU_MEM_REGION_GM &&
+        config->wt_idxes) {
+      LOG(LOG_ERR, "setting 'whole weight into GM' and 'weight index into GM' "
+                   "simultaneously is not allowed.");
+      return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
+    }
     m_swt_mem_region = config->wt_mem_region;
     if (config->wt_idxes) {
       for (int i = 0; i < config->wt_idxes_cnt; i++)
@@ -116,7 +122,9 @@ aipu_status_t Graph::load_common(bool ver_check) {
     return AIPU_STATUS_ERROR_TARGET_NOT_FOUND;
   }
 
-  if (m_isa <= ISAv5 && (m_put_weight_gm || m_put_desc_gm || m_put_ws_gm)) {
+  if (m_isa <= ISAv5 &&
+      (m_put_weight_gm || m_put_desc_gm || m_put_ws_gm ||
+       (m_swt_mem_region == AIPU_MEM_REGION_GM && !m_swt_idxes.empty()))) {
     LOG(LOG_ERR, "only >= v3_2 version supports put_xx_gm feature, but now %u",
         m_isa);
     return AIPU_STATUS_ERROR_OP_NOT_SUPPORTED;
@@ -258,6 +266,7 @@ aipu_status_t Graph::setup_weight_buffer(std::vector<WeightBufferInfo> &weights,
   for (uint32_t bss_id = 0; bss_id < get_bss_cnt(); bss_id++) {
     weights[bss_id].wb_weights.clear();
 
+    uint64_t weight_index_gm_offset = 0;
     auto blk_table = slice_weight(bss_id);
 
     uint32_t blk_offset = 0;
@@ -279,30 +288,53 @@ aipu_status_t Graph::setup_weight_buffer(std::vector<WeightBufferInfo> &weights,
       BufferDesc *buf = nullptr;
 
       /* DONT use with dynamic asid0/1 */
-      if (m_swt_idxes.count(i) == 0) {
-        if (static_sections[i].type == SECTION_TYPE_CONSTANT) {
-          buf = new BufferDesc;
-          buf->reset();
+      if (m_swt_idxes.count(i) == 0 || m_swt_mem_region == AIPU_MEM_REGION_GM) {
+        if (m_swt_idxes.count(i) == 0) {
+          if (static_sections[i].type == SECTION_TYPE_CONSTANT) {
+            buf = new BufferDesc;
+            buf->reset();
 
-          pa = weights[bss_id].wb_weight->pa + static_sections[i].dst_offset;
-          buf->init(weights[bss_id].wb_weight->asid_base, pa,
-                    static_sections[i].size, static_sections[i].size, 0,
-                    (m_mem->get_asid1() << 8) | AIPU_MEM_REGION_DEFAULT);
-          if (m_mem->write(pa, va + static_sections[i].src_offset - blk_offset,
-                           static_sections[i].size) != static_sections[i].size)
-            return AIPU_STATUS_ERROR_INVALID_SIZE;
-        } else if (static_sections[i].type == SECTION_TYPE_ZEROCPY_CONSTANT &&
-                   setup_zcy) {
-          buf = new BufferDesc;
-          buf->reset();
+            pa = weights[bss_id].wb_weight->pa + static_sections[i].dst_offset;
+            buf->init(weights[bss_id].wb_weight->asid_base, pa,
+                      static_sections[i].size, static_sections[i].size, 0,
+                      (m_mem->get_asid1() << 8) | AIPU_MEM_REGION_DEFAULT);
+            if (m_mem->write(
+                    pa, va + static_sections[i].src_offset - blk_offset,
+                    static_sections[i].size) != static_sections[i].size)
+              return AIPU_STATUS_ERROR_INVALID_SIZE;
+          } else if (static_sections[i].type == SECTION_TYPE_ZEROCPY_CONSTANT &&
+                     setup_zcy) {
+            buf = new BufferDesc;
+            buf->reset();
 
-          pa = weights[bss_id].wb_zerocpy_const->pa +
-               static_sections[i].dst_offset;
-          buf->init(weights[bss_id].wb_zerocpy_const->asid_base, pa,
-                    static_sections[i].size, static_sections[i].size);
-          if (m_mem->write(pa, va + static_sections[i].src_offset - blk_offset,
-                           static_sections[i].size) != static_sections[i].size)
-            return AIPU_STATUS_ERROR_INVALID_SIZE;
+            pa = weights[bss_id].wb_zerocpy_const->pa +
+                 static_sections[i].dst_offset;
+            buf->init(weights[bss_id].wb_zerocpy_const->asid_base, pa,
+                      static_sections[i].size, static_sections[i].size);
+            if (m_mem->write(
+                    pa, va + static_sections[i].src_offset - blk_offset,
+                    static_sections[i].size) != static_sections[i].size)
+              return AIPU_STATUS_ERROR_INVALID_SIZE;
+          }
+        } else {
+          if (m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_FM ||
+              (m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_ONLY &&
+               static_sections[i].type != SECTION_TYPE_ZEROCPY_CONSTANT)) {
+            buf = new BufferDesc;
+            buf->reset();
+            weight_index_gm_offset =
+                aligned(weight_index_gm_offset, static_sections[i].align_bytes);
+            pa = weights[bss_id].wb_weight_index_gm_pa + weight_index_gm_offset;
+            buf->init(weights[bss_id].wb_weight->asid_base, pa,
+                      static_sections[i].size, static_sections[i].size, 0,
+                      (m_mem->get_asid1() << 8) | AIPU_MEM_REGION_DEFAULT);
+
+            if (m_mem->write(
+                    pa, va + static_sections[i].src_offset - blk_offset,
+                    static_sections[i].size) != static_sections[i].size)
+              return AIPU_STATUS_ERROR_INVALID_SIZE;
+            weight_index_gm_offset += static_sections[i].size;
+          }
         }
       } else {
         std::string name = std::string("weight_") + std::to_string(i);
@@ -423,8 +455,10 @@ aipu_status_t Graph::setup_zcy_buffer(std::vector<WeightBufferInfo> &weights) {
 
 aipu_status_t Graph::alloc_weight_buffer() {
   aipu_status_t ret = AIPU_STATUS_SUCCESS;
-
-  if (!has_weight() || (m_put_weight_gm && m_mem->is_gm_enable()))
+  if (!has_weight() ||
+      ((m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_FM ||
+        m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_FM) &&
+       m_mem->is_gm_enable()))
     return AIPU_STATUS_SUCCESS;
 
   /* 1.alloc const buffer */
@@ -433,13 +467,30 @@ aipu_status_t Graph::alloc_weight_buffer() {
   m_weight.resize(get_bss_cnt());
   for (uint32_t bss_id = 0; bss_id < get_bss_cnt(); ++bss_id) {
     buf_name = std::string("weight_") + std::to_string(bss_id);
-    ret =
-        m_mem->malloc(get_const_size(bss_id) + get_alloc_pad_size(), align_page,
-                      &m_weight[bss_id].wb_weight, buf_name.c_str(),
-                      (m_mem->get_asid1() << 8) | AIPU_MEM_REGION_DEFAULT);
+    if (m_wt_in_gm_storage_flag == GM_WT_FLAG_NO_WEIGHT ||
+        m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_ONLY) {
+      ret = m_mem->malloc(get_const_size(bss_id) + get_alloc_pad_size(),
+                          align_page, &m_weight[bss_id].wb_weight,
+                          buf_name.c_str(),
+                          (m_mem->get_asid1() << 8) | AIPU_MEM_REGION_DEFAULT);
+    } else if (m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_ONLY) {
+      ret = m_mem->malloc(get_const_indices_size(bss_id) + get_alloc_pad_size(),
+                          align_page, &m_weight[bss_id].wb_weight_index,
+                          "weight_index",
+                          (m_mem->get_asid1() << 8) | AIPU_MEM_REGION_DEFAULT);
+      ret = m_mem->malloc(
+          get_const_size(bss_id) - get_const_indices_size(bss_id) +
+              get_alloc_pad_size(),
+          align_page, &m_weight[bss_id].wb_weight, buf_name.c_str(),
+          (m_mem->get_asid1() << 8) | AIPU_MEM_REGION_DEFAULT);
+    }
     if (ret != AIPU_STATUS_SUCCESS) {
       LOG(LOG_ERR, "alloc weight buffer [fail]");
       return ret;
+    }
+    if (m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_ONLY) {
+      m_weight[bss_id].wb_weight_index_gm_pa =
+          m_weight[bss_id].wb_weight_index->pa;
     }
 
     if (!m_dynamic_asid0) {
@@ -481,10 +532,14 @@ aipu_status_t Graph::unload() {
     for (uint32_t i = 0; i < wb_weights.size(); ++i) {
       if (wb_weights[i] != nullptr) {
         if (m_weight[0].wb_weight == nullptr ||
-            m_swt_idxes.count(i) != 0) /* scattered or specified */
+            (m_swt_idxes.count(i) != 0 &&
+             m_swt_mem_region ==
+                 AIPU_MEM_REGION_GM)) /* scattered or specified */
+        {
           m_mem->free(&wb_weights[i]);
-        else
+        } else {
           m_mem->free_bufferdesc(&wb_weights[i]);
+        }
       }
     }
     wb_weights.clear();
@@ -493,16 +548,28 @@ aipu_status_t Graph::unload() {
       if (bss_id > m_weight.size())
         break;
 
-      if (m_is_shared_weight || (m_put_weight_gm && m_mem->is_gm_enable()))
+      if (m_is_shared_weight ||
+          (m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_FM &&
+           m_mem->is_gm_enable()))
         break;
 
       if (m_weight[bss_id].wb_zerocpy_const != nullptr &&
-          m_weight[bss_id].wb_zerocpy_const->size != 0)
+          m_weight[bss_id].wb_zerocpy_const->size != 0) {
         m_mem->free(&m_weight[bss_id].wb_zerocpy_const);
+      }
 
       if (m_weight[bss_id].wb_weight != nullptr &&
-          m_weight[bss_id].wb_weight->size != 0)
+          m_weight[bss_id].wb_weight->size != 0) {
         m_mem->free(&m_weight[bss_id].wb_weight);
+      }
+
+      if (m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_ONLY &&
+          m_mem->is_gm_enable()) {
+        if (m_weight[bss_id].wb_weight_index != nullptr &&
+            m_weight[bss_id].wb_weight_index->size != 0) {
+          m_mem->free(&m_weight[bss_id].wb_weight_index);
+        }
+      }
     }
   }
 

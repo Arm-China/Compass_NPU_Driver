@@ -25,6 +25,12 @@ static struct aipu_priv *aipu;
 extern struct gpio_desc *__must_check devm_gpiod_get_optional(struct device *dev,
 						       const char *con_id,
 						       enum gpiod_flags flags);
+static int aipu_open(struct inode *inode, struct file *filp);
+static int aipu_release(struct inode *inode, struct file *filp);
+static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
+static unsigned int aipu_poll(struct file *filp, struct poll_table_struct *wait);
+static int aipu_mmap(struct file *filp, struct vm_area_struct *vma);
+static long aipu_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 
 static int aipu_open(struct inode *inode, struct file *filp)
 {
@@ -38,16 +44,21 @@ static int aipu_open(struct inode *inode, struct file *filp)
 static int aipu_release(struct inode *inode, struct file *filp)
 {
 	int ret = 0;
-	struct aipu_priv *aipu = filp->private_data;
+	struct aipu_priv *priv = NULL;
 
-	ret = aipu_job_manager_cancel_jobs(&aipu->job_manager, filp);
+	if (!filp->private_data)
+		return -EINVAL;
+
+	priv = (struct aipu_priv *)filp->private_data;
+
+	ret = aipu_job_manager_cancel_jobs(&priv->job_manager, filp);
 	if (ret)
 		return ret;
 
-	aipu_mm_free_buffers(&aipu->mm, filp);
+	aipu_mm_free_buffers(&priv->mm, filp);
 
-	if (aipu && aipu->soc_ops && aipu->soc_ops->soc_pm_runtime_put)
-		aipu->soc_ops->soc_pm_runtime_put(aipu->dev, aipu->soc);
+	if (priv && priv->soc_ops && priv->soc_ops->soc_pm_runtime_put)
+		priv->soc_ops->soc_pm_runtime_put(priv->dev, priv->soc);
 	return 0;
 }
 
@@ -56,8 +67,7 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	int ret = 0;
 	struct aipu_priv *aipu = filp->private_data;
 	struct aipu_job_manager *manager = &aipu->job_manager;
-
-	u32 partition_cnt = 0;
+	int partition_cnt = 0;
 	struct aipu_partition_cap *partition_cap = NULL;
 	struct aipu_cap cap;
 	struct aipu_buf_request buf_req;
@@ -341,6 +351,7 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			manager->pools->created = false;
 			manager->pools->bind = false;
 			manager->tec_intr_en = false;
+			atomic_set(&manager->tick_counter, 0);
 			aipu_sched_pending_job_lock(cls);
 		} else {
 			dev_warn(manager->dev, "hw reset is not supported.\n");
@@ -355,6 +366,7 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				manager->pools->created = false;
 				manager->pools->bind = false;
 				manager->tec_intr_en = false;
+				atomic_set(&manager->tick_counter, 0);
 				aipu_sched_pending_job_lock(cls);
 			}
 		} else {
@@ -372,9 +384,8 @@ static long aipu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 #ifdef CONFIG_COMPAT
 static long aipu_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	arg = (unsigned long)compat_ptr(arg);
-
-	return aipu_ioctl(filp, cmd, arg);
+	/* PRQA S 0326 1 */
+	return aipu_ioctl(filp, cmd, (unsigned long)compat_ptr(arg));
 }
 #endif
 
@@ -396,7 +407,7 @@ static unsigned int aipu_poll(struct file *filp, struct poll_table_struct *wait)
 	return mask;
 }
 
-static const struct file_operations aipu_fops = {
+static const struct file_operations aipu_priv_fops = {
 	.owner = THIS_MODULE,
 	.open = aipu_open,
 	.poll = aipu_poll,
@@ -447,7 +458,7 @@ int armchina_aipu_probe(struct platform_device *p_dev, struct aipu_soc *soc,
 			//return ret;
 		}
 
-		ret = init_aipu_priv(aipu, p_dev, &aipu_fops, soc, ops);
+		ret = init_aipu_priv(aipu, p_dev, &aipu_priv_fops, soc, ops);
 		if (ret) {
 			dev_err(dev, "FAIL TO INIT AIPU.\n");
 			aipu = NULL;
@@ -457,14 +468,16 @@ int armchina_aipu_probe(struct platform_device *p_dev, struct aipu_soc *soc,
 
 	of_property_read_u32(dev->of_node, "core-id", &id);
 
-	WARN_ON(!aipu->ops);
-	partition = aipu->ops->create_partitions(aipu, id, p_dev);
-	if (IS_ERR(partition)) {
-		dev_err(dev, "FAIL TO CREATE PARTITION.\n");
-		deinit_aipu_priv(aipu);
-		ret = -EIO;
-	} else {
-		platform_set_drvdata(p_dev, partition);
+
+	if (aipu->ops) {
+		partition = aipu->ops->create_partitions(aipu, id, p_dev);
+		if (IS_ERR(partition)) {
+			dev_err(dev, "FAIL TO CREATE PARTITION.\n");
+			deinit_aipu_priv(aipu);
+			ret = -EIO;
+		} else {
+			platform_set_drvdata(p_dev, partition);
+		}
 	}
 
 	return ret;

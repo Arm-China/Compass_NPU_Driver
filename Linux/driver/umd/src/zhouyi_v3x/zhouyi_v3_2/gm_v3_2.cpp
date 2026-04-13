@@ -31,15 +31,16 @@ void GM_V3_2::setup_gm_sync_from_ddr(tcb_t &tcb) {
     LOG(LOG_DEBUG, "gm size is 0");
     return;
   }
-
   JobV3_2 &job = reinterpret_cast<JobV3_2 &>(m_job);
-  if (job.m_secbuf_desc.count(FMSection::GM) == 0 ||
-      job.m_secbuf_desc.at(FMSection::GM)->size == 0) {
-    LOG(LOG_INFO, "gm buffer size is 0");
-    return;
+  if (m_graph.m_wt_in_gm_storage_flag != GM_WT_FLAG_WEIGHT_ONLY &&
+      m_graph.m_wt_in_gm_storage_flag != GM_WT_FLAG_WEIGHT_INDEX_ONLY) {
+    if (job.m_secbuf_desc.count(FMSection::GM) == 0 ||
+        job.m_secbuf_desc.at(FMSection::GM)->size == 0) {
+      LOG(LOG_INFO, "gm buffer size is 0");
+      return;
+    }
   }
 
-  const auto &gm_desc = job.m_secbuf_desc.at(FMSection::GM);
   const auto &gm_info = m_graph.get_gmsec_info();
 
   uint32_t remap_mode = 0; /* time priority */
@@ -51,9 +52,22 @@ void GM_V3_2::setup_gm_sync_from_ddr(tcb_t &tcb) {
     uint32_t sync_size = (aligned(gm_info.sync_size, 1 << 18) >> 18);
     tcb.grid.gm_sync = tcb_ctl::GM_REGION_CTRL_SYNC_TO_GM | (sync_size & 0xFFF);
   }
+  std::vector<WeightBufferInfo> weights = m_graph.get_weight_buffer_info();
 
-  tcb.grid.gm_addr_low = get_low_32(gm_desc->pa);
-  tcb.grid.gm_addr_high = get_high_32(gm_desc->pa);
+  if (m_graph.m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_ONLY) {
+    BufferDesc *gm_desc = weights[0].wb_weight;
+    tcb.grid.gm_addr_low = get_low_32(gm_desc->pa);
+    tcb.grid.gm_addr_high = get_high_32(gm_desc->pa);
+  } else if (m_graph.m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_ONLY) {
+    tcb.grid.gm_addr_low = get_low_32(weights[0].wb_weight_index_gm_pa);
+    tcb.grid.gm_addr_high = get_high_32(weights[0].wb_weight_index_gm_pa);
+  } else if (m_graph.m_wt_in_gm_storage_flag == GM_WT_FLAG_NO_WEIGHT ||
+             m_graph.m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_FM ||
+             m_graph.m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_FM) {
+    const auto &gm_desc = job.m_secbuf_desc.at(FMSection::GM);
+    tcb.grid.gm_addr_low = get_low_32(gm_desc->pa);
+    tcb.grid.gm_addr_high = get_high_32(gm_desc->pa);
+  }
 }
 
 } // namespace aipudrv

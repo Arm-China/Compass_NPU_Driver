@@ -921,7 +921,6 @@ static int aipu_mm_add_iova_region(struct aipu_memory_manager *mm)
 {
 	struct aipu_mem_region_obj *obj = NULL;
 	struct aipu_mem_region *reg = NULL;
-	int iova_region = 1;
 	unsigned long iova_region_size = 0xc0000000;
 	int asid_idx = 0;
 	int region_idx = 0;
@@ -955,30 +954,28 @@ static int aipu_mm_add_iova_region(struct aipu_memory_manager *mm)
 		goto FINISH;
 	}
 
-	do {
-		obj = aipu_mm_create_region_object(mm, AIPU_MEM_REGION_TYPE_MEMORY,
-						   iova_region_size, 0, asid_idx, NULL, true);
-		if (!obj) {
-			dev_err(mm->dev, "create iova region failed (ret = %ld)", PTR_ERR(reg));
-			mm->dma_mask = 32;
+	obj = aipu_mm_create_region_object(mm, AIPU_MEM_REGION_TYPE_MEMORY,
+						iova_region_size, 0, asid_idx, NULL, true);
+	if (!obj) {
+		dev_err(mm->dev, "create iova region failed (ret = %ld)", PTR_ERR(reg));
+		mm->dma_mask = 32;
 #if (KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE)
-			mm->dev->bus_dma_limit = 0xc0000000;
+		mm->dev->bus_dma_limit = 0xc0000000;
 #elif (KERNEL_VERSION(4, 19, 0) <= LINUX_VERSION_CODE)
-			mm->dev->bus_dma_mask = 0xc0000000;
+		mm->dev->bus_dma_mask = 0xc0000000;
 #endif
-			break;
-		}
+		goto FINISH;
+	}
 
-		reg = obj->reg;
+	reg = obj->reg;
 
-		list_add(&obj->list, &mm->mem.head->list);
-		if (mm->version > AIPU_ISA_VERSION_ZHOUYI_V1)
-			add_region_list(mm, asid_idx, reg);
-		else
-			add_region_list(mm, AIPU_BUF_ASID_0, reg);
-		asid_idx++;
-		region_idx++;
-	} while (region_idx < iova_region);
+	list_add(&obj->list, &mm->mem.head->list);
+	if (mm->version > AIPU_ISA_VERSION_ZHOUYI_V1)
+		add_region_list(mm, asid_idx, reg);
+	else
+		add_region_list(mm, AIPU_BUF_ASID_0, reg);
+
+	region_idx++;
 
 FINISH:
 	return region_idx;
@@ -2126,7 +2123,7 @@ u32 aipu_mm_get_asid_cnt(struct aipu_memory_manager *mm)
 
 int aipu_mm_init_gm(struct aipu_memory_manager *mm, int bytes)
 {
-	if (!mm || !bytes || mm->gm_policy == AIPU_GM_POLICY_NONE)
+	if (!mm || mm->gm_policy == AIPU_GM_POLICY_NONE)
 		return -EINVAL;
 
 	mm->gm_bytes = bytes;
@@ -3106,7 +3103,7 @@ int aipu_bind_dma_iova_phy(struct aipu_memory_manager *mm, struct aipu_bind_buf_
 	struct aipu_phy_block *block;
 	int ret = 0;
 	struct dma_buf *dmabuf = NULL;
-	struct exporter_dma_buf *exp_buf = dmabuf->priv;
+	struct exporter_dma_buf *exp_buf = NULL;
 
 	if (!mm || !desc)
 		return -EINVAL;

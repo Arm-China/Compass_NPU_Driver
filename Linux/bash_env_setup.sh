@@ -20,7 +20,7 @@
 # |
 # |-- AIPU_BSP
 # |   |-- kernel
-# |   |   |-- linux-5.11.18
+# |   |   |-- linux-6.12.54
 # |   |
 # |   |-- toolchain
 # |   |   |-- gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu
@@ -32,6 +32,7 @@
 #         |   |-- aipu_simulator_x2
 #         |   |-- aipu_simulator_x3
 #         |   |-- aipu_simulator_x3p
+#         |   |-- aipu_simulator_x3s
 #         |   |-- aipu_simulator_z1
 #         |   |-- aipu_simulator_z2
 #         |   |-- aipu_simulator_z3
@@ -41,6 +42,7 @@
 #             |-- libaipu_simulator_x2.so
 #             |-- libaipu_simulator_x3.so
 #             |-- libaipu_simulator_x3p.so
+#             |-- libaipu_simulator_x3s.so
 #             |-- libaipu_simulator_z1.so
 #             |-- libaipu_simulator_z2.so
 #             |-- libaipu_simulator_z3.so
@@ -122,14 +124,14 @@ export COMPASS_DRV_BTENVAR_TEST_BUILD_DIR=`pwd`/build/samples
 
 # Driver naming
 export COMPASS_DRV_BTENVAR_UMD_V_MAJOR=6
-export COMPASS_DRV_BTENVAR_UMD_V_MINOR=1.0
+export COMPASS_DRV_BTENVAR_UMD_V_MINOR=1.1
 export COMPASS_DRV_BTENVAR_UMD_SO_NAME=libaipudrv.so
 export COMPASS_DRV_BTENVAR_UMD_SO_NAME_MAJOR=${COMPASS_DRV_BTENVAR_UMD_SO_NAME}.${COMPASS_DRV_BTENVAR_UMD_V_MAJOR}
 export COMPASS_DRV_BTENVAR_UMD_SO_NAME_FULL=${COMPASS_DRV_BTENVAR_UMD_SO_NAME_MAJOR}.${COMPASS_DRV_BTENVAR_UMD_V_MINOR}
 export COMPASS_DRV_BTENVAR_UMD_A_NAME=libaipudrv.a
 export COMPASS_DRV_BTENVAR_UMD_A_NAME_MAJOR=${COMPASS_DRV_BTENVAR_UMD_A_NAME}.${COMPASS_DRV_BTENVAR_UMD_V_MAJOR}
 export COMPASS_DRV_BTENVAR_UMD_A_NAME_FULL=${COMPASS_DRV_BTENVAR_UMD_A_NAME_MAJOR}.${COMPASS_DRV_BTENVAR_UMD_V_MINOR}
-export COMPASS_DRV_BTENVAR_KMD_VERSION=6.1.0
+export COMPASS_DRV_BTENVAR_KMD_VERSION=6.1.1
 
 export COMPASS_DRV_BRENVAR_ERROR="\033[31;1m[DRV ERROR]\033[0m"
 export COMPASS_DRV_BRENVAR_WARN="\033[31;1m[DRV WARN]\033[0m"

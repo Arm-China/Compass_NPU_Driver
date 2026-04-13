@@ -144,8 +144,6 @@ static int init_aipu_job(struct aipu_job_manager *manager, struct aipu_job *job,
 
 static void destroy_aipu_job(struct aipu_job_manager *manager, struct aipu_job *job)
 {
-	WARN_ON(!job);
-
 #if AIPU_CONFIG_ENABLE_INTR_PROFILING
 	if (job->prof_filp) {
 		fput(job->prof_filp);
@@ -205,7 +203,6 @@ static struct aipu_job *create_aipu_job(struct aipu_job_manager *manager,
 
 static void remove_aipu_job(struct aipu_job_manager *manager, struct aipu_job *job)
 {
-	WARN_ON(!job);
 	list_del(&job->node);
 	destroy_aipu_job(manager, job);
 }
@@ -224,7 +221,7 @@ static void delete_job_queue(struct aipu_job_manager *manager, struct aipu_job *
 	}
 }
 
-inline bool is_job_version_match(struct aipu_partition *core, struct aipu_job_desc *user_job)
+static bool is_job_version_match(struct aipu_partition *core, struct aipu_job_desc *user_job)
 {
 	if (core->arch == user_job->aipu_arch && user_job->version_compatible)
 		return true;
@@ -234,7 +231,7 @@ inline bool is_job_version_match(struct aipu_partition *core, struct aipu_job_de
 		(core->config == user_job->aipu_config);
 }
 
-inline bool is_job_ok_for_core(struct aipu_partition *core, struct aipu_job_desc *user_job)
+static bool is_job_ok_for_core(struct aipu_partition *core, struct aipu_job_desc *user_job)
 {
 	if (!is_job_version_match(core, user_job)) {
 		dev_err(core->dev, "invalid specified arch %d or version %d or configuration %d\n",
@@ -341,6 +338,7 @@ static void reserve_core_for_job_no_lock(struct aipu_job_manager *manager, struc
 	struct aipu_partition *sched_core = NULL;
 	int ret = 0;
 
+	/* PRQA S 0602 2 */
 	WARN_ON(job->core_id < 0);
 	WARN_ON(job->core_id >= manager->partition_cnt);
 
@@ -537,6 +535,7 @@ static int schedule_new_job(struct aipu_job_manager *manager, struct aipu_job_de
 	if (user_job->aipu_version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_1 ) {
 		tcb = (struct aipu_tcb_v32 *)aipu_mm_get_va(manager->mm, user_job->head_tcb_pa);
 		if (!(tcb->grid.interrupt_en & EN_DONE_INTR_V3_2)) {
+			/* PRQA S 2996, 0602 1 */ /* spin_lock_irqsave is a kernel macro */
 			spin_lock_irqsave(&manager->lock, flags);
 			ret = schedule_v3_2_job_no_lock(manager, user_job);
 			spin_unlock_irqrestore(&manager->lock, flags);
@@ -550,8 +549,6 @@ static int schedule_new_job(struct aipu_job_manager *manager, struct aipu_job_de
 	else
 		queue = create_thread_wait_queue(manager->wait_queue_head,
 						 task_pid_nr(current), NULL);
-
-	WARN_ON(IS_ERR(queue));
 
 	kern_job = create_aipu_job(manager, user_job, queue, filp);
 	if (IS_ERR(kern_job)) {
@@ -730,6 +727,7 @@ int init_aipu_job_manager(struct aipu_job_manager *manager, struct aipu_memory_m
 	atomic_set(&manager->tick_counter, 0);
 	atomic_set(&manager->is_suspend, 0);
 
+	/* PRQA S 0602 2 */
 	WARN_ON(IS_ERR(manager->scheduled_head));
 	WARN_ON(IS_ERR(manager->wait_queue_head));
 
@@ -799,6 +797,7 @@ void deinit_aipu_job_manager(struct aipu_job_manager *manager)
 void aipu_job_manager_set_partitions_info(struct aipu_job_manager *manager, int partition_cnt,
 					  struct aipu_partition *partitions)
 {
+	/* PRQA S 0602 1 */
 	WARN_ON(!manager || !partition_cnt || !partitions);
 	manager->partition_cnt = partition_cnt;
 	manager->partitions = partitions;
@@ -862,7 +861,7 @@ static void aipu_real_time_printk(struct aipu_memory_manager *mm,
 
 	if (GET_PRINF_SIZE(info->sig_flag)) {
 		/* here: tail TCBP is the exact TCB sending a printf signal */
-		if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0) {
+		if (mm->version >= AIPU_ISA_VERSION_ZHOUYI_V3_2_0 && mm->has_iommu) {
 			blk = aipu_get_block_buffer(mm, pa, "printk");
 			if (!blk) {
 				dev_err(mm->dev, "real time printk: no BLK found (0x%llx)\n",
@@ -884,7 +883,7 @@ static void aipu_real_time_printk(struct aipu_memory_manager *mm,
 			else
 				dev_err(mm->dev, "real time printk: no pbuf found (0x%x)\n",
 					tcb->task.pprint);
-		} else if (mm->version == AIPU_ISA_VERSION_ZHOUYI_V3) {
+		} else {
 			tcb = aipu_mm_get_tcb(mm, pa);
 			if (!tcb) {
 				dev_err(mm->dev, "real time printk: no TCB found (0x%llx)\n",

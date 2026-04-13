@@ -5,17 +5,19 @@
 # SPDX-License-Identifier: Apache-2.0
 LOCAL_PATH=$(cd "$(dirname "$0")";pwd)
 
-# make umd .so
-VERSION=$1
-
 if [ -d ./umd ]; then
-	rm -fr ./umd
+	rm -rf ./umd
 fi
 
-pushd $LOCAL_PATH/../../AI610-SDK-1012*/Linux-driver/
+parent_dir=$(basename $LOCAL_PATH)
+if [ "$parent_dir" = "out_of_box" ]; then
+	pushd $LOCAL_PATH/../
+else
+	pushd $LOCAL_PATH/../../AI610-SDK-1012*/Linux-driver/
+fi
 
 # generate libaipudrv.so
-./build_all.sh -p sim -v $VERSION
+./build_all.sh -p sim
 if [ $? -ne 0 ]; then
 	echo -e "\033[32;1mCompile libaipudrv.so [fail] \033[0m"
 	exit 1

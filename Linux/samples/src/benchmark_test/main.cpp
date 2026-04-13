@@ -9,8 +9,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <fstream>
-#include <iostream>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -18,6 +16,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <fstream>
 #include <iostream>
 #include <vector>
 
@@ -32,7 +31,6 @@ using namespace std;
 #define BIND_CORE 0
 
 namespace {
-
 int dump_perfdata(aipu_ctx_handle_t *m_ctx, uint64_t graph_id, uint64_t job_id,
                   const std::string &dump_path = "") {
   aipu_status_t sts = AIPU_STATUS_SUCCESS;
@@ -104,10 +102,8 @@ int main(int argc, char *argv[]) {
   uint64_t graph_id, job_id;
   uint32_t input_cnt, output_cnt;
   vector<aipu_tensor_desc_t> input_desc;
-  vector<char *> input_data;
   vector<aipu_tensor_desc_t> output_desc;
   vector<char *> output_data;
-  vector<char *> gt;
   cmd_opt_t opt;
   uint32_t frame_cnt = 2;
   int pass = -1;
@@ -158,7 +154,7 @@ int main(int argc, char *argv[]) {
   AIPU_INFO()
   ("Driver UMD: %s, KMD: %s\n", drv_ver.umd_version, drv_ver.kmd_version);
 
-  if (opt.profile_en) {
+  if (opt.perf_mode) {
     ret = aipu_ioctl(ctx, AIPU_IOCTL_ENABLE_TICKCOUNTER, nullptr);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
@@ -184,6 +180,14 @@ int main(int argc, char *argv[]) {
   // load_graph_cfg.put_weight_gm = true;
   // load_graph_cfg.put_desc_gm = true;
   // load_graph_cfg.put_ws_gm = true;
+  if (opt.wt_idxes_cnt > 0) {
+    load_graph_cfg.wt_idxes = opt.wt_indices.data();
+    load_graph_cfg.wt_idxes_cnt = opt.wt_idxes_cnt;
+    load_graph_cfg.wt_mem_region = AIPU_MEM_REGION_GM;
+  }
+  if (opt.put_weight_gm) {
+    load_graph_cfg.put_weight_gm = true;
+  }
   ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id,
                         &load_graph_cfg);
   if (ret != AIPU_STATUS_SUCCESS) {
@@ -274,6 +278,8 @@ int main(int argc, char *argv[]) {
         AIPU_JOB_CONFIG_TYPE_DUMP_DESCRIPTOR | AIPU_JOB_CONFIG_TYPE_DUMP_INPUT |
         AIPU_JOB_CONFIG_TYPE_DUMP_OUTPUT | AIPU_JOB_CONFIG_TYPE_DUMP_TCB_CHAIN |
         AIPU_JOB_CONFIG_TYPE_DUMP_EMULATION;
+    if (opt.perf_mode)
+      cfg_types |= AIPU_JOB_CONFIG_TYPE_DUMP_PROFILE;
     ret = aipu_config_job(ctx, job_id, cfg_types, &mem_dump_config);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);
@@ -335,7 +341,7 @@ int main(int argc, char *argv[]) {
     }
     AIPU_INFO()("aipu_finish_job success\n");
 
-    if (opt.profile_en)
+    if (opt.perf_mode)
       dump_perfdata(ctx, graph_id, job_id, std::string(opt.dump_dir));
 
     for (uint32_t i = 0; i < output_cnt; i++) {
@@ -380,7 +386,7 @@ unload_graph:
   AIPU_INFO()("aipu_unload_graph success\n");
 
 deinit_ctx:
-  if (opt.profile_en) {
+  if (opt.perf_mode) {
     ret = aipu_ioctl(ctx, AIPU_IOCTL_DISABLE_TICKCOUNTER, nullptr);
     if (ret != AIPU_STATUS_SUCCESS) {
       aipu_get_error_message(ctx, ret, &msg);

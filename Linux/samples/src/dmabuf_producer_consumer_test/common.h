@@ -26,7 +26,7 @@
 
 int sender(int filefd, const char *server_path);
 int recver(const char *server_path);
-void *map_file_data(char *file, int &size);
+void *map_file_data(char *file, int &size, bool readonly = true);
 void unmap_file_data(void *data, int size);
 int dmabuf_malloc(uint64_t size);
 int dmabuf_free(int _fd);

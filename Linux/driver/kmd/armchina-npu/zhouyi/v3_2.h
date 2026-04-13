@@ -410,7 +410,7 @@
 #define GET_INTR_CLUSTER_ID_V3_2(status_32)           (((status_32) >> 24) & 0xFF)
 #define GET_INTR_CORE_ID_V3_2(status_32)              (((status_32) >> 20) & 0xF)
 #define GET_INTR_TEC_ID_V3_2(status_32)               (((status_32) >> 16) & 0xF)
-#define GET_INTR_GROUP_ID_V3_2(status_32)             ((status_32) & 0xFF)
+#define GET_INTR_GROUP_ID_V3_2(status_32)             ((status_32) & 0x7FFF)
 #define IS_POOL_IRQ_V3_2(status_32)                   (((status_32) >> 11) & 0x1)
 #define IS_CLUSTER_IRQ_V3_2(status_32)                (((status_32) >> 10) & 0x1)
 #define IS_CORE_IRQ_V3_2(status_32)                   (((status_32) >> 9) & 0x1)

@@ -149,7 +149,7 @@ aipu_status_t JobV12::init(const aipu_global_config_simulation_t *cfg,
     m_sim = cfg->simulator;
 
   m_log_level = cfg->log_level;
-  m_en_eval = cfg->en_eval;
+  m_en_eval = cfg->perf_mode != 0 || cfg->en_eval;
 
   if (cfg->log_file_path != nullptr)
     m_log_path = cfg->log_file_path;

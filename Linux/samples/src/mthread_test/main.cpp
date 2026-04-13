@@ -58,10 +58,8 @@ void non_pipeline(uint32_t frame_cnt) {
   uint64_t graph_id, job_id;
   uint32_t input_cnt, output_cnt;
   vector<aipu_tensor_desc_t> input_desc;
-  vector<char *> input_data;
   vector<aipu_tensor_desc_t> output_desc;
   vector<shared_ptr<char>> output_data_vec;
-  vector<char *> gt;
   std::string path;
   aipu_job_config_simulation_t sim_job_config = {0};
   aipu_job_config_dump_t mem_dump_config = {0};
@@ -263,10 +261,8 @@ void pipeline(uint32_t pipe_cnt) {
   uint64_t graph_id;
   uint32_t input_cnt, output_cnt;
   vector<aipu_tensor_desc_t> input_desc;
-  vector<char *> input_data;
   vector<aipu_tensor_desc_t> output_desc;
   vector<shared_ptr<char>> output_data_vec;
-  vector<char *> gt;
   std::vector<uint64_t> job_id_vec(pipe_cnt, 0);
   aipu_status_t aipu_sts = AIPU_STATUS_SUCCESS;
   aipu_job_status_t aipu_job_sts = AIPU_JOB_STATUS_NO_STATUS;
@@ -538,7 +534,6 @@ int main(int argc, char *argv[]) {
 
   sim_glb_config.log_level = opt.log_level;
   sim_glb_config.verbose = opt.verbose;
-  sim_glb_config.en_eval = false;
   sim_glb_config.simulator = opt.simulator;
 
   ret = aipu_init_context(&ctx);

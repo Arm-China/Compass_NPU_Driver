@@ -36,10 +36,8 @@ int main(int argc, char *argv[]) {
   uint64_t graph_id;
   uint32_t input_cnt, output_cnt;
   vector<aipu_tensor_desc_t> input_desc;
-  vector<char *> input_data;
   vector<aipu_tensor_desc_t> output_desc;
   vector<char *> output_data[MAX_BATCH];
-  vector<char *> gt;
   cmd_opt_t opt;
   int pass = -1, loop = 0, total_loop = 2;
   uint32_t batch_loop_cnt = 2;
@@ -77,7 +75,6 @@ int main(int argc, char *argv[]) {
   sim_glb_config.log_level = opt.log_level;
 
   sim_glb_config.verbose = opt.verbose;
-  sim_glb_config.en_eval = true;
 
   /* works for aipu v1/v2 simulations only */
   sim_glb_config.simulator = opt.simulator;

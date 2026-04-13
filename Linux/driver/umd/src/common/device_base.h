@@ -237,7 +237,7 @@ public:
   /**
    * indirectly call simulator's internal interface via this wrapper
    */
-  virtual void enable_profiling(bool en) {}
+  virtual void enable_profiling(int32_t mode) {}
   virtual void dump_profiling() {}
   virtual bool get_profile_en() const { return false; }
 

@@ -116,15 +116,9 @@ public:
 
   int version() { return m_aipu_ops->version(m_sim_aipu); }
 
-  void enable_profiling(bool en) {
-    if (en)
-      m_config.perf.mode = m_target.find("X2") != std::string::npos
-                               ? PERF_MODE_EVAL
-                               : PERF_MODE_FAST;
-    else
-      m_config.perf.mode = PERF_MODE_NONE;
-
-    return m_aipu_ops->enable_profiling(m_sim_aipu, en);
+  void enable_profiling(int32_t mode) {
+    m_config.perf.mode = mode;
+    return m_aipu_ops->enable_profiling(m_sim_aipu, m_config.perf.mode);
   }
 
   void dump_profiling() { return m_aipu_ops->dump_profiling(m_sim_aipu); }
@@ -165,7 +159,7 @@ public:
 
       sim_conf.fp_mode = conf->fp_mode;
       sim_conf.print_subg_info = conf->print_subg_info;
-      sim_conf.perf.mode = PERF_MODE_NONE;
+      sim_conf.perf.mode = conf->perf_mode;
       if (m_target.find("X3") != std::string::npos) {
         if (conf->en_fast_perf)
           sim_conf.perf.mode = PERF_MODE_FAST;
@@ -184,7 +178,7 @@ public:
       const static std::map<uint32_t, std::string> table = {
           {PERF_MODE_NONE, "NONE"},   {PERF_MODE_FAST, "FAST"},
           {PERF_MODE_EVAL, "EVAL"},   {PERF_MODE_IDU, "IDU"},
-          {PERF_MODE_PROBE, "PROBE"},
+          {PERF_MODE_PROBE, "PROBE"}, {PERF_MODE_SLOW, "SLOW"},
       };
 
       return table.at(mode);
@@ -227,7 +221,7 @@ public:
     if (m_target.find("X2") != std::string::npos) {
       code_str = m_target;
     } else if (m_target.find("X3") != std::string::npos) {
-      code_str = std::string("X3P-K") +
+      code_str = m_target.substr(0, 3) + std::string("-K") +
                  std::to_string((m_config.code >> 12) & 0xF) + "C" +
                  std::to_string((m_config.code >> 8) & 0xF) + "A" +
                  std::to_string((m_config.code >> 4) & 0xF) + "T" +

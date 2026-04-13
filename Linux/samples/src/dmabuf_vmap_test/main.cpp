@@ -143,8 +143,7 @@ int dmabuf_read(int fd) {
   int ret = 0;
   char *va = nullptr;
 
-  va = (char *)mmap(NULL, DMABUF_SZ, PROT_READ | PROT_WRITE, MAP_SHARED,
-                    dmabuf_fd, 0);
+  va = (char *)mmap(NULL, DMABUF_SZ, PROT_READ, MAP_SHARED, dmabuf_fd, 0);
   if (va == MAP_FAILED) {
     ret = -1;
     AIPU_ERR() << "mmap dmabuf [fail]\n";

@@ -65,8 +65,8 @@ $ cd Linux
 # bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
 $ source <bash_env_setup.sh|env_setup.sh>
 
-# v3 is for v1/v2/v3, and v3_2 is for v1/v2/v3_2, default refers to '-h'
-$ ./build_all.sh -p juno [-v <v3|v3_2>] [-d]
+# using '-h' for more details
+$ ./build_all.sh -p juno [-d]
 ```
 
 - 编译python api命令
@@ -82,8 +82,8 @@ $ cd Linux
 # bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
 $ source <bash_env_setup.sh|env_setup.sh>
 
-# v3 is for v1/v2/v3, and v3_2 is for v1/v2/v3_2, default refers to '-h'
-$ ./build_all.sh -p juno [-v <v3|v3_2>] -a python_api [-d]
+# using '-h' for more details
+$ ./build_all.sh -p juno -a python_api [-d]
 ```
 
 - 如果以上命令成功执行，一个驱动加载模块aipu.ko和一个用户态动态链接库libaipudrv.so将产生，并且被存放在bin文件夹中。
@@ -136,8 +136,8 @@ $ cd Linux
 # bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
 $ source <bash_env_setup.sh|env_setup.sh>
 
-# v3 is for v1/v2/v3, and v3_2 is for v1/v2/v3_2, default refers to '-h'
-$ ./build_all.sh -p sim [-v <v3|v3_2>] [-d]
+# using '-h' for more details
+$ ./build_all.sh -p sim [-d]
 ```
 
 - 编译python api命令
@@ -150,8 +150,8 @@ $ cd Linux
 # bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
 $ source <bash_env_setup.sh|env_setup.sh>
 
-# v3 is for v1/v2/v3, and v3_2 is for v1/v2/v3_2, default refers to '-h'
-$ ./build_all.sh -p sim [-v <v3|v3_2>] -a python_api [-d]
+# using '-h' for more details
+$ ./build_all.sh -p sim -a python_api [-d]
 ```
 
 - 如果以上命令成功执行，一个驱动加载模块aipu.ko和一个用户态动态链接库libaipudrv.so将产生，并且被存放在bin文件夹中。
@@ -169,8 +169,8 @@ $ ./build_all.sh -p sim [-v <v3|v3_2>] -a python_api [-d]
 $ cd Linux
 # bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
 $ source <bash_env_setup.sh|env_setup.sh>
-# v3 is for v1/v2/v3, and v3_2 is for v1/v2/v3_2, default refers to '-h'
-$ ./build_all.sh -p juno [-v <v3|v3_2>] -t sample [-d]
+# using '-h' for more details
+$ ./build_all.sh -p juno -t sample [-d]
 ```
 
 上述命令成功执行之后，对应的样例生成的可执行文件也将被放在bin文件夹中。
@@ -185,8 +185,8 @@ $ ./build_all.sh -p juno [-v <v3|v3_2>] -t sample [-d]
 $ cd Linux
 # bash_env_setup.sh is for bash env, and env_setup.sh is for csh env
 $ source <bash_env_setup.sh|env_setup.sh>
-# v3 is for v1/v2/v3, v3_2 is for v1/v2/v3_2, default refers to '-h'
-$ ./build_all.sh -p sim [-v <v3|v3_2>] -t sample [-d]
+# using '-h' for more details
+$ ./build_all.sh -p sim -t sample [-d]
 ```
 
 上述命令成功执行之后，对应的样例生成的可执行文件也将被放在bin文件夹中。

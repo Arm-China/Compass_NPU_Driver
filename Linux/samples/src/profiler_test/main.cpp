@@ -126,10 +126,8 @@ int main(int argc, char *argv[]) {
   uint64_t graph_id, job_id;
   uint32_t input_cnt, output_cnt;
   vector<aipu_tensor_desc_t> input_desc;
-  vector<char *> input_data;
   vector<aipu_tensor_desc_t> output_desc;
   vector<char *> output_data;
-  vector<char *> gt;
   cmd_opt_t opt;
   uint32_t frame_cnt = 1;
   int pass = -1;
@@ -171,6 +169,14 @@ int main(int argc, char *argv[]) {
   // load_graph_cfg.put_weight_gm = true;
   // load_graph_cfg.put_desc_gm = true;
   // load_graph_cfg.put_ws_gm = true;
+  if (opt.wt_idxes_cnt > 0) {
+    load_graph_cfg.wt_idxes = opt.wt_indices.data();
+    load_graph_cfg.wt_idxes_cnt = opt.wt_idxes_cnt;
+    load_graph_cfg.wt_mem_region = AIPU_MEM_REGION_GM;
+  }
+  if (opt.put_weight_gm) {
+    load_graph_cfg.put_weight_gm = true;
+  }
   ret = aipu_load_graph(ctx, opt.bin_files[0].c_str(), &graph_id,
                         &load_graph_cfg);
   if (ret != AIPU_STATUS_SUCCESS) {

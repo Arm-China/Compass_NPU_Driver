@@ -11,8 +11,7 @@ class Parse_Cmdline:
     m_so_lib_path = ""
     m_extra_weight_path = ""
     m_simulator = ""
-    m_target = ""
-    m_profile_en = False
+    m_perf_mode = 0
     m_input_shape = []
     m_benchmarks_list = []
 
@@ -35,10 +34,8 @@ class Parse_Cmdline:
                             help='-r: specify new input shape for all input tensors')
         parser.add_argument('-w', '--extra_weight_path', type=str,
                             help='-w: specify extra weight path')
-        parser.add_argument('-a', '--target', type=str,
-                            help='-a: specify aipu target, only for >= v3')
-        parser.add_argument('-p', '--profile', action='store_true',
-                            help='-p: enable profile, only for >= v3 and sgsf_finish.py')
+        parser.add_argument('-p', '--perf_mode', type=int,
+                            help='-p: set perf mode, simulator: perf mode; hardware: non-zero enables profiling')
 
         args = parser.parse_args()
 
@@ -74,9 +71,6 @@ class Parse_Cmdline:
                 self.logger.error(f'-l arg: {args.so_lib_path} [not exist]')
                 exit(-1)
 
-        if args.target != None:
-            self.m_target = args.target
-
         if args.simulator != None:
             self.logger.debug(f"--simulator arg: {args.simulator}")
             if os.path.isfile(args.simulator):
@@ -96,8 +90,8 @@ class Parse_Cmdline:
             else:
                 self.logger.error(f'-w arg: {args.extra_weight_path} [not exist]')
                 exit(-1)
-
-        self.m_profile_en = True if args.profile == 1 else False
+        if args.perf_mode != None:
+            self.m_perf_mode = args.perf_mode
 
     def parse_single_benchmark(self, bench_dir):
         self.logger.debug(f'benchdir: {bench_dir}')

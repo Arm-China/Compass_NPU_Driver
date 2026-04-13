@@ -28,7 +28,8 @@
 namespace aipudrv {
 #define MB_SIZE (1 * 1024 * 1024UL)
 #define AIPU_PAGE_SIZE (4 * 1024)
-#define AIPU_ALIGN_BYTES(size, align) (((size) + ((align)-1)) & ~((align)-1))
+#define AIPU_ALIGN_BYTES(size, align)                                          \
+  ((align) == 0 ? (size) : (((size) + ((align)-1)) & ~((align)-1)))
 
 #define AIPU_ASID0 (0 << 8)
 #define AIPU_ASID1 (1 << 8)

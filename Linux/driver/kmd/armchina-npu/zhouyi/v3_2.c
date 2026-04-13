@@ -193,7 +193,7 @@ static void zhouyi_v3_2_print_hw_id_info(struct aipu_partition *cluster)
 	int version = aipu->version;
 	u32 iter = 0;
 
-	dev_info(aipu->dev, "############# ZHOUYI %sAIPU #############",
+	dev_info(aipu->dev, "############# ZHOUYI %s AIPU #############",
 		 version == AIPU_ISA_VERSION_ZHOUYI_V3_2_0 ? "V3_2_0 ":
 		 version == AIPU_ISA_VERSION_ZHOUYI_V3_2_1 ? "V3_2_1":"");
 	dev_info(aipu->dev, "# Enabled Cluster Count: %d", aipu->cluster_cnt);
@@ -282,7 +282,7 @@ static int zhouyi_v3_2_upper_half(void *data)
 		info.core_id = GET_INTR_CORE_ID_V3_2(status);
 		info.tec_id = GET_INTR_TEC_ID_V3_2(status);
 
-		if (IS_TEC_IRQ_V3_2(status) && (IS_DONE_IRQ_V3_2(status)))
+		if ((IS_TEC_IRQ_V3_2(status) || IS_CORE_IRQ_V3_2(status)) && (IS_DONE_IRQ_V3_2(status)))
 			continue;
 
 		//check if do global soft reset

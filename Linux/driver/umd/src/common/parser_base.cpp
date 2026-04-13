@@ -156,6 +156,7 @@ aipu_status_t ParserBase::parse_bss_section(char *bss, uint32_t size,
   GraphParamMapLoadDesc param = {0};
   GraphIOTensors &io = gobj.get_bss_io_ref(0); /* put all io buffer into bss0 */
   uint32_t cst_start_addr = 0, zerocpy_cst_start_addr = 0;
+  uint32_t cst_indices_size_in_gm = 0, zerocpy_cst_indices_size_in_gm = 0;
 
   void *load_lb = bss;
   void *load_ub = (void *)((unsigned long)bss + sizeof(BSSHeader) + size);
@@ -238,13 +239,28 @@ aipu_status_t ParserBase::parse_bss_section(char *bss, uint32_t size,
     section_ir.type = sub_desc_load.type;
     section_ir.slot_index = static_sec_iter;
 
-    gobj.set_static_section_param(bss_id, static_desc_load, section_ir,
-                                  cst_start_addr, zerocpy_cst_start_addr);
+    if (gobj.get_swt_idxes().count(m_static_buf_idx) &&
+        gobj.get_swt_mem_region() == AIPU_MEM_REGION_GM) {
+      if (section_ir.type == SECTION_TYPE_ZEROCPY_CONSTANT) {
+        zerocpy_cst_indices_size_in_gm = aligned(zerocpy_cst_indices_size_in_gm,
+                                                 static_desc_load.align_bytes) +
+                                         section_ir.size;
+      } else {
+        cst_indices_size_in_gm = ALIGN_PAGE(
+            aligned(cst_indices_size_in_gm, static_desc_load.align_bytes) +
+            section_ir.size);
+      }
+    } else {
+      gobj.set_static_section_param(bss_id, static_desc_load, section_ir,
+                                    cst_start_addr, zerocpy_cst_start_addr);
+    }
     gobj.add_static_section(bss_id, section_ir);
     m_static_buf_idx++;
   }
 
   gobj.set_const_size(bss_id, cst_start_addr, zerocpy_cst_start_addr);
+  gobj.set_weight_indices_size(bss_id, cst_indices_size_in_gm,
+                               zerocpy_cst_indices_size_in_gm);
   LOG(LOG_INFO,
       "graph id: 0x%lx, bss id: %u, weight size: 0x%-10x zcy size: 0x%-10x",
       gobj.id(), bss_id, cst_start_addr, zerocpy_cst_start_addr);

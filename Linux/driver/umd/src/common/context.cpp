@@ -72,7 +72,8 @@ MainContext::MainContext() {
   m_sim_cfg.gm_size = 8 * MB_SIZE;
 #endif
 
-  m_sim_cfg.en_fast_perf = 0;
+  m_sim_cfg.perf_mode = AIPU_PERF_MODE_NONE;
+  m_sim_cfg.en_fast_perf = false;
   m_sim_cfg.freq_mhz = 1000;
   m_sim_cfg.ddr_latency_rd = 0;
   m_sim_cfg.ddr_latency_wr = 0;
@@ -651,6 +652,7 @@ MainContext::config_simulation(uint64_t types,
   m_sim_cfg.verbose = config->verbose;
   m_sim_cfg.enable_avx = config->enable_avx;
   m_sim_cfg.enable_calloc = config->enable_calloc;
+  m_sim_cfg.perf_mode = config->perf_mode;
   m_sim_cfg.en_eval = config->en_eval;
   m_sim_cfg.en_l2d = config->en_l2d;
   m_sim_cfg.fp_mode = config->fp_mode;
@@ -1021,14 +1023,10 @@ aipu_status_t MainContext::ioctl_cmd(uint32_t cmd, void *arg) {
 
   switch (cmd) {
   case AIPU_IOCTL_SET_PROFILE: {
-    bool profile_en = *(int32_t *)arg != 0;
-    if (m_dev == nullptr) {
-      /* set different target synchronously */
-      m_sim_cfg.en_eval = profile_en;
-      m_sim_cfg.en_fast_perf = profile_en;
-    } else {
-      m_dev->enable_profiling(profile_en);
-    }
+    int32_t mode = *(int32_t *)arg != 0;
+    m_sim_cfg.perf_mode = mode;
+    if (m_dev != nullptr)
+      m_dev->enable_profiling(mode);
   } break;
 
   case AIPU_IOCTL_GET_AIPUBIN_BUILDVERSION: {

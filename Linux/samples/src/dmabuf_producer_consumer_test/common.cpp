@@ -145,7 +145,7 @@ int recver(const char *server_path) {
 /**
  * mmap a file
  */
-void *map_file_data(char *fname, int &size) {
+void *map_file_data(char *fname, int &size, bool readonly) {
   int fd = 0;
   void *data = nullptr;
   struct stat finfo;
@@ -167,7 +167,8 @@ void *map_file_data(char *fname, int &size) {
   }
 
   data =
-      mmap(nullptr, finfo.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+      mmap(nullptr, finfo.st_size,
+           readonly ? PROT_READ : (PROT_READ | PROT_WRITE), MAP_SHARED, fd, 0);
   if (MAP_FAILED == data) {
     AIPU_ERR()("mmap failed\n");
     goto finish;

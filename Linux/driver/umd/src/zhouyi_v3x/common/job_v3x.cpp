@@ -474,6 +474,34 @@ aipu_status_t JobV3X::setup_job_buffers() {
   if (ret != AIPU_STATUS_SUCCESS)
     return ret;
 
+  if (graph().m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_FM) {
+    m_weight.clear();
+    m_weight.resize(graph().get_bss_cnt());
+    auto &desc = m_secbuf_desc[FMSection::TotalWeight];
+    const auto &gm_info = graph().get_gmsec_info();
+    uint32_t gm_weight_offset =
+        gm_info.info.at(GMBufType::GM_BUF_TYPE_WEIGHT).offset;
+    DEV_PA_64 pa_base = desc->pa;
+    for (uint32_t i = 0; i < graph().get_bss_cnt(); ++i) {
+      uint32_t weight_size = graph().get_const_size(i);
+      BufferDesc *weight = new BufferDesc;
+      weight->init(desc->asid_base, pa_base, weight_size, weight_size);
+      m_weight[i].wb_weight = weight;
+      pa_base += ALIGN_PAGE(weight_size);
+
+      uint32_t zcy_size = graph().get_zerocpy_const_size(i);
+      BufferDesc *zcy = new BufferDesc;
+      zcy->init(desc->asid_base, pa_base, zcy_size, zcy_size);
+      m_weight[i].wb_zerocpy_const = zcy;
+      pa_base += ALIGN_PAGE(zcy_size);
+
+      m_weight[i].wb_asid_base = desc->asid_base;
+      m_weight[i].wb_weight_index_gm_pa =
+          m_secbuf_desc[FMSection::GM]->pa + gm_weight_offset;
+    }
+    graph().setup_weight_buffer(m_weight, true /* setup_zcy */);
+  }
+
   if (m_secbuf_desc.count(FMSection::GM) != 0 &&
       m_secbuf_desc[FMSection::GM]->size != 0) {
     ret = setup_gm_buffer(m_secbuf_desc[FMSection::GM]);
@@ -482,7 +510,9 @@ aipu_status_t JobV3X::setup_job_buffers() {
   }
 
   /* v3 has no 'ZcyConst' section */
-  if (!graph().m_put_weight_gm &&
+  if ((graph().m_wt_in_gm_storage_flag == GM_WT_FLAG_NO_WEIGHT ||
+       graph().m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_ONLY ||
+       graph().m_wt_in_gm_storage_flag == GM_WT_FLAG_WEIGHT_INDEX_ONLY) &&
       m_secbuf_desc.count(FMSection::ZcyConst) != 0 &&
       m_secbuf_desc[FMSection::ZcyConst]->size != 0) {
     auto &desc = m_secbuf_desc[FMSection::ZcyConst];
@@ -858,7 +888,7 @@ void JobV3X::dump_extension_buffers(bool before) {
 }
 
 void JobV3X::dump_graphjson(const std::string &fullpath) {
-  if (graph().m_bgraphjson.size == 0) {
+  if (graph().m_bgraphjson.size != 0) {
     std::string json_data(graph().m_bgraphjson.va, graph().m_bgraphjson.size);
     std::ofstream json_file(fullpath, std::ios::out | std::ios::trunc);
     json_file.write(json_data.c_str(), json_data.size());
@@ -1026,11 +1056,16 @@ aipu_status_t JobV3X::dump_for_emulation() {
   /* runtime.cfg: profile */
   if (m_dev->get_profile_en()) {
     ofs << "\n[PROFILE]\n";
-    ofs << "#perf mode: 0:None,1:fast mode,2:eval,3:idu,4:probe\n";
-    if (graph().get_isa() == ISAv5)
-      ofs << "MODE=2\n";
-    else {
-      ofs << "MODE=1\n";
+    ofs << "#perf mode: 0:None,1:fast mode,2:eval,3:idu,4:probe,5:slow\n";
+
+    int32_t perf_mode = 0;
+    if (m_cfg->perf_mode != 0)
+      perf_mode = m_cfg->perf_mode;
+    else
+      perf_mode = m_cfg->en_eval ? 2 : (m_cfg->en_fast_perf ? 1 : 0);
+
+    ofs << "MODE=" << perf_mode << "\n";
+    if (graph().get_isa() == ISAv6) {
       ofs << "SYS_FREQ_MHZ=" << m_cfg->freq_mhz << "\n";
       ofs << "DDR_RD_LATENCY=" << m_cfg->ddr_latency_rd << "\n";
       ofs << "DDR_WR_LATENCY=" << m_cfg->ddr_latency_wr << "\n";
@@ -1054,24 +1089,7 @@ aipu_status_t JobV3X::dump_for_emulation() {
 
   ofs.dump_to_string(m_dumpcfg_header);
 
-  /* 3: text,ro,tcb */
-  int emu_input_cnt = 3 + m_inputs.size() + (m_descriptor != nullptr ? 1 : 0);
-  int emu_output_cnt = m_outputs.size();
-  /* runtime.cfg: [INPUT] */
-  for (uint32_t bss_id = 0; bss_id < m_weight.size(); bss_id++) {
-    if (m_weight[bss_id].wb_weight != nullptr &&
-        m_weight[bss_id].wb_weight->size > 0) {
-      emu_input_cnt += 1;
-      if (m_weight[bss_id].wb_zerocpy_const != nullptr &&
-          m_weight[bss_id].wb_zerocpy_const->size != 0)
-        emu_input_cnt += 1;
-    } else
-      emu_input_cnt += m_weight[bss_id].wb_weights.size();
-  }
-
   ofs << "[INPUT]\n";
-  ofs << "COUNT=" << emu_input_cnt << "\n";
-
   int file_id = -1;
   DEV_PA_64 dump_pa = 0;
   uint32_t dump_size = 0;
@@ -1217,6 +1235,7 @@ aipu_status_t JobV3X::dump_for_emulation() {
     ofs << "BASE" << file_id << "=0x" << std::hex << dump_pa << "\n";
     m_dumpcfg_input.push_back({dump_name, dump_pa});
   }
+  ofs << "COUNT=" << (file_id + 1) << "\n";
   ofs << "\n";
 
   ofs << "[HOST]\n";
@@ -1230,7 +1249,6 @@ aipu_status_t JobV3X::dump_for_emulation() {
 
   /* runtime.cfg: [OUTPUT] */
   ofs << "[OUTPUT]\n";
-  ofs << "COUNT=" << std::dec << emu_output_cnt << "\n";
 
   /* dump output.bin[n] */
   bool default_output_prefix = true;
@@ -1261,6 +1279,7 @@ aipu_status_t JobV3X::dump_for_emulation() {
     ofs << "BASE" << std::dec << i << "=0x" << std::hex << dump_pa << "\n";
     ofs << "SIZE" << std::dec << i << "=0x" << std::hex << dump_size << "\n";
   }
+  ofs << "COUNT=" << std::dec << m_outputs.size() << "\n";
 
   /* close runtime.cfg */
   ofs.close();

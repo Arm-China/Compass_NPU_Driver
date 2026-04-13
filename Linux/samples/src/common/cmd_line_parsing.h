@@ -34,9 +34,12 @@ typedef struct cmd_opt {
   uint32_t loop_cnt = 0;
   uint32_t frame_cnt = 0;
   int32_t graph_idx = -1;
-  bool profile_en = false;
+  int32_t perf_mode = 0;
   uint32_t thread_num;
   uint32_t reset_type = 0;
+  std::vector<int32_t> wt_indices;
+  uint32_t wt_idxes_cnt;
+  bool put_weight_gm = false;
 } cmd_opt_t;
 
 int init_test_bench(int argc, char *argv[], cmd_opt_t *opt,

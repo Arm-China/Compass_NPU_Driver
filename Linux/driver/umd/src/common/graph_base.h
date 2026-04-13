@@ -207,6 +207,8 @@ public:
   ISAType get_isa() const { return m_isa; }
   uint32_t get_remap_flag() const { return m_remap_flag; }
   uint32_t get_config() const { return m_hw_config; }
+  const std::set<uint32_t> &get_swt_idxes() const { return m_swt_idxes; }
+  const uint32_t &get_swt_mem_region() const { return m_swt_mem_region; }
   uint32_t get_revision() const { return m_hw_revision; }
   uint32_t get_buildversion() const { return m_aipubin_buildversion; }
   bool get_disable_input_reuse() const { return m_disable_input_reuse; }
